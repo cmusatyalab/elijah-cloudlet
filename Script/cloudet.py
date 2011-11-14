@@ -140,13 +140,16 @@ def print_usage(program_name):
     print 'usage: %s [option] [file]..  ' % program_name
     print ' -h, --help  print help'
     print ' -b, --base [disk image]'
-    print ' -c, --create [base image] [base mem]'
+    print ' -o, --overlay [base image] [base mem]'
     print ' -r, --run [base image] [base memory] [overlay image] [overlay memory]'
 
 
 def main(argv):
+    if len(argv) < 2:
+        print_usage(os.path.basename(argv[0]))
+        sys.exit(2)
     try:
-        optlist, args = getopt.getopt(argv[1:], 'hbcr', ["help", "base", "create", "run"])
+        optlist, args = getopt.getopt(argv[1:], 'hbcr', ["help", "base", "overlay", "run"])
     except getopt.GetoptError, err:
         print str(err)
         print_usage(os.path.basename(argv[0]))
@@ -161,13 +164,13 @@ def main(argv):
             print_help(os.path.basename(argv[0]))
             assert False, "Invalid argument"
         base_image, base_mem = create_base(args[0])
-        print '[INFO] Base (%s, %s) is created from %s' % (base_image, base_mem, image_name)
-    elif o in ("-c", "--create"):
+        print '[INFO] Base (%s, %s) is created from %s' % (base_image, base_mem, args[0])
+    elif o in ("-o", "--overlay"):
         if len(args) != 2:
             print_help(os.path.basename(argv[0]))
             assert False, "Invalid argument"
-        vm_image = args[0]
-        vm_memory = args[1]
+        base_image = args[0]
+        base_mem = args[1]
         # create overlay
         overlay_disk, overlay_mem, tmp_img, tmp_mem = create_overlay(base_image, base_mem)
         print '[INFO] Overlay (%s, %s) is created from %s' % (overlay_disk, overlay_mem, base_image)
@@ -179,7 +182,7 @@ def main(argv):
         if len(args) != 4:
             print_help(os.path.basename(argv[0]))
             assert False, "Invalid argument"
-        base_img = args[0], base_mem = args[1], overlay_img = args[2], overlay_mem = args[3]
+        base_img = args[0]; base_mem = args[1]; overlay_img = args[2]; overlay_mem = args[3]
         recover_img = os.path.join(os.path.dirname(base_img), 'recover.qcow2'); 
         recover_mem = os.path.join(os.path.dirname(base_mem), 'recover.mem');
         merge_file(base_img, overlay_img, recover_img)
