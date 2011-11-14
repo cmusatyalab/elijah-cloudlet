@@ -1,6 +1,6 @@
 #!/usr/bin/env python
 import xdelta3
-import os, commands, filecmp, sys, subprocess, getopt
+import os, commands, filecmp, sys, subprocess, getopt, time
 from datetime import datetime, timedelta
 
 CUR_DIR = os.getcwd()
@@ -96,6 +96,7 @@ def create_overlay(base_image, base_mem):
 
 
 def run_snapshot(disk_image, memory_image):
+    '''
     command_str = "kvm -hda "
     command_str += disk_image
     command_str += " -m 512 -monitor stdio -enable-kvm -net nic -net user -serial none -parallel none -usb -usbdevice tablet -redir tcp:2222::22"
@@ -103,6 +104,24 @@ def run_snapshot(disk_image, memory_image):
     print '[DEBUG] command : ' + command_str
     process = subprocess.Popen(command_str, shell=True)
     ret = process.wait()
+    '''
+    telnet_port = 19823; vnc_port = 2
+
+    command_str = "kvm -hda "
+    command_str += disk_image
+    command_str += " -m 512 -monitor telnet:localhost:" + str(telnet_port) + ",server,nowait -enable-kvm -net nic -net user -serial none -parallel none -usb -usbdevice tablet -redir tcp:2222::22"
+    command_str += " -incoming \"exec:cat " + memory_image + "\""
+    command_str += " -vnc :" + str(vnc_port)
+    print '[DEBUG] command : ' + command_str
+    process = subprocess.Popen(command_str, shell=True)
+
+    print 'sleep before'
+    time.sleep(3)
+    print 'sleep after'
+
+    vnc_process = subprocess.Popen("vncviewer localhost:" + str(vnc_port), shell=True)
+    ret = vnc_process.wait()
+
     return ret
 
 
