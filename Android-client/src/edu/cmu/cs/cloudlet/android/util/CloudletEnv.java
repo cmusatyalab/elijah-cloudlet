@@ -13,6 +13,7 @@ public class CloudletEnv {
 	public static final int PREFERENCE = 2;
 	public static final int SOCKET_MOCK_INPUT = 3;
 	public static final int SOCKET_MOCK_OUTPUT = 4;
+	public static final int ROOT_DIR = 5;
 	
 	protected File SD_ROOT = Environment.getExternalStorageDirectory();
 	
@@ -20,7 +21,7 @@ public class CloudletEnv {
 	private String overlay_dir 			= "overlay";
     private String installation_file	= ".installed";
     private String preference_file		= ".preference";
-    private String socket_mock_file 	= ".mock_output";
+    private String socket_mock_file 	= ".mock_output";    
 	
 	protected static CloudletEnv env = null;
 	
@@ -51,6 +52,8 @@ public class CloudletEnv {
 	public File getFilePath(int id){
 		String path = "";
 		switch(id){
+		case CloudletEnv.ROOT_DIR:
+			path = "";
 		case CloudletEnv.INSTALLATION:
 			path = this.installation_file;
 		case CloudletEnv.PREFERENCE:
@@ -64,7 +67,7 @@ public class CloudletEnv {
 		return new File(SD_ROOT + File.separator + env_root + File.separator + path);
 	}
 
-	public ArrayList<VMInfo> getOverlayInformation() {
+	public ArrayList<VMInfo> getOverlayDirectoryInfo() {
 		ArrayList<VMInfo> retList = new ArrayList<VMInfo>();
 		
 		// Get information From overlay directory

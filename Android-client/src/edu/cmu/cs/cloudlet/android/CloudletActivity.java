@@ -34,6 +34,7 @@ public class CloudletActivity extends Activity {
 		// set button action
 		Button mSendButton = (Button) findViewById(R.id.connectButton);
 		mSendButton.setOnClickListener(clickListener);
+		
 	}
 
 	/*

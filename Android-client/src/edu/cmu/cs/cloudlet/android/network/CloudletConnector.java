@@ -3,7 +3,12 @@ package edu.cmu.cs.cloudlet.android.network;
 import java.io.IOException;
 import java.net.UnknownHostException;
 
+import org.json.JSONArray;
+import org.json.JSONException;
+import org.json.JSONObject;
+
 import edu.cmu.cs.cloudlet.android.CloudletActivity;
+import edu.cmu.cs.cloudlet.android.util.KLog;
 
 import android.app.AlertDialog;
 import android.content.Context;
@@ -46,7 +51,16 @@ public class CloudletConnector {
 		}
 		
 		// Send REQ VM List
-		NetworkMsg msg = NetworkMsg.makeOverlayList();
+		NetworkMsg msg1 = NetworkMsg.MSG_OverlayList();
+//		msg1.printJSON();
+		
+		// Send REQ Transfer_Start
+		NetworkMsg msg2 = NetworkMsg.MSG_OverlayList();
+		msg2.printJSON();
+		
+		// REQ Launch
+		// REQ Stop
+		
 		
 		
 	}
