@@ -57,6 +57,7 @@ def create_overlay(base_image, base_mem):
     print '[INFO] run Base Image to generate memory snapshot'
     run_snapshot(tmp_disk, base_mem)
 
+    # stop 
     # migrate "exec:dd bs=1M 2> /dev/null | dd bs=1M of=ubuntu_base_tmp.mem 2> /dev/null" 
     tmp_mem = os.path.join(os.getcwd(), vm_name) + '_tmp.mem'
     if os.path.exists(tmp_mem) == False:
@@ -67,7 +68,9 @@ def create_overlay(base_image, base_mem):
             os.remove(tmp_disk)
         return None, None, None, None
 
+    prev_time = datetime.now()
     ret = diff_files(base_image, tmp_disk, overlay_disk)
+    print '[TIME] time for creating overlay disk : ', str(datetime.now()-prev_time)
     if ret == None:
         print '[ERROR] cannot create overlay disk'
         if os.path.exists(tmp_mem) == True:
@@ -76,8 +79,9 @@ def create_overlay(base_image, base_mem):
             os.remove(tmp_disk)
         return None, None, None, None
     
-
+    prev_time = datetime.now()
     ret = diff_files(base_mem, tmp_mem, overlay_mem)
+    print '[TIME] time for creating overlay memory : ', str(datetime.now()-prev_time)
     if ret == None:
         print '[ERROR] cannot create overlay_mem'
         if os.path.exists(tmp_mem) == True:
@@ -115,6 +119,7 @@ def create_base(imagefile):
     print '[INFO] run Base Image to generate memory snapshot'
     run_image(base_image)
 
+    # stop
     # migrate "exec:dd bs=1M 2> /dev/null | dd bs=1M of=ubuntu_base.mem 2> /dev/null" 
     base_mem = os.path.join(vm_path, vm_name) + '_base.mem'
     if os.path.exists(base_mem) == False:
@@ -149,7 +154,7 @@ def main(argv):
         print_usage(os.path.basename(argv[0]))
         sys.exit(2)
     try:
-        optlist, args = getopt.getopt(argv[1:], 'hbcr', ["help", "base", "overlay", "run"])
+        optlist, args = getopt.getopt(argv[1:], 'hbor', ["help", "base", "overlay", "run"])
     except getopt.GetoptError, err:
         print str(err)
         print_usage(os.path.basename(argv[0]))
@@ -185,8 +190,14 @@ def main(argv):
         base_img = args[0]; base_mem = args[1]; overlay_img = args[2]; overlay_mem = args[3]
         recover_img = os.path.join(os.path.dirname(base_img), 'recover.qcow2'); 
         recover_mem = os.path.join(os.path.dirname(base_mem), 'recover.mem');
+        
+        prev_time = datetime.now()
         merge_file(base_img, overlay_img, recover_img)
+        print '[TIME] time for apply overlay disk : ', str(datetime.now()-prev_time)
+
+        prev_time = datetime.now()
         merge_file(base_mem, overlay_mem, recover_mem)
+        print '[TIME] time for apply overlay memory : ', str(datetime.now()-prev_time)
         run_snapshot(recover_img, recover_mem)
     else:
         assert False, "unhandled option"
