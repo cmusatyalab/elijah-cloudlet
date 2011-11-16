@@ -13,10 +13,10 @@ import android.os.Bundle;
 import android.os.Handler;
 import android.os.Message;
 
-public class NetworkClientReceiver implements Runnable {
-	private boolean stopRunning = false;
+public class NetworkClientReceiver extends Thread {
 	private Handler mHandler;
 	private DataInputStream networkReader;
+	private boolean isThreadRun = true;
 	
 	public NetworkClientReceiver(DataInputStream dataInputStream, Handler mHandler) {
 		this.networkReader = dataInputStream;
@@ -24,8 +24,22 @@ public class NetworkClientReceiver implements Runnable {
 
 	@Override
 	public void run() {
-		while(stopRunning == false){
-			NetworkMsg msg = this.receiveMSg(networkReader);
+		while(isThreadRun == true){
+			try {
+				Thread.sleep(1000);
+			} catch (InterruptedException e) {
+			}
+			continue;
+			
+			/*
+			NetworkMsg msg = this.receiveMsg(networkReader);
+			if(msg == null){
+				try {
+					Thread.sleep(100);
+				} catch (InterruptedException e) {
+				}
+				continue;
+			}
 			switch(msg.getCommandNumber()){
 			case NetworkMsg.COMMAND_ACK_VMLIST:
 				handleVMList(msg);
@@ -43,10 +57,11 @@ public class NetworkClientReceiver implements Runnable {
 				KLog.printErr("Cannot parse network command : " + msg);
 				break;			
 			}
+			*/
 		}
 	}
 
-	private NetworkMsg receiveMSg(DataInputStream reader) {
+	private NetworkMsg receiveMsg(DataInputStream reader) {
 		NetworkMsg receiveMsg = null;		
 		try {
 			int msgNumber = reader.readInt();
@@ -100,5 +115,15 @@ public class NetworkClientReceiver implements Runnable {
 	}
 
 	private void handleVMStop(NetworkMsg msg) {
+	}
+
+	public void close() {
+		this.isThreadRun = false;
+		
+		try {
+			this.networkReader.close();
+		} catch (IOException e) {
+			KLog.printErr(e.toString());
+		}
 	}
 }

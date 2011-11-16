@@ -1,6 +1,7 @@
 package edu.cmu.cs.cloudlet.android.network;
 
 import java.io.UnsupportedEncodingException;
+import java.nio.ByteBuffer;
 import java.util.ArrayList;
 
 import org.json.JSONArray;
@@ -62,9 +63,7 @@ public class NetworkMsg {
 	}
 	public void setJsonPayload(JSONObject jsonPayload) {
 		this.jsonPayload = jsonPayload;
-	}
-
-	
+	}	
 	
 	/*
 	 * Generating Sending Message
@@ -80,16 +79,69 @@ public class NetworkMsg {
 			json.put("Request_synthesis_core", "4");
 		} catch (JSONException e) {
 			e.printStackTrace();
+		}		
+		saveJSON(msg, json);		
+		return msg;
+	}
+
+	public static NetworkMsg MSG_SelectedVM(VMInfo vm) {
+		NetworkMsg msg = new NetworkMsg(COMMAND_REQ_TRANSFER_START);
+		ArrayList<VMInfo> overlay = new ArrayList<VMInfo>();
+		overlay.add(vm);
+		JSONObject json = NetworkMsg.generateJSON(overlay);
+		
+		// additional values
+		try {
+			json.put("Protocol-version", NetworkMsg.PROTOCOL_VERSION);
+		} catch (JSONException e) {
+			e.printStackTrace();
 		}
+
+		saveJSON(msg, json);		
+		return msg;
+	}
+
+	public static NetworkMsg MSG_LaunchVM(VMInfo vm, int cpuNumber, int memSize) {
+		NetworkMsg msg = new NetworkMsg(COMMAND_REQ_TRANSFER_START);
+		ArrayList<VMInfo> overlay = new ArrayList<VMInfo>();
+		overlay.add(vm);
+		JSONObject json = NetworkMsg.generateJSON(overlay);
 		
-		msg.jsonPayload = json;
-		byte[] data = json.toString().getBytes();
-		msg.payload = data;
-		msg.payloadLength = data.length;
+		// additional values
+		try {
+			json.put("Protocol-version", NetworkMsg.PROTOCOL_VERSION);
+			if(cpuNumber > 0)
+				json.put("memory_size", memSize + "");
+			if(memSize > 0)
+				json.put("vcpu_number", cpuNumber + "");			
+		} catch (JSONException e) {
+			e.printStackTrace();
+		}
+
+		saveJSON(msg, json);
+		return msg;
+	}
+
+	public static NetworkMsg MSG_StopVM(VMInfo vm) {
+		NetworkMsg msg = new NetworkMsg(COMMAND_REQ_TRANSFER_START);
+		ArrayList<VMInfo> overlay = new ArrayList<VMInfo>();
+		overlay.add(vm);
+		JSONObject json = NetworkMsg.generateJSON(overlay);
 		
+		// additional values
+		try {
+			json.put("Protocol-version", NetworkMsg.PROTOCOL_VERSION);			
+		} catch (JSONException e) {
+			e.printStackTrace();
+		}
+
+		saveJSON(msg, json);		
 		return msg;
 	}
 	
+	/*
+	 * JSON Utility
+	 */
 	public void printJSON(){
 		if(this.jsonPayload != null){
 			String jsonString = null;
@@ -121,9 +173,24 @@ public class NetworkMsg {
 
 		return rootObject;
 	}
+
+	private static void saveJSON(NetworkMsg msg, JSONObject json) {
+		msg.jsonPayload = json;
+		byte[] data = json.toString().getBytes();
+		msg.payload = data;
+		msg.payloadLength = data.length;
+	}
 	
 	public String toString(){
 		return this.commandNumber + " " + this.payloadLength + " " + this.jsonPayload;
+	}
+	
+	public byte[] toNetworkByte(){
+		ByteBuffer byteBuffer = ByteBuffer.allocate(4 + 4 + this.payload.length);
+		byteBuffer.putInt(this.commandNumber);
+		byteBuffer.putInt(this.payloadLength);
+		byteBuffer.put(this.payload);
+		return byteBuffer.array();
 	}
 	
 }

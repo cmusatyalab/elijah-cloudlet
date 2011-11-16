@@ -11,11 +11,13 @@ import java.util.ArrayList;
 import java.util.Vector;
 
 import edu.cmu.cs.cloudlet.android.util.CloudletEnv;
+import edu.cmu.cs.cloudlet.android.util.KLog;
 
 import android.content.Context;
 import android.os.Handler;
 
-public class NetworkClientSender implements Runnable {
+public class NetworkClientSender extends Thread {
+	private boolean isThreadRun = true;
 	private static boolean IS_MOCK = true;
 	private Context mContext;
 	private Handler mHandler;
@@ -32,28 +34,30 @@ public class NetworkClientSender implements Runnable {
 	}
 
 	public void initConnection(String ip, int port) throws UnknownHostException, IOException {
-		if(NetworkClientSender.IS_MOCK == false){
-			mClientSocket = new Socket(ip, port);
-			networkWriter = new DataOutputStream(mClientSocket.getOutputStream());
-			receiver = new NetworkClientReceiver(new DataInputStream(mClientSocket.getInputStream()), mHandler);
-			Thread receiverThread = new Thread(receiver);
-			receiverThread.start();			
-		}else{
-			// for mock test, read from file
-			FileOutputStream mockOutputFile = new FileOutputStream(CloudletEnv.instance().getFilePath(CloudletEnv.SOCKET_MOCK_OUTPUT));
-			networkWriter = new DataOutputStream(mockOutputFile);
-//			receiver = new NetworkClientReceiver(new DataInputStream(mClientSocket.getInputStream()), mHandler);
-//			Thread receiverThread = new Thread(receiver);
-//			receiverThread.start();
-		}
+		mClientSocket = new Socket(ip, port);
+		networkWriter = new DataOutputStream(mClientSocket.getOutputStream());
+		receiver = new NetworkClientReceiver(new DataInputStream(mClientSocket.getInputStream()), mHandler);
+			
+
+		/*
+		// for mock test, read from file
+		FileOutputStream mockOutputFile = new FileOutputStream(CloudletEnv.instance().getFilePath(CloudletEnv.SOCKET_MOCK_OUTPUT));
+		networkWriter = new DataOutputStream(mockOutputFile);
+		receiver = new NetworkClientReceiver(new DataInputStream(mClientSocket.getInputStream()), mHandler);
+		Thread receiverThread = new Thread(receiver);
+		receiverThread.start();
+		 */
 	}
 		
 	public void run() {
 		if(mClientSocket == null || networkWriter == null){
 			return;
 		}
-
-		while(true){
+		// Socket Receiver Thread Start 
+		Thread receiverThread = new Thread(receiver);
+		receiverThread.start();
+		
+		while(isThreadRun == true){
 			if(commandQueue.size() == 0){
 				try {
 					Thread.sleep(100);
@@ -67,11 +71,11 @@ public class NetworkClientSender implements Runnable {
 		}
 	}
 
-	private void sendCommand(NetworkMsg remove) {
+	private void sendCommand(NetworkMsg msg) {
 		// upload image
 		try {
-			networkWriter.writeInt(1);
-			networkWriter.write(1);
+			byte[] byteMsg = msg.toNetworkByte();
+			networkWriter.write(byteMsg);
 			networkWriter.flush(); // flush for accurate time measure
 		} catch (IOException e) {
 			e.printStackTrace();
@@ -81,6 +85,18 @@ public class NetworkClientSender implements Runnable {
 
 	public void requestCommand(NetworkMsg command){
 		this.commandQueue.add(command);
+	}
+
+	public void close() {
+		try {
+			this.receiver.close();			
+			this.isThreadRun = false;
+			networkWriter.close();
+			mClientSocket.close();
+		} catch (IOException e) {
+			KLog.printErr(e.toString());
+		}
+		KLog.println("Socket Connection Closed");
 	}
 
 }
