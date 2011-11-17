@@ -44,6 +44,11 @@ public class KLog {
 	
 	public static void printErr(String message) {
 		Log.e(TAG, message);
+		StackTraceElement[] stackTraces = Thread.currentThread().getStackTrace();
+		for(int i = 0; i < stackTraces.length; i++){
+		    StackTraceElement stackTraceElement = stackTraces[i];
+			Log.e(TAG, stackTraceElement.toString());
+		}
 		if(mWriter != null){
 			try {
 				mWriter.write("[ERROR] " + TIMESTAMP_FMT.format(new Date()));

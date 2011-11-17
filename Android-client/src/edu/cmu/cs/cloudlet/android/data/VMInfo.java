@@ -9,49 +9,62 @@ import java.util.TreeMap;
 import org.json.JSONException;
 import org.json.JSONObject;
 
+import edu.cmu.cs.cloudlet.android.util.KLog;
+
 import android.util.Log;
 
 public class VMInfo {
 	protected TreeMap<String, String> data = new TreeMap<String, String>();
 	protected File rootDirectory = null;
 	
-	protected String KEY_NAME = "name";
-	protected String KEY_TYPE = "type";
-	protected String KEY_DISKIMAGE_NAME = "diskimg_name";
-	protected String KEY_MEMORYSNAPSHOT_NAME = "memorysnapshot_name";
+	public static final String KEY_NAME = "name";
+	public static final String KEY_TYPE = "type";
+	public static final String KEY_DISKIMAGE_PATH = "diskimg_path";
+	public static final String KEY_DISKIMAGE_SIZE = "diskimg_size";
+	public static final String KEY_MEMORYSNAPSHOT_PATH = "memorysnapshot_path";
+	public static final String KEY_MEMORYSNAPSHOT_SIZE = "memorysnapshot_size";
 //	protected String uuid;
 //	protected String version;
-
-	public VMInfo() {
-	}
 	
-	public VMInfo(File overlayDirectory){
+	
+	public VMInfo(File overlayDirectory, String vmName){
 		rootDirectory = overlayDirectory;
-		String name = rootDirectory.getName();
 		File[] files = rootDirectory.listFiles();
 		
-		this.data.put(KEY_NAME, name);
-		this.data.put(KEY_TYPE, "overlay");		
+		this.data.put(KEY_NAME, vmName);
+		this.data.put(KEY_TYPE, "overlay");
 		for(int i = 0; i < files.length; i++){
-			String filename = files[i].getName();			
+			String filename = files[i].getAbsolutePath();
 			if(filename.endsWith("mem") == true){
-				this.data.put(KEY_MEMORYSNAPSHOT_NAME, filename);
+				this.data.put(KEY_MEMORYSNAPSHOT_PATH, filename);
+				this.data.put(KEY_MEMORYSNAPSHOT_SIZE, "" + files[i].length());
 			}else if(filename.endsWith("img") == true){
-				this.data.put(KEY_DISKIMAGE_NAME, filename);
+				this.data.put(KEY_DISKIMAGE_PATH, filename);
+				this.data.put(KEY_DISKIMAGE_SIZE, "" + files[i].length());
 			}
 		}
-	}	
+	}
+
+	public VMInfo(JSONObject jsonVM) throws JSONException {
+		Iterator keys = jsonVM.keys();
+		while(keys.hasNext()){
+			String key = (String) keys.next();
+			Object value = jsonVM.get(key);
+			if(value instanceof String){
+				String value_string = (String)value;
+				this.data.put(key, value_string);
+			}else{
+				KLog.printErr("json value is not String type : " + key);
+			}
+		}
+	}
 
 	public JSONObject toJSON(){
 		JSONObject object = new JSONObject(this.data);
 		return object;
 	}
 	
-	public VMInfo getTestVMInfo(){
-		this.data.put(KEY_NAME, "ubuntu");
-		this.data.put(KEY_TYPE, "overlay");		
-		this.data.put(KEY_MEMORYSNAPSHOT_NAME, "ubuntu_overlay.mem");
-		this.data.put(KEY_DISKIMAGE_NAME, "ubuntu_overlay.img");
-		return this;
+	public String getInfo(String key){
+		return this.data.get(key);		
 	}
 }

@@ -47,7 +47,7 @@ int read_full(int fd, char *buffer, int count) {
 /*
  * Write exact amount of data at fd
  */
-int write_full(int fd, char *buffer, int count) {
+int write_full(int fd, const char *buffer, int count) {
 	int got, done;
 	done = 0;
 	char *buf = buffer;

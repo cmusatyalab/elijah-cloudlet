@@ -28,6 +28,7 @@ public class NetworkMsg {
 	protected int payloadLength = -1;
 	protected byte[] payload = null;
 	protected JSONObject jsonPayload = null;
+	private ArrayList<VMInfo> vmList = new ArrayList<VMInfo>();
 	
 	
 	public NetworkMsg(int command) {
@@ -84,10 +85,11 @@ public class NetworkMsg {
 		return msg;
 	}
 
-	public static NetworkMsg MSG_SelectedVM(VMInfo vm) {
+	public static NetworkMsg MSG_SelectedVM(VMInfo baseVM, VMInfo overlayVM) {
 		NetworkMsg msg = new NetworkMsg(COMMAND_REQ_TRANSFER_START);
 		ArrayList<VMInfo> overlay = new ArrayList<VMInfo>();
-		overlay.add(vm);
+		overlay.add(baseVM);
+		overlay.add(overlayVM);
 		JSONObject json = NetworkMsg.generateJSON(overlay);
 		
 		// additional values
@@ -97,7 +99,8 @@ public class NetworkMsg {
 			e.printStackTrace();
 		}
 
-		saveJSON(msg, json);		
+		saveJSON(msg, json);
+		msg.saveVMList(overlay);
 		return msg;
 	}
 
@@ -180,6 +183,14 @@ public class NetworkMsg {
 		msg.payload = data;
 		msg.payloadLength = data.length;
 	}
+
+	private void saveVMList(ArrayList<VMInfo> overlay) {
+		this.vmList = overlay;
+	}
+
+	public ArrayList<VMInfo> getVMList() {
+		return this.vmList;
+	}
 	
 	public String toString(){
 		return this.commandNumber + " " + this.payloadLength + " " + this.jsonPayload;
@@ -192,5 +203,4 @@ public class NetworkMsg {
 		byteBuffer.put(this.payload);
 		return byteBuffer.array();
 	}
-	
 }

@@ -1,13 +1,23 @@
 package edu.cmu.cs.cloudlet.android.network;
 
+import java.io.IOException;
+import java.util.ArrayList;
+import java.util.Vector;
+
+import org.json.JSONArray;
+import org.json.JSONException;
+import org.json.JSONObject;
+
 import edu.cmu.cs.cloudlet.android.R;
 import edu.cmu.cs.cloudlet.android.data.VMInfo;
+import edu.cmu.cs.cloudlet.android.util.CloudletEnv;
 import edu.cmu.cs.cloudlet.android.util.KLog;
 
 import android.app.AlertDialog;
 import android.app.ProgressDialog;
 import android.content.Context;
 import android.content.DialogInterface;
+import android.os.Bundle;
 import android.os.Handler;
 import android.os.Message;
 import android.util.TypedValue;
@@ -16,8 +26,9 @@ import android.widget.TextView;
 
 public class CloudletConnector {
 	public static final int CONNECTION_ERROR	 	= 1;
-	public static final int PROGRESS_MESSAGE		= 2;
-	public static final int FINISH_MESSAGE			= 3;
+	public static final int NETWORK_ERROR 			= 2;
+	public static final int PROGRESS_MESSAGE		= 3;
+	public static final int FINISH_MESSAGE			= 4;
 	
 	protected Context mContext;
 	protected NetworkClientSender networkClient;
@@ -41,12 +52,17 @@ public class CloudletConnector {
 		mDialog.show();
 		
 		networkClient.setConnection(ipAddress, port); 
-		networkClient.start();		
+		networkClient.start();
+		
+		// Send VM Request Message 
+		NetworkMsg networkMsg = NetworkMsg.MSG_OverlayList();
+		networkClient.requestCommand(networkMsg);
 	}
 	
 	public View.OnClickListener protocolTestClickListener = new View.OnClickListener() {
 		public void onClick(View v) {
 			NetworkMsg networkMsg = null;
+			VMInfo vm = CloudletEnv.instance().getOverlayDirectoryInfo().get(0);
 			
 			switch(v.getId()){
 			case R.id.protocol_test1:
@@ -55,18 +71,15 @@ public class CloudletConnector {
 				break;
 			case R.id.protocol_test2:
 				// Send REQ Transfer_Start
-				VMInfo vm2 = new VMInfo().getTestVMInfo();
-				networkMsg = NetworkMsg.MSG_SelectedVM(vm2);
+				networkMsg = NetworkMsg.MSG_SelectedVM(vm, vm);
 				break;
 			case R.id.protocol_test3:				
 				// REQ Launch
-				VMInfo vm3 = new VMInfo().getTestVMInfo();
-				networkMsg = NetworkMsg.MSG_LaunchVM(vm3, 4, 512);
+				networkMsg = NetworkMsg.MSG_LaunchVM(vm, 4, 512);
 				break;
 			case R.id.protocol_test4:
 				// REQ Stop
-				VMInfo vm4 = new VMInfo().getTestVMInfo();
-				networkMsg = NetworkMsg.MSG_StopVM(vm4);
+				networkMsg = NetworkMsg.MSG_StopVM(vm);
 				break;
 			case R.id.protocol_test5:
 			break;
@@ -89,49 +102,140 @@ public class CloudletConnector {
 	Handler eventHandler = new Handler() {
 		public void handleMessage(Message msg) {
 			if(msg.what == CloudletConnector.CONNECTION_ERROR){
-				if(mDialog != null && mDialog.isShowing() == true){
+				if(mDialog != null){
 					mDialog.dismiss();
 				}
 				
-				messageBuffer.append(msg.getData().getString("message") + "\n");
-				new AlertDialog.Builder(mContext).setTitle("Error")
-				.setMessage(messageBuffer.toString())
-				.setNegativeButton("Confirm", null)
-				.show();
+				String message = msg.getData().getString("message");
+				showAlertDialog(message);
+			}else if(msg.what == CloudletConnector.NETWORK_ERROR){
+				if(mDialog != null){
+					mDialog.dismiss();
+				}
+				String message = msg.getData().getString("message");
+				showAlertDialog(message);
 			}else if(msg.what == CloudletConnector.PROGRESS_MESSAGE){
-				messageBuffer.append(msg.getData().getString("message") + "\n");
-				if(mDialog == null){
-					mDialog = ProgressDialog.show(mContext, "Info", messageBuffer.toString(), true);					
+				Bundle data = msg.getData();
+				NetworkMsg response = (NetworkMsg) msg.obj;
+				
+				// Display to Dialog
+				messageBuffer.append(data.getString("message") + "\n");
+				KLog.println(messageBuffer.toString());				
+				if(mDialog != null){
+//					mDialog = ProgressDialog.show(mContext, "Info", messageBuffer.toString(), true);
+					mDialog.dismiss();					
 				}
-				mDialog.setMessage(messageBuffer.toString());
-				if(mDialog.isShowing() == false){
-					mDialog.show();
+				
+				// Check JSON there is error message or not.
+				if(checkErrorStutus(response.getJsonPayload()) == true){
+					return;
 				}
-
-				KLog.println(messageBuffer.toString());
+				
+				// Handle Cloudlet response
+				if(response != null){
+					switch(response.getCommandNumber()){
+					case NetworkMsg.COMMAND_ACK_VMLIST:
+						KLog.println("COMMAND_ACK_VMLIST message received");
+						responseVMList(response);
+						break;
+					case NetworkMsg.COMMAND_ACK_TRANSFER_START:
+						KLog.println("COMMAND_ACK_TRANSFER_START message received");
+						responseTransferStart(response);
+						break;
+					case NetworkMsg.COMMAND_ACK_VM_LAUNCH:
+						KLog.println("COMMAND_ACK_VM_LAUNCH message received");
+						responseVMLaunch(response);
+						break;
+					case NetworkMsg.COMMAND_ACK_VM_STOP:
+						KLog.println("COMMAND_ACK_VM_STOP message received");
+						responseVMStop(response);
+						break;
+					default:
+						break;
+					}
+				}
+			}else if(msg.what == CloudletConnector.FINISH_MESSAGE){
+				if(mDialog != null && mDialog.isShowing() == true){
+					mDialog.dismiss();
+					
+					// Do network work
+				}
 			}
 		}
 	};
-	
-	private void DialogSelectOption() {
-		final String items[] = { "item1", "item2", "item3" };
-		AlertDialog.Builder ab = new AlertDialog.Builder(this.mContext);
-		ab.setTitle("Title");
-		ab.setIcon(R.drawable.ic_launcher);
-		ab.setSingleChoiceItems(items, 0,
-			new DialogInterface.OnClickListener() {
-			public void onClick(DialogInterface dialog, int whichButton) {
+
+	private void responseVMList(NetworkMsg response) {
+		ArrayList<VMInfo> overlayVMList = CloudletEnv.instance().getOverlayDirectoryInfo();
+		Vector<VMInfo> matchingVMList = new Vector<VMInfo>();
+		VMInfo overlayVM = null;
+		
+		try {
+			JSONObject json = response.getJsonPayload();
+			JSONArray vms = json.getJSONArray("VM");
+			for(int i = 0; i < vms.length(); i++){
+				JSONObject vm = (JSONObject) vms.get(i);
+				VMInfo newVM = new VMInfo(vm);
+				for(int j = 0; j < overlayVMList.size(); j++){
+					// matching with mobile overlay list
+					String name = overlayVMList.get(j).getInfo(VMInfo.KEY_NAME);
+					if(name.equalsIgnoreCase(newVM.getInfo(VMInfo.KEY_NAME))){
+						if(matchingVMList.contains(newVM) == false){
+							matchingVMList.add(newVM);
+							overlayVM = overlayVMList.get(j);
+						}
+					}
+				}
+				KLog.println(newVM.toJSON().toString());
 			}
-			}).setPositiveButton("Ok",
-			new DialogInterface.OnClickListener() {
-			public void onClick(DialogInterface dialog, int whichButton) {
-			}
-			}).setNegativeButton("Cancel",
-			new DialogInterface.OnClickListener() {
-			public void onClick(DialogInterface dialog, int whichButton) {
-			}
-			});
-		ab.show();
+		} catch (JSONException e) {
+			KLog.printErr(e.toString());
+		}
+		
+		// Send VM Transfer Message
+		if(matchingVMList.size() == 1){
+			VMInfo baseVM = matchingVMList.get(0);
+			NetworkMsg sendMsg = NetworkMsg.MSG_SelectedVM(baseVM, overlayVM);
+			this.networkClient.requestCommand(sendMsg);								
+			
+		}else{
+			// No matching VM List
+			this.showAlertDialog("No Matching VM with Cloudlet");
+		}
+		
 	}
 
+	private void responseTransferStart(NetworkMsg response) {
+	}
+	
+	private void responseVMLaunch(NetworkMsg response) {
+	}
+
+	private void responseVMStop(NetworkMsg response) {
+	}
+
+
+	
+	/*
+	 * Check Error Message in JSON
+	 */
+	private boolean checkErrorStutus(JSONObject json) {
+		String errorMsg = null;;
+		try {
+			errorMsg = json.getString("Error");
+		} catch (JSONException e) {
+		}
+		if(errorMsg != null && errorMsg.length() > 0){
+			// Response is error message
+			showAlertDialog(errorMsg);
+			return true;
+		}
+		return false;
+	}
+	
+	private void showAlertDialog(String errorMsg) {
+		new AlertDialog.Builder(mContext).setTitle("Error")
+		.setMessage(errorMsg)
+		.setNegativeButton("Confirm", null)
+		.show();
+	}
 }

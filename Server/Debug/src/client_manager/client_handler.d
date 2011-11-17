@@ -1,6 +1,8 @@
 src/client_manager/client_handler.d src/client_manager/client_handler.o: \
  ../src/client_manager/client_handler.c \
  ../src/client_manager/client_handler.h \
+ ../src/client_manager/../lib/lib_type.h \
+ ../src/client_manager/../protocol.h \
  ../src/client_manager/../util/json_util.h /usr/include/glib-2.0/glib.h \
  /usr/include/glib-2.0/glib/galloca.h /usr/include/glib-2.0/glib/gtypes.h \
  /usr/lib/glib-2.0/include/glibconfig.h \
@@ -50,6 +52,10 @@ src/client_manager/client_handler.d src/client_manager/client_handler.o: \
  ../src/client_manager/../lib/lib_socket.h
 
 ../src/client_manager/client_handler.h:
+
+../src/client_manager/../lib/lib_type.h:
+
+../src/client_manager/../protocol.h:
 
 ../src/client_manager/../util/json_util.h:
 

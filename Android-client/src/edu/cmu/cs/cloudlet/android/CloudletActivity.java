@@ -30,23 +30,30 @@ public class CloudletActivity extends Activity {
 		this.serviceDiscovery = new ServiceDiscovery();
 		this.serviceDiscovery.setHandler(discoveryHandler);
 		this.connector = new CloudletConnector(CloudletActivity.this);
-		
+
 		// set button action
 		connector.startConnection("128.2.212.207", 9090);
-//		Button mSendButton = (Button) findViewById(R.id.connectButton);
-//		mSendButton.setOnClickListener(clickListener);
-		
-		// Protocol Formatting test
-		Button protocol_test1 = (Button) findViewById(R.id.protocol_test1);
-		Button protocol_test2 = (Button) findViewById(R.id.protocol_test2);
-		Button protocol_test3 = (Button) findViewById(R.id.protocol_test3);
-		Button protocol_test4 = (Button) findViewById(R.id.protocol_test4);
-		Button protocol_test5 = (Button) findViewById(R.id.protocol_test5);
-		protocol_test1.setOnClickListener(connector.protocolTestClickListener);
-		protocol_test2.setOnClickListener(connector.protocolTestClickListener);
-		protocol_test3.setOnClickListener(connector.protocolTestClickListener);
-		protocol_test4.setOnClickListener(connector.protocolTestClickListener);
-		protocol_test5.setOnClickListener(connector.protocolTestClickListener);		
+
+		/*
+		 * Button mSendButton = (Button) findViewById(R.id.connectButton);
+		 * mSendButton.setOnClickListener(clickListener); // Protocol Formatting
+		 * test Button protocol_test1 = (Button)
+		 * findViewById(R.id.protocol_test1); Button protocol_test2 = (Button)
+		 * findViewById(R.id.protocol_test2); Button protocol_test3 = (Button)
+		 * findViewById(R.id.protocol_test3); Button protocol_test4 = (Button)
+		 * findViewById(R.id.protocol_test4); Button protocol_test5 = (Button)
+		 * findViewById(R.id.protocol_test5);
+		 * protocol_test1.setOnClickListener(connector
+		 * .protocolTestClickListener);
+		 * protocol_test2.setOnClickListener(connector
+		 * .protocolTestClickListener);
+		 * protocol_test3.setOnClickListener(connector
+		 * .protocolTestClickListener);
+		 * protocol_test4.setOnClickListener(connector
+		 * .protocolTestClickListener);
+		 * protocol_test5.setOnClickListener(connector
+		 * .protocolTestClickListener);
+		 */
 	}
 
 	/*
@@ -54,7 +61,7 @@ public class CloudletActivity extends Activity {
 	 */
 	Handler discoveryHandler = new Handler() {
 		public void handleMessage(Message msg) {
-			if(msg.what == ServiceDiscovery.SERVICE_FOUND){
+			if (msg.what == ServiceDiscovery.SERVICE_FOUND) {
 				Bundle data = msg.getData();
 				String ipAddress = data.getString(ServiceDiscovery.KEY_SERVICE_IP_ADDRESS);
 				int port = data.getInt(ServiceDiscovery.KEY_SERVICE_PORT);
@@ -68,7 +75,6 @@ public class CloudletActivity extends Activity {
 		public void onClick(View v) {
 		}
 	};
-
 
 	public boolean onKeyDown(int keyCode, KeyEvent event) {
 		if (keyCode == KeyEvent.KEYCODE_BACK) {
@@ -87,5 +93,23 @@ public class CloudletActivity extends Activity {
 	public void onDestroy() {
 		connector.close();
 		super.onDestroy();
+	}
+
+	private void DialogSelectOption() {
+		final String items[] = { "item1", "item2", "item3" };
+		AlertDialog.Builder ab = new AlertDialog.Builder(this);
+		ab.setTitle("Title");
+		ab.setIcon(R.drawable.ic_launcher);
+		ab.setSingleChoiceItems(items, 0, new DialogInterface.OnClickListener() {
+			public void onClick(DialogInterface dialog, int whichButton) {
+			}
+		}).setPositiveButton("Ok", new DialogInterface.OnClickListener() {
+			public void onClick(DialogInterface dialog, int whichButton) {
+			}
+		}).setNegativeButton("Cancel", new DialogInterface.OnClickListener() {
+			public void onClick(DialogInterface dialog, int whichButton) {
+			}
+		});
+		ab.show();
 	}
 }
