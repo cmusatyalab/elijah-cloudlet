@@ -26,7 +26,8 @@ public class NetworkClientReceiver extends Thread {
 	public void run() {
 		while(isThreadRun == true){
 			try {
-				Thread.sleep(1000);
+				this.notifyStatus("reading...");				
+				Thread.sleep(100);
 			} catch (InterruptedException e) {
 			}
 			continue;
@@ -59,6 +60,15 @@ public class NetworkClientReceiver extends Thread {
 			}
 			*/
 		}
+	}
+
+	private void notifyStatus(String string) {
+		Message msg = Message.obtain();
+		msg.what = CloudletConnector.PROGRESS_MESSAGE;
+		Bundle data = new Bundle();
+		data.putString("message", string);
+		msg.setData(data);
+		this.mHandler.sendMessage(msg);
 	}
 
 	private NetworkMsg receiveMsg(DataInputStream reader) {

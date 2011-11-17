@@ -2,19 +2,17 @@ package edu.cmu.cs.cloudlet.android.network;
 
 import java.io.DataInputStream;
 import java.io.DataOutputStream;
-import java.io.File;
-import java.io.FileOutputStream;
 import java.io.IOException;
+import java.net.InetSocketAddress;
 import java.net.Socket;
 import java.net.UnknownHostException;
-import java.util.ArrayList;
 import java.util.Vector;
-
-import edu.cmu.cs.cloudlet.android.util.CloudletEnv;
 import edu.cmu.cs.cloudlet.android.util.KLog;
 
 import android.content.Context;
+import android.os.Bundle;
 import android.os.Handler;
+import android.os.Message;
 
 public class NetworkClientSender extends Thread {
 	private boolean isThreadRun = true;
@@ -22,6 +20,9 @@ public class NetworkClientSender extends Thread {
 	private Context mContext;
 	private Handler mHandler;
 
+	private String Server_ipAddress;
+	private int Server_port;
+	
 	private NetworkClientReceiver receiver;
 	private Vector<NetworkMsg> commandQueue = new Vector<NetworkMsg>();		//thread safe
 	private Socket mClientSocket;
@@ -33,11 +34,9 @@ public class NetworkClientSender extends Thread {
 		mHandler = handler;
 	}
 
-	public void initConnection(String ip, int port) throws UnknownHostException, IOException {
-		mClientSocket = new Socket(ip, port);
-		networkWriter = new DataOutputStream(mClientSocket.getOutputStream());
-		receiver = new NetworkClientReceiver(new DataInputStream(mClientSocket.getInputStream()), mHandler);
-			
+	public void setConnection(String ip, int port){
+		this.Server_ipAddress = ip;
+		this.Server_port = port; 
 
 		/*
 		// for mock test, read from file
@@ -48,14 +47,42 @@ public class NetworkClientSender extends Thread {
 		receiverThread.start();
 		 */
 	}
-		
-	public void run() {
-		if(mClientSocket == null || networkWriter == null){
-			return;
+
+
+	private boolean initConnection(String server_ipAddress2, int server_port2) {
+		try {
+			mClientSocket = new Socket();
+			mClientSocket.connect(new InetSocketAddress(this.Server_ipAddress, this.Server_port), 10*1000);
+			networkWriter = new DataOutputStream(mClientSocket.getOutputStream());
+			receiver = new NetworkClientReceiver(new DataInputStream(mClientSocket.getInputStream()), mHandler);
+		} catch (UnknownHostException e) {
+			Message msg = Message.obtain();
+			msg.what = CloudletConnector.CONNECTION_ERROR;
+			Bundle data = new Bundle();
+			data.putString("message", "Cannot Connect to " + this.Server_ipAddress + ":" + this.Server_port);
+			msg.setData(data);
+			mHandler.sendMessage(msg);
+			return false;
+		} catch (IOException e) {
+			Message msg = Message.obtain();
+			msg.what = CloudletConnector.CONNECTION_ERROR;
+			Bundle data = new Bundle();
+			data.putString("message", "Cannot Connect to " + this.Server_ipAddress + ":" + this.Server_port);
+			msg.setData(data);
+			mHandler.sendMessage(msg);
+			return false;
 		}
+		
+		return true;
+	}
+	
+	public void run() {
+		boolean ret = this.initConnection(this.Server_ipAddress, this.Server_port);
+		if(ret == false)
+			return;
+		
 		// Socket Receiver Thread Start 
-		Thread receiverThread = new Thread(receiver);
-		receiverThread.start();
+		this.receiver.start();
 		
 		while(isThreadRun == true){
 			if(commandQueue.size() == 0){
@@ -70,7 +97,7 @@ public class NetworkClientSender extends Thread {
 			this.sendCommand(commandQueue.remove(0));
 		}
 	}
-
+	
 	private void sendCommand(NetworkMsg msg) {
 		// upload image
 		try {

@@ -1,59 +1,47 @@
 package edu.cmu.cs.cloudlet.android.network;
 
-import java.io.IOException;
-import java.net.UnknownHostException;
-
-import org.json.JSONArray;
-import org.json.JSONException;
-import org.json.JSONObject;
-
-import edu.cmu.cs.cloudlet.android.CloudletActivity;
 import edu.cmu.cs.cloudlet.android.R;
 import edu.cmu.cs.cloudlet.android.data.VMInfo;
 import edu.cmu.cs.cloudlet.android.util.KLog;
 
 import android.app.AlertDialog;
+import android.app.ProgressDialog;
 import android.content.Context;
 import android.content.DialogInterface;
 import android.os.Handler;
 import android.os.Message;
+import android.util.TypedValue;
 import android.view.View;
+import android.widget.TextView;
 
 public class CloudletConnector {
+	public static final int CONNECTION_ERROR	 	= 1;
+	public static final int PROGRESS_MESSAGE		= 2;
+	public static final int FINISH_MESSAGE			= 3;
+	
 	protected Context mContext;
 	protected NetworkClientSender networkClient;
+
+	protected ProgressDialog mDialog;
+	protected StringBuffer messageBuffer;
 
 	public CloudletConnector(Context context) {
 		this.mContext = context;
 		networkClient = new NetworkClientSender(context, eventHandler);
+		messageBuffer = new StringBuffer();
 	}
-
-	/*
-	 * Server Message Handler
-	 */
-	Handler eventHandler = new Handler() {
-		public void handleMessage(Message msg) {
-		}
-	};
 	
 	public void startConnection(String ipAddress, int port) {
-		try {
-			networkClient.initConnection(ipAddress, port); 
-			networkClient.start();
-			
-		} catch (UnknownHostException e) {
-			new AlertDialog.Builder(mContext).setTitle("Error")
-			.setMessage("Unkown host: " + ipAddress + "(" + port + ")")
-			.setNegativeButton("Confirm", null)
-			.show();
-			return;
-		} catch (IOException e) {			
-			new AlertDialog.Builder(mContext).setTitle("Error")
-			.setMessage("IOException : " + e.toString())
-			.setNegativeButton("Confirm", null)
-			.show();
-			return;
+		if(mDialog == null){						 
+			mDialog = ProgressDialog.show(this.mContext, "Info", "Connecting to " + ipAddress , true);
+			mDialog.setIcon(R.drawable.ic_launcher);
+		}else{
+			mDialog.setMessage("Connecting to " + ipAddress);
 		}
+		mDialog.show();
+		
+		networkClient.setConnection(ipAddress, port); 
+		networkClient.start();		
 	}
 	
 	public View.OnClickListener protocolTestClickListener = new View.OnClickListener() {
@@ -93,4 +81,57 @@ public class CloudletConnector {
 		if(this.networkClient != null)
 			this.networkClient.close();
 	}
+	
+
+	/*
+	 * Server Message Handler
+	 */
+	Handler eventHandler = new Handler() {
+		public void handleMessage(Message msg) {
+			if(msg.what == CloudletConnector.CONNECTION_ERROR){
+				if(mDialog != null && mDialog.isShowing() == true){
+					mDialog.dismiss();
+				}
+				
+				messageBuffer.append(msg.getData().getString("message") + "\n");
+				new AlertDialog.Builder(mContext).setTitle("Error")
+				.setMessage(messageBuffer.toString())
+				.setNegativeButton("Confirm", null)
+				.show();
+			}else if(msg.what == CloudletConnector.PROGRESS_MESSAGE){
+				messageBuffer.append(msg.getData().getString("message") + "\n");
+				if(mDialog == null){
+					mDialog = ProgressDialog.show(mContext, "Info", messageBuffer.toString(), true);					
+				}
+				mDialog.setMessage(messageBuffer.toString());
+				if(mDialog.isShowing() == false){
+					mDialog.show();
+				}
+
+				KLog.println(messageBuffer.toString());
+			}
+		}
+	};
+	
+	private void DialogSelectOption() {
+		final String items[] = { "item1", "item2", "item3" };
+		AlertDialog.Builder ab = new AlertDialog.Builder(this.mContext);
+		ab.setTitle("Title");
+		ab.setIcon(R.drawable.ic_launcher);
+		ab.setSingleChoiceItems(items, 0,
+			new DialogInterface.OnClickListener() {
+			public void onClick(DialogInterface dialog, int whichButton) {
+			}
+			}).setPositiveButton("Ok",
+			new DialogInterface.OnClickListener() {
+			public void onClick(DialogInterface dialog, int whichButton) {
+			}
+			}).setNegativeButton("Cancel",
+			new DialogInterface.OnClickListener() {
+			public void onClick(DialogInterface dialog, int whichButton) {
+			}
+			});
+		ab.show();
+	}
+
 }
