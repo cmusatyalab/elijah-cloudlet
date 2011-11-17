@@ -70,8 +70,11 @@ int write_full(int fd, char *buffer, int count) {
  */
 #define BUFFERSIZE 	1024
 #define MAX_NIC		10
+
+// C-99 incompatible
 const char *myip() {
 	const char * localip = "0.0.0.0";
+	return localip;
 	struct ifconf ifc;
 	struct ifreq ifr[MAX_NIC];
 	static char ip[BUFFERSIZE];

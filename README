@@ -1,5 +1,11 @@
 Prototype for Cloudlet
 
+# Source dependency
+1) C Server
+	glib-2.0
+	libjson0-dev (JSON manipulation library)
+2) Python Script
+3) Android-client
 
 # GIT Basic Command
 $ git add README

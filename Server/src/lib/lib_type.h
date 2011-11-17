@@ -13,7 +13,8 @@
 /*
  * Log Macro
  */
-#define PRINT_OUT(...)					fprintf(stdout, __VA_ARGS__)
-#define PRINT_ERR(...)					fprintf(stderr, __VA_ARGS__)
+
+#define PRINT_OUT(fmt, args...) fprintf(stdout, "[%s][%d] "fmt, __FUNCTION__, __LINE__, ##args);
+#define PRINT_ERR(fmt, args...) fprintf(stderr, "[%s][%d] "fmt, __FUNCTION__, __LINE__, ##args);
 
 #endif

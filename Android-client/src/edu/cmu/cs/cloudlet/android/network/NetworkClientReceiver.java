@@ -118,10 +118,10 @@ public class NetworkClientReceiver extends Thread {
 	}
 
 	public void close() {
-		this.isThreadRun = false;
-		
+		this.isThreadRun = false;		
 		try {
-			this.networkReader.close();
+			if(this.networkReader != null)
+				this.networkReader.close();
 		} catch (IOException e) {
 			KLog.printErr(e.toString());
 		}

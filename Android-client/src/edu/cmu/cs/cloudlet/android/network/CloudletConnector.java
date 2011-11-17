@@ -38,9 +38,7 @@ public class CloudletConnector {
 	
 	public void startConnection(String ipAddress, int port) {
 		try {
-			networkClient.initConnection(ipAddress, port);
-
-			// Socket Thread Start 
+			networkClient.initConnection(ipAddress, port); 
 			networkClient.start();
 			
 		} catch (UnknownHostException e) {
@@ -92,6 +90,7 @@ public class CloudletConnector {
 	};
 
 	public void close() {
-		networkClient.close();
+		if(this.networkClient != null)
+			this.networkClient.close();
 	}
 }

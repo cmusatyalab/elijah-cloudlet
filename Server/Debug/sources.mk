@@ -13,6 +13,7 @@ EXECUTABLES :=
 
 # Every subdirectory with source files must be described here
 SUBDIRS := \
+src/util \
 src/lib \
 src/client_manager \
 src \

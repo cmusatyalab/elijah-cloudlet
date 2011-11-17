@@ -1,39 +1,48 @@
 #include "client_manager.h"
+#include "client_handler.h"
+#include "../protocol.h"
+#include "../util/json_util.h"
 #include "../lib/lib_socket.h"
 #include "../lib/lib_type.h"
 
+#include <unistd.h>
 #include <sys/socket.h>
 #include <arpa/inet.h>
 #include <netinet/in.h>
 #include <netinet/tcp.h>
 
 #include <stdio.h>
-#include <sys/wait.h>
+#include <stdlib.h>
+#include <string.h>
 #include <pthread.h>
 
 #include <json/json.h>
 
-
-static pthread_t client_manager_thread;
-static pthread_t client_data_handler;
+/*
+ * Private method definition
+ */
+static void init_client(int client_handler);
 void *start_client_handler(void *arg); //socket connection thread
 void *start_client_manager(void *arg); // client handler thread
 
+/*
+ * Private data
+ */
+static pthread_t client_manager_thread;			// network socket accept thread
+static pthread_t client_data_handler;			// client data handler thread
 typedef struct {
 	int sock_fd;
 	char ip_address[16];
 }__attribute__((packed)) TCPClient;
+static TCPClient clients[MAX_CLIENT_NUMBER];	// array structure for client fd
 
-//array for managing client
-static TCPClient clients[MAX_CLIENT_NUMBER];
-
-/*
- * Client Thread Conroller
- */
-pthread_mutex_t client_mutex;
+pthread_mutex_t client_mutex;					// client socket mutex
 static int client_lock;
 static fd_set clients_fdset;
-static void init_client(int client_handler);
+
+/*
+ * Client Thread Lock
+ */
 static void lock() {
 	client_lock = 1;
 	pthread_mutex_lock(&client_mutex);
@@ -50,7 +59,9 @@ static void waiting_lock() {
 }
 
 
-#pragma mark PUBLIC_METHOD
+/*
+ * Public method implementation
+ */
 int init_client_manager(){
 	pthread_create(&client_manager_thread, NULL, start_client_manager, NULL);
 	return SUCCESS;
@@ -112,11 +123,9 @@ void *start_client_manager(void* args){
 }
 
 
-
-
-#pragma mark PRIVATE_METHOD
-
-// init(or reset) client socket connection
+/*
+ * Private method implementation
+ */
 static void init_client(int client_handler) {
 	lock();
 	memset(clients[client_handler].ip_address, 0, sizeof(clients[client_handler].ip_address));
@@ -131,12 +140,12 @@ void *start_client_handler(void *arg) {
 	struct timeval timeout;
 	fd_set temp_fdset;
 	Client_Msg client_msg;
-	unsigned char* json_byte;
+	char* json_string;
 	int json_max_size = MAX_JSON_SIZE;
 	int result;
-	int i, j;
+	int i;
 
-	json_byte  = (unsigned char*)malloc(json_max_size * sizeof(char));
+	json_string = (char*) malloc(json_max_size * sizeof(char));
 
 	FD_ZERO(&clients_fdset);
 	FD_ZERO(&temp_fdset);
@@ -149,8 +158,7 @@ void *start_client_handler(void *arg) {
 		temp_fdset = clients_fdset;
 		result = select(FD_SETSIZE, &temp_fdset, (fd_set *) NULL, (fd_set *) NULL, &timeout);
 		if (result == 0) {
-			usleep(100);
-			// time-out
+			usleep(100);	// time-out
 			unlock();
 			continue;
 		} else if (result == -1) {
@@ -167,12 +175,8 @@ void *start_client_handler(void *arg) {
 				continue;
 			}
 
-			//PRINT_OUT("[%d] New Data is coming\n", i);
-			char buffer[1];
-			result = recv(clients[i].sock_fd, buffer, 1, MSG_WAITALL);
-			printf("%s", buffer);
+			PRINT_OUT("[%d] New Data is coming\n", i);
 
-			/*
 			memset(&client_msg, '\0', sizeof(client_msg));
 			result = recv(clients[i].sock_fd, &client_msg, 2 * sizeof(int), MSG_WAITALL);
 			if (result <= 0) {
@@ -184,85 +188,61 @@ void *start_client_handler(void *arg) {
 
 			// check buffer size for json
 			client_msg.payload_length = endian_swap_int(client_msg.payload_length);
+			client_msg.cmd = endian_swap_int(client_msg.cmd);
 			PRINT_OUT("[%d] Data Size : %d\n", i, client_msg.payload_length);
 			if(client_msg.payload_length > json_max_size){
 				json_max_size = sizeof(char) * client_msg.payload_length;
-				json_byte = (char*)realloc(json_byte, sizeof(char) * json_max_size);
-				if(!json_byte){
+				json_string = (char*)realloc(json_string, sizeof(char) * json_max_size);
+				if(!json_string){
 					PRINT_ERR("[%d] Cannot Allocate %d Memory.\n", i, json_max_size);
 					exit(-1);
 				}
 			}
 
-			// read pyaload
-			recv(clients[i].sock_fd, json_byte, client_msg.payload_length, MSG_WAITALL);
+			// read payload
+			recv(clients[i].sock_fd, json_string, client_msg.payload_length, MSG_WAITALL);
 			PRINT_OUT("[%d] All Data Received\n", i);
 
-			// parse JSON
-			 */
+			// protocol version check
+			json_object *jobj = json_tokener_parse((const char*)json_string);
+			char* protocol_version = json_get_type_value(jobj, JSON_KEY_PROTOCOL_VERSION, json_type_string);
+			if(strcasecmp(protocol_version, PROTOCOl_VERSION) != 0){
+				PRINT_ERR("[%d] Procotol version is Wrong %d != %d\n", protocol_version, PROTOCOl_VERSION);
+				return;
+			}
+			free(protocol_version);
 
+			// parsing packet
+			switch(client_msg.cmd){
+				case COMMAND_REQ_VMLIST:
+					PRINT_OUT("[%d] COMMAND_REQ_VMLIST\n", i);
+					parse_req_vmlist(clients[i].sock_fd, json_string);
+					break;
+				case COMMAND_REQ_TRANSFER_START:
+					PRINT_OUT("[%d] COMMAND_REQ_TRANSFER_START\n", i);
+					parse_req_transfer(clients[i].sock_fd, json_string);
+					break;
+				case COMMAND_REQ_VM_LAUNCH:
+					PRINT_OUT("[%d] COMMAND_REQ_TRANSFER_START\n", i);
+					parse_req_launch(clients[i].sock_fd, json_string);
+					break;
+				case COMMAND_REQ_VM_STOP:
+					PRINT_OUT("[%d] COMMAND_REQ_TRANSFER_START\n", i);
+					parse_req_stop(clients[i].sock_fd, json_string);
+					break;
+				default:
+					PRINT_ERR("[%d] Not valid command: %d\n", i, client_msg.cmd);
+					break;
+			}
 		}
 	}
 
-	free(json_byte);
+	free(json_string);
 	return NULL;
 }
 
-static int python_exec() {
-	FILE *fp;
-	int status;
-	char path[1035];
+/*
+ * Parse JSON and returns VM_Info data point
+ * caller have responsibility for deallocating memory
+ */
 
-	/* Open the command for reading. */
-	fp= popen("~/Cloudlet/src/Script/cloudet.py -o ~/Cloudlet/image/baseVM/ubuntu_base.qcow2 ~/Cloudlet/image/baseVM/ubuntu_base.mem","r");
-	if (fp == NULL) {
-		printf("Failed to run command\n");
-		return -1;
-	}
-	wait(&status);
-	printf("********* return1\n");
-
-	/* Read the output a line at a time - output it. */
-	while (fgets(path, sizeof(path) - 1, fp) != NULL) {
-		printf("%s", path);
-	}
-	printf("********* return2\n");
-
-	/* close */
-	pclose(fp);
-
-	return 0;
-}
-
-
-
-
-int test_JSON() {
-	char * string = "{\"name\" : \"joys of programming\"}";
-	json_object * jobj = json_tokener_parse(string);
-	enum json_type type = json_object_get_type(jobj);
-	printf("type: %d", type);
-	switch (type) {
-	case json_type_null:
-		printf("json_type_null\n");
-		break;
-	case json_type_boolean:
-		printf("json_type_boolean\n");
-		break;
-	case json_type_double:
-		printf("json_type_double\n");
-		break;
-	case json_type_int:
-		printf("json_type_int\n");
-		break;
-	case json_type_object:
-		printf("json_type_object\n");
-		break;
-	case json_type_array:
-		printf("json_type_array\n");
-		break;
-	case json_type_string:
-		printf("json_type_string\n");
-		break;
-	}
-}

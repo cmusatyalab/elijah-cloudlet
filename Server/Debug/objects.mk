@@ -4,4 +4,4 @@
 
 USER_OBJS :=
 
-LIBS := -ljson -lpthread
+LIBS := -ljson -lglib-2.0 -lpthread

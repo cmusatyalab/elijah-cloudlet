@@ -77,6 +77,7 @@ public class NetworkClientSender extends Thread {
 			byte[] byteMsg = msg.toNetworkByte();
 			networkWriter.write(byteMsg);
 			networkWriter.flush(); // flush for accurate time measure
+			KLog.println("Send Message " + msg);
 		} catch (IOException e) {
 			e.printStackTrace();
 		}
@@ -89,10 +90,14 @@ public class NetworkClientSender extends Thread {
 
 	public void close() {
 		try {
-			this.receiver.close();			
 			this.isThreadRun = false;
-			networkWriter.close();
-			mClientSocket.close();
+			
+			if(this.receiver != null)
+				this.receiver.close();
+			if(this.networkWriter != null)
+				this.networkWriter.close();
+			if(this.mClientSocket != null)
+				this.mClientSocket.close();
 		} catch (IOException e) {
 			KLog.printErr(e.toString());
 		}

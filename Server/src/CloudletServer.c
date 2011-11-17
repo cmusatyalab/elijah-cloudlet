@@ -4,7 +4,6 @@
 #include "client_manager/client_manager.h"
 #include "lib/lib_type.h"
 
-
 int main(void) {
 
 	// Run Socket Server
@@ -20,3 +19,5 @@ int main(void) {
 	end_client_manager();
 	return 0;
 }
+
+
