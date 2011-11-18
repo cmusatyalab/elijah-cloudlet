@@ -178,6 +178,7 @@ void *start_client_handler(void *arg) {
 			PRINT_OUT("[%d] New Data is coming\n", i);
 
 			memset(&client_msg, '\0', sizeof(client_msg));
+			memset(json_string, '\0', json_max_size);
 			result = recv(clients[i].sock_fd, &client_msg, 2 * sizeof(int), MSG_WAITALL);
 			if (result <= 0) {
 				PRINT_OUT("[%d] Closed Client.\n", i);
@@ -201,13 +202,12 @@ void *start_client_handler(void *arg) {
 
 			// read payload
 			recv(clients[i].sock_fd, json_string, client_msg.payload_length, MSG_WAITALL);
-			PRINT_OUT("[%d] All Data Received\n", i);
 
 			// protocol version check
 			json_object *jobj = json_tokener_parse((const char*)json_string);
 			char* protocol_version = json_get_type_value(jobj, JSON_KEY_PROTOCOL_VERSION, json_type_string);
 			if(strcasecmp(protocol_version, PROTOCOl_VERSION) != 0){
-				PRINT_ERR("[%d] Procotol version is Wrong %d != %d\n", protocol_version, PROTOCOl_VERSION);
+				PRINT_ERR("[%d] Procotol version is Wrong %s != %s\n", protocol_version, PROTOCOl_VERSION);
 				return;
 			}
 			free(protocol_version);
@@ -223,11 +223,11 @@ void *start_client_handler(void *arg) {
 					parse_req_transfer(clients[i].sock_fd, json_string);
 					break;
 				case COMMAND_REQ_VM_LAUNCH:
-					PRINT_OUT("[%d] COMMAND_REQ_TRANSFER_START\n", i);
+					PRINT_OUT("[%d] COMMAND_REQ_VM_LAUNCH\n", i);
 					parse_req_launch(clients[i].sock_fd, json_string);
 					break;
 				case COMMAND_REQ_VM_STOP:
-					PRINT_OUT("[%d] COMMAND_REQ_TRANSFER_START\n", i);
+					PRINT_OUT("[%d] COMMAND_REQ_VM_STOP\n", i);
 					parse_req_stop(clients[i].sock_fd, json_string);
 					break;
 				default:

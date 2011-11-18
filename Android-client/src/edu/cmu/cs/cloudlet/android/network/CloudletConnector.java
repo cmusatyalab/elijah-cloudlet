@@ -177,8 +177,8 @@ public class CloudletConnector {
 				VMInfo newVM = new VMInfo(vm);
 				for(int j = 0; j < overlayVMList.size(); j++){
 					// matching with mobile overlay list
-					String name = overlayVMList.get(j).getInfo(VMInfo.KEY_NAME);
-					if(name.equalsIgnoreCase(newVM.getInfo(VMInfo.KEY_NAME))){
+					String name = overlayVMList.get(j).getInfo(VMInfo.JSON_KEY_NAME);
+					if(name.equalsIgnoreCase(newVM.getInfo(VMInfo.JSON_KEY_NAME))){
 						if(matchingVMList.contains(newVM) == false){
 							matchingVMList.add(newVM);
 							overlayVM = overlayVMList.get(j);

@@ -107,18 +107,18 @@ public class NetworkClientSender extends Thread {
 			
 			NetworkMsg command = commandQueue.remove(0);
 			this.sendCommand(command);
-			if(command.commandNumber == NetworkMsg.COMMAND_ACK_TRANSFER_START){
+			if(command.commandNumber == NetworkMsg.COMMAND_REQ_TRANSFER_START){
 				// send data
 				VMInfo overlayVM = null;
 				ArrayList<VMInfo> vmList = command.getVMList();
 				for(int i = 0; i < vmList.size(); i++){
-					if(vmList.get(i).getInfo(VMInfo.KEY_TYPE).equalsIgnoreCase("overlay") == true){
+					if(vmList.get(i).getInfo(VMInfo.JSON_KEY_TYPE).equalsIgnoreCase("overlay") == true){
 						overlayVM = vmList.get(i);
 					} 
 				}
 				if(overlayVM != null){
-					File image = new File(overlayVM.getInfo(VMInfo.KEY_DISKIMAGE_PATH));
-					File mem = new File(overlayVM.getInfo(VMInfo.KEY_MEMORYSNAPSHOT_PATH));
+					File image = new File(overlayVM.getInfo(VMInfo.JSON_KEY_DISKIMAGE_PATH));
+					File mem = new File(overlayVM.getInfo(VMInfo.JSON_KEY_MEMORYSNAPSHOT_PATH));
 					this.sendOverlayImage(image, mem);
 				}
 			}

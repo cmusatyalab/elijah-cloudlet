@@ -19,8 +19,24 @@
 
 
 int saveToFile(int sock_fd, const char* path, int size){
-	int buffer_size = 1024 * 10;
+	int buffer_size = 1024 * 100;
 	char* buffer = (char*)malloc(sizeof(char) * buffer_size);
+
+	int ret = 0, left_byte = size;
+	while(left_byte > 0){
+		if(left_byte >= buffer_size){
+			// read full
+			ret = read_full(sock_fd, buffer, buffer_size);
+			left_byte -= ret;
+			PRINT_OUT("save (%d/%d) to %s\n", (size-left_byte), size, path);
+		}else{
+			// read left
+			ret = read_full(sock_fd, buffer, left_byte);
+			left_byte -= ret;
+			PRINT_OUT("last save (%d/%d) to %s\n", (size-left_byte), size, path);
+		}
+	}
+
 	return -1;
 }
 
@@ -48,8 +64,7 @@ void parse_req_vmlist(int sock_fd, const char* json_string){
 	Client_Msg send_msg;
 	send_msg.cmd = endian_swap_int(COMMAND_ACK_VMLIST);						// send it with Big-endian
 	send_msg.payload_length = endian_swap_int(strlen(vm_configuration));	// send it with Big-endian
-	PRINT_OUT("[%d] COMMAND_ACK_VMLIST Sent\n", i);
-//	PRINT_OUT("[%d] %s \n", i, vm_configuration);
+	PRINT_OUT("[%d] COMMAND_ACK_VMLIST Sent\n", sock_fd);
 	write_full(sock_fd, &send_msg, sizeof(send_msg));
 	write_full(sock_fd, vm_configuration, strlen(vm_configuration));
 
@@ -61,6 +76,7 @@ void parse_req_vmlist(int sock_fd, const char* json_string){
 
 void parse_req_transfer(int sock_fd, const char* json_string){
 	// Data
+//	PRINT_OUT("Input JSON : %s\n", json_string);
 	GPtrArray *VM_array = g_ptr_array_new();
 	json_object *jobj = json_tokener_parse((const char*)json_string);	// Parse JSON
 
@@ -70,9 +86,9 @@ void parse_req_transfer(int sock_fd, const char* json_string){
 	VM_Info *baseVM = NULL, *overlayVM = NULL;
 	for(i = 0; i < ret_number; i++) {
 		VM_Info *vm = (VM_Info *) g_ptr_array_index(VM_array, i);
-		if(strcasecmp(vm->type, JSON_VALUE_VM_TYPE_BASE)){
+		if(strcasecmp(vm->type, JSON_VALUE_VM_TYPE_BASE) == 0){
 			baseVM = vm;
-		}else if(strcasecmp(vm->type, JSON_VALUE_VM_TYPE_OVERLAY)){
+		}else if(strcasecmp(vm->type, JSON_VALUE_VM_TYPE_OVERLAY) == 0){
 			overlayVM = vm;
 		}
 		print_VM_Info(vm);
@@ -82,8 +98,12 @@ void parse_req_transfer(int sock_fd, const char* json_string){
 	Client_Msg send_msg;
 	send_msg.cmd = COMMAND_ACK_TRANSFER_START;
 	const char tmp_overlay_disk_path[256], tmp_overlay_mem_path[256];
-	const int overlay_disk_size = (overlayVM->diskimg_size!=NULL)? atoi(overlayVM->diskimg_size) : 0;
-	const int overlay_mem_size = (overlayVM->memory_snapshot_size!=NULL)? atoi(overlayVM->memory_snapshot_size) : 0;
+
+	const long overlay_disk_size = stringToLong(overlayVM->diskimg_size);
+	const long overlay_mem_size = stringToLong(overlayVM->memory_snapshot_size);
+	if(overlay_disk_size <= 0 || overlay_mem_size <= 0){
+		PRINT_ERR("Invalid overlay disk or mem size : %s\n", json_string);
+	}
 
 	int rand = random();
 	sprintf(tmp_overlay_disk_path, "/tmp/%s_%d.img", overlayVM->name, rand);

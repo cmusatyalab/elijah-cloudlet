@@ -17,12 +17,18 @@ public class VMInfo {
 	protected TreeMap<String, String> data = new TreeMap<String, String>();
 	protected File rootDirectory = null;
 	
-	public static final String KEY_NAME = "name";
-	public static final String KEY_TYPE = "type";
-	public static final String KEY_DISKIMAGE_PATH = "diskimg_path";
-	public static final String KEY_DISKIMAGE_SIZE = "diskimg_size";
-	public static final String KEY_MEMORYSNAPSHOT_PATH = "memorysnapshot_path";
-	public static final String KEY_MEMORYSNAPSHOT_SIZE = "memorysnapshot_size";
+	public static final String JSON_KEY_NAME = "name";
+	public static final String JSON_KEY_TYPE = "type";
+	public static final String JSON_KEY_DISKIMAGE_PATH = "diskimg_path";
+	public static final String JSON_KEY_DISKIMAGE_SIZE = "diskimg_size";
+	public static final String JSON_KEY_MEMORYSNAPSHOT_PATH = "memorysnapshot_path";
+	public static final String JSON_KEY_MEMORYSNAPSHOT_SIZE = "memorysnapshot_size";
+	public static final String JSON_KEY_CLOUDLET_CPU_CLOCK		="CPU-Clock";
+	public static final String JSON_KEY_CLOUDLET_CPU_CORE		="CPU-Core";
+	public static final String JSON_KEY_CLOUDLET_MEMORY_SIZE	="Memory-Size";
+
+	public static final String JSON_VALUE_VM_TYPE_BASE				="baseVM";
+	public static final String JSON_VALUE_VM_TYPE_OVERLAY			="overlay";
 //	protected String uuid;
 //	protected String version;
 	
@@ -31,16 +37,16 @@ public class VMInfo {
 		rootDirectory = overlayDirectory;
 		File[] files = rootDirectory.listFiles();
 		
-		this.data.put(KEY_NAME, vmName);
-		this.data.put(KEY_TYPE, "overlay");
+		this.data.put(JSON_KEY_NAME, vmName);
+		this.data.put(JSON_KEY_TYPE, "overlay");
 		for(int i = 0; i < files.length; i++){
 			String filename = files[i].getAbsolutePath();
 			if(filename.endsWith("mem") == true){
-				this.data.put(KEY_MEMORYSNAPSHOT_PATH, filename);
-				this.data.put(KEY_MEMORYSNAPSHOT_SIZE, "" + files[i].length());
+				this.data.put(JSON_KEY_MEMORYSNAPSHOT_PATH, filename);
+				this.data.put(JSON_KEY_MEMORYSNAPSHOT_SIZE, "" + files[i].length());
 			}else if(filename.endsWith("img") == true){
-				this.data.put(KEY_DISKIMAGE_PATH, filename);
-				this.data.put(KEY_DISKIMAGE_SIZE, "" + files[i].length());
+				this.data.put(JSON_KEY_DISKIMAGE_PATH, filename);
+				this.data.put(JSON_KEY_DISKIMAGE_SIZE, "" + files[i].length());
 			}
 		}
 	}
