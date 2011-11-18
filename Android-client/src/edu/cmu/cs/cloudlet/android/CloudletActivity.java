@@ -34,27 +34,6 @@ public class CloudletActivity extends Activity {
 
 		// set button action
 		connector.startConnection("128.2.212.207", 9090);
-
-		/*
-		 * Button mSendButton = (Button) findViewById(R.id.connectButton);
-		 * mSendButton.setOnClickListener(clickListener); // Protocol Formatting
-		 * test Button protocol_test1 = (Button)
-		 * findViewById(R.id.protocol_test1); Button protocol_test2 = (Button)
-		 * findViewById(R.id.protocol_test2); Button protocol_test3 = (Button)
-		 * findViewById(R.id.protocol_test3); Button protocol_test4 = (Button)
-		 * findViewById(R.id.protocol_test4); Button protocol_test5 = (Button)
-		 * findViewById(R.id.protocol_test5);
-		 * protocol_test1.setOnClickListener(connector
-		 * .protocolTestClickListener);
-		 * protocol_test2.setOnClickListener(connector
-		 * .protocolTestClickListener);
-		 * protocol_test3.setOnClickListener(connector
-		 * .protocolTestClickListener);
-		 * protocol_test4.setOnClickListener(connector
-		 * .protocolTestClickListener);
-		 * protocol_test5.setOnClickListener(connector
-		 * .protocolTestClickListener);
-		 */
 	}
 
 	/*

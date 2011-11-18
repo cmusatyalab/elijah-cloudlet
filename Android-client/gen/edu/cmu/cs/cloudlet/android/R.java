@@ -15,11 +15,6 @@ public final class R {
     }
     public static final class id {
         public static final int connectButton=0x7f050000;
-        public static final int protocol_test1=0x7f050001;
-        public static final int protocol_test2=0x7f050002;
-        public static final int protocol_test3=0x7f050003;
-        public static final int protocol_test4=0x7f050004;
-        public static final int protocol_test5=0x7f050005;
     }
     public static final class layout {
         public static final int main=0x7f030000;

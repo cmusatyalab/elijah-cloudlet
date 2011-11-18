@@ -62,36 +62,6 @@ public class CloudletConnector {
 		networkClient.requestCommand(networkMsg);
 	}
 	
-	public View.OnClickListener protocolTestClickListener = new View.OnClickListener() {
-		public void onClick(View v) {
-			NetworkMsg networkMsg = null;
-			VMInfo vm = CloudletEnv.instance().getOverlayDirectoryInfo().get(0);
-			
-			switch(v.getId()){
-			case R.id.protocol_test1:
-				// Send REQ VM List
-				networkMsg = NetworkMsg.MSG_OverlayList();
-				break;
-			case R.id.protocol_test2:
-				// Send REQ Transfer_Start
-				networkMsg = NetworkMsg.MSG_SelectedVM(vm, vm);
-				break;
-			case R.id.protocol_test3:				
-				// REQ Launch
-				networkMsg = NetworkMsg.MSG_LaunchVM(vm, 4, 512);
-				break;
-			case R.id.protocol_test4:
-				// REQ Stop
-				networkMsg = NetworkMsg.MSG_StopVM(vm);
-				break;
-			case R.id.protocol_test5:
-			break;
-			}
-			
-			networkMsg.printJSON();
-			networkClient.requestCommand(networkMsg);
-		}
-	};
 
 	public void close() {
 		if(this.networkClient != null)

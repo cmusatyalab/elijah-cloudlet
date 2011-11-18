@@ -16,42 +16,4 @@
         android:layout_gravity="bottom"
         android:text="Start Test" >
     </Button>
- 
-    <Button
-        android:id="@+id/protocol_test1"
-        android:layout_width="fill_parent"
-        android:layout_height="wrap_content"
-        android:layout_gravity="bottom"
-        android:text="Test 1" >
-    </Button>    
-    <Button
-        android:id="@+id/protocol_test2"
-        android:layout_width="fill_parent"
-        android:layout_height="wrap_content"
-        android:layout_gravity="bottom"
-        android:text="Test 2" >
-    </Button>    
-    <Button
-        android:id="@+id/protocol_test3"
-        android:layout_width="fill_parent"
-        android:layout_height="wrap_content"
-        android:layout_gravity="bottom"
-        android:text="Test 3" >
-    </Button>
-    
-    <Button
-        android:id="@+id/protocol_test4"
-        android:layout_width="fill_parent"
-        android:layout_height="wrap_content"
-        android:layout_gravity="bottom"
-        android:text="Test 4" >
-    </Button>
-    
-    <Button
-        android:id="@+id/protocol_test5"
-        android:layout_width="fill_parent"
-        android:layout_height="wrap_content"
-        android:layout_gravity="bottom"
-        android:text="Test 5" >
-    </Button>
 </LinearLayout>
