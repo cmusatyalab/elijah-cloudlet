@@ -115,7 +115,7 @@ void *start_client_manager(void* args){
 			continue;
 		}
 
-		PRINT_OUT("[%d] Client Manager Accepted new Client.\n", i);
+		PRINT_OUT("[%d] Client Manager Accepted new Client.\n", clients[i].sock_fd);
 		strcpy(clients[i].ip_address, inet_ntoa(accepted_addr.sin_addr));
 		clients[i].sock_fd = accepted_sock;
 		FD_SET(accepted_sock, &clients_fdset);
@@ -175,13 +175,13 @@ void *start_client_handler(void *arg) {
 				continue;
 			}
 
-			PRINT_OUT("[%d] New Data is coming\n", i);
+			PRINT_OUT("[%d] New Data is coming\n", clients[i].sock_fd);
 
 			memset(&client_msg, '\0', sizeof(client_msg));
 			memset(json_string, '\0', json_max_size);
 			result = recv(clients[i].sock_fd, &client_msg, 2 * sizeof(int), MSG_WAITALL);
 			if (result <= 0) {
-				PRINT_OUT("[%d] Closed Client.\n", i);
+				PRINT_OUT("[%d] Closed Client.\n", clients[i].sock_fd);
 				init_client(i);
 				unlock();
 				continue;
@@ -190,12 +190,12 @@ void *start_client_handler(void *arg) {
 			// check buffer size for json
 			client_msg.payload_length = endian_swap_int(client_msg.payload_length);
 			client_msg.cmd = endian_swap_int(client_msg.cmd);
-			PRINT_OUT("[%d] Data Size : %d\n", i, client_msg.payload_length);
+			PRINT_OUT("[%d] Data Size : %d\n", clients[i].sock_fd, client_msg.payload_length);
 			if(client_msg.payload_length > json_max_size){
 				json_max_size = sizeof(char) * client_msg.payload_length;
 				json_string = (char*)realloc(json_string, sizeof(char) * json_max_size);
 				if(!json_string){
-					PRINT_ERR("[%d] Cannot Allocate %d Memory.\n", i, json_max_size);
+					PRINT_ERR("[%d] Cannot Allocate %d Memory.\n", clients[i].sock_fd, json_max_size);
 					exit(-1);
 				}
 			}

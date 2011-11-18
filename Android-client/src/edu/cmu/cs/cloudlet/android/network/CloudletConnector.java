@@ -8,6 +8,7 @@ import org.json.JSONArray;
 import org.json.JSONException;
 import org.json.JSONObject;
 
+import edu.cmu.cs.cloudlet.android.CloudletActivity;
 import edu.cmu.cs.cloudlet.android.R;
 import edu.cmu.cs.cloudlet.android.data.VMInfo;
 import edu.cmu.cs.cloudlet.android.util.CloudletEnv;
@@ -35,6 +36,8 @@ public class CloudletConnector {
 
 	protected ProgressDialog mDialog;
 	protected StringBuffer messageBuffer;
+
+	private VMInfo requestBaseVM;
 
 	public CloudletConnector(Context context) {
 		this.mContext = context;
@@ -135,19 +138,19 @@ public class CloudletConnector {
 				if(response != null){
 					switch(response.getCommandNumber()){
 					case NetworkMsg.COMMAND_ACK_VMLIST:
-						KLog.println("COMMAND_ACK_VMLIST message received");
+						KLog.println("1. COMMAND_ACK_VMLIST message received");
 						responseVMList(response);
 						break;
 					case NetworkMsg.COMMAND_ACK_TRANSFER_START:
-						KLog.println("COMMAND_ACK_TRANSFER_START message received");
+						KLog.println("2. COMMAND_ACK_TRANSFER_START message received");
 						responseTransferStart(response);
 						break;
 					case NetworkMsg.COMMAND_ACK_VM_LAUNCH:
-						KLog.println("COMMAND_ACK_VM_LAUNCH message received");
+						KLog.println("3. COMMAND_ACK_VM_LAUNCH message received");
 						responseVMLaunch(response);
 						break;
 					case NetworkMsg.COMMAND_ACK_VM_STOP:
-						KLog.println("COMMAND_ACK_VM_STOP message received");
+						KLog.println("4. COMMAND_ACK_VM_STOP message received");
 						responseVMStop(response);
 						break;
 					default:
@@ -195,22 +198,64 @@ public class CloudletConnector {
 		if(matchingVMList.size() == 1){
 			VMInfo baseVM = matchingVMList.get(0);
 			NetworkMsg sendMsg = NetworkMsg.MSG_SelectedVM(baseVM, overlayVM);
-			this.networkClient.requestCommand(sendMsg);								
+			this.networkClient.requestCommand(sendMsg);
+			
+			//save requested VM Information
+			this.requestBaseVM = baseVM;								
 			
 		}else{
 			// No matching VM List
 			this.showAlertDialog("No Matching VM with Cloudlet");
-		}
-		
+		}		
 	}
 
 	private void responseTransferStart(NetworkMsg response) {
+		
+			
+		if(checkVMValidity(response, this.requestBaseVM) == true){
+			// Let's wait launch SUCCESS Message without requesting
+			/*
+			//Get base VM Information
+			NetworkMsg sendMsg = NetworkMsg.MSG_LaunchVM(vms.get(0), 2, 512);			
+			// Send Launch request
+			this.networkClient.requestCommand(sendMsg);
+			*/
+			
+		}else{
+			// No matching VM List
+			this.showAlertDialog("Retuned VM information is wrong, check # of received VM Information");		
+		}
 	}
-	
+
 	private void responseVMLaunch(NetworkMsg response) {
+		try {
+			String ipaddress = response.getJsonPayload().getString(VMInfo.JSON_KEY_LAUNCH_VM_IP);
+		} catch (JSONException e) {
+			KLog.printErr(e.toString());
+		}
+		
+		if(checkVMValidity(response, this.requestBaseVM) == true){
+			String synthesisInfo = "Finish VM Synthesis";
+
+			// Run Application
+			new AlertDialog.Builder(mContext).setTitle("SUCESS")
+			.setMessage(synthesisInfo)
+			.setPositiveButton("Run Application", CloudletActivity.launchApplication)
+			.setNegativeButton("Done", null)
+			.show();
+			
+			
+		}else{
+			this.showAlertDialog("Retuned VM information is wrong, check # of received VM Information");		
+		}
 	}
 
 	private void responseVMStop(NetworkMsg response) {
+		ArrayList<VMInfo> vms = response.getVMList();
+		
+		// Get Residue URL
+		
+		// Get Residue Data
 	}
 
 
@@ -219,7 +264,7 @@ public class CloudletConnector {
 	 * Check Error Message in JSON
 	 */
 	private boolean checkErrorStutus(JSONObject json) {
-		String errorMsg = null;;
+		String errorMsg = null;
 		try {
 			errorMsg = json.getString("Error");
 		} catch (JSONException e) {
@@ -230,6 +275,24 @@ public class CloudletConnector {
 			return true;
 		}
 		return false;
+	}
+	
+	private boolean checkVMValidity(NetworkMsg response, VMInfo requestBaseVM2) {
+		JSONObject json = response.getJsonPayload();
+		JSONArray vms = null;
+		try {
+			vms = json.getJSONArray("VM");
+		} catch (JSONException e) {
+			// TODO Auto-generated catch block
+			e.printStackTrace();
+		}
+				
+		if(vms != null && vms.length() == 1){
+			return true;
+		}else{
+			return false;
+		}
+			
 	}
 	
 	private void showAlertDialog(String errorMsg) {

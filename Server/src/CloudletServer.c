@@ -14,18 +14,18 @@ void check_config_file(int argc, char **argv);
 int main(int argc, char **argv) {
 	check_config_file(argc, argv);
 
-	// Run Socket Server
-	if (init_client_manager() != SUCCESS) {
-		fprintf(stderr, "Cannot run TCP Server\n");
-		return -1;
-	}
+	 // Run Socket Server
+	 if (init_client_manager() != SUCCESS) {
+	 fprintf(stderr, "Cannot run TCP Server\n");
+	 return -1;
+	 }
 
-	while (1) {
-		sleep(10000);
-	}
+	 while (1) {
+	 sleep(10000);
+	 }
 
-	end_client_manager();
-	return 0;
+	 end_client_manager();
+	 return 0;
 }
 
 /*
@@ -84,6 +84,7 @@ void check_config_file(int argc, char **argv) {
 	int size = ftell(file);
 	fseek(file, 0L, SEEK_SET);
 	char *json_string = (char*) malloc(size * sizeof(char));
+	memset(json_string, 0, size);
 	fread(json_string, size, 1, file);
 	fclose(file);
 
@@ -97,8 +98,9 @@ void check_config_file(int argc, char **argv) {
 	GPtrArray *VM_array = g_ptr_array_new();
 	int ret_number = json_get_VM_Info(jobj, JSON_KEY_VM, VM_array);
 
-	if ((strlen(cpu_clock) <= 0) || (strlen(cpu_clock) <= 0) || (strlen(
-			cpu_clock) <= 0) || (ret_number < 1)) {
+	if (cpu_clock == NULL || cpu_core == NULL || mem_size == NULL || (strlen(
+			cpu_clock) <= 0) || (strlen(cpu_core) <= 0) || (strlen(mem_size)
+			<= 0) || (ret_number < 1)) {
 
 		//Invalid argument
 		fprintf(stderr, "configuration is invalid\n");
@@ -117,7 +119,7 @@ void check_config_file(int argc, char **argv) {
 	}
 
 	// save it to configuration char string
-	vm_configuration = (char*)malloc(sizeof(char) * strlen(json_string));
+	vm_configuration = (char*) malloc(sizeof(char) * strlen(json_string));
 	strcpy(vm_configuration, json_string);
 	PRINT_OUT("VM Configuration : %s", vm_configuration);
 

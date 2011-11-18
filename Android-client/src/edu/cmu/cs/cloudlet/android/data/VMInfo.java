@@ -17,18 +17,26 @@ public class VMInfo {
 	protected TreeMap<String, String> data = new TreeMap<String, String>();
 	protected File rootDirectory = null;
 	
-	public static final String JSON_KEY_NAME = "name";
-	public static final String JSON_KEY_TYPE = "type";
-	public static final String JSON_KEY_DISKIMAGE_PATH = "diskimg_path";
-	public static final String JSON_KEY_DISKIMAGE_SIZE = "diskimg_size";
-	public static final String JSON_KEY_MEMORYSNAPSHOT_PATH = "memorysnapshot_path";
-	public static final String JSON_KEY_MEMORYSNAPSHOT_SIZE = "memorysnapshot_size";
-	public static final String JSON_KEY_CLOUDLET_CPU_CLOCK		="CPU-Clock";
-	public static final String JSON_KEY_CLOUDLET_CPU_CORE		="CPU-Core";
-	public static final String JSON_KEY_CLOUDLET_MEMORY_SIZE	="Memory-Size";
+	public static final String JSON_KEY_NAME 					= "name";
+	public static final String JSON_KEY_TYPE 					= "type";
+	public static final String JSON_KEY_UUID 					= "uuid";
+	public static final String JSON_KEY_DISKIMAGE_PATH 			= "diskimg_path";
+	public static final String JSON_KEY_DISKIMAGE_SIZE 			= "diskimg_size";
+	public static final String JSON_KEY_MEMORYSNAPSHOT_PATH 	= "memorysnapshot_path";
+	public static final String JSON_KEY_MEMORYSNAPSHOT_SIZE 	= "memorysnapshot_size";
+	public static final String JSON_KEY_VERSION					= "version";
 
-	public static final String JSON_VALUE_VM_TYPE_BASE				="baseVM";
-	public static final String JSON_VALUE_VM_TYPE_OVERLAY			="overlay";
+	public static final String JSON_KEY_ERROR					= "Error";
+	
+	public static final String JSON_KEY_CLOUDLET_CPU_CLOCK		= "CPU-Clock";
+	public static final String JSON_KEY_CLOUDLET_CPU_CORE		= "CPU-Core";
+	public static final String JSON_KEY_CLOUDLET_MEMORY_SIZE	= "Memory-Size";
+
+	public static final String JSON_KEY_LAUNCH_VM_IP 			= "LaunchVM-IP";
+
+	public static final String JSON_VALUE_VM_TYPE_BASE			= "baseVM";
+	public static final String JSON_VALUE_VM_TYPE_OVERLAY		= "overlay";
+
 //	protected String uuid;
 //	protected String version;
 	

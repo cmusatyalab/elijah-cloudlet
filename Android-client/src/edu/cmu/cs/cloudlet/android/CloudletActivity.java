@@ -9,6 +9,7 @@ import android.app.Activity;
 import android.app.AlertDialog;
 import android.app.ProgressDialog;
 import android.content.DialogInterface;
+import android.content.DialogInterface.OnClickListener;
 import android.os.Bundle;
 import android.os.Handler;
 import android.os.Message;
@@ -112,4 +113,14 @@ public class CloudletActivity extends Activity {
 		});
 		ab.show();
 	}
+	
+
+	public static DialogInterface.OnClickListener launchApplication = new DialogInterface.OnClickListener() {		
+
+		@Override
+		public void onClick(DialogInterface dialog, int which) {
+			// TODO Auto-generated method stub
+			
+		}
+	};
 }
