@@ -1,0 +1,242 @@
+package edu.cmu.cs.cloudlet.android.application;
+
+import java.io.File;
+import java.io.FileFilter;
+import java.io.FileNotFoundException;
+import java.io.FileOutputStream;
+import java.io.IOException;
+import java.io.PrintWriter;
+import java.net.InetSocketAddress;
+import java.net.Socket;
+import java.util.Locale;
+
+import edu.cmu.cs.cloudlet.android.CloudletActivity;
+import edu.cmu.cs.cloudlet.android.R;
+
+import android.app.Activity;
+import android.app.ProgressDialog;
+import android.content.Intent;
+import android.hardware.Camera;
+import android.media.AudioManager;
+import android.media.ToneGenerator;
+import android.net.Uri;
+import android.os.Bundle;
+import android.os.Handler;
+import android.os.Message;
+import android.speech.tts.TextToSpeech;
+import android.util.Log;
+import android.view.KeyEvent;
+import android.view.View;
+import android.view.Window;
+import android.widget.Button;
+
+public class CloudletCameraActivity extends Activity implements TextToSpeech.OnInitListener {
+	public static final String TAG = "krha_app";
+	
+	protected static String server_ipaddress= "128.2.212.166";
+	protected static int server_port = 8080;
+	protected NetworkClient client;
+	
+	protected ProgressDialog mDialog;	
+	protected boolean gFocussed = false;
+	protected boolean gCameraPressed = false;
+	protected Uri mImageCaptureUri;
+	protected Button mSendButton;
+	protected Button mTestButton;
+
+	protected byte[] mImageData;
+	protected Preview mPreview;
+	protected TextToSpeech mTTS;
+	
+	// time stamp for test
+	protected long takePicStart;
+	protected long takePicEnd;
+
+	static protected final String OUTLOG_FILENAME = "/mnt/sdcard/cloulet_exp_result.txt";
+	static protected PrintWriter outlogWriter;		
+	static{
+		try {
+			outlogWriter = new PrintWriter(new File(OUTLOG_FILENAME));
+		} catch (FileNotFoundException e) {
+			Log.e("krha_app", "Cannot Create Log File");
+		}
+	}
+
+	@Override
+	public void onCreate(Bundle savedInstanceState) {
+		super.onCreate(savedInstanceState);
+		requestWindowFeature(Window.FEATURE_NO_TITLE);
+		setContentView(R.layout.application_camera);
+		mPreview = (Preview) findViewById(R.id.camera_preview);
+		
+		Bundle extras = getIntent().getExtras();
+		server_ipaddress = extras.getString("address");		
+		Log.d("krha_app", "server connection " + server_ipaddress + ":" + server_port);
+		
+		// buttons
+		mSendButton = (Button) findViewById(R.id.sendButton);
+		mSendButton.setOnClickListener(new View.OnClickListener() {
+			@Override
+			public void onClick(View v) {
+				//capture image
+				if (mPreview.mCamera != null) {
+					takePicStart = System.currentTimeMillis();
+					mPreview.mCamera.takePicture(null, null, mPictureCallbackJpeg);
+				}
+			}
+		});
+		
+		// TextToSpeech.OnInitListener
+		mTTS = new TextToSpeech(this, this);
+
+	}
+
+	/*
+	 * Network Event Handler
+	 */
+	Handler networkHandler = new Handler() {
+		public void handleMessage(Message msg) {
+			if (msg.what == NetworkClient.FEEDBACK_RECEIVED) {
+				// Dissmiss Dialog
+				mDialog.dismiss();
+				
+				// Run TTS				
+				Bundle data = msg.getData();
+				Log.d("krha_app", "num of people : " + data.getInt("number_of_people"));
+				TTSFeedback(data.getInt("number_of_people"));
+			}
+		}
+	};
+
+	/*
+	 * TTS
+	 */
+	private static final String FEEDBACK_PREFIX = "The number of people is ";
+	private void TTSFeedback(int number) {
+		// Select a random hello.
+		mTTS.speak(FEEDBACK_PREFIX + number, TextToSpeech.QUEUE_FLUSH, null);
+	}
+
+	// Implements TextToSpeech.OnInitListener
+	public void onInit(int status) {
+		if (status == TextToSpeech.SUCCESS) {
+			int result = mTTS.setLanguage(Locale.US);
+			if (result == TextToSpeech.LANG_MISSING_DATA || result == TextToSpeech.LANG_NOT_SUPPORTED) {
+				Log.e("krha_app", "Language is not available.");
+			}
+		} else {
+			// Initialization failed.
+			Log.e("krha_app", "Could not initialize TextToSpeech.");
+		}
+	}
+	
+	/*
+	 * Camera Capture
+	 */
+	Camera.PictureCallback mPictureCallbackJpeg = new Camera.PictureCallback() {
+		public void onPictureTaken(byte[] data, Camera c) {
+			//time stamp
+			takePicEnd = System.currentTimeMillis();
+			Log.d("krha_app_time", "[TAKE_PIC]\t" + takePicEnd + " - " + takePicStart + " = " + (takePicEnd-takePicStart));
+			
+			mImageData = data;
+			saveImage(mImageData);		
+			mImageData = null;
+
+			if (mPreview.mCamera != null) {
+				try {
+					mPreview.mCamera.startPreview();
+				} catch (Exception e) {
+
+				}
+			}
+		}
+	};
+
+	public void saveImage(byte[] data) {
+		// check network connection
+		mDialog = ProgressDialog.show(CloudletCameraActivity.this, "", "Processing...", true);		
+		if(client == null){
+			client = new NetworkClient(CloudletCameraActivity.this, networkHandler);
+			try {				
+				client.initConnection(server_ipaddress, server_port);
+				client.start();
+			} catch (IOException e) {
+				Log.e("krha_app", e.toString());
+				Utilities.showError(CloudletCameraActivity.this, "Error", "Cannot connect to Server " + server_ipaddress + ":" + server_port);
+				client = null;
+				mDialog.dismiss();
+			}
+		}
+		
+		// upload image
+		if(client !=null){
+			client.uploadImage(data);			
+		}
+	}
+	
+	Camera.AutoFocusCallback cb = new Camera.AutoFocusCallback() {
+		public void onAutoFocus(boolean success, Camera c) {
+
+			if (success) {
+				ToneGenerator tg = new ToneGenerator(AudioManager.STREAM_SYSTEM, 100);
+				if (tg != null)
+					tg.startTone(ToneGenerator.TONE_PROP_BEEP2);
+				gFocussed = true;
+				try {
+					if (gCameraPressed) {
+						if (mPreview.mCamera != null) {
+							mPreview.mCamera.takePicture(null, null, mPictureCallbackJpeg);
+						}
+					}
+				} catch (Exception e) {
+					Log.i("Exc", e.toString());
+				}
+			} else {
+				ToneGenerator tg = new ToneGenerator(AudioManager.STREAM_SYSTEM, 100);
+				if (tg != null)
+					tg.startTone(ToneGenerator.TONE_PROP_BEEP2);
+
+				try {
+					if (gCameraPressed) {
+						if (mPreview.mCamera != null) {
+							mPreview.mCamera.takePicture(null, null, mPictureCallbackJpeg);
+						}
+					}
+				} catch (Exception e) {
+					Log.i("Exc", e.toString());
+				}
+			}
+		}
+	};
+
+	/*
+	 * Destroy
+	 * @see android.app.Activity#onKeyDown(int, android.view.KeyEvent)
+	 */
+	public boolean onKeyDown(int keyCode, KeyEvent event) {
+		if (keyCode == KeyEvent.KEYCODE_BACK) {
+
+            Intent caller = getIntent(); 
+            caller.putExtra("message", "finish"); 
+            setResult(RESULT_OK, caller); 
+            finish();
+            
+			Intent intent = new Intent(CloudletCameraActivity.this, CloudletActivity.class);
+			startActivity(intent); 
+			finish();
+		}
+		return super.onKeyDown(keyCode, event);
+	}
+
+	@Override
+	public void onDestroy() {
+		// Don't forget to shutdown!
+		if (mTTS != null) {
+			mTTS.stop();
+			mTTS.shutdown();
+		}
+		super.onDestroy();
+	}
+
+}
