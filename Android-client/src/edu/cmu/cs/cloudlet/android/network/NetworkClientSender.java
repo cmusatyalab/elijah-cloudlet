@@ -38,7 +38,7 @@ public class NetworkClientSender extends Thread {
 	private Socket mClientSocket;
 	private DataOutputStream networkWriter;
 	
-	private byte[] imageSendingBuffer = new byte[1024*1024];
+	private byte[] imageSendingBuffer = new byte[2*1024*1024];
 	
 
 	public NetworkClientSender(Context context, Handler handler) {

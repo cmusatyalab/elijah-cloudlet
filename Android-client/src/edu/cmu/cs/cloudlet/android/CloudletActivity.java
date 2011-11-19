@@ -36,7 +36,7 @@ public class CloudletActivity extends Activity {
         Button mSendButton = (Button) findViewById(R.id.connectButton);
         mSendButton.setOnClickListener(clickListener);
         
-//		connector.startConnection("128.2.212.207", 9090);
+		connector.startConnection("128.2.212.207", 9090);
 	}
 
 	/*

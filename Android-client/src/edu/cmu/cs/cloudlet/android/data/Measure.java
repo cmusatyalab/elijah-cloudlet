@@ -2,22 +2,25 @@ package edu.cmu.cs.cloudlet.android.data;
 
 import java.util.Vector;
 
+import android.util.Log;
+
 
 public class Measure {
-	private static final String SEPERATOR = "|";
-	public static final String NET_REQ_VMLIST = "NET_REQ_VMLIST";
-	public static final String NET_REQ_OVERLAY_TRASFER = "NET_REQ_OVERLAY_TRASFER";
-	public static final String NET_ACK_VMLIST = "NET_ACK_VMLIST";
-	public static final String NET_ACK_OVERLAY_TRASFER = "NET_REQ_OVERLAY_TRASFER";
-	public static final String OVERLAY_TRANSFER_START = "OVERLAY_TRANSFER_START";
-	public static final String OVERLAY_TRANSFER_END = "OVERLAY_TRANSFER_END";
+	private static final String SEPERATOR = ":";
+	public static final String NET_REQ_VMLIST = "REQ_VMLIST";
+	public static final String NET_REQ_OVERLAY_TRASFER = "REQ_OVERLAY";
+	public static final String NET_ACK_VMLIST = "ACK_VMLIST";
+	public static final String NET_ACK_OVERLAY_TRASFER = "ACK_OVERLAY";
+	public static final String OVERLAY_TRANSFER_START = "TRANSFER_START";
+	public static final String OVERLAY_TRANSFER_END = "TRANSFER_END";
 	public static final String VM_LAUNCHED = "VM_LAUNCHED";
 	
 	protected static Vector<String> timeline = new Vector<String>();
 	protected static long imageSize = 0, memorySize = 0;
 	
 	public static void put(String timeString){
-		timeline.add(timeString + SEPERATOR + System.currentTimeMillis());
+		timeline.add(timeString + SEPERATOR + (System.currentTimeMillis()/1000));
+//		Log.d("krha", "Measurement : " + timeString + SEPERATOR + System.currentTimeMillis());
 	}
 	
 	public static void setOverlaySize(long imgSize, long memSize){
@@ -44,22 +47,26 @@ public class Measure {
 			String[] prev = timeline.get(i-1).split(SEPERATOR);
 			String[] curr = timeline.get(i).split(SEPERATOR);
 			long timeDiff = Long.parseLong(curr[1]) - Long.parseLong(prev[1]);
-			sb.append(curr[0] + "\t-\t" + prev[0] + "\t= " + timeDiff + "\n");
+			String msg = curr[0] + "\t-\t" + prev[0] + "\t= " + timeDiff + "\n"; 
+//			sb.append(msg);
 			
 			if(curr[0].equals(Measure.OVERLAY_TRANSFER_START) == true){
-				overlayStart = Long.parseLong(prev[1]);
+				overlayStart = Long.parseLong(curr[1]);
 			}else if(curr[0].equals(Measure.OVERLAY_TRANSFER_END) == true){
-				overlayEnd = Long.parseLong(prev[1]);				
+				overlayEnd = Long.parseLong(curr[1]);				
 			}else if(curr[0].equals(Measure.NET_REQ_VMLIST) == true){
-				startConnection = Long.parseLong(prev[1]);				
+				startConnection = Long.parseLong(curr[1]);				
 			}else if(curr[0].equals(Measure.VM_LAUNCHED) == true){
-				endConnection = Long.parseLong(prev[1]);				
+				endConnection = Long.parseLong(curr[1]);				
 			}
 		}
+		startConnection = Long.parseLong(timeline.get(0).split(SEPERATOR)[1]);
+		endConnection = Long.parseLong(timeline.get(timeline.size()-1).split(SEPERATOR)[1]);
 		sb.append("-----------------------------------\n");
-		sb.append("From connect to VM Launch\t: " + (endConnection-startConnection));
-		sb.append("Sending overlay\t\t: " + (overlayEnd-overlayStart));
-		sb.append("Network Bandwidth\t\t: " + (overlayEnd-overlayStart)/(imageSize+memorySize));
+		sb.append("End-to-End : " + endConnection + "-" + startConnection +"=" + (endConnection-startConnection) + " s \n");
+		sb.append("Overlay Trans : " + (overlayEnd-overlayStart) + " s \n");
+		sb.append("Overlay Size: : " + (imageSize + memorySize)/1000/1000 + " MB \n");
+		sb.append("Bandwidth : " + (imageSize+memorySize)/1000/(overlayEnd-overlayStart) + " MB/s\n");
 		return sb.toString();
 	}
 	

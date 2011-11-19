@@ -17,55 +17,9 @@
 #include <stdlib.h>
 #include <string.h>
 
-static int launch_VM(const char *tmp_overlay_disk_path, const char *tmp_overlay_mem_path, VM_Info *overlayVM, VM_Info *baseVM){
-	//run python script
-
-
-	return SUCCESS;
-}
-
-static const char* create_output_string_with_vm(const VM_Info *vm){
-	json_object *jobj = json_object_new_object();
-	json_object *jarray = json_object_new_array();
-	json_object *jobj_vm = json_create_from_VMInfo(vm);
-	json_object_array_add(jarray, jobj_vm);
-	json_object_object_add(jobj, JSON_KEY_VM, jarray);
-	const char* jstring = json_object_to_json_string(jobj);
-
-}
-
-static int saveToFile(int sock_fd, const char* path, int size){
-	FILE *file = fopen(path, "wb");
-	if(file == NULL)
-		return -1;
-
-	int buffer_size = 1024 * 1024;
-	char* buffer = (char*)malloc(sizeof(char) * buffer_size);
-
-	int file_write_total = 0;
-	int read_size = 0, left_byte = size;
-	while(left_byte > 0){
-		if(left_byte >= buffer_size){
-			// read full
-			read_size = read_full(sock_fd, buffer, buffer_size);
-			file_write_total += fwrite(buffer, 1, read_size, file);
-			left_byte -= read_size;
-			PRINT_OUT("save (%d/%d) -> %d to %s\n", (size-left_byte), size, file_write_total, path);
-		}else{
-			// read left
-			read_size = read_full(sock_fd, buffer, left_byte);
-			file_write_total += fwrite(buffer, 1, read_size, file);
-			left_byte -= read_size;
-			PRINT_OUT("save (%d/%d) -> %d to %s\n", (size-left_byte), size, file_write_total, path);
-		}
-	}
-
-	free(buffer);
-	fclose(file);
-	return file_write_total;
-}
-
-
+//static int launch_VM(const char *tmp_overlay_disk_path, const char *tmp_overlay_mem_path, VM_Info *overlayVM, VM_Info *baseVM);
+static const char* create_output_string_with_vm(const VM_Info *vm);
+static int saveToFile(int sock_fd, const char* path, int size);
 /*
  * Handle Commands
  */
@@ -115,7 +69,6 @@ void parse_req_transfer(int sock_fd, const char* json_string){
 		}else if(strcasecmp(vm->type, JSON_VALUE_VM_TYPE_OVERLAY) == 0){
 			overlayVM = vm;
 		}
-//		print_VM_Info(vm);
 	}
 
 	// Receive Overlay VM's disk image and memory
@@ -162,6 +115,18 @@ void parse_req_transfer(int sock_fd, const char* json_string){
 			//Launch VM
 			int ret = launch_VM(tmp_overlay_disk_path, tmp_overlay_mem_path, overlayVM, baseVM);
 			if(ret == SUCCESS){
+
+				//Compact it into Full JSON format
+				json_object *jobj_vm = json_create_from_VMInfo(baseVM);
+				json_object *jobj = json_object_new_object();
+				json_object *jarray = json_object_new_array();
+				json_object_array_add(jarray, jobj_vm);
+				json_object_object_add(jobj, JSON_KEY_VM, jarray);
+				//Add VM Ip Address
+				const char* VM_IP = myip();
+				json_object_object_add(jobj, JSON_KEY_LAUNCH_VM_IP, json_object_new_string(VM_IP));
+				const char* jstring = json_object_to_json_string(jobj);
+
 				send_msg.cmd = endian_swap_int(COMMAND_ACK_VM_LAUNCH);
 				send_msg.payload_length = endian_swap_int(strlen(jstring));
 				PRINT_OUT("[%d] COMMAND_ACK_VM_LAUNCH Success Sent\n", sock_fd);
@@ -200,6 +165,7 @@ void parse_req_launch(int sock_fd, const char* json_string){
 
 void parse_req_stop(int sock_fd, const char* json_string){
 
+	/*
 	GPtrArray *VM_array = g_ptr_array_new();
 	json_object *jobj = json_tokener_parse((const char*) vm_configuration); // Parse JSON
 	int ret_number = json_get_VM_Info(jobj, JSON_KEY_VM, VM_array);
@@ -212,11 +178,59 @@ void parse_req_stop(int sock_fd, const char* json_string){
 	json_object_object_add(ret_jobj, JSON_KEY_CLOUDLET_CPU_CLOCK,
 			json_object_new_string("3.25"));
 	PRINT_OUT("ret : %s\n", json_object_to_json_string(ret_jobj));
-
-
+	*/
 }
 
 
 /*
- * JSON Generator
+ * Private Method
+ * Launch VM base on overlay images
  */
+int launch_VM(const char *tmp_overlay_disk_path, const char *tmp_overlay_mem_path, VM_Info *overlayVM, VM_Info *baseVM){
+	//run python script
+
+
+	return SUCCESS;
+}
+
+static const char* create_output_string_with_vm(const VM_Info *vm){
+	json_object *jobj = json_object_new_object();
+	json_object *jarray = json_object_new_array();
+	json_object *jobj_vm = json_create_from_VMInfo(vm);
+	json_object_array_add(jarray, jobj_vm);
+	json_object_object_add(jobj, JSON_KEY_VM, jarray);
+	const char* jstring = json_object_to_json_string(jobj);
+}
+
+static int saveToFile(int sock_fd, const char* path, int size){
+	FILE *file = fopen(path, "wb");
+	if(file == NULL)
+		return -1;
+
+	int buffer_size = 1024 * 1024;
+	char* buffer = (char*)malloc(sizeof(char) * buffer_size);
+
+	int file_write_total = 0;
+	int read_size = 0, left_byte = size;
+	while(left_byte > 0){
+		if(left_byte >= buffer_size){
+			// read full
+			read_size = read_full(sock_fd, buffer, buffer_size);
+			file_write_total += fwrite(buffer, 1, read_size, file);
+			left_byte -= read_size;
+			PRINT_OUT("save (%d/%d) -> %d to %s\n", (size-left_byte), size, file_write_total, path);
+		}else{
+			// read left
+			read_size = read_full(sock_fd, buffer, left_byte);
+			file_write_total += fwrite(buffer, 1, read_size, file);
+			left_byte -= read_size;
+			PRINT_OUT("save (%d/%d) -> %d to %s\n", (size-left_byte), size, file_write_total, path);
+		}
+	}
+
+	free(buffer);
+	fclose(file);
+	return file_write_total;
+}
+
+
