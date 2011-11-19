@@ -15,6 +15,7 @@ import java.net.UnknownHostException;
 import java.util.ArrayList;
 import java.util.Vector;
 
+import edu.cmu.cs.cloudlet.android.data.Measure;
 import edu.cmu.cs.cloudlet.android.data.VMInfo;
 import edu.cmu.cs.cloudlet.android.util.KLog;
 
@@ -107,6 +108,17 @@ public class NetworkClientSender extends Thread {
 			
 			NetworkMsg command = commandQueue.remove(0);
 			this.sendCommand(command);
+			
+			// Performance(Time) Measure
+			switch(command.commandNumber){
+			case NetworkMsg.COMMAND_REQ_VMLIST:
+				Measure.put(Measure.NET_REQ_VMLIST);
+				break;
+			case NetworkMsg.COMMAND_REQ_TRANSFER_START:
+				Measure.put(Measure.NET_REQ_OVERLAY_TRASFER);
+				break;				
+			}
+			
 			if(command.commandNumber == NetworkMsg.COMMAND_REQ_TRANSFER_START){
 				// send data
 				VMInfo overlayVM = null;
@@ -119,7 +131,10 @@ public class NetworkClientSender extends Thread {
 				if(overlayVM != null){
 					File image = new File(overlayVM.getInfo(VMInfo.JSON_KEY_DISKIMAGE_PATH));
 					File mem = new File(overlayVM.getInfo(VMInfo.JSON_KEY_MEMORYSNAPSHOT_PATH));
+					Measure.setOverlaySize(image.length(), mem.length());
+					Measure.put(Measure.OVERLAY_TRANSFER_START);
 					this.sendOverlayImage(image, mem);
+					Measure.put(Measure.OVERLAY_TRANSFER_END);
 				}
 			}
 		}

@@ -2,13 +2,6 @@ package edu.cmu.cs.cloudlet.android.network;
 
 import java.io.DataInputStream;
 import java.io.IOException;
-import java.util.Vector;
-
-import org.json.JSONArray;
-import org.json.JSONException;
-import org.json.JSONObject;
-
-import edu.cmu.cs.cloudlet.android.data.VMInfo;
 import edu.cmu.cs.cloudlet.android.util.KLog;
 
 import android.os.Bundle;

@@ -10,6 +10,7 @@ import org.json.JSONObject;
 
 import edu.cmu.cs.cloudlet.android.CloudletActivity;
 import edu.cmu.cs.cloudlet.android.R;
+import edu.cmu.cs.cloudlet.android.data.Measure;
 import edu.cmu.cs.cloudlet.android.data.VMInfo;
 import edu.cmu.cs.cloudlet.android.util.CloudletEnv;
 import edu.cmu.cs.cloudlet.android.util.KLog;
@@ -94,7 +95,7 @@ public class CloudletConnector {
 				// Display to Dialog
 				messageBuffer.append(data.getString("message") + "\n");
 				KLog.println(messageBuffer.toString());				
-				if(mDialog != null){
+				if(mDialog == null){
 //					mDialog = ProgressDialog.show(mContext, "Info", messageBuffer.toString(), true);
 					mDialog.dismiss();					
 				}
@@ -107,16 +108,19 @@ public class CloudletConnector {
 				// Handle Cloudlet response
 				if(response != null){
 					switch(response.getCommandNumber()){
-					case NetworkMsg.COMMAND_ACK_VMLIST:
+					case NetworkMsg.COMMAND_ACK_VMLIST: 						
 						KLog.println("1. COMMAND_ACK_VMLIST message received");
+						Measure.put(Measure.NET_ACK_VMLIST);
 						responseVMList(response);
 						break;
 					case NetworkMsg.COMMAND_ACK_TRANSFER_START:
 						KLog.println("2. COMMAND_ACK_TRANSFER_START message received");
+						Measure.put(Measure.NET_ACK_OVERLAY_TRASFER);
 						responseTransferStart(response);
 						break;
 					case NetworkMsg.COMMAND_ACK_VM_LAUNCH:
 						KLog.println("3. COMMAND_ACK_VM_LAUNCH message received");
+						Measure.put(Measure.VM_LAUNCHED);
 						responseVMLaunch(response);
 						break;
 					case NetworkMsg.COMMAND_ACK_VM_STOP:
@@ -126,12 +130,6 @@ public class CloudletConnector {
 					default:
 						break;
 					}
-				}
-			}else if(msg.what == CloudletConnector.FINISH_MESSAGE){
-				if(mDialog != null && mDialog.isShowing() == true){
-					mDialog.dismiss();
-					
-					// Do network work
 				}
 			}
 		}
@@ -179,8 +177,7 @@ public class CloudletConnector {
 		}		
 	}
 
-	private void responseTransferStart(NetworkMsg response) {
-		
+	private void responseTransferStart(NetworkMsg response) {		
 			
 		if(checkVMValidity(response, this.requestBaseVM) == true){
 			// Let's wait launch SUCCESS Message without requesting
@@ -205,15 +202,14 @@ public class CloudletConnector {
 		}
 		
 		if(checkVMValidity(response, this.requestBaseVM) == true){
-			String synthesisInfo = "Finish VM Synthesis";
+			String synthesisInfo = "Finish VM Synthesis\n" + Measure.printInfo();			
 
 			// Run Application
 			new AlertDialog.Builder(mContext).setTitle("SUCESS")
 			.setMessage(synthesisInfo)
 			.setPositiveButton("Run Application", CloudletActivity.launchApplication)
 			.setNegativeButton("Done", null)
-			.show();
-			
+			.show();			
 			
 		}else{
 			this.showAlertDialog("Retuned VM information is wrong, check # of received VM Information");		
