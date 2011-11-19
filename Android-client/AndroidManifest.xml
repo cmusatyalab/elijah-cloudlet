@@ -18,11 +18,24 @@
                 <category android:name="android.intent.category.LAUNCHER" />
             </intent-filter>
         </activity>
+        <activity
+            android:label="@string/app_name"
+            android:name=".application.CloudletCameraActivity"
+            android:screenOrientation="landscape"
+            android:theme="@android:style/Theme.NoTitleBar.Fullscreen" >
+        </activity>
     </application>
 
-	<uses-feature android:name="android.hardware.camera"></uses-feature>
-	<uses-permission android:name="android.permission.ACCESS_NETWORK_STATE"></uses-permission>
-	<uses-permission android:name="android.permission.INTERNET"></uses-permission>
-	<uses-permission android:name="android.permission.WRITE_EXTERNAL_STORAGE"></uses-permission>
-	<uses-permission android:name="android.permission.CAMERA"></uses-permission>
+    <uses-feature android:name="android.hardware.camera" >
+    </uses-feature>
+
+    <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" >
+    </uses-permission>
+    <uses-permission android:name="android.permission.INTERNET" >
+    </uses-permission>
+    <uses-permission android:name="android.permission.WRITE_EXTERNAL_STORAGE" >
+    </uses-permission>
+    <uses-permission android:name="android.permission.CAMERA" >
+    </uses-permission>
+
 </manifest>

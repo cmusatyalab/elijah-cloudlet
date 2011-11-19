@@ -2,14 +2,14 @@ package edu.cmu.cs.cloudlet.android;
 
 import java.io.File;
 
+import edu.cmu.cs.cloudlet.android.application.CloudletCameraActivity;
 import edu.cmu.cs.cloudlet.android.network.CloudletConnector;
 import edu.cmu.cs.cloudlet.android.network.ServiceDiscovery;
 
 import android.app.Activity;
 import android.app.AlertDialog;
-import android.app.ProgressDialog;
 import android.content.DialogInterface;
-import android.content.DialogInterface.OnClickListener;
+import android.content.Intent;
 import android.os.Bundle;
 import android.os.Handler;
 import android.os.Message;
@@ -33,7 +33,10 @@ public class CloudletActivity extends Activity {
 		this.connector = new CloudletConnector(CloudletActivity.this);
 
 		// set button action
-		connector.startConnection("128.2.212.207", 9090);
+        Button mSendButton = (Button) findViewById(R.id.connectButton);
+        mSendButton.setOnClickListener(clickListener);
+        
+//		connector.startConnection("128.2.212.207", 9090);
 	}
 
 	/*
@@ -53,9 +56,51 @@ public class CloudletActivity extends Activity {
 	View.OnClickListener clickListener = new View.OnClickListener() {
 		@Override
 		public void onClick(View v) {
+			Intent intent = new Intent(CloudletActivity.this, CloudletCameraActivity.class);
+			intent.putExtra("address", "desk.krha.kr");
+		    startActivityForResult(intent, 0);
 		}
 	};
 
+	private void DialogSelectOption() {
+		final String items[] = { "item1", "item2", "item3" };
+		AlertDialog.Builder ab = new AlertDialog.Builder(this);
+		ab.setTitle("Title");
+		ab.setIcon(R.drawable.ic_launcher);
+		ab.setSingleChoiceItems(items, 0, new DialogInterface.OnClickListener() {
+			public void onClick(DialogInterface dialog, int whichButton) {
+			}
+		}).setPositiveButton("Ok", new DialogInterface.OnClickListener() {
+			public void onClick(DialogInterface dialog, int whichButton) {
+			}
+		}).setNegativeButton("Cancel", new DialogInterface.OnClickListener() {
+			public void onClick(DialogInterface dialog, int whichButton) {
+			}
+		});
+		ab.show();
+	}	
+
+	/*
+	 * Callback function after VM Synthesis
+	 */
+	public static DialogInterface.OnClickListener launchApplication = new DialogInterface.OnClickListener() {
+		@Override
+		public void onClick(DialogInterface dialog, int which) {
+			// TODO Auto-generated method stub
+			
+		}
+	};
+
+	@Override 
+    protected void onActivityResult(int requestCode, int resultCode, Intent data) { 
+        super.onActivityResult(requestCode, resultCode, data); 
+        if (resultCode == RESULT_OK) { 
+            if (requestCode == 0) {  
+                String ret = data.getExtras().getString("message"); 
+            } 
+        } 
+    } 
+	
 	public boolean onKeyDown(int keyCode, KeyEvent event) {
 		if (keyCode == KeyEvent.KEYCODE_BACK) {
 			new AlertDialog.Builder(CloudletActivity.this).setTitle("Exit").setMessage("Finish Application")
@@ -74,32 +119,4 @@ public class CloudletActivity extends Activity {
 		connector.close();
 		super.onDestroy();
 	}
-
-	private void DialogSelectOption() {
-		final String items[] = { "item1", "item2", "item3" };
-		AlertDialog.Builder ab = new AlertDialog.Builder(this);
-		ab.setTitle("Title");
-		ab.setIcon(R.drawable.ic_launcher);
-		ab.setSingleChoiceItems(items, 0, new DialogInterface.OnClickListener() {
-			public void onClick(DialogInterface dialog, int whichButton) {
-			}
-		}).setPositiveButton("Ok", new DialogInterface.OnClickListener() {
-			public void onClick(DialogInterface dialog, int whichButton) {
-			}
-		}).setNegativeButton("Cancel", new DialogInterface.OnClickListener() {
-			public void onClick(DialogInterface dialog, int whichButton) {
-			}
-		});
-		ab.show();
-	}
-	
-
-	public static DialogInterface.OnClickListener launchApplication = new DialogInterface.OnClickListener() {		
-
-		@Override
-		public void onClick(DialogInterface dialog, int which) {
-			// TODO Auto-generated method stub
-			
-		}
-	};
 }
