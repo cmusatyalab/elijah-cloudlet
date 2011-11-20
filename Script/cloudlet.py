@@ -2,6 +2,7 @@
 import xdelta3
 import os, commands, filecmp, sys, subprocess, getopt, time
 from datetime import datetime, timedelta
+import telnetlib
 
 CUR_DIR = os.getcwd()
 
@@ -40,6 +41,7 @@ def compare_same(filename1, filename2):
     else:
         print '[INFO] SUCCESS to recover'
         return True
+    migration_file = 
 
 def create_overlay(base_image, base_mem):
     # generate overlay VM(disk + memory) from Base VM
@@ -51,15 +53,17 @@ def create_overlay(base_image, base_mem):
     overlay_disk = os.path.join(os.getcwd(), vm_name) + '_overlay.qcow2'
     overlay_mem = os.path.join(os.getcwd(), vm_name) + '_overlay.mem'
     tmp_disk = os.path.join(vm_path, vm_name) + '_tmp.qcow2'
+    tmp_mem = os.path.join(vm_path, vm_name) + '_tmp.mem'
     command_str = 'cp ' + base_image + ' ' + tmp_disk
     ret = commands.getoutput(command_str)
 
     print '[INFO] run Base Image to generate memory snapshot'
-    run_snapshot(tmp_disk, base_mem)
+    telnet_port = 19823; vnc_port = 2
+    migration_file = 
+    run_snapshot(tmp_disk, base_mem, telnet_port, vnc_port)
+    # stop and migrate
+    run_migration(telnet_port, vnc_port, tmp_mem)
 
-    # stop 
-    # migrate "exec:dd bs=1M 2> /dev/null | dd bs=1M of=ubuntu_base_tmp.mem 2> /dev/null" 
-    tmp_mem = os.path.join(os.getcwd(), vm_name) + '_tmp.mem'
     if os.path.exists(tmp_mem) == False:
         print '[ERROR] new memory snapshot (%s) is not exit' % tmp_mem
         if os.path.exists(tmp_mem) == True:
@@ -95,7 +99,7 @@ def create_overlay(base_image, base_mem):
     return overlay_disk, overlay_mem, tmp_disk, tmp_mem
 
 
-def run_snapshot(disk_image, memory_image):
+def run_snapshot(disk_image, memory_image, telnet_port, vnc_port)
     '''
     command_str = "kvm -hda "
     command_str += disk_image
@@ -105,24 +109,35 @@ def run_snapshot(disk_image, memory_image):
     process = subprocess.Popen(command_str, shell=True)
     ret = process.wait()
     '''
-    telnet_port = 19823; vnc_port = 2
 
     command_str = "kvm -hda "
     command_str += disk_image
-    command_str += " -m 512 -monitor telnet:localhost:" + str(telnet_port) + ",server,nowait -enable-kvm -net nic -net user -serial none -parallel none -usb -usbdevice tablet -redir tcp:2222::22"
+    if telnet_port != 0 and vnc_port != -1:
+        command_str += " -m 512 -monitor telnet:localhost:" + str(telnet_port) + ",server,nowait -enable-kvm -net nic -net user -serial none -parallel none -usb -usbdevice tablet -redir tcp:2222::22"
+        command_str += " -vnc :" + str(vnc_port) + " "
+    else:
+        command_str += " -m 512 -enable-kvm -net nic -net user -serial none -parallel none -usb -usbdevice tablet -redir tcp:2222::22"
     command_str += " -incoming \"exec:cat " + memory_image + "\""
-    command_str += " -vnc :" + str(vnc_port)
     print '[DEBUG] command : ' + command_str
     process = subprocess.Popen(command_str, shell=True)
 
-    print 'sleep before'
+    # Run VNC and wait until user finishes working
     time.sleep(3)
-    print 'sleep after'
-
     vnc_process = subprocess.Popen("vncviewer localhost:" + str(vnc_port), shell=True)
     ret = vnc_process.wait()
 
-    return ret
+
+def run_migration(telnet_port, vnc_port, mig_path)
+    # save Memory State
+    migration_cmd = "migrate \"exec:dd bs=1M 2> /dev/null | dd bs=1M of=" + mig_path +" 2> /dev/null\"\n"
+    tn = telnetlib.Telnet('localhost', telnet_port)
+    tn.write("stop\n")
+    tn.read_until("(qemu)", 10)
+    tn.write(migration_cmd)
+    while (1):
+        tn_read = tn.read_some()
+        if tn_read.find("qemu"):
+            break;
 
 
 def create_base(imagefile):

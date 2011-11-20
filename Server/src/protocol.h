@@ -75,7 +75,7 @@ typedef struct Client_MSG{
 
 
 // Global Data
-#define synthesis_script		"/home/krha/Cloudlet/src/Script/cloudet.py"
+#define synthesis_script		"/home/krha/Cloudlet/src/Script/cloudlet.py"
 const char *vm_configuration;
 
 
