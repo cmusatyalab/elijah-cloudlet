@@ -16,6 +16,8 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <time.h>
+
 
 //static int launch_VM(const char *tmp_overlay_disk_path, const char *tmp_overlay_mem_path, VM_Info *overlayVM, VM_Info *baseVM);
 static const char* create_output_string_with_vm(const VM_Info *vm);
@@ -82,6 +84,7 @@ void parse_req_transfer(int sock_fd, const char* json_string){
 	}
 
 	// Save them to disk
+	srand(time(NULL));
 	int rand = random();
 	sprintf(tmp_overlay_disk_path, "/tmp/%s_%d.img", overlayVM->name, rand);
 	sprintf(tmp_overlay_mem_path, "/tmp/%s_%d.mem", overlayVM->name, rand);
@@ -115,7 +118,6 @@ void parse_req_transfer(int sock_fd, const char* json_string){
 			//Launch VM
 			int ret = launch_VM(tmp_overlay_disk_path, tmp_overlay_mem_path, overlayVM, baseVM);
 			if(ret == SUCCESS){
-
 				//Compact it into Full JSON format
 				json_object *jobj_vm = json_create_from_VMInfo(baseVM);
 				json_object *jobj = json_object_new_object();
@@ -188,7 +190,11 @@ void parse_req_stop(int sock_fd, const char* json_string){
  */
 int launch_VM(const char *tmp_overlay_disk_path, const char *tmp_overlay_mem_path, VM_Info *overlayVM, VM_Info *baseVM){
 	//run python script
-
+	char command[512] = {'\0'};
+	sprintf(command, "%s -o %s %s", synthesis_script, baseVM->diskimg_path, baseVM->memory_snapshot_path);
+	printf("%s\n", command);
+	int ret = system(command);
+	printf("run result : %d\n", ret);
 
 	return SUCCESS;
 }
@@ -207,7 +213,7 @@ static int saveToFile(int sock_fd, const char* path, int size){
 	if(file == NULL)
 		return -1;
 
-	int buffer_size = 1024 * 1024;
+	int buffer_size = 1024 * 1024 * 3;
 	char* buffer = (char*)malloc(sizeof(char) * buffer_size);
 
 	int file_write_total = 0;
@@ -232,5 +238,4 @@ static int saveToFile(int sock_fd, const char* path, int size){
 	fclose(file);
 	return file_write_total;
 }
-
 

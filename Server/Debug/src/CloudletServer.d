@@ -1,5 +1,7 @@
 src/CloudletServer.d src/CloudletServer.o: ../src/CloudletServer.c \
- ../src/client_manager/client_manager.h ../src/lib/lib_type.h \
+ ../src/client_manager/client_manager.h \
+ ../src/client_manager/client_handler.h \
+ ../src/client_manager/../protocol.h ../src/lib/lib_type.h \
  ../src/util/json_util.h /usr/include/glib-2.0/glib.h \
  /usr/include/glib-2.0/glib/galloca.h /usr/include/glib-2.0/glib/gtypes.h \
  /usr/lib/glib-2.0/include/glibconfig.h \
@@ -47,6 +49,10 @@ src/CloudletServer.d src/CloudletServer.o: ../src/CloudletServer.c \
  /usr/include/glib-2.0/glib/gvariant.h ../src/util/../protocol.h
 
 ../src/client_manager/client_manager.h:
+
+../src/client_manager/client_handler.h:
+
+../src/client_manager/../protocol.h:
 
 ../src/lib/lib_type.h:
 

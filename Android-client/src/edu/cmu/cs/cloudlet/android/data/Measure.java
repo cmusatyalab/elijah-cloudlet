@@ -2,8 +2,6 @@ package edu.cmu.cs.cloudlet.android.data;
 
 import java.util.Vector;
 
-import android.util.Log;
-
 
 public class Measure {
 	private static final String SEPERATOR = ":";
@@ -66,7 +64,7 @@ public class Measure {
 		sb.append("End-to-End : " + endConnection + "-" + startConnection +"=" + (endConnection-startConnection) + " s \n");
 		sb.append("Overlay Trans : " + (overlayEnd-overlayStart) + " s \n");
 		sb.append("Overlay Size: : " + (imageSize + memorySize)/1000/1000 + " MB \n");
-		sb.append("Bandwidth : " + (imageSize+memorySize)/1000/(overlayEnd-overlayStart) + " MB/s\n");
+		sb.append("Bandwidth : " + (imageSize+memorySize)/1000/(overlayEnd-overlayStart) + " KB/s\n");
 		return sb.toString();
 	}
 	

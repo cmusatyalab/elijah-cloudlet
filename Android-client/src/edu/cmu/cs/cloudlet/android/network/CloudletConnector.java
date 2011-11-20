@@ -205,7 +205,7 @@ public class CloudletConnector {
 			String synthesisInfo = "Finish VM Synthesis\n" + Measure.printInfo();			
 
 			// Run Application
-			new AlertDialog.Builder(mContext).setTitle("SUCESS")
+			new AlertDialog.Builder(mContext).setTitle("SUCCESS")
 			.setMessage(synthesisInfo)
 			.setPositiveButton("Run Application", CloudletActivity.launchApplication)
 			.setNegativeButton("Done", null)

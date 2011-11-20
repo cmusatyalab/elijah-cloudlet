@@ -5,6 +5,7 @@
 #include <getopt.h>
 
 #include "client_manager/client_manager.h"
+#include "client_manager/client_handler.h"
 #include "lib/lib_type.h"
 #include "util/json_util.h"
 
@@ -12,6 +13,14 @@ void print_help();
 void check_config_file(int argc, char **argv);
 
 int main(int argc, char **argv) {
+	const char *disk = "/tmp/ubuntuLTS_1804289383.img";
+	const char *mem = "/tmp/ubuntuLTS_1804289383.mem";
+	VM_Info *overlayVM = (VM_Info *)malloc(sizeof(struct VM_Info));
+	VM_Info *baseVM = (VM_Info *)malloc(sizeof(struct VM_Info));
+	baseVM->diskimg_path = "/home/krha/Cloudlet/image/baseVM/ubuntu_base.qcow2";
+	baseVM->memory_snapshot_path = "/home/krha/Cloudlet/image/baseVM/ubuntu_base.mem";
+	int ret = launch_VM(disk, mem, overlayVM, baseVM);
+	/*
 	check_config_file(argc, argv);
 
 	 // Run Socket Server
@@ -26,6 +35,7 @@ int main(int argc, char **argv) {
 
 	 end_client_manager();
 	 return 0;
+	 */
 }
 
 /*
