@@ -13,8 +13,8 @@ void print_help();
 void check_config_file(int argc, char **argv);
 
 int main(int argc, char **argv) {
-	const char *disk = "/tmp/ubuntuLTS_1804289383.img";
-	const char *mem = "/tmp/ubuntuLTS_1804289383.mem";
+	const char *disk = "/tmp/ubuntu_base_overlay.qcow2";
+	const char *mem = "/tmp/ubuntu_base_overlay.mem";
 	VM_Info *overlayVM = (VM_Info *)malloc(sizeof(struct VM_Info));
 	VM_Info *baseVM = (VM_Info *)malloc(sizeof(struct VM_Info));
 	baseVM->diskimg_path = "/home/krha/Cloudlet/image/baseVM/ubuntu_base.qcow2";

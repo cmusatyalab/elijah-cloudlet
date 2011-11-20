@@ -16,7 +16,7 @@ def diff_files(source_file, target_file, output_file):
     if os.path.exists(output_file) == True:
         os.remove(output_file)
 
-    print '[INFO] create overlay comparing %s(base) and %s --> %s' % (os.path.basename(source_file), os.path.basename(target_file), os.path.basename(output_file))
+    print '[INFO] %s(base) - %s  =  %s' % (os.path.basename(source_file), os.path.basename(target_file), os.path.basename(output_file))
     command_delta = ['xdelta3', '-f', '-s', source_file, target_file, output_file]
     ret = xdelta3.xd3_main_cmdline(command_delta)
     if ret == 0:
@@ -41,7 +41,6 @@ def compare_same(filename1, filename2):
     else:
         print '[INFO] SUCCESS to recover'
         return True
-    migration_file = 
 
 def create_overlay(base_image, base_mem):
     # generate overlay VM(disk + memory) from Base VM
@@ -59,7 +58,6 @@ def create_overlay(base_image, base_mem):
 
     print '[INFO] run Base Image to generate memory snapshot'
     telnet_port = 19823; vnc_port = 2
-    migration_file = 
     run_snapshot(tmp_disk, base_mem, telnet_port, vnc_port)
     # stop and migrate
     run_migration(telnet_port, vnc_port, tmp_mem)
@@ -99,7 +97,7 @@ def create_overlay(base_image, base_mem):
     return overlay_disk, overlay_mem, tmp_disk, tmp_mem
 
 
-def run_snapshot(disk_image, memory_image, telnet_port, vnc_port)
+def run_snapshot(disk_image, memory_image, telnet_port, vnc_port):
     '''
     command_str = "kvm -hda "
     command_str += disk_image
@@ -127,17 +125,22 @@ def run_snapshot(disk_image, memory_image, telnet_port, vnc_port)
     ret = vnc_process.wait()
 
 
-def run_migration(telnet_port, vnc_port, mig_path)
+def run_migration(telnet_port, vnc_port, mig_path):
     # save Memory State
     migration_cmd = "migrate \"exec:dd bs=1M 2> /dev/null | dd bs=1M of=" + mig_path +" 2> /dev/null\"\n"
+    print 'debug ', migration_cmd
+
     tn = telnetlib.Telnet('localhost', telnet_port)
     tn.write("stop\n")
-    tn.read_until("(qemu)", 10)
+    ret = tn.read_until("(qemu)", 10)
+    print 'waiting telnet ', ret
     tn.write(migration_cmd)
     while (1):
         tn_read = tn.read_some()
-        if tn_read.find("qemu"):
+        if tn_read.find("qemu") == True:
             break;
+    tn.write("quit\n")
+    tn.close()
 
 
 def create_base(imagefile):
@@ -212,7 +215,7 @@ def main(argv):
         base_mem = args[1]
         # create overlay
         overlay_disk, overlay_mem, tmp_img, tmp_mem = create_overlay(base_image, base_mem)
-        print '[INFO] Overlay (%s, %s) is created from %s' % (overlay_disk, overlay_mem, base_image)
+        print '[INFO] Overlay (%s, %s) is created from %s' % (overlay_disk, overlay_mem, os.path.basename(base_image))
         if os.path.exists(tmp_img) == True:
             os.remove(tmp_img)
         if os.path.exists(tmp_mem) == True:
@@ -232,7 +235,8 @@ def main(argv):
         prev_time = datetime.now()
         merge_file(base_mem, overlay_mem, recover_mem)
         print '[TIME] time for apply overlay memory : ', str(datetime.now()-prev_time)
-        run_snapshot(recover_img, recover_mem)
+        telnet_port = 19823; vnc_port = 2
+        run_snapshot(recover_img, recover_mem, telnet_port, vnc_port)
     else:
         assert False, "unhandled option"
 
