@@ -3,6 +3,7 @@ import xdelta3
 import os, commands, filecmp, sys, subprocess, getopt, time
 from datetime import datetime, timedelta
 import telnetlib
+import pylzma
 
 CUR_DIR = os.getcwd()
 
@@ -42,11 +43,43 @@ def compare_same(filename1, filename2):
         print '[INFO] SUCCESS to recover'
         return True
 
+# compression
+def comp_lzma(inputname, outputname):
+    prev_time = datetime.now()
+
+    in_file = open(inputname, 'rb')
+    ret_file = open(outputname, 'wb')
+    c_fp = pylzma.compressfile(in_file, eos=1, algorithm=2)
+    while True:
+        chunk = c_fp.read(8192)
+        if not chunk: break
+        ret_file.write(chunk)
+
+    in_file.close()
+    ret_file.close()
+    time_diff = str(datetime.now()-prev_time)
+    return outputname, str(time_diff)
+
+#decompression
+def decomp_lzma(inputname, outputname):
+    prev_time = datetime.now()
+    comp_file = open(inputname, 'rb')
+    ret_file = open(outputname, 'wb')
+    obj = pylzma.decompressobj()
+
+    while True:
+        tmp = comp_file.read(8192)
+        if not tmp: break
+        ret_file.write(obj.decompress(tmp))
+    ret_file.write(obj.flush())
+
+    comp_file.close()
+    ret_file.close()
+    time_diff = str(datetime.now()-prev_time)
+    return outputname, str(time_diff)
+
 def create_overlay(base_image, base_mem):
     # generate overlay VM(disk + memory) from Base VM
-    overlay_disk = None
-    overlay_mem = None
-
     vm_name = os.path.basename(base_image).split('.')[0]
     vm_path = os.path.dirname(base_mem)
     overlay_disk = os.path.join(os.getcwd(), vm_name) + '_overlay.qcow2'
@@ -92,10 +125,40 @@ def create_overlay(base_image, base_mem):
             os.remove(tmp_disk)
         return None, None, None, None
 
-    #os.remove(tmp_mem)
-    #os.remove(tmp_disk)
-    return overlay_disk, overlay_mem, tmp_disk, tmp_mem
+    # compression
+    comp_disk = overlay_disk + '.lzma'
+    comp_mem = overlay_mem + '.lzma'
+    comp_disk, time1 = comp_lzma(overlay_disk, comp_disk)
+    comp_mem, time2 = comp_lzma(overlay_mem, comp_mem)
 
+    os.remove(tmp_mem)
+    os.remove(tmp_disk)
+    os.remove(overlay_disk)
+    os.remove(overlay_mem)
+    return comp_disk, comp_mem
+
+def recover_snapshot(base_img, base_mem, comp_img, comp_mem):
+    # decompress
+    overlay_img = comp_img + '.decomp'
+    overlay_mem = comp_mem + '.decomp'
+    decomp_lzma(comp_img, overlay_img)
+    decomp_lzma(comp_mem, overlay_mem)
+
+    # merge with base image
+    recover_img = os.path.join(os.path.dirname(base_img), 'recover.qcow2'); 
+    recover_mem = os.path.join(os.path.dirname(base_mem), 'recover.mem');
+
+    prev_time = datetime.now()
+    merge_file(base_img, overlay_img, recover_img)
+    print '[TIME] time for apply overlay disk : ', str(datetime.now()-prev_time)
+
+    prev_time = datetime.now()
+    merge_file(base_mem, overlay_mem, recover_mem)
+    print '[TIME] time for apply overlay memory : ', str(datetime.now()-prev_time)
+
+    os.remove(overlay_img)
+    os.remove(overlay_mem)
+    return recover_img, recover_mem
 
 def run_snapshot(disk_image, memory_image, telnet_port, vnc_port):
     '''
@@ -140,6 +203,7 @@ def run_migration(telnet_port, vnc_port, mig_path):
         if tn_read.find("qemu") == True:
             break;
     tn.write("quit\n")
+    ret = tn.read_until("(qemu)", 2)
     tn.close()
 
 
@@ -154,26 +218,37 @@ def create_base(imagefile):
     command_str = 'qemu-img create -f qcow2 -b ' + imagefile + ' ' + base_image
     ret = commands.getoutput(command_str)
     print '[INFO] run Base Image to generate memory snapshot'
-    run_image(base_image)
+    telnet_port = 12123; vnc_port = 3
+    run_image(base_image, telnet_port, vnc_port)
 
-    # stop
-    # migrate "exec:dd bs=1M 2> /dev/null | dd bs=1M of=ubuntu_base.mem 2> /dev/null" 
+    # stop and migrate
     base_mem = os.path.join(vm_path, vm_name) + '_base.mem'
+    run_migration(telnet_port, vnc_port, base_mem)
     if os.path.exists(base_mem) == False:
         print '[ERROR] base memory snapshot (%s) is not exit' % base_mem
         return None, None
 
     return base_image, base_mem
 
-def run_image(disk_image):
+def run_image(disk_image, telnet_port, vnc_port):
     command_str = "kvm -hda "
     command_str += disk_image
-    command_str += " -m 512 -monitor stdio -enable-kvm -net nic -net user -serial none -parallel none -usb -usbdevice tablet -redir tcp:2222::22 "
-    print "[Debug] command : ", command_str
-
+    if telnet_port != 0 and vnc_port != -1:
+        command_str += " -m 512 -monitor telnet:localhost:" + str(telnet_port) + ",server,nowait -enable-kvm -net nic -net user -serial none -parallel none -usb -usbdevice tablet -redir tcp:2222::22"
+        command_str += " -vnc :" + str(vnc_port) + " "
+    else:
+        command_str += " -m 512 -enable-kvm -net nic -net user -serial none -parallel none -usb -usbdevice tablet -redir tcp:2222::22"
+    print '[DEBUG] command : ' + command_str
     process = subprocess.Popen(command_str, shell=True)
-    ret = process.wait()
-    print "[Debug] run command : ", ret
+
+    # Run VNC and wait until user finishes working
+    counter = 0
+    while counter < 50:
+        time.sleep(1)
+        print 'waiting for booting..'
+        counter = counter+1
+    vnc_process = subprocess.Popen("vncviewer localhost:" + str(vnc_port), shell=True)
+    ret = vnc_process.wait()
 
 def print_help(program_name):
     print 'help: %s...' % program_name
@@ -214,29 +289,28 @@ def main(argv):
         base_image = args[0]
         base_mem = args[1]
         # create overlay
-        overlay_disk, overlay_mem, tmp_img, tmp_mem = create_overlay(base_image, base_mem)
+        overlay_disk, overlay_mem = create_overlay(base_image, base_mem)
         print '[INFO] Overlay (%s, %s) is created from %s' % (overlay_disk, overlay_mem, os.path.basename(base_image))
-        if os.path.exists(tmp_img) == True:
-            os.remove(tmp_img)
-        if os.path.exists(tmp_mem) == True:
-            os.remove(tmp_mem)
     elif o in ("-r", "--run"):
         if len(args) != 4:
             print_help(os.path.basename(argv[0]))
             assert False, "Invalid argument"
-        base_img = args[0]; base_mem = args[1]; overlay_img = args[2]; overlay_mem = args[3]
-        recover_img = os.path.join(os.path.dirname(base_img), 'recover.qcow2'); 
-        recover_mem = os.path.join(os.path.dirname(base_mem), 'recover.mem');
-        
-        prev_time = datetime.now()
-        merge_file(base_img, overlay_img, recover_img)
-        print '[TIME] time for apply overlay disk : ', str(datetime.now()-prev_time)
+        base_img = args[0]; base_mem = args[1]; comp_img = args[2]; comp_mem = args[3]
+        recover_img, recover_mem = recover_snapshot(base_img, base_mem, comp_img, comp_mem)
 
-        prev_time = datetime.now()
-        merge_file(base_mem, overlay_mem, recover_mem)
-        print '[TIME] time for apply overlay memory : ', str(datetime.now()-prev_time)
         telnet_port = 19823; vnc_port = 2
         run_snapshot(recover_img, recover_mem, telnet_port, vnc_port)
+        
+        # stop and quit
+        tn = telnetlib.Telnet('localhost', telnet_port)
+        tn.write("stop\n")
+        ret = tn.read_until("(qemu)", 10)
+        tn.write("quit\n")
+        ret = tn.read_until("(qemu)", 2)
+        tn.close()
+
+        os.remove(recover_img)
+        os.remove(recover_mem)
     else:
         assert False, "unhandled option"
 
