@@ -5,9 +5,13 @@ Prototype for Cloudlet
 	glib-2.0
 	libjson0-dev (JSON manipulation library)
 2) Python Script
+	xdelta
+		binary diff
+		$ sudo apt-get install python-xdelta3
 	pylmza
 		compression
-		$ sudo easy-install pylzma
+		$ sudo apt-get install python-setuptools python-dev build-essential
+		$ sudo easy_install pylzma
 3) Android-client
 
 # GIT Basic Command
