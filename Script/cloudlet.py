@@ -91,7 +91,7 @@ def create_overlay(base_image, base_mem):
 
     print '[INFO] run Base Image to generate memory snapshot'
     telnet_port = 19823; vnc_port = 2
-    run_snapshot(tmp_disk, base_mem, telnet_port, vnc_port)
+    run_snapshot(tmp_disk, base_mem, telnet_port, vnc_port, show_vnc=True)
     # stop and migrate
     run_migration(telnet_port, vnc_port, tmp_mem)
 
@@ -141,8 +141,11 @@ def recover_snapshot(base_img, base_mem, comp_img, comp_mem):
     # decompress
     overlay_img = comp_img + '.decomp'
     overlay_mem = comp_mem + '.decomp'
+    prev_time = datetime.now()
+    print '[INFO] Decompressing..'
     decomp_lzma(comp_img, overlay_img)
     decomp_lzma(comp_mem, overlay_mem)
+    print '[TIME] Decompression : ', str(datetime.now()-prev_time)
 
     # merge with base image
     recover_img = os.path.join(os.path.dirname(base_img), 'recover.qcow2'); 
@@ -150,27 +153,17 @@ def recover_snapshot(base_img, base_mem, comp_img, comp_mem):
 
     prev_time = datetime.now()
     merge_file(base_img, overlay_img, recover_img)
-    print '[TIME] time for apply overlay disk : ', str(datetime.now()-prev_time)
+    print '[TIME] Apply overlay disk : ', str(datetime.now()-prev_time)
 
     prev_time = datetime.now()
     merge_file(base_mem, overlay_mem, recover_mem)
-    print '[TIME] time for apply overlay memory : ', str(datetime.now()-prev_time)
+    print '[TIME] Apply overlay memory : ', str(datetime.now()-prev_time)
 
     os.remove(overlay_img)
     os.remove(overlay_mem)
     return recover_img, recover_mem
 
-def run_snapshot(disk_image, memory_image, telnet_port, vnc_port):
-    '''
-    command_str = "kvm -hda "
-    command_str += disk_image
-    command_str += " -m 512 -monitor stdio -enable-kvm -net nic -net user -serial none -parallel none -usb -usbdevice tablet -redir tcp:2222::22"
-    command_str += " -incoming \"exec:cat " + memory_image + "\""
-    print '[DEBUG] command : ' + command_str
-    process = subprocess.Popen(command_str, shell=True)
-    ret = process.wait()
-    '''
-
+def run_snapshot(disk_image, memory_image, telnet_port, vnc_port, show_vnc):
     command_str = "kvm -hda "
     command_str += disk_image
     if telnet_port != 0 and vnc_port != -1:
@@ -179,14 +172,15 @@ def run_snapshot(disk_image, memory_image, telnet_port, vnc_port):
     else:
         command_str += " -m 512 -enable-kvm -net nic -net user -serial none -parallel none -usb -usbdevice tablet -redir tcp:2222::22"
     command_str += " -incoming \"exec:cat " + memory_image + "\""
-    print '[DEBUG] command : ' + command_str
+    print '[INFO] Run snapshot..'
     process = subprocess.Popen(command_str, shell=True)
+    time.sleep(1)
 
     # Run VNC and wait until user finishes working
-    time.sleep(3)
-    vnc_process = subprocess.Popen("vncviewer localhost:" + str(vnc_port), shell=True)
-    ret = vnc_process.wait()
-
+    if show_vnc == True:
+        time.sleep(3)
+        vnc_process = subprocess.Popen("vncviewer localhost:" + str(vnc_port), shell=True)
+        ret = vnc_process.wait()
 
 def run_migration(telnet_port, vnc_port, mig_path):
     # save Memory State
@@ -250,15 +244,14 @@ def run_image(disk_image, telnet_port, vnc_port):
     vnc_process = subprocess.Popen("vncviewer localhost:" + str(vnc_port), shell=True)
     ret = vnc_process.wait()
 
-def print_help(program_name):
-    print 'help: %s...' % program_name
 
 def print_usage(program_name):
     print 'usage: %s [option] [file]..  ' % program_name
     print ' -h, --help  print help'
     print ' -b, --base [disk image]'
     print ' -o, --overlay [base image] [base mem]'
-    print ' -r, --run [base image] [base memory] [overlay image] [overlay memory]'
+    print ' -r, --run [base image] [base memory] [overlay image] [overlay memory] [telnet_port] [vnc_port]'
+    print ' -s, --stop [command_port]'
 
 
 def main(argv):
@@ -266,7 +259,7 @@ def main(argv):
         print_usage(os.path.basename(argv[0]))
         sys.exit(2)
     try:
-        optlist, args = getopt.getopt(argv[1:], 'hbor', ["help", "base", "overlay", "run"])
+        optlist, args = getopt.getopt(argv[1:], 'hbors', ["help", "base", "overlay", "run", "stop"])
     except getopt.GetoptError, err:
         print str(err)
         print_usage(os.path.basename(argv[0]))
@@ -275,32 +268,41 @@ def main(argv):
     # parse argument
     o = optlist[0][0]
     if o in ("-h", "--help"):
-        print_help(os.path.basename(argv[0]))
+        print_usage(os.path.basename(argv[0]))
     elif o in ("-b", "--base"):
         if len(args) != 1:
-            print_help(os.path.basename(argv[0]))
-            assert False, "Invalid argument"
+            print_usage(os.path.basename(argv[0]))
+            print 'invalid argument'
+            return;
         base_image, base_mem = create_base(args[0])
         print '[INFO] Base (%s, %s) is created from %s' % (base_image, base_mem, args[0])
     elif o in ("-o", "--overlay"):
         if len(args) != 2:
-            print_help(os.path.basename(argv[0]))
-            assert False, "Invalid argument"
+            print_usage(os.path.basename(argv[0]))
+            print 'invalid argument'
+            return;
         base_image = args[0]
         base_mem = args[1]
         # create overlay
         overlay_disk, overlay_mem = create_overlay(base_image, base_mem)
         print '[INFO] Overlay (%s, %s) is created from %s' % (overlay_disk, overlay_mem, os.path.basename(base_image))
     elif o in ("-r", "--run"):
-        if len(args) != 4:
-            print_help(os.path.basename(argv[0]))
-            assert False, "Invalid argument"
+        if len(args) != 6:
+            print_usage(os.path.basename(argv[0]))
+            print 'invalid argument'
+            return;
         base_img = args[0]; base_mem = args[1]; comp_img = args[2]; comp_mem = args[3]
+        telnet_port = int(args[4]); vnc_port = int(args[5])
+        # recover image from overlay
         recover_img, recover_mem = recover_snapshot(base_img, base_mem, comp_img, comp_mem)
-
-        telnet_port = 19823; vnc_port = 2
-        run_snapshot(recover_img, recover_mem, telnet_port, vnc_port)
-        
+        # run snapshot non-blocking mode
+        run_snapshot(recover_img, recover_mem, telnet_port, vnc_port, show_vnc=False)
+    elif o in ("-s", "--stop"):
+        if len(args) != 1:
+            print_usage(os.path.basename(argv[0]))
+            print 'invalid argument'
+            return;
+        telnet_port = int(args[0])
         # stop and quit
         tn = telnetlib.Telnet('localhost', telnet_port)
         tn.write("stop\n")
@@ -308,9 +310,6 @@ def main(argv):
         tn.write("quit\n")
         ret = tn.read_until("(qemu)", 2)
         tn.close()
-
-        os.remove(recover_img)
-        os.remove(recover_mem)
     else:
         assert False, "unhandled option"
 

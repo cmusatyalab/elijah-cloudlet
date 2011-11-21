@@ -14,6 +14,7 @@
 #include <stropts.h>
 #include <net/if.h>
 #include <linux/sockios.h>
+#include <netdb.h>
 
 /*
  * Get System TS
@@ -73,209 +74,232 @@ int write_full(int fd, const char *buffer, int count) {
 
 // C-99 incompatible
 const char *myip() {
-	const char * localip = "0.0.0.0";
-	return localip;
-	struct ifconf ifc;
-	struct ifreq ifr[MAX_NIC];
-	static char ip[BUFFERSIZE];
-	int s;
-	int nNumIFs;
-	int i;
-	int count;
-	int max = 2;
-	int cmd = SIOCGIFCONF;
 
-	max++;
+	char ac[80];
+	int i = 0;
 
-	ifc.ifc_len = sizeof ifr;
-	ifc.ifc_ifcu.ifcu_req = ifr;
+	// Get my host name
+	if (gethostname(ac, sizeof(ac)) != -1) {
+		printf("Host name: %s\n", ac);
 
-	if ((s = socket(AF_INET, SOCK_STREAM, 0)) < 0) {
-		perror("socket");
-		exit(1);
-	}
-
-#if defined(_AIX)
-	cmd = CSIOCGIFCONF;
-#endif
-
-	if ((s = ioctl(s, cmd, &ifc)) < 0) {
-		perror("ioctl");
-		exit(1);
-	}
-
-	nNumIFs = ifc.ifc_len / sizeof(struct ifreq);
-	count = 0;
-	strcpy(ip, localip);
-	for (i = 0; i < nNumIFs; i++) {
-		struct in_addr addr;
-		if (ifc.ifc_ifcu.ifcu_req[i].ifr_ifru.ifru_addr.sa_family != AF_INET) {
-			continue;
+		// Find IP addresses
+		struct hostent* p_he = gethostbyname(ac);
+		if (p_he != 0) {
+			for (i = 0; p_he->h_addr_list[i] != 0; ++i) {
+				struct in_addr addr;
+				memcpy(&addr, p_he->h_addr_list[i], sizeof(struct in_addr));
+				printf("IP address %d: %s\n", i, inet_ntoa(addr));
+			}
 		}
-
-		addr
-				= ((struct sockaddr_in *) &ifc.ifc_ifcu.ifcu_req[i].ifr_ifru.ifru_addr)->sin_addr;
-		if (addr.s_addr == htonl(0x7f000001)) {
-			continue;
-		}
-		strcpy(ip, inet_ntoa(addr));
 	}
-	return ip;
-}
+	return NULL;
+		/*
+		 const char * localip = "0.0.0.0";
+		 return localip;
+		 struct ifconf ifc;
+		 struct ifreq ifr[MAX_NIC];
+		 static char ip[BUFFERSIZE];
+		 int s;
+		 int nNumIFs;
+		 int i;
+		 int count;
+		 int max = 2;
+		 int cmd = SIOCGIFCONF;
 
-/*
- * Get next argument removing empty space
- */
-int get_next_num() {
-	int result = 0;
-	char tmp;
+		 max++;
 
-	while (1) {
-		tmp = getchar();
-		if (tmp == ' ' || tmp == '\t')
-			continue;
-		else if (tmp == '\n')
-			return -1;
-		break;
+		 ifc.ifc_len = sizeof ifr;
+		 ifc.ifc_ifcu.ifcu_req = ifr;
+
+		 if ((s = socket(AF_INET, SOCK_STREAM, 0)) < 0) {
+		 perror("socket");
+		 exit(1);
+		 }
+
+		 #if defined(_AIX)
+		 cmd = CSIOCGIFCONF;
+		 #endif
+
+		 if ((s = ioctl(s, cmd, &ifc)) < 0) {
+		 perror("ioctl");
+		 exit(1);
+		 }
+
+		 nNumIFs = ifc.ifc_len / sizeof(struct ifreq);
+		 count = 0;
+		 strcpy(ip, localip);
+		 for (i = 0; i < nNumIFs; i++) {
+		 struct in_addr addr;
+		 if (ifc.ifc_ifcu.ifcu_req[i].ifr_ifru.ifru_addr.sa_family != AF_INET) {
+		 continue;
+		 }
+
+		 addr
+		 = ((struct sockaddr_in *) &ifc.ifc_ifcu.ifcu_req[i].ifr_ifru.ifru_addr)->sin_addr;
+		 if (addr.s_addr == htonl(0x7f000001)) {
+		 continue;
+		 }
+		 strcpy(ip, inet_ntoa(addr));
+		 }
+		 return ip;
+		 */
 	}
 
-	while (1) {
-		if (tmp < '0' || tmp > '9')
+	/*
+	 * Get next argument removing empty space
+	 */
+	int get_next_num() {
+		int result = 0;
+		char tmp;
+
+		while (1) {
+			tmp = getchar();
+			if (tmp == ' ' || tmp == '\t')
+				continue;
+			else if (tmp == '\n')
+				return -1;
 			break;
-		result *= 10;
-		result += tmp - '0';
-		tmp = getchar();
+		}
+
+		while (1) {
+			if (tmp < '0' || tmp > '9')
+				break;
+			result *= 10;
+			result += tmp - '0';
+			tmp = getchar();
+		}
+
+		return result;
 	}
 
-	return result;
-}
-
-/*
- * Nagle disable
- */
-void nagles_off(int sock) {
-	int one = 1;
-	if (setsockopt(sock, IPPROTO_TCP, TCP_NODELAY, (char *) &one, sizeof(one))
-			< 0) {
-		fprintf(stderr, "Nagles Fail...\n");
-	}
-}
-
-/*
- * Convert to non-blocking mode
- */
-void nonblock(int sockfd) {
-	int opts;
-	opts = fcntl(sockfd, F_GETFL);
-	if (opts < 0) {
-		perror("fcntl(F_GETFL)\n");
-		exit(1);
-	}
-	opts = (opts | O_NONBLOCK);
-	if (fcntl(sockfd, F_SETFL, opts) < 0) {
-		perror("fcntl(F_SETFL)\n");
-		exit(1);
-	}
-}
-
-/*
- * Make local udp socket
- * Failed when return value is -1
- */
-int make_local_udp_socket(int *port) {
-	struct sockaddr_in addr;
-	int sock;
-
-	sock = socket(PF_INET, SOCK_DGRAM, 0);
-	if (sock < 0) {
-		return -1;
+	/*
+	 * Nagle disable
+	 */
+	void nagles_off(int sock) {
+		int one = 1;
+		if (setsockopt(sock, IPPROTO_TCP, TCP_NODELAY, (char *) &one,
+				sizeof(one)) < 0) {
+			fprintf(stderr, "Nagles Fail...\n");
+		}
 	}
 
-	memset(&addr, 0, sizeof(struct sockaddr_in));
-	addr.sin_family = AF_INET;
-	addr.sin_addr.s_addr = INADDR_ANY;
-	addr.sin_port = htons(*port);
-
-	if (bind(sock, (struct sockaddr_in*) &addr, sizeof(struct sockaddr_in)) < 0) {
-		return -1;
+	/*
+	 * Convert to non-blocking mode
+	 */
+	void nonblock(int sockfd) {
+		int opts;
+		opts = fcntl(sockfd, F_GETFL);
+		if (opts < 0) {
+			perror("fcntl(F_GETFL)\n");
+			exit(1);
+		}
+		opts = (opts | O_NONBLOCK);
+		if (fcntl(sockfd, F_SETFL, opts) < 0) {
+			perror("fcntl(F_SETFL)\n");
+			exit(1);
+		}
 	}
 
-	if (*port != 0)
+	/*
+	 * Make local udp socket
+	 * Failed when return value is -1
+	 */
+	int make_local_udp_socket(int *port) {
+		struct sockaddr_in addr;
+		int sock;
+
+		sock = socket(PF_INET, SOCK_DGRAM, 0);
+		if (sock < 0) {
+			return -1;
+		}
+
+		memset(&addr, 0, sizeof(struct sockaddr_in));
+		addr.sin_family = AF_INET;
+		addr.sin_addr.s_addr = INADDR_ANY;
+		addr.sin_port = htons(*port);
+
+		if (bind(sock, (struct sockaddr_in*) &addr, sizeof(struct sockaddr_in))
+				< 0) {
+			return -1;
+		}
+
+		if (*port != 0)
+			return sock;
+
+		struct sockaddr_in adr_inet;
+		socklen_t len_inet = (socklen_t) sizeof(adr_inet);
+		getsockname(sock, (struct sockaddr*) &adr_inet, &len_inet);
+		*port = (unsigned) ntohs(adr_inet.sin_port);
 		return sock;
-
-	struct sockaddr_in adr_inet;
-	socklen_t len_inet = (socklen_t) sizeof(adr_inet);
-	getsockname(sock, (struct sockaddr*) &adr_inet, &len_inet);
-	*port = (unsigned) ntohs(adr_inet.sin_port);
-	return sock;
-}
-
-/*
- * Make local TCP port
- * failed when return value is -1
- */
-int read_full_non_block(int fd, char *buffer, int count);
-int make_local_tcp_server_socket(int *port, int num_of_client) {
-	int server_sock;
-	struct sockaddr_in server_addr;
-
-	server_sock = socket(PF_INET, SOCK_STREAM, 0);
-	if (server_sock == -1) {
-		return -1;
 	}
 
-	server_addr.sin_family = AF_INET;
-	server_addr.sin_addr.s_addr = htonl(INADDR_ANY);
-	server_addr.sin_port = htons(*port);
+	/*
+	 * Make local TCP port
+	 * failed when return value is -1
+	 */
+	int read_full_non_block(int fd, char *buffer, int count);
+	int make_local_tcp_server_socket(int *port, int num_of_client) {
+		int server_sock;
+		struct sockaddr_in server_addr;
 
-	int option = 1;
-	setsockopt(server_sock, SOL_SOCKET, SO_REUSEADDR, (void*) &option,
-			sizeof(option));
+		server_sock = socket(PF_INET, SOCK_STREAM, 0);
+		if (server_sock == -1) {
+			return -1;
+		}
 
-	if (bind(server_sock, (struct sockaddr*) &server_addr, sizeof(server_addr))
-			< 0) {
-		return -1;
-	}
+		server_addr.sin_family = AF_INET;
+		server_addr.sin_addr.s_addr = htonl(INADDR_ANY);
+		server_addr.sin_port = htons(*port);
 
-	if (listen(server_sock, num_of_client) < 0) {
-		return -1;
-	}
+		int option = 1;
+		setsockopt(server_sock, SOL_SOCKET, SO_REUSEADDR, (void*) &option,
+				sizeof(option));
 
-	if (*port != 0)
+		if (bind(server_sock, (struct sockaddr*) &server_addr,
+				sizeof(server_addr)) < 0) {
+			return -1;
+		}
+
+		if (listen(server_sock, num_of_client) < 0) {
+			return -1;
+		}
+
+		if (*port != 0)
+			return server_sock;
+
+		struct sockaddr_in adr_inet;
+		socklen_t len_inet = (socklen_t) sizeof(adr_inet);
+		getsockname(server_sock, (struct sockaddr*) &adr_inet, &len_inet);
+		*port = (unsigned) ntohs(adr_inet.sin_port);
+
 		return server_sock;
-
-	struct sockaddr_in adr_inet;
-	socklen_t len_inet = (socklen_t) sizeof(adr_inet);
-	getsockname(server_sock, (struct sockaddr*) &adr_inet, &len_inet);
-	*port = (unsigned) ntohs(adr_inet.sin_port);
-
-	return server_sock;
-}
-
-/*
- * Make current process as Daemon
- */
-static void makedaemon(int mode) {
-	pid_t pid;
-
-	if ((pid = fork()) < 0)
-		exit(0);
-
-	else if (pid != 0)
-		exit(0);
-
-	if (mode == 0) {
-		close(0);
-		close(1);
-		close(2);
 	}
-	setsid();
-}
 
-/*
- * Convert int from big endian to little endian
- */
-int endian_swap_int(int data) {
-	int ret =  ((data>>24) & 0x000000FF) |((data<<8) & 0x00FF0000) |((data>>8) & 0x0000FF00) | ((data<<24) & 0xFF000000);
-	return ret;
-}
+	/*
+	 * Make current process as Daemon
+	 */
+	static void makedaemon(int mode) {
+		pid_t pid;
+
+		if ((pid = fork()) < 0)
+			exit(0);
+
+		else if (pid != 0)
+			exit(0);
+
+		if (mode == 0) {
+			close(0);
+			close(1);
+			close(2);
+		}
+		setsid();
+	}
+
+	/*
+	 * Convert int from big endian to little endian
+	 */
+	int endian_swap_int(int data) {
+		int ret = ((data >> 24) & 0x000000FF) | ((data << 8) & 0x00FF0000)
+				| ((data >> 8) & 0x0000FF00) | ((data << 24) & 0xFF000000);
+		return ret;
+	}

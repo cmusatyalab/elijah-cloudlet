@@ -19,7 +19,7 @@
 #include <time.h>
 
 
-//static int launch_VM(const char *tmp_overlay_disk_path, const char *tmp_overlay_mem_path, VM_Info *overlayVM, VM_Info *baseVM);
+static int launch_VM(const char *disk_path, const char *mem_path, VM_Info *overlayVM, VM_Info *baseVM, int telnet_port, int vnc_port);
 static const char* create_output_string_with_vm(const VM_Info *vm);
 static int saveToFile(int sock_fd, const char* path, int size);
 /*
@@ -114,9 +114,9 @@ void parse_req_transfer(int sock_fd, const char* json_string){
 			write_full(sock_fd, &send_msg, sizeof(send_msg));
 			write_full(sock_fd, jstring, strlen(jstring));
 
-
 			//Launch VM
-			int ret = launch_VM(tmp_overlay_disk_path, tmp_overlay_mem_path, overlayVM, baseVM);
+			int telnet_port = 9862, vnc = 2;
+			int ret = launch_VM(tmp_overlay_disk_path, tmp_overlay_mem_path, overlayVM, baseVM, telnet_port, vnc);
 			if(ret == SUCCESS){
 				//Compact it into Full JSON format
 				json_object *jobj_vm = json_create_from_VMInfo(baseVM);
@@ -188,15 +188,17 @@ void parse_req_stop(int sock_fd, const char* json_string){
  * Private Method
  * Launch VM base on overlay images
  */
-int launch_VM(const char *tmp_overlay_disk_path, const char *tmp_overlay_mem_path, VM_Info *overlayVM, VM_Info *baseVM){
+static int launch_VM(const char *disk_path, const char *mem_path, VM_Info *overlayVM, VM_Info *baseVM, int telnet_port, int vnc_port){
 	//run python script
 	char command[512] = {'\0'};
-	sprintf(command, "%s -o %s %s", synthesis_script, baseVM->diskimg_path, baseVM->memory_snapshot_path);
+	sprintf(command, "%s -r %s %s %s %s %d %d", synthesis_script, baseVM->diskimg_path, baseVM->memory_snapshot_path, disk_path, mem_path, telnet_port, vnc_port);
 	printf("%s\n", command);
 	int ret = system(command);
-	printf("run result : %d\n", ret);
-
-	return SUCCESS;
+	if(ret == 0){
+		return SUCCESS;
+	}else{
+		return FAIL;
+	}
 }
 
 static const char* create_output_string_with_vm(const VM_Info *vm){
@@ -213,7 +215,7 @@ static int saveToFile(int sock_fd, const char* path, int size){
 	if(file == NULL)
 		return -1;
 
-	int buffer_size = 1024 * 1024 * 3;
+	int buffer_size = 1024 * 1024 * 10;
 	char* buffer = (char*)malloc(sizeof(char) * buffer_size);
 
 	int file_write_total = 0;

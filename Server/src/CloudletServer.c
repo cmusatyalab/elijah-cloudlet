@@ -13,29 +13,25 @@ void print_help();
 void check_config_file(int argc, char **argv);
 
 int main(int argc, char **argv) {
-	const char *disk = "/tmp/ubuntu_base_overlay.qcow2";
-	const char *mem = "/tmp/ubuntu_base_overlay.mem";
-	VM_Info *overlayVM = (VM_Info *)malloc(sizeof(struct VM_Info));
-	VM_Info *baseVM = (VM_Info *)malloc(sizeof(struct VM_Info));
-	baseVM->diskimg_path = "/home/krha/Cloudlet/image/baseVM/ubuntu_base.qcow2";
-	baseVM->memory_snapshot_path = "/home/krha/Cloudlet/image/baseVM/ubuntu_base.mem";
-	int ret = launch_VM(disk, mem, overlayVM, baseVM);
+
+	const char* VM_IP = myip();
+	printf("%s", VM_IP);
 	/*
 	check_config_file(argc, argv);
 
-	 // Run Socket Server
-	 if (init_client_manager() != SUCCESS) {
-	 fprintf(stderr, "Cannot run TCP Server\n");
-	 return -1;
-	 }
+	// Run Socket Server
+	if (init_client_manager() != SUCCESS) {
+		fprintf(stderr, "Cannot run TCP Server\n");
+		return -1;
+	}
 
-	 while (1) {
-	 sleep(10000);
-	 }
+	while (1) {
+		sleep(10000);
+	}
 
-	 end_client_manager();
-	 return 0;
-	 */
+	end_client_manager();
+	return 0;
+	*/
 }
 
 /*

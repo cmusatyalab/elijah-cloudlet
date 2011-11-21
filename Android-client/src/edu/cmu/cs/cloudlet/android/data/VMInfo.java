@@ -49,10 +49,10 @@ public class VMInfo {
 		this.data.put(JSON_KEY_TYPE, "overlay");
 		for(int i = 0; i < files.length; i++){
 			String filename = files[i].getAbsolutePath();
-			if(filename.endsWith("mem") == true){
+			if(filename.endsWith("mem.lzma") == true){
 				this.data.put(JSON_KEY_MEMORYSNAPSHOT_PATH, filename);
 				this.data.put(JSON_KEY_MEMORYSNAPSHOT_SIZE, "" + files[i].length());
-			}else if(filename.endsWith("img") == true){
+			}else if(filename.endsWith("qcow2.lzma") == true){
 				this.data.put(JSON_KEY_DISKIMAGE_PATH, filename);
 				this.data.put(JSON_KEY_DISKIMAGE_SIZE, "" + files[i].length());
 			}
