@@ -12,10 +12,16 @@
 void print_help();
 void check_config_file(int argc, char **argv);
 
-int main(int argc, char **argv) {
+#include <stdio.h>
+#include <stropts.h>
+#include <sys/socket.h>
+#include <sys/ioctl.h>
+#include <linux/netdevice.h>
+#include <arpa/inet.h>
+#include <netinet/in.h>
+#include <unistd.h>
 
-	const char* VM_IP = myip();
-	printf("%s", VM_IP);
+int main(int argc, char **argv) {
 	/*
 	check_config_file(argc, argv);
 
@@ -30,8 +36,9 @@ int main(int argc, char **argv) {
 	}
 
 	end_client_manager();
-	return 0;
 	*/
+
+	return 0;
 }
 
 /*

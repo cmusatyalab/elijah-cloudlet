@@ -12,6 +12,10 @@ Prototype for Cloudlet
 		compression
 		$ sudo apt-get install python-setuptools python-dev build-essential
 		$ sudo easy_install pylzma
+	gvncviewer
+		vncview for VM interaction, gvncviewer can accommodate resolution changes
+		$ sudo apt-get install gvncviewer
+
 3) Android-client
 
 # GIT Basic Command

@@ -133,8 +133,8 @@ def create_overlay(base_image, base_mem):
 
     os.remove(tmp_mem)
     os.remove(tmp_disk)
-    os.remove(overlay_disk)
-    os.remove(overlay_mem)
+    #os.remove(overlay_disk)
+    #os.remove(overlay_mem)
     return comp_disk, comp_mem
 
 def recover_snapshot(base_img, base_mem, comp_img, comp_mem):
@@ -179,7 +179,7 @@ def run_snapshot(disk_image, memory_image, telnet_port, vnc_port, show_vnc):
     # Run VNC and wait until user finishes working
     if show_vnc == True:
         time.sleep(3)
-        vnc_process = subprocess.Popen("vncviewer localhost:" + str(vnc_port), shell=True)
+        vnc_process = subprocess.Popen("gvncviewer localhost:" + str(vnc_port), shell=True)
         ret = vnc_process.wait()
 
 def run_migration(telnet_port, vnc_port, mig_path):
@@ -237,21 +237,18 @@ def run_image(disk_image, telnet_port, vnc_port):
 
     # Run VNC and wait until user finishes working
     counter = 0
-    while counter < 50:
-        time.sleep(1)
-        print 'waiting for booting..'
-        counter = counter+1
-    vnc_process = subprocess.Popen("vncviewer localhost:" + str(vnc_port), shell=True)
+    time.sleep(3)
+    vnc_process = subprocess.Popen("gvncviewer localhost:" + str(vnc_port), shell=True)
     ret = vnc_process.wait()
 
 
 def print_usage(program_name):
     print 'usage: %s [option] [file]..  ' % program_name
     print ' -h, --help  print help'
-    print ' -b, --base [disk image]'
-    print ' -o, --overlay [base image] [base mem]'
-    print ' -r, --run [base image] [base memory] [overlay image] [overlay memory] [telnet_port] [vnc_port]'
-    print ' -s, --stop [command_port]'
+    print ' -b, --base [disk image]' + '\tcreate Base VM (image and memory)'
+    print ' -o, --overlay [base image] [base mem]' + '\tcreate overlay from base image'
+    print ' -r, --run [base image] [base memory] [overlay image] [overlay memory] [telnet_port] [vnc_port]' + '\trun overlay image'
+    print ' -s, --stop [command_port]' + '\tstop VM using qemu telnet monitor'
 
 
 def main(argv):

@@ -125,7 +125,7 @@ void parse_req_transfer(int sock_fd, const char* json_string){
 				json_object_array_add(jarray, jobj_vm);
 				json_object_object_add(jobj, JSON_KEY_VM, jarray);
 				//Add VM Ip Address
-				const char* VM_IP = myip();
+				const char* VM_IP = print_addresses();
 				json_object_object_add(jobj, JSON_KEY_LAUNCH_VM_IP, json_object_new_string(VM_IP));
 				const char* jstring = json_object_to_json_string(jobj);
 
