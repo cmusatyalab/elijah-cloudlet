@@ -18,10 +18,14 @@
 #include <string.h>
 #include <time.h>
 
+extern const char *log_filename;
 
+// VM synthesis related private method
 static int launch_VM(const char *disk_path, const char *mem_path, VM_Info *overlayVM, VM_Info *baseVM, int telnet_port, int vnc_port);
 static const char* create_output_string_with_vm(const VM_Info *vm);
 static int saveToFile(int sock_fd, const char* path, int size);
+
+
 /*
  * Handle Commands
  */
@@ -91,8 +95,13 @@ void parse_req_transfer(int sock_fd, const char* json_string){
 
 	if(overlayVM != NULL && baseVM != NULL){
 		// Wait transfer
+		PRINT_TIME("Save disk image Start");
 		int ret1 = saveToFile(sock_fd, tmp_overlay_disk_path, overlay_disk_size);
+		PRINT_TIME("Save disk image End");
+		PRINT_TIME("Save memory image Start");
 		int ret2 = saveToFile(sock_fd, tmp_overlay_mem_path, overlay_mem_size);
+		PRINT_TIME("Save memory image End");
+
 		if(ret1 != overlay_disk_size || ret2 != overlay_mem_size){
 			// error while saving it to files
 			// Send error message
@@ -116,7 +125,9 @@ void parse_req_transfer(int sock_fd, const char* json_string){
 
 			//Launch VM
 			int telnet_port = 9862, vnc = 2;
+			PRINT_TIME("VM Launch Start");
 			int ret = launch_VM(tmp_overlay_disk_path, tmp_overlay_mem_path, overlayVM, baseVM, telnet_port, vnc);
+			PRINT_TIME("VM Launch End");
 			if(ret == SUCCESS){
 				//Compact it into Full JSON format
 				json_object *jobj_vm = json_create_from_VMInfo(baseVM);
@@ -135,6 +146,7 @@ void parse_req_transfer(int sock_fd, const char* json_string){
 				PRINT_OUT("ret : %s\n", jstring);
 				write_full(sock_fd, (const char*)&send_msg, sizeof(send_msg));
 				write_full(sock_fd, jstring, strlen(jstring));
+				PRINT_TIME("[Time] [END] Send VM Launch Command");
 			}
 
 			free(jstring);
@@ -190,15 +202,34 @@ void parse_req_stop(int sock_fd, const char* json_string){
  */
 static int launch_VM(const char *disk_path, const char *mem_path, VM_Info *overlayVM, VM_Info *baseVM, int telnet_port, int vnc_port){
 	//run python script
+
+	/*
+	FILE *command_file;
+	char ret_string[1024];
 	char command[512] = {'\0'};
 	sprintf(command, "%s -r %s %s %s %s %d %d", synthesis_script, baseVM->diskimg_path, baseVM->memory_snapshot_path, disk_path, mem_path, telnet_port, vnc_port);
-	printf("%s\n", command);
-	int ret = system(command);
-	if(ret == 0){
-		return SUCCESS;
-	}else{
+	command_file = popen(command, "r");
+	if (command_file == NULL) {
+		PRINT_ERR("Failed to run command\n" );
 		return FAIL;
 	}
+	while (fgets(ret_string, sizeof(ret_string)-1, command_file) != NULL) {
+		PRINT_TIME("%s", ret_string);
+	}
+	PRINT_OUT("done\n");
+	pclose(command_file);
+	return SUCCESS;
+	*/
+
+    char command[512] = {'\0'};
+    sprintf(command, "%s -r %s %s %s %s %d %d >> %s", synthesis_script, baseVM->diskimg_path, baseVM->memory_snapshot_path, disk_path, mem_path, telnet_port, vnc_port, log_filename);
+    printf("%s\n", command);
+    int ret = system(command);
+    if(ret == 0){
+    	return SUCCESS;
+    }else{
+    	return FAIL;
+    }
 }
 
 static const char* create_output_string_with_vm(const VM_Info *vm){

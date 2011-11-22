@@ -26,7 +26,7 @@ def diff_files(source_file, target_file, output_file):
         return None
 
 def merge_file(source_file, overlay_file, output_file):
-    command_patch = ['xdelta3', '-d', '-s', source_file, overlay_file, output_file]
+    command_patch = ['xdelta3', '-df', '-s', source_file, overlay_file, output_file]
     ret = xdelta3.xd3_main_cmdline(command_patch)
     if ret == 0:
         return output_file
@@ -105,7 +105,7 @@ def create_overlay(base_image, base_mem):
 
     prev_time = datetime.now()
     ret = diff_files(base_image, tmp_disk, overlay_disk)
-    print '[TIME] time for creating overlay disk : ', str(datetime.now()-prev_time)
+    print '[TIME] time for creating overlay disk : ' % str(datetime.now()-prev_time)
     if ret == None:
         print '[ERROR] cannot create overlay disk'
         if os.path.exists(tmp_mem) == True:
@@ -143,21 +143,22 @@ def recover_snapshot(base_img, base_mem, comp_img, comp_mem):
     overlay_mem = comp_mem + '.decomp'
     prev_time = datetime.now()
     print '[INFO] Decompressing..'
+    print '[Time] Decompressing Start : ' + datetime.strftime(datetime.now(), '%X.%f')
     decomp_lzma(comp_img, overlay_img)
     decomp_lzma(comp_mem, overlay_mem)
-    print '[TIME] Decompression : ', str(datetime.now()-prev_time)
+    print '[Time] Decompressing End : ' + datetime.strftime(datetime.now(), '%X.%f') 
+    #print '[INFO] Decompression : ', str(datetime.now()-prev_time)
 
     # merge with base image
     recover_img = os.path.join(os.path.dirname(base_img), 'recover.qcow2'); 
     recover_mem = os.path.join(os.path.dirname(base_mem), 'recover.mem');
 
+    print '[Time] Recover(xdelta) image start : ' + datetime.strftime(datetime.now(), '%X.%f')
     prev_time = datetime.now()
     merge_file(base_img, overlay_img, recover_img)
-    print '[TIME] Apply overlay disk : ', str(datetime.now()-prev_time)
-
-    prev_time = datetime.now()
     merge_file(base_mem, overlay_mem, recover_mem)
-    print '[TIME] Apply overlay memory : ', str(datetime.now()-prev_time)
+    print '[Time] Recover(xdelta) image end ' + datetime.strftime(datetime.now(), '%X.%f')
+    #print 'Apply overlay memory : ', str(datetime.now()-prev_time)
 
     os.remove(overlay_img)
     os.remove(overlay_mem)
@@ -293,7 +294,10 @@ def main(argv):
         # recover image from overlay
         recover_img, recover_mem = recover_snapshot(base_img, base_mem, comp_img, comp_mem)
         # run snapshot non-blocking mode
+        print '[Time] Run Snapshot Start : ' + datetime.strftime(datetime.now(), '%X.%f') 
         run_snapshot(recover_img, recover_mem, telnet_port, vnc_port, show_vnc=False)
+        print '[Time] Run Snapshot End : ' + datetime.strftime(datetime.now(), '%X.%f') 
+        sys.exit(0)
     elif o in ("-s", "--stop"):
         if len(args) != 1:
             print_usage(os.path.basename(argv[0]))

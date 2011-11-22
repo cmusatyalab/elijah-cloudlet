@@ -162,7 +162,7 @@ const char* print_addresses() {
 		}
 
 //		printf("%s - %s\n", ifr[i].ifr_name, ip);
-		if((strncmp(ip, "127.0.0.1", 3) != 0) && (strncmp(ip, "0.0.0.0", 1) != 0) && strncmp(ip, "192.168", 7) != 0){
+		if((strncmp(ip, "127.0.0.1", 3) != 0) && (strncmp(ip, "0.0.0.0", 1) != 0) && strncmp(ifr[i].ifr_name, "vir", 3) != 0){
 			strcpy(myIP, ip);
 			break;
 		}

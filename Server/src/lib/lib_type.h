@@ -11,11 +11,22 @@
 #define FAIL		0
 #define EMPTY		0
 
+
 /*
  * Log Macro
  */
-
 #define PRINT_OUT(fmt, args...) fprintf(stdout, "[%s][#%d] "fmt, __FILE__, __LINE__, ##args);
 #define PRINT_ERR(fmt, args...) fprintf(stderr, "[%s][#%d] "fmt, __FILE__, __LINE__, ##args);
+#define PRINT_TIME(fmt, args...) print_time_info(fmt, ##args);
+
+void create_logfile();
+void close_logfile();
+FILE *log_file;
+const char *log_filename;
+
+/*
+ * Time measurement
+ */
+//int timeval_subtract(struct timeval *result, struct timeval *x, struct timeval *y);
 
 #endif

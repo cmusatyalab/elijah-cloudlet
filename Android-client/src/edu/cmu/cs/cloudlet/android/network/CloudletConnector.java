@@ -96,8 +96,8 @@ public class CloudletConnector {
 				messageBuffer.append(data.getString("message") + "\n");
 				KLog.println(messageBuffer.toString());				
 				if(mDialog == null){
-//					mDialog = ProgressDialog.show(mContext, "Info", messageBuffer.toString(), true);
-					mDialog.dismiss();					
+					mDialog = ProgressDialog.show(mContext, "Info", messageBuffer.toString(), true);
+//					mDialog.dismiss();
 				}
 				
 				// Check JSON there is error message or not.
@@ -122,6 +122,7 @@ public class CloudletConnector {
 						KLog.println("3. COMMAND_ACK_VM_LAUNCH message received");
 						Measure.put(Measure.VM_LAUNCHED);
 						responseVMLaunch(response);
+						mDialog.dismiss();
 						break;
 					case NetworkMsg.COMMAND_ACK_VM_STOP:
 						KLog.println("4. COMMAND_ACK_VM_STOP message received");
@@ -195,14 +196,15 @@ public class CloudletConnector {
 	}
 
 	private void responseVMLaunch(NetworkMsg response) {
+		String ipaddress = null;
 		try {
-			String ipaddress = response.getJsonPayload().getString(VMInfo.JSON_KEY_LAUNCH_VM_IP);
+			ipaddress = response.getJsonPayload().getString(VMInfo.JSON_KEY_LAUNCH_VM_IP);
 		} catch (JSONException e) {
 			KLog.printErr(e.toString());
 		}
 		
 		if(checkVMValidity(response, this.requestBaseVM) == true){
-			String synthesisInfo = "Finish VM Synthesis\n" + Measure.printInfo();			
+			String synthesisInfo = "Finish VM Synthesis\n" + Measure.printInfo() + "\nServer IP: " + ipaddress;			
 
 			// Run Application
 			new AlertDialog.Builder(mContext).setTitle("SUCCESS")

@@ -12,19 +12,11 @@
 void print_help();
 void check_config_file(int argc, char **argv);
 
-#include <stdio.h>
-#include <stropts.h>
-#include <sys/socket.h>
-#include <sys/ioctl.h>
-#include <linux/netdevice.h>
-#include <arpa/inet.h>
-#include <netinet/in.h>
-#include <unistd.h>
+extern FILE *log_file;
 
 int main(int argc, char **argv) {
-	/*
+	create_logfile();
 	check_config_file(argc, argv);
-
 	// Run Socket Server
 	if (init_client_manager() != SUCCESS) {
 		fprintf(stderr, "Cannot run TCP Server\n");
@@ -36,8 +28,6 @@ int main(int argc, char **argv) {
 	}
 
 	end_client_manager();
-	*/
-
 	return 0;
 }
 
@@ -143,3 +133,4 @@ void check_config_file(int argc, char **argv) {
 	delete_VM_Info(VM_array);
 	g_ptr_array_free(VM_array, TRUE);
 }
+

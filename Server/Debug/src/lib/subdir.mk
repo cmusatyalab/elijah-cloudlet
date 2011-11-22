@@ -4,13 +4,16 @@
 
 # Add inputs and outputs from these tool invocations to the build variables 
 C_SRCS += \
-../src/lib/lib_socket.c 
+../src/lib/lib_socket.c \
+../src/lib/lib_type.c 
 
 OBJS += \
-./src/lib/lib_socket.o 
+./src/lib/lib_socket.o \
+./src/lib/lib_type.o 
 
 C_DEPS += \
-./src/lib/lib_socket.d 
+./src/lib/lib_socket.d \
+./src/lib/lib_type.d 
 
 
 # Each subdirectory must supply rules for building sources it contributes

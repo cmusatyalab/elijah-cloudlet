@@ -216,6 +216,7 @@ void *start_client_handler(void *arg) {
 			switch(client_msg.cmd){
 				case COMMAND_REQ_VMLIST:
 					PRINT_OUT("[%d] COMMAND_REQ_VMLIST\n", i);
+					PRINT_TIME("[Time] [START] Receive vmlist command");
 					parse_req_vmlist(clients[i].sock_fd, json_string);
 					break;
 				case COMMAND_REQ_TRANSFER_START:
