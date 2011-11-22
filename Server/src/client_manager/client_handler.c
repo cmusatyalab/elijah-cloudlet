@@ -146,7 +146,7 @@ void parse_req_transfer(int sock_fd, const char* json_string){
 				PRINT_OUT("ret : %s\n", jstring);
 				write_full(sock_fd, (const char*)&send_msg, sizeof(send_msg));
 				write_full(sock_fd, jstring, strlen(jstring));
-				PRINT_TIME("[Time] [END] Send VM Launch Command");
+				PRINT_TIME("[END] Send VM Launch Command");
 			}
 
 			free(jstring);
@@ -222,7 +222,7 @@ static int launch_VM(const char *disk_path, const char *mem_path, VM_Info *overl
 	*/
 
     char command[512] = {'\0'};
-    sprintf(command, "%s -r %s %s %s %s %d %d >> %s", synthesis_script, baseVM->diskimg_path, baseVM->memory_snapshot_path, disk_path, mem_path, telnet_port, vnc_port, log_filename);
+    sprintf(command, "%s -r %s %s %s %s %d %d > %s.script", synthesis_script, baseVM->diskimg_path, baseVM->memory_snapshot_path, disk_path, mem_path, telnet_port, vnc_port, log_filename);
     printf("%s\n", command);
     int ret = system(command);
     if(ret == 0){
