@@ -142,23 +142,18 @@ def recover_snapshot(base_img, base_mem, comp_img, comp_mem):
     overlay_img = comp_img + '.decomp'
     overlay_mem = comp_mem + '.decomp'
     prev_time = datetime.now()
-    print '[INFO] Decompressing..'
-    print '[Time] Decompressing Start : ' + datetime.strftime(datetime.now(), '%X.%f')
     decomp_lzma(comp_img, overlay_img)
     decomp_lzma(comp_mem, overlay_mem)
-    print '[Time] Decompressing End : ' + datetime.strftime(datetime.now(), '%X.%f') 
-    #print '[INFO] Decompression : ', str(datetime.now()-prev_time)
+    print '[Time] Decompression - ', str(datetime.now()-prev_time)
 
     # merge with base image
     recover_img = os.path.join(os.path.dirname(base_img), 'recover.qcow2'); 
     recover_mem = os.path.join(os.path.dirname(base_mem), 'recover.mem');
 
-    print '[Time] Recover(xdelta) image start : ' + datetime.strftime(datetime.now(), '%X.%f')
     prev_time = datetime.now()
     merge_file(base_img, overlay_img, recover_img)
     merge_file(base_mem, overlay_mem, recover_mem)
-    print '[Time] Recover(xdelta) image end ' + datetime.strftime(datetime.now(), '%X.%f')
-    #print 'Apply overlay memory : ', str(datetime.now()-prev_time)
+    print '[Time] Recover(xdelta) image - ', str(datetime.now()-prev_time)
 
     os.remove(overlay_img)
     os.remove(overlay_mem)
@@ -173,7 +168,7 @@ def run_snapshot(disk_image, memory_image, telnet_port, vnc_port, show_vnc):
     else:
         command_str += " -m 512 -enable-kvm -net nic -net user -serial none -parallel none -usb -usbdevice tablet -redir tcp:2222::22"
     command_str += " -incoming \"exec:cat " + memory_image + "\""
-    print '[INFO] Run snapshot..'
+    # print '[INFO] Run snapshot..'
     process = subprocess.Popen(command_str, shell=True)
     time.sleep(1)
 
@@ -294,9 +289,9 @@ def main(argv):
         # recover image from overlay
         recover_img, recover_mem = recover_snapshot(base_img, base_mem, comp_img, comp_mem)
         # run snapshot non-blocking mode
-        print '[Time] Run Snapshot Start : ' + datetime.strftime(datetime.now(), '%X.%f') 
+        prev_time = datetime.now()
         run_snapshot(recover_img, recover_mem, telnet_port, vnc_port, show_vnc=False)
-        print '[Time] Run Snapshot End : ' + datetime.strftime(datetime.now(), '%X.%f') 
+        print '[Time] Run Snapshot - ', str(datetime.now()-prev_time)
         sys.exit(0)
     elif o in ("-s", "--stop"):
         if len(args) != 1:

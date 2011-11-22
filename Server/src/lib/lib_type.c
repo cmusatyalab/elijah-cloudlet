@@ -25,8 +25,8 @@ void print_time_info(char *fmt, ...) {
 		struct tm *tm;
 		gettimeofday(&val, NULL);
 		tm = localtime(&val.tv_sec);
-		fprintf(log_file, "[Time] %s : %02d:%02d:%02d.%06ld\n", buf, tm->tm_hour,	tm->tm_min, tm->tm_sec, val.tv_usec);
-		PRINT_OUT("[Time] %s : %02d:%02d:%02d.%06ld\n", buf, tm->tm_hour, tm->tm_min, tm->tm_sec, val.tv_usec);
+		fprintf(log_file, "[Time] %s - %02d:%02d:%02d.%06ld\n", buf, tm->tm_hour,	tm->tm_min, tm->tm_sec, val.tv_usec);
+		PRINT_OUT("[Time] %s - %02d:%02d:%02d.%06ld\n", buf, tm->tm_hour, tm->tm_min, tm->tm_sec, val.tv_usec);
 	} else {
 		fprintf(log_file, buf);
 		PRINT_OUT("%s", buf);
