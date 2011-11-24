@@ -85,7 +85,7 @@ public class NetworkClient extends Thread {
 					networkWriter.flush(); // flush for accurate time measure					
 				}else{
 					try {
-						Thread.sleep(1000);
+						Thread.sleep(100);
 					} catch (InterruptedException e) {
 						// TODO Auto-generated catch block
 						e.printStackTrace();
@@ -96,10 +96,14 @@ public class NetworkClient extends Thread {
 				dataReceiveStart = dataSendEnd = System.currentTimeMillis();
 				Log.d("krha_app", "[DATA_SEND]\t" + dataSendEnd + " - " + dataSendStart + " = " + (dataSendEnd-dataSendStart));
 				
-				int numberOfPeople = -1;
+				String ret_string = "None";
 				if(networkReader != null){
 					// receive results
-					numberOfPeople = networkReader.readInt();					
+					int ret_size = networkReader.readInt();
+					Log.d("krha", "ret data size : " + ret_size);
+					byte[] ret_byte = new byte[ret_size];
+					networkReader.read(ret_byte);
+					ret_string = new String(ret_byte, "UTF-8");					
 				}else{
 					try {
 						Thread.sleep(1000);
@@ -117,7 +121,7 @@ public class NetworkClient extends Thread {
 				Message msg = Message.obtain();
 				msg.what = NetworkClient.FEEDBACK_RECEIVED;
 				Bundle data = new Bundle();
-				data.putInt("number_of_people", numberOfPeople);
+				data.putString("objects", ret_string);
 				msg.setData(data);
 				mHandler.sendMessage(msg);
 				
@@ -130,5 +134,16 @@ public class NetworkClient extends Thread {
 
 	public void uploadImage(byte[] data) {
 		mData = data;
+	}
+
+	public void close() {
+		// TODO Auto-generated method stub
+		try {
+			mClientSocket.close();
+			networkReader.close();
+			networkWriter.close();
+		} catch (IOException e) {
+			e.printStackTrace();
+		}
 	}
 }

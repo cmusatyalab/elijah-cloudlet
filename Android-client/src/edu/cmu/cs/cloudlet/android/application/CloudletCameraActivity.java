@@ -34,7 +34,7 @@ public class CloudletCameraActivity extends Activity implements TextToSpeech.OnI
 	public static final String TAG = "krha_app";
 	
 	protected static String server_ipaddress= "128.2.212.166";
-	protected static int server_port = 8080;
+	protected static int server_port = 9092;
 	protected NetworkClient client;
 	
 	protected ProgressDialog mDialog;	
@@ -88,7 +88,6 @@ public class CloudletCameraActivity extends Activity implements TextToSpeech.OnI
 		
 		// TextToSpeech.OnInitListener
 		mTTS = new TextToSpeech(this, this);
-
 	}
 
 	/*
@@ -102,8 +101,8 @@ public class CloudletCameraActivity extends Activity implements TextToSpeech.OnI
 				
 				// Run TTS				
 				Bundle data = msg.getData();
-				Log.d("krha_app", "num of people : " + data.getInt("number_of_people"));
-				TTSFeedback(data.getInt("number_of_people"));
+				String ttsString = data.getString("objects");
+				TTSFeedback(ttsString);
 			}
 		}
 	};
@@ -111,10 +110,27 @@ public class CloudletCameraActivity extends Activity implements TextToSpeech.OnI
 	/*
 	 * TTS
 	 */
-	private static final String FEEDBACK_PREFIX = "The number of people is ";
-	private void TTSFeedback(int number) {
+	private static final String FEEDBACK_PREFIX = "Found items are ";
+	private void TTSFeedback(String ttsString) {
 		// Select a random hello.
-		mTTS.speak(FEEDBACK_PREFIX + number, TextToSpeech.QUEUE_FLUSH, null);
+		String[] objects = ttsString.split(" ");
+		if(objects == null){
+			mTTS.speak("We found nothing", TextToSpeech.QUEUE_FLUSH, null);			
+		}else if(objects.length == 1){
+			objects[0].replace("_", " ");
+			mTTS.speak("We found a " + objects[0], TextToSpeech.QUEUE_FLUSH, null);			
+		}else{
+			StringBuffer sb = new StringBuffer();
+			for(int i = 0; i < objects.length; i++){
+				sb.append(objects[i].replaceAll("_", "  "));
+				if(i != objects.length-1){
+					sb.append(" and ");					
+				}
+			}
+			Log.d("krha", "tts string : " + sb.toString());
+			mTTS.setSpeechRate(0.8f);
+			mTTS.speak("We found " + sb.toString(), TextToSpeech.QUEUE_FLUSH, null);
+		}
 	}
 
 	// Implements TextToSpeech.OnInitListener
@@ -140,7 +156,7 @@ public class CloudletCameraActivity extends Activity implements TextToSpeech.OnI
 			Log.d("krha_app_time", "[TAKE_PIC]\t" + takePicEnd + " - " + takePicStart + " = " + (takePicEnd-takePicStart));
 			
 			mImageData = data;
-			saveImage(mImageData);		
+			saveImage(mImageData);
 			mImageData = null;
 
 			if (mPreview.mCamera != null) {
@@ -231,6 +247,7 @@ public class CloudletCameraActivity extends Activity implements TextToSpeech.OnI
 
 	@Override
 	public void onDestroy() {
+		client.close();
 		// Don't forget to shutdown!
 		if (mTTS != null) {
 			mTTS.stop();

@@ -18,7 +18,6 @@ class Preview extends SurfaceView implements SurfaceHolder.Callback {
 			mCamera.stopPreview();
 			mCamera.release();
 			mCamera = null;
-
 		}
 	}
 

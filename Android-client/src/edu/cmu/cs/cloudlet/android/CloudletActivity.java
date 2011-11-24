@@ -37,7 +37,6 @@ public class CloudletActivity extends Activity {
         mSendButton.setOnClickListener(clickListener);
         
 //		connector.startConnection("128.2.212.207", 9090);
-        connector.startConnection("192.168.2.4", 9090);
 	}
 
 	/*

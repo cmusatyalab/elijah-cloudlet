@@ -243,9 +243,9 @@ void *start_client_manager(void* args){
 static void init_client(int client_handler) {
 	lock();
 	memset(clients[client_handler].ip_address, 0, sizeof(clients[client_handler].ip_address));
-	if (clients[client_handler].sock_fd != -1)
+	if (clients[client_handler].sock_fd != 0)
 		FD_CLR(clients[client_handler].sock_fd, &clients_fdset);
-	clients[client_handler].sock_fd = -1;
+	clients[client_handler].sock_fd = -0;
 	unlock();
 }
 
@@ -327,6 +327,7 @@ void *start_client_handler(void *arg) {
 		result = select(FD_SETSIZE, &temp_fdset, (fd_set *) NULL,(fd_set *) NULL, &timeout);
 		if (result == 0) {
 			// time-out
+			printf("waiting...\n");
 			usleep(100); unlock(); continue;
 		} else if (result == -1) {
 			usleep(100); unlock();continue;
@@ -340,6 +341,10 @@ void *start_client_handler(void *arg) {
 
 			printf("[%d]New Data is incoming\n", i);
 			result = recv(clients[i].sock_fd, &msg_datasize, 4 * sizeof(char), MSG_WAITALL);
+			if (result <= 0) {
+				printf("[%d]Closed Client.\n", i); init_client(i); unlock(); continue;
+			}
+
 			printf("[%d]Data Size : %d\n", i, endian_swap_int(msg_datasize));
 			msg_datasize = endian_swap_int(msg_datasize);
 			if(msg_datasize > MAX_IMAGE_SIZE){
@@ -348,14 +353,9 @@ void *start_client_handler(void *arg) {
 					printf("[%d]Cannot Allocate %d Memory.\n", i, msg_datasize);
 				}
 			}
-
-			if (result <= 0) {
-				printf("[%d]Closed Client.\n", i); init_client(i); unlock(); continue;
-			}
-
 			//read image data
-			printf("[%d]All Data Receiving %d \n", i, msg_datasize);
 			recv(clients[i].sock_fd, image_data, msg_datasize, MSG_WAITALL);
+			printf("[%d]All data is received %d \n", i, msg_datasize);
 
 			//save it to file --> need to be fixed into direct memory access
 			temp_image_file = fopen(image_filename, "w");
@@ -371,9 +371,9 @@ void *start_client_handler(void *arg) {
 			printf("objects : %s\n", detected_objects);
 
 			//return number of people in the picture
-			int ret_size = strlen(detected_objects);
+			int ret_size = endian_swap_int(strlen(detected_objects));
 			send(clients[i].sock_fd, &ret_size, sizeof(int), MSG_WAITALL);
-			send(clients[i].sock_fd, detected_objects, ret_size, MSG_WAITALL);
+			send(clients[i].sock_fd, detected_objects, strlen(detected_objects), MSG_WAITALL);
 			printf("[%d]Result is sent.\n", i);
 
 		}
