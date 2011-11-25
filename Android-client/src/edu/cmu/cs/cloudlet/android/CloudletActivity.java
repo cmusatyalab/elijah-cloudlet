@@ -1,15 +1,20 @@
 package edu.cmu.cs.cloudlet.android;
 
-import java.io.File;
+
+import org.teleal.cling.android.AndroidUpnpServiceImpl;
 
 import edu.cmu.cs.cloudlet.android.application.CloudletCameraActivity;
 import edu.cmu.cs.cloudlet.android.network.CloudletConnector;
-import edu.cmu.cs.cloudlet.android.network.ServiceDiscovery;
+import edu.cmu.cs.cloudlet.android.upnp.DeviceDisplay;
+import edu.cmu.cs.cloudlet.android.upnp.UPnPDiscovery;
+import edu.cmu.cs.cloudlet.android.util.KLog;
 
 import android.app.Activity;
 import android.app.AlertDialog;
+import android.content.Context;
 import android.content.DialogInterface;
 import android.content.Intent;
+import android.content.ServiceConnection;
 import android.os.Bundle;
 import android.os.Handler;
 import android.os.Message;
@@ -21,16 +26,16 @@ public class CloudletActivity extends Activity {
 	/** Called when the activity is first created. */
 	protected Button startConnectionButton;
 	protected CloudletConnector connector;
-	private ServiceDiscovery serviceDiscovery;
+	private UPnPDiscovery serviceDiscovery;
 
 	@Override
 	public void onCreate(Bundle savedInstanceState) {
 		super.onCreate(savedInstanceState);
 		setContentView(R.layout.cloudlet);
 
-		this.serviceDiscovery = new ServiceDiscovery();
-		this.serviceDiscovery.setHandler(discoveryHandler);
+		this.serviceDiscovery = new UPnPDiscovery(this, CloudletActivity.this, discoveryHandler);
 		this.connector = new CloudletConnector(CloudletActivity.this);
+		getApplicationContext().bindService(new Intent(this, AndroidUpnpServiceImpl.class), this.serviceDiscovery.serviceConnection, Context.BIND_AUTO_CREATE);
 
 		// set button action
         Button mSendButton = (Button) findViewById(R.id.connectButton);
@@ -44,11 +49,14 @@ public class CloudletActivity extends Activity {
 	 */
 	Handler discoveryHandler = new Handler() {
 		public void handleMessage(Message msg) {
-			if (msg.what == ServiceDiscovery.SERVICE_FOUND) {
-				Bundle data = msg.getData();
-				String ipAddress = data.getString(ServiceDiscovery.KEY_SERVICE_IP_ADDRESS);
-				int port = data.getInt(ServiceDiscovery.KEY_SERVICE_PORT);
-				connector.startConnection(ipAddress, port);
+			if (msg.what == UPnPDiscovery.DEVICE_SELECTED) {
+				DeviceDisplay device = (DeviceDisplay) msg.obj;
+				String ipAddress = device.getIPAddress();
+				int port = device.getPort();
+				KLog.println("ip : " + ipAddress + ", port : " + port);
+//				connector.startConnection(ipAddress, port);
+			}else if(msg.what == UPnPDiscovery.USER_CANCELED){
+				
 			}
 		}
 	};
@@ -56,9 +64,11 @@ public class CloudletActivity extends Activity {
 	View.OnClickListener clickListener = new View.OnClickListener() {
 		@Override
 		public void onClick(View v) {
-			Intent intent = new Intent(CloudletActivity.this, CloudletCameraActivity.class);
-			intent.putExtra("address", "desk.krha.kr");
-		    startActivityForResult(intent, 0);
+			serviceDiscovery.showDialogSelectOption();
+			
+//			Intent intent = new Intent(CloudletActivity.this, CloudletCameraActivity.class);
+//			intent.putExtra("address", "desk.krha.kr");
+//		    startActivityForResult(intent, 0);
 		}
 	};
 
@@ -115,8 +125,10 @@ public class CloudletActivity extends Activity {
 	}
 
 	@Override
-	public void onDestroy() {
-		connector.close();
+	public void onDestroy() {		
+		getApplicationContext().unbindService(this.serviceDiscovery.serviceConnection);
+		this.serviceDiscovery.close();
+		this.connector.close();
 		super.onDestroy();
 	}
 }
