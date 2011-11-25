@@ -161,18 +161,18 @@ static fd_set clients_fdset;
  * Client Thread Lock
  */
 static void lock() {
-	client_lock = 1;
-	pthread_mutex_lock(&client_mutex);
+//	client_lock = 1;
+//	pthread_mutex_lock(&client_mutex);
 }
 static void unlock() {
-	pthread_mutex_unlock(&client_mutex);
-	client_lock = 0;
+//	pthread_mutex_unlock(&client_mutex);
+//	client_lock = 0;
 }
 static void waiting_lock() {
-	while (client_lock) {
-		sched_yield();
-	}
-	pthread_mutex_lock(&client_mutex);
+//	while (client_lock) {
+//		sched_yield();
+//	}
+//	pthread_mutex_lock(&client_mutex);
 }
 
 int init_client_manager(){
@@ -327,7 +327,6 @@ void *start_client_handler(void *arg) {
 		result = select(FD_SETSIZE, &temp_fdset, (fd_set *) NULL,(fd_set *) NULL, &timeout);
 		if (result == 0) {
 			// time-out
-			printf("waiting...\n");
 			usleep(100); unlock(); continue;
 		} else if (result == -1) {
 			usleep(100); unlock();continue;
@@ -363,7 +362,8 @@ void *start_client_handler(void *arg) {
 			fclose(temp_image_file);
 
 			//Run MOPED
-			string image_name =  "/home/krha/workspace/object/moped-example/test/image_0002.jpg";
+			//string image_name =  "/home/krha/workspace/object/moped-example/test/image_0002.jpg";
+			string image_name = string(image_filename);
 			string *objects = run_moped(image_name);
 			close_moped();
 			cout << objects->c_str() << endl;
