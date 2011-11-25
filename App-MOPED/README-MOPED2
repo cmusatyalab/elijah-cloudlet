@@ -1,11 +1,16 @@
-Compile and Run
-1) Time Sync
-	System->Time and Date Settings
+Run
+1) Download binary and Models file 
+	git clone git@bitbucket.org:krha/cloudlet-applications.git
 
-2) Install library
+2) Install runtime library
+	sudo apt-get install libcv4 libhighgui4 libcvaux4 libdevil1c2 libglut3 libglew1.5	(17.8 MB)	
+
+Compile
+1) Install dev library
 	sudo apt-get install build-essential g++ git-core gitk
 	sudo apt-get install libcv-dev libglew-dev libdevil-dev libhighgui-dev
 
-3) Download source file
+2) Download source file
 	git clone git@bitbucket.org:krha/cloudlet-applications.git
 	
+
