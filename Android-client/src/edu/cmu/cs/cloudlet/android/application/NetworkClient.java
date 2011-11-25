@@ -139,9 +139,12 @@ public class NetworkClient extends Thread {
 	public void close() {
 		// TODO Auto-generated method stub
 		try {
-			mClientSocket.close();
-			networkReader.close();
-			networkWriter.close();
+			if(mClientSocket != null)
+				mClientSocket.close();
+			if(networkReader != null)
+				networkReader.close();
+			if(networkWriter != null)
+				networkWriter.close();
 		} catch (IOException e) {
 			e.printStackTrace();
 		}

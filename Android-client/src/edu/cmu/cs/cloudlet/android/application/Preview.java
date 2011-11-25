@@ -8,21 +8,23 @@ import android.util.Log;
 import android.view.SurfaceHolder;
 import android.view.SurfaceView;
 
-class Preview extends SurfaceView implements SurfaceHolder.Callback {
+public class Preview extends SurfaceView implements SurfaceHolder.Callback {
 
-	SurfaceHolder mHolder;
-	Camera mCamera = null;
+	public SurfaceHolder mHolder;
+	public Camera mCamera = null;
 
 	public void close() {
 		if (mCamera != null) {
 			mCamera.stopPreview();
 			mCamera.release();
 			mCamera = null;
+
 		}
 	}
 
 	public Preview(Context context, AttributeSet attrs) {
 		super(context, attrs);
+		Log.d("krha", "context : " + context);
 		if (mCamera == null) {
 			mCamera = Camera.open();
 		}

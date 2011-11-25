@@ -12,6 +12,8 @@ import java.util.Locale;
 
 import edu.cmu.cs.cloudlet.android.CloudletActivity;
 import edu.cmu.cs.cloudlet.android.R;
+import edu.cmu.cs.cloudlet.android.R.id;
+import edu.cmu.cs.cloudlet.android.R.layout;
 
 import android.app.Activity;
 import android.app.ProgressDialog;
@@ -37,7 +39,7 @@ public class CloudletCameraActivity extends Activity implements TextToSpeech.OnI
 	protected static int server_port = 9092;
 	protected NetworkClient client;
 	
-	protected ProgressDialog mDialog;	
+	protected ProgressDialog mDialog;
 	protected boolean gFocussed = false;
 	protected boolean gCameraPressed = false;
 	protected Uri mImageCaptureUri;
@@ -66,19 +68,18 @@ public class CloudletCameraActivity extends Activity implements TextToSpeech.OnI
 	public void onCreate(Bundle savedInstanceState) {
 		super.onCreate(savedInstanceState);
 		requestWindowFeature(Window.FEATURE_NO_TITLE);
-		setContentView(R.layout.application_camera);
+		setContentView(R.layout.camera);
 		mPreview = (Preview) findViewById(R.id.camera_preview);
 		
 		Bundle extras = getIntent().getExtras();
-		server_ipaddress = extras.getString("address");		
-		Log.d("krha_app", "server connection " + server_ipaddress + ":" + server_port);
+		server_ipaddress = extras.getString("address");
 		
 		// buttons
 		mSendButton = (Button) findViewById(R.id.sendButton);
 		mSendButton.setOnClickListener(new View.OnClickListener() {
 			@Override
 			public void onClick(View v) {
-				//capture image
+				// capture image
 				if (mPreview.mCamera != null) {
 					takePicStart = System.currentTimeMillis();
 					mPreview.mCamera.takePicture(null, null, mPictureCallbackJpeg);
@@ -247,7 +248,11 @@ public class CloudletCameraActivity extends Activity implements TextToSpeech.OnI
 
 	@Override
 	public void onDestroy() {
-		client.close();
+		if(client != null)
+			client.close();
+		
+		if(mPreview != null)
+			mPreview.close();
 		// Don't forget to shutdown!
 		if (mTTS != null) {
 			mTTS.stop();
