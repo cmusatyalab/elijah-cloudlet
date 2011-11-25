@@ -114,8 +114,9 @@ public class CloudletCameraActivity extends Activity implements TextToSpeech.OnI
 	private static final String FEEDBACK_PREFIX = "Found items are ";
 	private void TTSFeedback(String ttsString) {
 		// Select a random hello.
+		Log.d("krha", "tts string origin: " + ttsString);
 		String[] objects = ttsString.split(" ");
-		if(objects == null){
+		if(ttsString == null || objects == null || objects.length == 0 || ttsString.trim().length() == 0){
 			mTTS.speak("We found nothing", TextToSpeech.QUEUE_FLUSH, null);			
 		}else if(objects.length == 1){
 			objects[0].replace("_", " ");
@@ -123,7 +124,7 @@ public class CloudletCameraActivity extends Activity implements TextToSpeech.OnI
 		}else{
 			StringBuffer sb = new StringBuffer();
 			for(int i = 0; i < objects.length; i++){
-				sb.append(objects[i].replaceAll("_", "  "));
+				sb.append(objects[i].replaceAll("_", " "));
 				if(i != objects.length-1){
 					sb.append(" and ");					
 				}
