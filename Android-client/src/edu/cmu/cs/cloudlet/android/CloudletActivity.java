@@ -33,15 +33,18 @@ public class CloudletActivity extends Activity {
 		super.onCreate(savedInstanceState);
 		setContentView(R.layout.cloudlet);
 
+		// upnp service binding
 		this.serviceDiscovery = new UPnPDiscovery(this, CloudletActivity.this, discoveryHandler);
-		this.connector = new CloudletConnector(CloudletActivity.this);
+		this.connector = new CloudletConnector(this, CloudletActivity.this);
 		getApplicationContext().bindService(new Intent(this, AndroidUpnpServiceImpl.class), this.serviceDiscovery.serviceConnection, Context.BIND_AUTO_CREATE);
 
+		// show upnp discovery dialog 
+		serviceDiscovery.showDialogSelectOption();
+		
 		// set button action
         Button mSendButton = (Button) findViewById(R.id.connectButton);
         mSendButton.setOnClickListener(clickListener);
-        
-//		connector.startConnection("128.2.212.207", 9090);
+
 	}
 
 	/*
@@ -53,10 +56,16 @@ public class CloudletActivity extends Activity {
 				DeviceDisplay device = (DeviceDisplay) msg.obj;
 				String ipAddress = device.getIPAddress();
 				int port = device.getPort();
-				KLog.println("ip : " + ipAddress + ", port : " + port);
-//				connector.startConnection(ipAddress, port);
+				KLog.println("ip : " + ipAddress + ", port : " + port);				
+//				connector.startConnection(ipAddress, 9090);
+
+				connector.startConnection("128.2.212.207", 9090);
 			}else if(msg.what == UPnPDiscovery.USER_CANCELED){
-				
+				new AlertDialog.Builder(CloudletActivity.this).setTitle("Info")
+				.setMessage("Select UPnP Server for Cloudlet Service")
+				.setIcon(R.drawable.ic_launcher)
+				.setNegativeButton("Confirm", null)
+				.show();
 			}
 		}
 	};
@@ -65,41 +74,9 @@ public class CloudletActivity extends Activity {
 		@Override
 		public void onClick(View v) {
 			serviceDiscovery.showDialogSelectOption();
-			
-//			Intent intent = new Intent(CloudletActivity.this, CloudletCameraActivity.class);
-//			intent.putExtra("address", "desk.krha.kr");
-//		    startActivityForResult(intent, 0);
 		}
 	};
 
-	private void DialogSelectOption() {
-		final String items[] = { "item1", "item2", "item3" };
-		AlertDialog.Builder ab = new AlertDialog.Builder(this);
-		ab.setTitle("Title");
-		ab.setIcon(R.drawable.ic_launcher);
-		ab.setSingleChoiceItems(items, 0, new DialogInterface.OnClickListener() {
-			public void onClick(DialogInterface dialog, int whichButton) {
-			}
-		}).setPositiveButton("Ok", new DialogInterface.OnClickListener() {
-			public void onClick(DialogInterface dialog, int whichButton) {
-			}
-		}).setNegativeButton("Cancel", new DialogInterface.OnClickListener() {
-			public void onClick(DialogInterface dialog, int whichButton) {
-			}
-		});
-		ab.show();
-	}	
-
-	/*
-	 * Callback function after VM Synthesis
-	 */
-	public static DialogInterface.OnClickListener launchApplication = new DialogInterface.OnClickListener() {
-		@Override
-		public void onClick(DialogInterface dialog, int which) {
-			// TODO Auto-generated method stub
-			
-		}
-	};
 
 	@Override 
     protected void onActivityResult(int requestCode, int resultCode, Intent data) { 

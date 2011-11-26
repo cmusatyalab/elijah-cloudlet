@@ -29,7 +29,8 @@ public class NetworkClientReceiver extends Thread {
 				this.notifyStatus(CloudletConnector.NETWORK_ERROR, e.toString(), null);
 				break;
 			}
-			if(msg == null){				
+			
+			if(msg == null){			
 				try { Thread.sleep(200);} catch (InterruptedException e) {}
 				continue;
 			}else{

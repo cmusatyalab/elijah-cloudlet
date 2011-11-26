@@ -10,15 +10,18 @@ import org.json.JSONObject;
 
 import edu.cmu.cs.cloudlet.android.CloudletActivity;
 import edu.cmu.cs.cloudlet.android.R;
+import edu.cmu.cs.cloudlet.android.application.CloudletCameraActivity;
 import edu.cmu.cs.cloudlet.android.data.Measure;
 import edu.cmu.cs.cloudlet.android.data.VMInfo;
 import edu.cmu.cs.cloudlet.android.util.CloudletEnv;
 import edu.cmu.cs.cloudlet.android.util.KLog;
 
+import android.app.Activity;
 import android.app.AlertDialog;
 import android.app.ProgressDialog;
 import android.content.Context;
 import android.content.DialogInterface;
+import android.content.Intent;
 import android.os.Bundle;
 import android.os.Handler;
 import android.os.Message;
@@ -27,23 +30,24 @@ import android.view.View;
 import android.widget.TextView;
 
 public class CloudletConnector {
-	public static final int CONNECTION_ERROR	 	= 1;
-	public static final int NETWORK_ERROR 			= 2;
-	public static final int PROGRESS_MESSAGE		= 3;
-	public static final int FINISH_MESSAGE			= 4;
+	public static final int CONNECTION_ERROR			 	= 1;
+	public static final int NETWORK_ERROR 					= 2;
+	public static final int PROGRESS_MESSAGE				= 3;
+	public static final int FINISH_MESSAGE					= 4;
+	public static final int PROGRESS_MESSAGE_TRANFER		= 5;
 	
+	protected Activity activity;
 	protected Context mContext;
 	protected NetworkClientSender networkClient;
-
 	protected ProgressDialog mDialog;
-	protected StringBuffer messageBuffer;
 
 	private VMInfo requestBaseVM;
 
-	public CloudletConnector(Context context) {
+	public CloudletConnector(Activity activity, Context context) {
+		this.activity = activity;
 		this.mContext = context;
 		networkClient = new NetworkClientSender(context, eventHandler);
-		messageBuffer = new StringBuffer();
+		networkClient.setConnector(this);
 	}
 	
 	public void startConnection(String ipAddress, int port) {
@@ -57,10 +61,17 @@ public class CloudletConnector {
 		
 		networkClient.setConnection(ipAddress, port); 
 		networkClient.start();
+		mDialog.setMessage("Step 1. Waiting for VM Lists");
 		
 		// Send VM Request Message 
 		NetworkMsg networkMsg = NetworkMsg.MSG_OverlayList();
 		networkClient.requestCommand(networkMsg);
+	}
+	
+	public void updateMessage(String dialogMessage){
+		if(mDialog != null && mDialog.isShowing()){
+			mDialog.setMessage(dialogMessage);
+		}
 	}
 	
 
@@ -79,7 +90,6 @@ public class CloudletConnector {
 				if(mDialog != null){
 					mDialog.dismiss();
 				}
-				
 				String message = msg.getData().getString("message");
 				showAlertDialog(message);
 			}else if(msg.what == CloudletConnector.NETWORK_ERROR){
@@ -91,15 +101,7 @@ public class CloudletConnector {
 			}else if(msg.what == CloudletConnector.PROGRESS_MESSAGE){
 				Bundle data = msg.getData();
 				NetworkMsg response = (NetworkMsg) msg.obj;
-				
-				// Display to Dialog
-				messageBuffer.append(data.getString("message") + "\n");
-				KLog.println(messageBuffer.toString());				
-				if(mDialog == null){
-					mDialog = ProgressDialog.show(mContext, "Info", messageBuffer.toString(), true);
-//					mDialog.dismiss();
-				}
-				
+								
 				// Check JSON there is error message or not.
 				if(checkErrorStutus(response.getJsonPayload()) == true){
 					return;
@@ -110,16 +112,19 @@ public class CloudletConnector {
 					switch(response.getCommandNumber()){
 					case NetworkMsg.COMMAND_ACK_VMLIST: 						
 						KLog.println("1. COMMAND_ACK_VMLIST message received");
+						updateMessage("Step 2. Sending overlay VM ..");
 						Measure.put(Measure.NET_ACK_VMLIST);
 						responseVMList(response);
 						break;
 					case NetworkMsg.COMMAND_ACK_TRANSFER_START:
 						KLog.println("2. COMMAND_ACK_TRANSFER_START message received");
+						updateMessage("Step 3. Waiting for VM Synthesis ..");
 						Measure.put(Measure.NET_ACK_OVERLAY_TRASFER);
 						responseTransferStart(response);
 						break;
 					case NetworkMsg.COMMAND_ACK_VM_LAUNCH:
 						KLog.println("3. COMMAND_ACK_VM_LAUNCH message received");
+						updateMessage("Step 3. VM is ready.");
 						Measure.put(Measure.VM_LAUNCHED);
 						responseVMLaunch(response);
 						mDialog.dismiss();
@@ -178,43 +183,33 @@ public class CloudletConnector {
 		}		
 	}
 
-	private void responseTransferStart(NetworkMsg response) {		
-			
-		if(checkVMValidity(response, this.requestBaseVM) == true){
-			// Let's wait launch SUCCESS Message without requesting
-			/*
-			//Get base VM Information
-			NetworkMsg sendMsg = NetworkMsg.MSG_LaunchVM(vms.get(0), 2, 512);			
-			// Send Launch request
-			this.networkClient.requestCommand(sendMsg);
-			*/
-			
-		}else{
-			// No matching VM List
-			this.showAlertDialog("Retuned VM information is wrong, check # of received VM Information");		
-		}
+	private void responseTransferStart(NetworkMsg response) {
+		// Now do nothing			
 	}
 
 	private void responseVMLaunch(NetworkMsg response) {
-		String ipaddress = null;
+		final String ipaddress;
 		try {
 			ipaddress = response.getJsonPayload().getString(VMInfo.JSON_KEY_LAUNCH_VM_IP);
+			if(checkVMValidity(response, this.requestBaseVM) == true){
+				String synthesisInfo = "Finish VM Synthesis\n" + Measure.printInfo() + "\nServer IP: " + ipaddress;
+				// Run Application
+				new AlertDialog.Builder(mContext).setTitle("SUCCESS")
+				.setMessage(synthesisInfo)
+				.setPositiveButton("Run App", new DialogInterface.OnClickListener(){
+					public void onClick(DialogInterface dialog, int which) {
+						Intent intent = new Intent(mContext, CloudletCameraActivity.class);
+						intent.putExtra("address", ipaddress);
+						activity.startActivityForResult(intent, 0);
+					}					
+				})
+				.setNegativeButton("Done", null)
+				.show();
+			}else{
+				this.showAlertDialog("Retuned VM information is wrong, check # of received VM Information");		
+			}
 		} catch (JSONException e) {
 			KLog.printErr(e.toString());
-		}
-		
-		if(checkVMValidity(response, this.requestBaseVM) == true){
-			String synthesisInfo = "Finish VM Synthesis\n" + Measure.printInfo() + "\nServer IP: " + ipaddress;			
-
-			// Run Application
-			new AlertDialog.Builder(mContext).setTitle("SUCCESS")
-			.setMessage(synthesisInfo)
-			.setPositiveButton("Run Application", CloudletActivity.launchApplication)
-			.setNegativeButton("Done", null)
-			.show();			
-			
-		}else{
-			this.showAlertDialog("Retuned VM information is wrong, check # of received VM Information");		
 		}
 	}
 
@@ -264,9 +259,24 @@ public class CloudletConnector {
 	}
 	
 	private void showAlertDialog(String errorMsg) {
-		new AlertDialog.Builder(mContext).setTitle("Error")
-		.setMessage(errorMsg)
-		.setNegativeButton("Confirm", null)
-		.show();
+		if(activity.isFinishing() == false){
+			new AlertDialog.Builder(mContext).setTitle("Error")
+			.setIcon(R.drawable.ic_launcher)
+			.setMessage(errorMsg)
+			.setNegativeButton("Confirm", null)
+			.show();			
+		}
 	}
+	
+	/*
+	 * Callback function after VM Synthesis
+	 */
+	public DialogInterface.OnClickListener launchApplication = new DialogInterface.OnClickListener() {
+		@Override
+		public void onClick(DialogInterface dialog, int which) {
+			Intent intent = new Intent(mContext, CloudletCameraActivity.class);
+			intent.putExtra("address", "desk.krha.kr");
+			activity.startActivityForResult(intent, 0);			
+		}
+	};
 }

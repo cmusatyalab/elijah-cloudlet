@@ -39,11 +39,18 @@ public class NetworkClientSender extends Thread {
 	private DataOutputStream networkWriter;
 	
 	private byte[] imageSendingBuffer = new byte[3*1024*1024];
-	
+	private CloudletConnector connector;
 
 	public NetworkClientSender(Context context, Handler handler) {
 		mContext = context;
 		mHandler = handler;
+	}
+	
+	// this is only for sending status of VM transfer.
+	// I know this is bad approach, but make my life easier.
+	// Do not use this method for other usage.
+	public void setConnector(CloudletConnector connector){
+		this.connector = connector;
 	}
 
 	public void setConnection(String ip, int port){
@@ -154,20 +161,27 @@ public class NetworkClientSender extends Thread {
 
 	private void sendOverlayImage(File image, File mem) {
 		try {			
-			int sendByte = -1;
+			int sendByte = -1, totalByte = 0;
 			//sending disk image
 			BufferedInputStream bi = new BufferedInputStream(new FileInputStream(image));
 			while((sendByte = bi.read(imageSendingBuffer, 0, imageSendingBuffer.length)) > 0){
 				networkWriter.write(imageSendingBuffer, 0, sendByte);
-				KLog.println("Sending " + image.getName() + ".. " + sendByte);
+				totalByte += sendByte;
+				String statusMsg = "Sending Disk.. " + (int)(100.0*totalByte/image.length()) + "%, (" + totalByte + "/" + image.length() + ")";
+				KLog.println(statusMsg);
+				this.notifyTransferStatus("Step 2. Sending overlay VM ..\n" + statusMsg);
 			}
 			bi.close();
 
 			//sending memory snapshot
+			totalByte = 0;
 			bi = new BufferedInputStream(new FileInputStream(mem));
 			while((sendByte = bi.read(imageSendingBuffer, 0, imageSendingBuffer.length)) > 0){
 				networkWriter.write(imageSendingBuffer, 0, sendByte);
-				KLog.println("Sending " + image.getName() + ".. " + sendByte);
+				totalByte += sendByte;
+				String statusMsg = "Sending Memory.. " + (int)(100.0*totalByte/mem.length()) + "%, (" + totalByte + "/" + mem.length() + ")";
+				KLog.println(statusMsg);
+				this.notifyTransferStatus("Step 2. Sending overlay VM ..\n" + statusMsg);
 			}
 			bi.close();
 
@@ -180,6 +194,18 @@ public class NetworkClientSender extends Thread {
 		
 	}
 
+	private void notifyTransferStatus(final String messageString) {
+		if(this.connector != null){
+			mHandler.post(new Runnable(){
+				@Override
+				public void run() {
+					connector.updateMessage(messageString);
+					
+				}				
+			});
+		}
+	}
+	
 	public void requestCommand(NetworkMsg command){
 		this.commandQueue.add(command);
 	}
