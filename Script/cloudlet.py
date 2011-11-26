@@ -105,7 +105,7 @@ def create_overlay(base_image, base_mem):
 
     prev_time = datetime.now()
     ret = diff_files(base_image, tmp_disk, overlay_disk)
-    print '[TIME] time for creating overlay disk : ' % str(datetime.now()-prev_time)
+    print '[TIME] time for creating overlay disk : ', str(datetime.now()-prev_time)
     if ret == None:
         print '[ERROR] cannot create overlay disk'
         if os.path.exists(tmp_mem) == True:
