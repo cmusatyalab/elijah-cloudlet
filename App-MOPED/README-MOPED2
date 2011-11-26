@@ -1,6 +1,6 @@
 Run
 1) Download binary and Models file 
-	git clone git@bitbucket.org:krha/cloudlet-applications.git
+	https://bitbucket.org/krha/cloudlet-applications/get/master.tar.gz (9.7 MB)
 
 2) Install runtime library
 	sudo apt-get install libcv4 libhighgui4 libcvaux4 libdevil1c2 libglut3 libglew1.5	(17.8 MB)	
