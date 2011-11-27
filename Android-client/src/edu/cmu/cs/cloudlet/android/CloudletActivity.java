@@ -45,6 +45,10 @@ public class CloudletActivity extends Activity {
         Button mSendButton = (Button) findViewById(R.id.connectButton);
         mSendButton.setOnClickListener(clickListener);
 
+		// Launching Application
+		Intent intent = new Intent(CloudletActivity.this, CloudletCameraActivity.class);
+		intent.putExtra("address", "desk.krha.kr");
+		CloudletActivity.this.startActivityForResult(intent, 0);
 	}
 
 	/*
@@ -56,10 +60,16 @@ public class CloudletActivity extends Activity {
 				DeviceDisplay device = (DeviceDisplay) msg.obj;
 				String ipAddress = device.getIPAddress();
 				int port = device.getPort();
-				KLog.println("ip : " + ipAddress + ", port : " + port);				
+				KLog.println("ip : " + ipAddress + ", port : " + port);
+				
 //				connector.startConnection(ipAddress, 9090);
-
-				connector.startConnection("128.2.212.207", 9090);
+//				connector.startConnection("128.2.212.207", 9090);
+			
+				// Launching Application
+				Intent intent = new Intent(CloudletActivity.this, CloudletCameraActivity.class);
+				intent.putExtra("address", "desk.krha.kr");
+				CloudletActivity.this.startActivityForResult(intent, 0);
+				
 			}else if(msg.what == UPnPDiscovery.USER_CANCELED){
 				new AlertDialog.Builder(CloudletActivity.this).setTitle("Info")
 				.setMessage("Select UPnP Server for Cloudlet Service")

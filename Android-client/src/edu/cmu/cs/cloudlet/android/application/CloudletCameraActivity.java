@@ -36,7 +36,7 @@ public class CloudletCameraActivity extends Activity implements TextToSpeech.OnI
 	public static final String TAG = "krha_app";
 	
 	protected static String server_ipaddress= "128.2.212.166";
-	protected static int server_port = 9092;
+	protected static int server_port = 19092;
 	protected NetworkClient client;
 	
 	protected ProgressDialog mDialog;

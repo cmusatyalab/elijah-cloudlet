@@ -163,10 +163,10 @@ def run_snapshot(disk_image, memory_image, telnet_port, vnc_port, show_vnc):
     command_str = "kvm -hda "
     command_str += disk_image
     if telnet_port != 0 and vnc_port != -1:
-        command_str += " -m 512 -monitor telnet:localhost:" + str(telnet_port) + ",server,nowait -enable-kvm -net nic -net user -serial none -parallel none -usb -usbdevice tablet -redir tcp:2222::22"
+        command_str += " -m 2048 -monitor telnet:localhost:" + str(telnet_port) + ",server,nowait -enable-kvm -net nic -net user -serial none -parallel none -usb -usbdevice tablet -redir tcp:19092::9092"
         command_str += " -vnc :" + str(vnc_port) + " "
     else:
-        command_str += " -m 512 -enable-kvm -net nic -net user -serial none -parallel none -usb -usbdevice tablet -redir tcp:2222::22"
+        command_str += " -m 2048 -enable-kvm -net nic -net user -serial none -parallel none -usb -usbdevice tablet -redir tcp:2222::22"
     command_str += " -incoming \"exec:cat " + memory_image + "\""
     # print '[INFO] Run snapshot..'
     process = subprocess.Popen(command_str, shell=True)
@@ -193,7 +193,7 @@ def run_migration(telnet_port, vnc_port, mig_path):
         if tn_read.find("qemu") == True:
             break;
     tn.write("quit\n")
-    ret = tn.read_until("(qemu)", 2)
+    ret = tn.read_until("(qemu)", 10)
     tn.close()
 
 
@@ -224,10 +224,10 @@ def run_image(disk_image, telnet_port, vnc_port):
     command_str = "kvm -hda "
     command_str += disk_image
     if telnet_port != 0 and vnc_port != -1:
-        command_str += " -m 512 -monitor telnet:localhost:" + str(telnet_port) + ",server,nowait -enable-kvm -net nic -net user -serial none -parallel none -usb -usbdevice tablet -redir tcp:2222::22"
+        command_str += " -m 2048 -monitor telnet:localhost:" + str(telnet_port) + ",server,nowait -enable-kvm -net nic -net user -serial none -parallel none -usb -usbdevice tablet -redir tcp:2222::22"
         command_str += " -vnc :" + str(vnc_port) + " "
     else:
-        command_str += " -m 512 -enable-kvm -net nic -net user -serial none -parallel none -usb -usbdevice tablet -redir tcp:2222::22"
+        command_str += " -m 2048 -enable-kvm -net nic -net user -serial none -parallel none -usb -usbdevice tablet -redir tcp:2222::22"
     print '[DEBUG] command : ' + command_str
     process = subprocess.Popen(command_str, shell=True)
 
