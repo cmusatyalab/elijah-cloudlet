@@ -86,8 +86,8 @@ void check_config_file(int argc, char **argv) {
 	fseek(file, 0L, SEEK_END);
 	int size = ftell(file);
 	fseek(file, 0L, SEEK_SET);
-	char *json_string = (char*) malloc(size * sizeof(char));
-	memset(json_string, 0, size);
+	char *json_string = (char*) malloc(size * sizeof(char)+1);
+	memset(json_string, '\0', size+1);
 	fread(json_string, size, 1, file);
 	fclose(file);
 
@@ -122,9 +122,10 @@ void check_config_file(int argc, char **argv) {
 	}
 
 	// save it to configuration char string
-	vm_configuration = (char*) malloc(sizeof(char) * strlen(json_string));
+	vm_configuration = (char*) malloc(sizeof(char) * strlen(json_string) + 1);
+	memset(vm_configuration, '\0', strlen(json_string) + 1);
 	strcpy(vm_configuration, json_string);
-	PRINT_OUT("VM Configuration : %s", vm_configuration);
+	PRINT_OUT("VM Configuration : %s\n", vm_configuration);
 
 	free(json_string);
 	free(cpu_clock);

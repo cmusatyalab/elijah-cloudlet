@@ -44,18 +44,18 @@ static fd_set clients_fdset;
  * Client Thread Lock
  */
 static void lock() {
-	client_lock = 1;
-	pthread_mutex_lock(&client_mutex);
+//	client_lock = 1;
+//	pthread_mutex_lock(&client_mutex);
 }
 static void unlock() {
-	pthread_mutex_unlock(&client_mutex);
-	client_lock = 0;
+//	pthread_mutex_unlock(&client_mutex);
+//	client_lock = 0;
 }
 static void waiting_lock() {
-	while (client_lock) {
-		sched_yield();
-	}
-	pthread_mutex_lock(&client_mutex);
+//	while (client_lock) {
+//		sched_yield();
+//	}
+//	pthread_mutex_lock(&client_mutex);
 }
 
 

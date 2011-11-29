@@ -146,6 +146,8 @@ public class CloudletConnector {
 		Vector<VMInfo> matchingVMList = new Vector<VMInfo>();
 		VMInfo overlayVM = null;
 		
+		// find matching VM
+		/*
 		try {
 			JSONObject json = response.getJsonPayload();
 			JSONArray vms = json.getJSONArray("VM");
@@ -166,6 +168,20 @@ public class CloudletConnector {
 			}
 		} catch (JSONException e) {
 			KLog.printErr(e.toString());
+		}
+		*/
+		// For Test, Select the first VM
+		try{
+			JSONObject json = response.getJsonPayload();
+			JSONArray vms = json.getJSONArray("VM");
+			for(int i = 0; i < Math.min(vms.length(), 1); i++){
+				JSONObject vm = (JSONObject) vms.get(i);
+				VMInfo newVM = new VMInfo(vm);
+				matchingVMList.add(newVM);
+				overlayVM = overlayVMList.get(0);
+			}
+		} catch (JSONException e) {
+			e.printStackTrace();
 		}
 		
 		// Send VM Transfer Message

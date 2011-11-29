@@ -38,17 +38,17 @@ public class CloudletActivity extends Activity {
 		this.connector = new CloudletConnector(this, CloudletActivity.this);
 		getApplicationContext().bindService(new Intent(this, AndroidUpnpServiceImpl.class), this.serviceDiscovery.serviceConnection, Context.BIND_AUTO_CREATE);
 
-		// show upnp discovery dialog 
-		serviceDiscovery.showDialogSelectOption();
-		
-		// set button action
-        Button mSendButton = (Button) findViewById(R.id.connectButton);
-        mSendButton.setOnClickListener(clickListener);
 
+		// show upnp discovery dialog 
+//		serviceDiscovery.showDialogSelectOption();
+
+		// Connect Directly
+		connector.startConnection("192.168.2.4", 9090);
+        
 		// Launching Application
-		Intent intent = new Intent(CloudletActivity.this, CloudletCameraActivity.class);
-		intent.putExtra("address", "desk.krha.kr");
-		CloudletActivity.this.startActivityForResult(intent, 0);
+//		Intent intent = new Intent(CloudletActivity.this, CloudletCameraActivity.class);
+//		intent.putExtra("address", "desk.krha.kr");
+//		CloudletActivity.this.startActivityForResult(intent, 0);
 	}
 
 	/*
@@ -65,10 +65,6 @@ public class CloudletActivity extends Activity {
 //				connector.startConnection(ipAddress, 9090);
 //				connector.startConnection("128.2.212.207", 9090);
 			
-				// Launching Application
-				Intent intent = new Intent(CloudletActivity.this, CloudletCameraActivity.class);
-				intent.putExtra("address", "desk.krha.kr");
-				CloudletActivity.this.startActivityForResult(intent, 0);
 				
 			}else if(msg.what == UPnPDiscovery.USER_CANCELED){
 				new AlertDialog.Builder(CloudletActivity.this).setTitle("Info")

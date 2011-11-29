@@ -5,6 +5,8 @@ from datetime import datetime, timedelta
 import telnetlib
 import pylzma
 
+VM_MEMORY = "512"
+PORT_FORWARDING = "-redir tcp:9876::9876 -redir tcp:2222::22 -redir tcp:19092::9092"
 CUR_DIR = os.getcwd()
 
 def diff_files(source_file, target_file, output_file):
@@ -163,19 +165,19 @@ def run_snapshot(disk_image, memory_image, telnet_port, vnc_port, show_vnc):
     command_str = "kvm -hda "
     command_str += disk_image
     if telnet_port != 0 and vnc_port != -1:
-        command_str += " -m 2048 -monitor telnet:localhost:" + str(telnet_port) + ",server,nowait -enable-kvm -net nic -net user -serial none -parallel none -usb -usbdevice tablet -redir tcp:19092::9092"
+        command_str += " -m " + VM_MEMORY + " -monitor telnet:localhost:" + str(telnet_port) + ",server,nowait -enable-kvm -net nic -net user -serial none -parallel none -usb -usbdevice tablet " + PORT_FORWARDING
         command_str += " -vnc :" + str(vnc_port) + " "
     else:
-        command_str += " -m 2048 -enable-kvm -net nic -net user -serial none -parallel none -usb -usbdevice tablet -redir tcp:2222::22"
+        command_str += " -m " + VM_MEMORY + " -enable-kvm -net nic -net user -serial none -parallel none -usb -usbdevice tablet -redir tcp:2222::22"
     command_str += " -incoming \"exec:cat " + memory_image + "\""
     # print '[INFO] Run snapshot..'
     process = subprocess.Popen(command_str, shell=True)
     time.sleep(1)
 
     # Run VNC and wait until user finishes working
+    time.sleep(3)
+    vnc_process = subprocess.Popen("gvncviewer localhost:" + str(vnc_port), shell=True)
     if show_vnc == True:
-        time.sleep(3)
-        vnc_process = subprocess.Popen("gvncviewer localhost:" + str(vnc_port), shell=True)
         ret = vnc_process.wait()
 
 def run_migration(telnet_port, vnc_port, mig_path):
@@ -224,10 +226,10 @@ def run_image(disk_image, telnet_port, vnc_port):
     command_str = "kvm -hda "
     command_str += disk_image
     if telnet_port != 0 and vnc_port != -1:
-        command_str += " -m 2048 -monitor telnet:localhost:" + str(telnet_port) + ",server,nowait -enable-kvm -net nic -net user -serial none -parallel none -usb -usbdevice tablet -redir tcp:2222::22"
+        command_str += " -m " + VM_MEMORY + " -monitor telnet:localhost:" + str(telnet_port) + ",server,nowait -enable-kvm -net nic -net user -serial none -parallel none -usb -usbdevice tablet -redir tcp:9876::9876"
         command_str += " -vnc :" + str(vnc_port) + " "
     else:
-        command_str += " -m 2048 -enable-kvm -net nic -net user -serial none -parallel none -usb -usbdevice tablet -redir tcp:2222::22"
+        command_str += " -m " + VM_MEMORY + " -enable-kvm -net nic -net user -serial none -parallel none -usb -usbdevice tablet -redir tcp:2222::22"
     print '[DEBUG] command : ' + command_str
     process = subprocess.Popen(command_str, shell=True)
 
