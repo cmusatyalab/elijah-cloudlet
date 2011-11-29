@@ -1,0 +1,16 @@
+{
+   "python-script":"/home/krha/Cloudlet/src/Script/cloudet.py",
+   "CPU-Clock":"2.13",
+   "CPU-Core":"2",
+   "Memory-Size":"4",
+   "VM":[
+      {
+         "name":"ubuntuLTS",
+         "type":"baseVM",
+         "OS":"Linux",
+         "OS-version":"Ubuntu_10.04 LTS",
+         "diskimg_path":"/home/krha/Cloudlet/image/MOPED_BaseVM/ubuntu_base.qcow2",
+         "memorysnapshot_path":"/home/krha/Cloudlet/image/MOPED_BaseVM/ubuntu_base.mem"
+      }
+   ]
+}

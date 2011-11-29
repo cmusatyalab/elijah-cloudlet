@@ -5,7 +5,7 @@ from datetime import datetime, timedelta
 import telnetlib
 import pylzma
 
-VM_MEMORY = "512"
+VM_MEMORY = "2048"
 PORT_FORWARDING = "-redir tcp:9876::9876 -redir tcp:2222::22 -redir tcp:19092::9092"
 CUR_DIR = os.getcwd()
 
