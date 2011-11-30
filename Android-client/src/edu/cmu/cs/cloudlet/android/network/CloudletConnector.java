@@ -11,6 +11,7 @@ import org.json.JSONObject;
 import edu.cmu.cs.cloudlet.android.CloudletActivity;
 import edu.cmu.cs.cloudlet.android.R;
 import edu.cmu.cs.cloudlet.android.application.CloudletCameraActivity;
+import edu.cmu.cs.cloudlet.android.application.face.ui.FaceRecClientCameraPreview;
 import edu.cmu.cs.cloudlet.android.data.Measure;
 import edu.cmu.cs.cloudlet.android.data.VMInfo;
 import edu.cmu.cs.cloudlet.android.util.CloudletEnv;
@@ -225,9 +226,35 @@ public class CloudletConnector {
 				.setMessage(synthesisInfo)
 				.setPositiveButton("Run App", new DialogInterface.OnClickListener(){
 					public void onClick(DialogInterface dialog, int which) {
-						Intent intent = new Intent(mContext, CloudletCameraActivity.class);
-						intent.putExtra("address", ipaddress);
-						activity.startActivityForResult(intent, 0);
+						ArrayList<VMInfo> vmList = CloudletEnv.instance().getOverlayDirectoryInfo();
+						if(vmList == null && vmList.size() != 1){
+							// Error
+							showAlertDialog("No Overlay VM List is suit");
+							return;
+						}
+						
+						String VMName = vmList.get(0).getInfo(VMInfo.JSON_KEY_NAME);
+						if(VMName == null){
+							// Error
+							showAlertDialog("VM Name is NULL");
+							return;
+						}
+						
+						if(VMName.equalsIgnoreCase("ubuntuLTS")){
+							Intent intent = new Intent(mContext, CloudletCameraActivity.class);
+							intent.putExtra("address", ipaddress);
+							activity.startActivityForResult(intent, 0);								
+						}else if(VMName.equalsIgnoreCase("windowXP")){
+							Intent intent = new Intent(mContext, FaceRecClientCameraPreview.class);
+							intent.putExtra("address", ipaddress);
+							activity.startActivityForResult(intent, 0);			
+						}else if(VMName.equalsIgnoreCase("NULL")){
+							showAlertDialog("This is null test, No Application");							
+						}else{
+							// Error
+							showAlertDialog("VM Matching Overlay VM and Application");
+							return;							
+						}
 					}					
 				})
 				.setNegativeButton("Done", null)

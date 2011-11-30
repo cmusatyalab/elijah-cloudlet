@@ -81,4 +81,8 @@ public class VMInfo {
 	public String getInfo(String key){
 		return this.data.get(key);		
 	}
+	
+	public String toString(){
+		return this.getInfo(JSON_KEY_NAME) + ":" + this.getInfo(JSON_KEY_DISKIMAGE_PATH) + ":" + this.getInfo(JSON_KEY_MEMORYSNAPSHOT_PATH);
+	}
 }

@@ -55,16 +55,7 @@ public class NetworkClientSender extends Thread {
 
 	public void setConnection(String ip, int port){
 		this.Server_ipAddress = ip;
-		this.Server_port = port; 
-
-		/*
-		// for mock test, read from file
-		FileOutputStream mockOutputFile = new FileOutputStream(CloudletEnv.instance().getFilePath(CloudletEnv.SOCKET_MOCK_OUTPUT));
-		networkWriter = new DataOutputStream(mockOutputFile);
-		receiver = new NetworkClientReceiver(new DataInputStream(mClientSocket.getInputStream()), mHandler);
-		Thread receiverThread = new Thread(receiver);
-		receiverThread.start();
-		 */
+		this.Server_port = port;
 	}
 
 
@@ -126,6 +117,7 @@ public class NetworkClientSender extends Thread {
 				break;				
 			}
 			
+			// Send Overlay VM after we request VM Transfer Start
 			if(command.commandNumber == NetworkMsg.COMMAND_REQ_TRANSFER_START){
 				// send data
 				VMInfo overlayVM = null;

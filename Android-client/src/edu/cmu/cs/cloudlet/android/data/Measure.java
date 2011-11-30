@@ -64,7 +64,10 @@ public class Measure {
 		sb.append("End-to-End : " + endConnection + "-" + startConnection +"=" + (endConnection-startConnection) + " s \n");
 		sb.append("Overlay Trans : " + (overlayEnd-overlayStart) + " s \n");
 		sb.append("Overlay Size: : " + (imageSize + memorySize)/1000/1000 + " MB \n");
-		sb.append("Bandwidth : " + (imageSize+memorySize)/1000/(overlayEnd-overlayStart) + " KB/s\n");
+		if((overlayEnd-overlayStart) > 0)
+			sb.append("Bandwidth : " + (imageSize+memorySize)/1000/(overlayEnd-overlayStart) + " KB/s\n");
+		else
+			sb.append("Bandwidth : N/A\n");
 		return sb.toString();
 	}
 	

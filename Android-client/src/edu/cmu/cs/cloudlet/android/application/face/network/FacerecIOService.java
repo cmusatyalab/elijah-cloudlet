@@ -192,7 +192,7 @@ public class FacerecIOService extends Service implements
 		// krha
 		// loadVMServerInfo();
 		serverIPAddress = CloudletActivity.TEST_CLOUDLET_SERVER_IP;
-		serverPort = CloudletActivity.TEST_CLOUDLET_SERVER_PORT;		
+		serverPort = CloudletActivity.TEST_CLOUDLET_FACE_PORT;		
 		initSocketAndThreads();
 	}
 

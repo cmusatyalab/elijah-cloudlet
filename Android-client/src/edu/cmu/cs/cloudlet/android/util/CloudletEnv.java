@@ -24,7 +24,7 @@ public class CloudletEnv {
     private String socket_mock_file 	= ".mock_output";    
 	
 	protected static CloudletEnv env = null;
-	protected ArrayList<VMInfo> overlayVMList = new ArrayList<VMInfo>();
+	protected ArrayList<VMInfo> overlayVMList = null;
 	protected String VM_Type;
 	 
 	
@@ -74,6 +74,7 @@ public class CloudletEnv {
 		if(overlayVMList != null && overlayVMList.size() > 0){
 			return this.overlayVMList;
 		}
+		overlayVMList = new ArrayList<VMInfo>();
 		
 		// Get information From overlay directory
 		File env_dir = new File(SD_ROOT + File.separator + env_root);
@@ -87,21 +88,19 @@ public class CloudletEnv {
 			// Enumerate multiple Version of Overlay
 			for(int j = 0; j < overlaydir.length; j++){
 				File overlay = overlaydir[j];
-				if(this.VM_Type != null || this.VM_Type.length() != 0){
-					// If specific type of VM is defined by user, check it.
-					
-				}else{
-					VMInfo newVM = new VMInfo(overlay, VMDir.getName());
-					this.overlayVMList.add(newVM);					
-				}
+				VMInfo newVM = new VMInfo(overlay, VMDir.getName());
+				this.overlayVMList.add(newVM);
 			}
 		}
 		
 		return this.overlayVMList;
 	}
 
-	public void specifyVM(String VM_Name) {
-		this.VM_Type = VM_Name;
+	public void resetOverlayList() {
+		if(overlayVMList != null){
+			overlayVMList.clear();
+			overlayVMList = null;
+		}		
 	}
 
 }

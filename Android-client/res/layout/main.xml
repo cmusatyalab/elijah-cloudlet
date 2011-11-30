@@ -13,21 +13,12 @@
         android:text="Synthesis Test" />
 
     <Button
-        android:id="@+id/testMOPED"
+        android:id="@+id/testSynthesis"
         android:layout_width="fill_parent"
         android:layout_height="0dp"
         android:layout_gravity="bottom"
         android:layout_weight="1"
-        android:text="Start MOPED Synthesis" >
-    </Button>
-
-    <Button
-        android:id="@+id/testFACE"
-        android:layout_width="fill_parent"
-        android:layout_height="0dp"
-        android:layout_gravity="bottom"
-        android:layout_weight="1"
-        android:text="Start FACE Synthesis" >
+        android:text="Start VM Synthesis" >
     </Button>
 
     <TextView
