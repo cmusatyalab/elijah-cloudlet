@@ -38,18 +38,13 @@ public class CloudletActivity extends Activity {
 		this.connector = new CloudletConnector(this, CloudletActivity.this);
 		getApplicationContext().bindService(new Intent(this, AndroidUpnpServiceImpl.class), this.serviceDiscovery.serviceConnection, Context.BIND_AUTO_CREATE);
 
-
 		// show upnp discovery dialog 
 //		serviceDiscovery.showDialogSelectOption();
 
 		// Connect Directly
 		Button button = (Button)findViewById(R.id.connectButton);
-		button.setOnClickListener(clickListener);		
+		button.setOnClickListener(clickListener);	
         
-		// Launching Application
-//		Intent intent = new Intent(CloudletActivity.this, CloudletCameraActivity.class);
-//		intent.putExtra("address", "desk.krha.kr");
-//		CloudletActivity.this.startActivityForResult(intent, 0);
 	}
 
 	/*
