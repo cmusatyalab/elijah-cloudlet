@@ -387,7 +387,7 @@ unless ($st) {
 }
 
 # krha
-print($isrdir);
+# print($isrdir); --> ~/.isr/
 
 #
 # Avoid symlink attacks if $isrdir is in a shared directory.
@@ -482,6 +482,7 @@ purge_completion_cache();
 
 # Basic commands
 if ($command eq "checkout") {
+	print("krha, in checkout");
     need_parcel();
     need_network();
     need_remote_parcel();
@@ -666,6 +667,7 @@ exit 0;
 # checkout - Lock a parcel and copy it from the server to the client
 #
 sub checkout () {
+	print("krha");
     my $clientname = hostname();
     my $sigset;
     my %map;
