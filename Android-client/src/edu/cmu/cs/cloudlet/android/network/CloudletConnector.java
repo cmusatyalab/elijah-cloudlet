@@ -46,8 +46,6 @@ public class CloudletConnector {
 	public CloudletConnector(Activity activity, Context context) {
 		this.activity = activity;
 		this.mContext = context;
-		networkClient = new NetworkClientSender(context, eventHandler);
-		networkClient.setConnector(this);
 	}
 	
 	public void startConnection(String ipAddress, int port) {
@@ -58,8 +56,14 @@ public class CloudletConnector {
 			mDialog.setMessage("Connecting to " + ipAddress);
 		}
 		mDialog.show();
-		
-		networkClient.setConnection(ipAddress, port); 
+
+		if(networkClient != null){
+			networkClient.close();
+			networkClient.stop();
+		}
+		networkClient = new NetworkClientSender(this.mContext, eventHandler);
+		networkClient.setConnector(this);
+		networkClient.setConnection(ipAddress, port);		
 		networkClient.start();
 		mDialog.setMessage("Step 1. Waiting for VM Lists");
 		
@@ -90,11 +94,18 @@ public class CloudletConnector {
 				if(mDialog != null){
 					mDialog.dismiss();
 				}
+				if(networkClient != null){
+					networkClient.close();
+				}
+				
 				String message = msg.getData().getString("message");
 				showAlertDialog(message);
 			}else if(msg.what == CloudletConnector.NETWORK_ERROR){
 				if(mDialog != null){
 					mDialog.dismiss();
+				}
+				if(networkClient != null){
+					networkClient.close();
 				}
 				String message = msg.getData().getString("message");
 				showAlertDialog(message);

@@ -109,8 +109,8 @@ def exit_error(error_message):
 
 
 def print_usage(program_name):
-    print 'usage: %s [-b Bandwidth kb/s] [-u username] [-s server_address] [-m VM name]' % program_name
-    print ' -h, --help  print help'
+    print 'usage\t: %s [-b Bandwidth kb/s] [-u username] [-s server_address] [-m VM name]' % program_name
+    print 'example\t: ./isr_run.py -u test1 -s dagama.isr.cs.cmu.edu -m windowXP -b 100000'
 
 
 def main(argv):

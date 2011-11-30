@@ -32,7 +32,7 @@ public class CloudletActivity extends Activity {
 	@Override
 	public void onCreate(Bundle savedInstanceState) {
 		super.onCreate(savedInstanceState);
-		setContentView(R.layout.cloudlet);
+		setContentView(R.layout.main);
 
 		// upnp service binding
 		this.serviceDiscovery = new UPnPDiscovery(this, CloudletActivity.this, discoveryHandler);
@@ -63,7 +63,6 @@ public class CloudletActivity extends Activity {
 				
 //				connector.startConnection(ipAddress, 9090);
 //				connector.startConnection("128.2.212.207", 9090);
-			
 				
 			}else if(msg.what == UPnPDiscovery.USER_CANCELED){
 				new AlertDialog.Builder(CloudletActivity.this).setTitle("Info")
