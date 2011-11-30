@@ -7,6 +7,7 @@ import edu.cmu.cs.cloudlet.android.application.CloudletCameraActivity;
 import edu.cmu.cs.cloudlet.android.network.CloudletConnector;
 import edu.cmu.cs.cloudlet.android.upnp.DeviceDisplay;
 import edu.cmu.cs.cloudlet.android.upnp.UPnPDiscovery;
+import edu.cmu.cs.cloudlet.android.util.CloudletEnv;
 import edu.cmu.cs.cloudlet.android.util.KLog;
 
 import android.app.Activity;
@@ -23,7 +24,7 @@ import android.view.View;
 import android.widget.Button;
 
 public class CloudletActivity extends Activity {
-	/** Called when the activity is first created. */
+	public static final String TEST_CLOUDLET_SERVER = "cage.coda.cs.cmu.edu";
 	protected Button startConnectionButton;
 	protected CloudletConnector connector;
 	private UPnPDiscovery serviceDiscovery;
@@ -42,8 +43,10 @@ public class CloudletActivity extends Activity {
 //		serviceDiscovery.showDialogSelectOption();
 
 		// Connect Directly
-		Button button = (Button)findViewById(R.id.connectButton);
-		button.setOnClickListener(clickListener);	
+		findViewById(R.id.testMOPED).setOnClickListener(clickListener);
+		findViewById(R.id.testFACE).setOnClickListener(clickListener);
+		findViewById(R.id.runMOPEDApp).setOnClickListener(clickListener);
+		findViewById(R.id.runFACEApp).setOnClickListener(clickListener);
         
 	}
 
@@ -76,7 +79,19 @@ public class CloudletActivity extends Activity {
 		@Override
 		public void onClick(View v) {
 //			serviceDiscovery.showDialogSelectOption();
-			connector.startConnection("cage.coda.cs.cmu.edu", 9090);
+			
+			if(v.getId() == R.id.testMOPED){
+//				CloudletEnv.instance().specifyVM("MOPED");
+				connector.startConnection(TEST_CLOUDLET_SERVER, 9090);
+			}else if(v.getId() == R.id.testFACE){
+//				CloudletEnv.instance().specifyVM("FACE");
+				connector.startConnection(TEST_CLOUDLET_SERVER, 9090);				
+			}else if(v.getId() == R.id.runMOPEDApp){
+				Intent intent = new Intent(CloudletActivity.this, CloudletCameraActivity.class);
+				intent.putExtra("address", TEST_CLOUDLET_SERVER);
+				startActivityForResult(intent, 0);				
+			}else if(v.getId() == R.id.runFACEApp){				
+			}
 		}
 	};
 

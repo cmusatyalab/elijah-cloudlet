@@ -25,6 +25,7 @@ public class CloudletEnv {
 	
 	protected static CloudletEnv env = null;
 	protected ArrayList<VMInfo> overlayVMList = new ArrayList<VMInfo>();
+	protected String VM_Type;
 	 
 	
 	public static CloudletEnv instance(){
@@ -86,12 +87,21 @@ public class CloudletEnv {
 			// Enumerate multiple Version of Overlay
 			for(int j = 0; j < overlaydir.length; j++){
 				File overlay = overlaydir[j];
-				VMInfo newVM = new VMInfo(overlay, VMDir.getName());
-				this.overlayVMList.add(newVM);
+				if(this.VM_Type != null || this.VM_Type.length() != 0){
+					// If specific type of VM is defined by user, check it.
+					
+				}else{
+					VMInfo newVM = new VMInfo(overlay, VMDir.getName());
+					this.overlayVMList.add(newVM);					
+				}
 			}
 		}
 		
 		return this.overlayVMList;
+	}
+
+	public void specifyVM(String VM_Name) {
+		this.VM_Type = VM_Name;
 	}
 
 }
