@@ -1,0 +1,59 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="fill_parent"
+    android:layout_height="fill_parent"
+    android:orientation="vertical" >
+
+    <TextView
+        android:layout_width="fill_parent"
+        android:layout_height="0dp"
+        android:textSize = "25sp"
+        android:gravity="center_vertical"
+        android:layout_weight="1"
+        android:text="Synthesis Test" />
+
+    <Button
+        android:id="@+id/testMOPED"
+        android:layout_width="fill_parent"
+        android:layout_height="0dp"
+        android:layout_gravity="bottom"
+        android:layout_weight="1"
+        android:text="Start MOPED Synthesis" >
+    </Button>
+
+    <Button
+        android:id="@+id/testFACE"
+        android:layout_width="fill_parent"
+        android:layout_height="0dp"
+        android:layout_gravity="bottom"
+        android:layout_weight="1"
+        android:text="Start FACE Synthesis" >
+    </Button>
+
+    <TextView
+        android:layout_width="fill_parent"
+        android:layout_height="0dp"
+        android:textSize = "25sp"
+        android:gravity="center_vertical"
+        android:layout_weight="1"
+        android:text="Application Start" />
+    
+    <Button
+        android:id="@+id/runMOPEDApp"
+        android:layout_width="fill_parent"
+        android:layout_height="0dp"
+        android:layout_gravity="bottom"
+        android:layout_weight="1"
+        android:text="Run MOPED App" >
+    </Button>
+
+    <Button
+        android:id="@+id/runFACEApp"
+        android:layout_width="fill_parent"
+        android:layout_height="0dp"
+        android:layout_gravity="bottom"
+        android:layout_weight="1"
+        android:text="Run FACE App" >
+    </Button>
+
+</LinearLayout>
