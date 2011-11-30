@@ -1,0 +1,70 @@
+#!!!PERLPATH!!
+#
+# shell - OpenISR (R) VMM driver that just launches a shell
+#
+# Copyright (C) 2008-2009 Carnegie Mellon University
+#
+# This program is free software; you can redistribute it and/or modify it
+# under the terms of version 2 of the GNU General Public License as published
+# by the Free Software Foundation.  A copy of the GNU General Public License
+# should have been distributed along with this program in the file
+# LICENSE.GPL.
+#
+# This program is distributed in the hope that it will be useful, but
+# WITHOUT ANY WARRANTY; without even the implied warranty of MERCHANTABILITY
+# or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU General Public License
+# for more details.
+#
+
+BEGIN {
+	do "!!SHAREDIR!!/vmm.pm";
+	die "Couldn't load vmm.pm: $!\n"
+		if $!;
+	die "Couldn't parse vmm.pm: $@\n"
+		if $@;
+	import vmm;
+}
+
+use Cwd qw/realpath/;
+use strict;
+use warnings;
+
+my $program;
+
+sub check_runnable {
+	if (defined $COMMAND) {
+		fail "$COMMAND invalid or not executable"
+			unless defined ($program = find_program $COMMAND);
+	} else {
+		foreach my $prog ('bash', 'sh') {
+			last if defined ($program = find_program $prog);
+		}
+		fail "No executable shell found"
+			unless defined $program;
+	}
+}
+
+sub info {
+	$VMNAME = "shell";
+	$USES_ROOT = "yes"
+		if $OPTIONS{'allow_root'};
+	check_runnable;
+}
+
+sub run {
+	my $ret;
+
+	check_runnable;
+
+	$ENV{'DISK'} = realpath("$CFGDIR/../vfs/image");
+	print STDERR "Disk image file (\$DISK): $ENV{DISK}\n";
+	print STDERR "Exit the shell to suspend your parcel.\n";
+
+	$ret = run_program($program, sub { kill 'HUP', shift });
+	fail "Couldn't run $program"
+		if $ret == -1;
+}
+
+sub poweroff {}
+
+main;

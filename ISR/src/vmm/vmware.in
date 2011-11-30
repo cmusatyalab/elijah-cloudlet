@@ -1,0 +1,620 @@
+#!!!PERLPATH!!
+#
+# vmware - OpenISR (R) VMM driver for VMware Workstation and VMware Player
+#
+# Copyright (C) 2008-2010 Carnegie Mellon University
+#
+# This program is free software; you can redistribute it and/or modify it
+# under the terms of version 2 of the GNU General Public License as published
+# by the Free Software Foundation.  A copy of the GNU General Public License
+# should have been distributed along with this program in the file
+# LICENSE.GPL.
+#
+# This program is distributed in the hope that it will be useful, but
+# WITHOUT ANY WARRANTY; without even the implied warranty of MERCHANTABILITY
+# or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU General Public License
+# for more details.
+#
+
+BEGIN {
+	do "!!SHAREDIR!!/vmm.pm";
+	die "Couldn't load vmm.pm: $!\n"
+		if $!;
+	die "Couldn't parse vmm.pm: $@\n"
+		if $@;
+	import vmm;
+}
+
+use Cwd qw/abs_path/;
+use strict;
+use warnings;
+
+my $program;
+
+# Return key and value, or undef on parse error.
+sub split_record {
+	my $line = shift;
+
+	$line =~ /^([^=\s]+)\s*=\s*([^\n]+)\n$/
+		or return undef;
+	return ($1, $2);
+}
+
+sub find_vmx {
+	my $vmx;
+	my $dent;
+
+	# New canonical location
+	return "vmware.vmx"
+		if -f "$CFGDIR/vmware.vmx";
+
+	# Search the cfg directory for legacy VMXes
+	opendir DIR, $CFGDIR
+		or fail "Couldn't read cfg directory";
+	while ($dent = readdir(DIR)) {
+		next if $dent !~ /\.vmx$/;
+		fail "Too many VMX files in $CFGDIR"
+			if defined $vmx;
+		$vmx = $dent;
+	}
+	closedir DIR;
+	return $vmx;
+}
+
+sub find_vmdk {
+	my $vmx = shift;
+	my $vmdk;
+	my $fh;
+	my $line;
+	my $key;
+	my $value;
+
+	open($fh, $vmx)
+		or fail "Couldn't read $vmx";
+	while ($line = <$fh>) {
+		($key, $value) = split_record($line);
+		if (defined $key and $key =~ /fileName$/ and
+					$value =~ /.vmdk"$/) {
+			fail "Parcel associated with more than one VMDK; "
+						. "bailing out"
+				if defined $vmdk;
+			$vmdk = $value;
+			$vmdk =~ s/"//g;
+			$vmdk = "$CFGDIR/$vmdk";
+		}
+	}
+	close $fh;
+	fail "Unable to find reference to virtual disk"
+		unless defined $vmdk;
+	return $vmdk;
+}
+
+sub check_runnable {
+	fail "Cannot resume: parcel already suspended with $SUSPENDED"
+		if $SUSPENDED ne "no" and $SUSPENDED ne "vmware";
+	if (defined $COMMAND) {
+		fail "$COMMAND invalid or not executable"
+			unless defined ($program = find_program $COMMAND);
+	} else {
+		foreach my $prog ('vmplayer', 'vmware') {
+			last if defined ($program = find_program $prog);
+		}
+		fail "VMware not found"
+			unless defined $program;
+	}
+	# Make sure we can locate a specific VMX file to run
+	find_vmx;
+}
+
+sub info {
+	$VMNAME = "VMware";
+	$USES_ROOT = "yes";
+	check_runnable;
+}
+
+sub get_geometry {
+	# Always round down
+	my $cyls = int($SECTORS / (16 * 63));
+	my $bioscyls = int($SECTORS / (255 * 63));
+	$cyls = 16383 if $cyls > 16383;
+	$bioscyls = 1024 if $bioscyls > 1024;
+	return (
+		'ddb.geometry.cylinders' => $cyls,
+		'ddb.geometry.heads' => 16,
+		'ddb.geometry.sectors' => 63,
+		'ddb.geometry.biosCylinders' => $bioscyls,
+		'ddb.geometry.biosHeads' => 255,
+		'ddb.geometry.biosSectors' => 63
+	);
+}
+
+sub new_vmdata {
+	my $cid = sprintf("%x", int(rand(0xffffffff)));
+	my %geom = get_geometry();
+	my $key;
+
+	open(VMDK, ">", "$CFGDIR/vmware.vmdk")
+		or fail "Unable to write to $CFGDIR/vmware.vmdk";
+	print VMDK <<EOF;
+version=1
+CID=$cid
+parentCID=ffffffff
+createType="monolithicFlat"
+
+RW $SECTORS FLAT "../vfs/image" 0
+
+ddb.virtualHWVersion = "6"
+ddb.adapterType = "ide"
+EOF
+	for $key (sort keys %geom) {
+		print VMDK "$key = \"$geom{$key}\"\n";
+	}
+	close(VMDK);
+
+	open(VMX, ">", "$CFGDIR/vmware.vmx")
+		or fail "Unable to write to $CFGDIR/vmware.vmx";
+	print VMX <<EOF;
+config.version = "7"
+virtualHW.version = "6"
+displayName = "$NAME"
+guestOS = "other26xlinux"
+memsize = "$MEM"
+ide0:0.present = "TRUE"
+ide0:0.fileName = "vmware.vmdk"
+ide0:1.present = "TRUE"
+ide0:1.deviceType = "cdrom-raw"
+ide0:1.autodetect = "TRUE"
+floppy0.present = "FALSE"
+Ethernet0.present = "TRUE"
+Ethernet0.connectionType = "nat"
+sound.present = "TRUE"
+sound.autodetect = "TRUE"
+usb.present = "TRUE"
+ehci.present = "TRUE"
+tools.remindInstall = "TRUE"
+undopoint.disableSnapshots = "TRUE"
+uuid.action = "keep"
+nvram = "vmware.nvram"
+EOF
+	close(VMX);
+}
+
+sub try_rename {
+	my $from = shift;
+	my $to = shift;
+
+	fail "$to already exists; will not overwrite"
+		if -e "$CFGDIR/$to";
+	rename("$CFGDIR/$from", "$CFGDIR/$to")
+		or fail "Couldn't rename $CFGDIR/$from";
+}
+
+sub new_filenames {
+	my $vmx = shift;
+
+	my $vmdk;
+	my $vmxf;
+	my $nvram;
+	my $base;
+	my $ext;
+	my $line;
+	my $key;
+	my $value;
+	my @files;
+	my $file;
+
+	open(OLD, "<", "$CFGDIR/$vmx")
+		or fail "Couldn't read $vmx";
+	open(NEW, ">", "$CFGDIR/vmware.vmx")
+		or fail "Couldn't write new vmware.vmx";
+	while ($line = <OLD>) {
+		($key, $value) = split_record($line);
+		unless (defined $key) {
+			print NEW $line;
+			next;
+		}
+		$value =~ s/"//g;
+		if ($key =~ /fileName$/ and $value =~ /.vmdk$/) {
+			fail "Parcel associated with more than one VMDK; "
+						. "bailing out"
+				if defined $vmdk;
+			$vmdk = $value;
+			print NEW "$key = \"vmware.vmdk\"\n";
+		} elsif ($key eq "extendedConfigFile") {
+			$vmxf = $value;
+			print NEW "extendedConfigFile = \"vmware.vmxf\"\n";
+		} elsif ($key eq "checkpoint.vmState") {
+			# This key does not appear to be respected by
+			# current VMware, and misleadingly gives a filename
+			# for the VMSS file.  Drop the line.
+		} elsif ($key eq "nvram") {
+			$nvram = $value;
+			print NEW "nvram = \"vmware.nvram\"\n";
+		} else {
+			print NEW $line;
+		}
+	}
+	unless (defined $nvram) {
+		$nvram = "nvram";
+		print NEW "nvram = \"vmware.nvram\"\n";
+	}
+	close(OLD);
+	close(NEW);
+	unlink "$CFGDIR/$vmx"
+		or fail "Couldn't unlink $vmx";
+
+	try_rename $vmdk, "vmware.vmdk"
+		if $vmdk ne "vmware.vmdk";
+
+	try_rename $nvram, "vmware.nvram"
+		if $nvram ne "vmware.nvram" and -e "$CFGDIR/$nvram";
+
+	if (defined $vmxf and $vmxf ne "vmware.vmxf") {
+		fail "vmware.vmxf already exists; will not overwrite"
+			if -e "$CFGDIR/vmware.vmxf";
+		open(OLD, "<", "$CFGDIR/$vmxf")
+			or fail "Couldn't read $vmxf";
+		open(NEW, ">", "$CFGDIR/vmware.vmxf")
+			or fail "Couldn't write new vmware.vmxf";
+		while ($line = <OLD>) {
+			$line =~ s/$vmx/vmware.vmx/g
+				if $line =~ /vmxPathName/;
+			print NEW $line;
+		}
+		close OLD;
+		close NEW;
+		unlink "$CFGDIR/$vmxf"
+			or fail "Couldn't unlink $vmxf";
+	}
+
+	($base = $vmx) =~ s/\.vmx$//;
+	opendir DIR, $CFGDIR
+		or fail "Couldn't read cfg directory";
+	@files = grep /^$base\./, readdir(DIR);
+	closedir DIR;
+	foreach $file (@files) {
+		($ext = $file) =~ s/^$base\.//;
+		# If the file is of a type which requires it to be explicitly
+		# listed in the VMX file, then we don't want to rename it
+		# here: we've already found the canonical copy and renamed it,
+		# so despite its basename the file we've found here is not
+		# really associated with the VM.
+		next if $ext =~ /^vmdk|vmxf|nvram$/;
+		try_rename "$base.$ext", "vmware.$ext";
+	}
+}
+
+sub convert_to_fuse_vfs {
+	my $vmx = "$CFGDIR/vmware.vmx";
+	my $vmdk = find_vmdk($vmx);
+	my $ofh;
+	my $nfh;
+	my $line;
+	my $key;
+	my $value;
+	my $resp = "";
+	my $need_upgrade = 0;
+	my @data;
+	my @fields;
+
+	open($ofh, "<", $vmdk)
+		or fail "Couldn't read $vmdk";
+	while ($line = <$ofh>) {
+		($key, $value) = split_record($line);
+		if ($line =~ /^RW /) {
+			@fields = split ' ', $line;
+			if ($fields[3] =~ m:/dev/hdk:) {
+				$need_upgrade = 1;
+				$fields[3] = '"../vfs/image"';
+			}
+			push @data, join(' ', @fields) . "\n";
+		} elsif (! defined $key) {
+			push @data, $line;
+		} elsif ($key eq "createType" and $value !~ /monolithicFlat/) {
+			$need_upgrade = 1;
+			push @data, 'createType="monolithicFlat"' . "\n";
+		} else {
+			push @data, $line;
+		}
+	}
+	close($ofh);
+	return unless $need_upgrade;
+
+	print STDERR <<END;
+
+This parcel is configured for an older version of ISR.
+If you resume the parcel, it will be upgraded and will no longer be usable
+with OpenISR clients older than 0.10.0.
+
+END
+	while ($resp !~ /^[yn]$/) {
+		print STDERR "Resume parcel? (y/n) ";
+		chomp ($resp = <STDIN>);
+	}
+	print STDERR "\n";
+	fail "User declined to upgrade parcel"
+		if $resp ne "y";
+
+	open($nfh, ">", "$vmdk.new")
+		or fail "Couldn't write $vmdk.new";
+	for $line (@data) {
+		print $nfh $line;
+	}
+	close($nfh);
+	rename("$vmdk.new", $vmdk)
+		or fail "Couldn't update $vmdk";
+
+	undef $ofh;
+	undef $nfh;
+	open($ofh, "<", $vmx)
+		or fail "Couldn't read $vmx";
+	open($nfh, ">", "$vmx.new")
+		or fail "Couldn't write $vmx.new";
+	while ($line = <$ofh>) {
+		($key, $value) = split_record($line);
+		unless (defined $key) {
+			print $nfh $line;
+			next;
+		}
+		next if $key =~ /^ide0:0\.deviceType$/;
+		print $nfh $line;
+	}
+	close($ofh);
+	close($nfh);
+	rename("$vmx.new", $vmx)
+		or fail "Couldn't update $vmx";
+}
+
+sub new_uuid {
+	my $vmx = "$CFGDIR/vmware.vmx";
+	my $vmdk = find_vmdk($vmx);
+	my $line;
+	my $key;
+	my $value;
+
+	open(OLD, "<", $vmx)
+		or fail "Couldn't read $vmx";
+	open(NEW, ">", "$vmx.new")
+		or fail "Couldn't write $vmx.new";
+	while ($line = <OLD>) {
+		($key, $value) = split_record($line);
+		unless (defined $key) {
+			print NEW $line;
+			next;
+		}
+		next if $key =~ /ethernet[0-9]+\.addressType/;
+		next if $key =~ /ethernet[0-9]+\.generatedAddress/;
+		next if $key =~ /uuid\.(location|bios)/;
+		if ($key eq "displayName") {
+			print NEW "displayName = \"$NAME\"\n";
+		} else {
+			print NEW $line;
+		}
+	}
+	close(OLD);
+	close(NEW);
+	rename("$vmx.new", $vmx)
+		or fail "Couldn't update $vmx";
+
+	open(OLD, "<", $vmdk)
+		or fail "Couldn't read $vmdk";
+	open(NEW, ">", "$vmdk.new")
+		or fail "Couldn't write $vmdk.new";
+	while ($line = <OLD>) {
+		($key, $value) = split_record($line);
+		unless (defined $key) {
+			print NEW $line;
+			next;
+		}
+		next if $key =~ /ddb\.uuid/;
+		print NEW $line;
+	}
+	close(OLD);
+	close(NEW);
+	rename("$vmdk.new", $vmdk)
+		or fail "Couldn't update $vmdk";
+}
+
+sub new_disk_size {
+	my $vmdk = find_vmdk("$CFGDIR/vmware.vmx");
+	my %geom = get_geometry();
+	my $fh;
+	my $line;
+	my $key;
+	my $value;
+	my @fields;
+	my @data;
+
+	open($fh, "<", $vmdk)
+		or fail "Couldn't read $vmdk";
+	while ($line = <$fh>) {
+		($key, $value) = split_record($line);
+		if ($line =~ /^RW /) {
+			@fields = split ' ', $line;
+			$fields[1] = $SECTORS;
+			push @data, join(' ', @fields) . "\n";
+		} elsif (! defined $key) {
+			push @data, $line;
+		} else {
+			$value =~ s/"//g;
+			if ($key eq "ddb.geometry.heads" && int($value) > 16) {
+				# Old ISR-3 parcels have invalid geometry,
+				# and their sector count in the VMDK file is
+				# less than the number of sectors in the real
+				# disk.  We can't resize such a parcel
+				# because it would confuse the guest OS;
+				# also, we can't detect whether resize was
+				# really desired because SECTORS already
+				# doesn't match the VMDK.  So, we notice this
+				# case and refuse to resize.
+				print STDERR "Refusing to resize parcel " .
+						"with invalid geometry\n";
+				close $fh;
+				return;
+			}
+			if (exists $geom{$key}) {
+				push @data, "$key = \"$geom{$key}\"\n";
+			} else {
+				push @data, $line;
+			}
+		}
+	}
+	close($fh);
+	undef $fh;
+	open($fh, ">", "$vmdk.new")
+		or fail "Couldn't write $vmdk.new";
+	for $line (@data) {
+		print $fh $line;
+	}
+	close($fh);
+	rename("$vmdk.new", $vmdk)
+		or fail "Couldn't update $vmdk";
+}
+
+sub update_cfg {
+	my $need_refresh = 0;
+	my $refreshed = 0;
+	my $old_id;
+	my $uufile = "$CFGDIR/vmware.uuid";
+	my $vmx;
+
+	$vmx = find_vmx;
+	new_filenames $vmx
+		if defined $vmx and $vmx ne "vmware.vmx";
+	convert_to_fuse_vfs
+		if defined $vmx;
+	if (!defined $vmx) {
+		# This parcel has no VMX file.  Create a VMX and VMDK.
+		new_vmdata;
+		$refreshed = 1;
+	} elsif (-e $uufile) {
+		# This parcel has a UUID file.  Make sure it matches the
+		# current parcel's UUID.  If not, the parcel has been cloned,
+		# and we need to clean out unique identifiers in the VMX
+		# and VMDK.
+		open(UUFILE, $uufile)
+			or fail "Couldn't read $uufile";
+		$old_id = <UUFILE>;
+		chomp $old_id;
+		close UUFILE;
+		$need_refresh = 1
+			if $old_id ne $UUID;
+	} else {
+		# This parcel has no UUID file, which means it has only been
+		# used with older versions of OpenISR.  Update the VMware
+		# unique identifiers just to be safe.  (This used to be done
+		# in isr_admin copyparcel, but newer versions don't do this,
+		# and the parcel may have been cloned by newer versions.
+		# Also, older versions of isr_admin didn't do this either, so
+		# old parcels may have non-unique identifiers that we need
+		# to correct.)
+		$need_refresh = 1;
+	}
+
+	if ($need_refresh) {
+		new_uuid;
+		# Old ISR-3 parcels have VMDK files which don't match the
+		# actual size of the parcel, which would normally cause us
+		# to try to resize the parcel on every resume.
+		# new_disk_size() detects this case and prints a warning,
+		# but we don't want to do that on every resume.  Compromise:
+		# only attempt to resize the disk if the parcel was cloned.
+		new_disk_size;
+		$refreshed = 1;
+	}
+	if ($refreshed) {
+		open(UUFILE, ">", $uufile)
+			or fail "Couldn't write $uufile";
+		print UUFILE "$UUID\n";
+		close UUFILE;
+	}
+}
+
+# When we run VMware, our immediate child is not the binary itself, but a
+# shell script which runs the binary and which ignores SIGINT.  To ask VMware
+# to exit, we need to send SIGINT to the child *of the shell script*.
+my $signaled = 0;
+sub kill_vmware {
+	my $pid = shift;
+
+	my $child_bin;
+	my $shell_path;
+	my $cur;
+	my $ppid;
+
+	return if $signaled;
+	$signaled = 1;
+	print STDERR "Suspending parcel...\n";
+	# Get the binary being run by our child, and compare it to /bin/sh.
+	# /bin/sh may be a symlink, so we need to canonicalize it.
+	$child_bin = readlink "/proc/$pid/exe"
+		or return;
+	$shell_path = abs_path "/bin/sh";
+	if ($child_bin ne $shell_path) {
+		# Our child is not a shell, so just signal it directly.
+		kill 'INT', $pid;
+		return;
+	}
+	# Send SIGINT to all children of $pid.
+	opendir(PROC, "/proc")
+		or return;
+	foreach $cur (readdir PROC) {
+		next if $cur !~ /^[0-9]+$/;
+		open(STAT, "/proc/$cur/stat")
+			or next;
+		$ppid = (split ' ', <STAT>)[3];
+		close STAT;
+		kill 'INT', $cur
+			if $ppid == $pid;
+	}
+	closedir PROC;
+}
+
+sub run {
+	my $ret;
+	my $opts;
+
+	$opts = ($FULLSCREEN eq "yes" ? "-X" : "");
+	check_runnable;
+	update_cfg;
+	$ret = run_program("$program $opts $CFGDIR/vmware.vmx",
+				\&kill_vmware, ($VERBOSE ne "yes"));
+	fail "Couldn't run $program"
+		if $ret == -1;
+
+	$SUSPENDED = "vmware";
+	opendir DIR, $CFGDIR
+		or fail "Couldn't read cfg directory";
+	if (grep(/\.vmem$/, readdir(DIR))) {
+		$SUSPENDED = "vmware";
+	} else {
+		$SUSPENDED = "no";
+	}
+	closedir DIR;
+	fail "$program returned $ret"
+		if $ret;
+}
+
+sub poweroff {
+	# If this is an old parcel which has never been run through
+	# new_filenames(), the memory image won't be where we expect it.
+	# Be noisy about the fact that we won't work correctly.
+	fail "Old or missing VMware metadata; try resuming the parcel first"
+		unless -e "$CFGDIR/vmware.vmx";
+	unlink "$CFGDIR/vmware.vmem", "$CFGDIR/vmware.vmss";
+	$SUSPENDED = "no"
+		if $SUSPENDED eq "vmware";
+};
+
+sub cleanup {
+	opendir(CDIR, $CFGDIR)
+		or fail "Can't read directory $CFGDIR";
+	foreach my $file (grep(/^(vmware(-core\.gz|.*\.log))|core$/,
+				readdir(CDIR))) {
+		unlink "$CFGDIR/$file"
+			or fail "Couldn't remove $CFGDIR/$file";
+	}
+	closedir(CDIR);
+}
+
+main;

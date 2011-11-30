@@ -1,0 +1,138 @@
+INSTALLING THE SERVER
+---------------------
+
+Configure your server system with a web server and SSH daemon.  Then:
+
+./configure --disable-client --enable-server --sysconfdir=/etc \
+	--localstatedir=/var
+make
+make install
+
+The server software does not include any persistent daemons, so there is
+nothing to launch.  ISR clients interact with the server by fetching data
+from it via HTTP and by running commands on it via SSH.
+
+CONFIGURING THE ISR SERVER
+--------------------------
+
+The server reads settings from /etc/openisr/locksrv.conf.  Settings
+are key-value pairs of the form:
+
+key = value
+
+The following keys are supported:
+
+content_root
+	This is the path to the directory in which ISR data should be stored,
+	and defaults to /var/lib/openisr/server.
+
+http_path
+	The pathname part of the HTTP URL corresponding to the content root.
+	The default is /isr.  Setting this value to the empty string causes
+	the content root to be the web server's document root.
+
+default_pass
+	The password assigned to user accounts created by isr_admin.
+	The default is to randomly generate a password.
+
+hostname
+	The hostname by which clients will refer to this server.  The
+	default is the fully-qualified domain name of your server, but
+	you may need to override this if autodetection fails.
+
+CONFIGURING THE WEB SERVER
+--------------------------
+
+Your web server must be configured to map http_path to the content_root.
+For example, to configure the Apache web server to map the default http_path
+(/isr) to the default content_root (/var/lib/openisr/server), use the
+following directive:
+
+	Alias /isr /var/lib/openisr/server
+
+In addition, it is recommended that you configure your web server to:
+
+      - Follow symbolic links.  This is required for the proper operation
+	of the server.
+
+      - Disable directory indexes.  By default, most web servers allow
+	browsing the contents of any directory which does not have an
+	"index.html" page; therefore, unless this feature is disabled,
+	anyone (including search engines) can see what users and parcels
+	exist on your server.
+
+      - Always return files with the application/octet-stream MIME type.
+	This prevents the web server from misrecognizing individual
+	encrypted disk chunks as other types of data.
+
+If you are using Apache, you can accomplish these things using the following
+directives (assuming your content_root is /var/lib/openisr/server):
+
+	<Directory /var/lib/openisr/server>
+		Options -Indexes FollowSymLinks
+		ForceType application/octet-stream
+	</Directory>
+
+UPGRADING FROM 0.9.5 OR EARLIER
+-------------------------------
+
+The source distributions of OpenISR 0.9.5 and earlier used different default
+paths.  To preserve access to your existing parcels, you should add the
+following lines to /etc/openisr/locksrv.conf:
+
+	content_root = /var/www/html
+	http_path =
+
+If you installed the OpenISR 0.9.5 server from a .deb or .rpm package, this
+section does not apply to you.
+
+ADMINISTERING THE SERVER
+------------------------
+
+The server includes a tool, "isr_admin", which automates creating and
+deleting users and parcels.  For a usage summary, run "isr_admin"
+without arguments.  For examples, run "isr_admin -hh".
+
+PARCEL FORMATS
+--------------
+
+OpenISR 0.9.8 introduces a new parcel format, format 4, which is not
+compatible with older versions of the OpenISR client.  This format is
+required to support new parcel features, such as selectable compression
+for the parcel's memory image.  Format 3 is still supported and remains
+compatible with all OpenISR 0.9.x releases.
+
+As of version 0.9.8, "isr_admin makeparcel" and "isr_admin import" will
+create format 4 parcels by default.  To override the default format
+when creating a parcel, pass "-T <format>" to isr_admin, where <format>
+is 3 or 4.  To change the default, place the following line in
+/etc/openisr/locksrv.conf:
+
+	default_format = <format>
+
+Existing format 3 parcels, and format 3 parcels cloned with
+"isr_admin copyparcel", are not automatically upgraded to format 4.
+To upgrade a parcel, use the new "isr_admin upgrade" command.  Note that
+"isr_admin upgrade" respects the default format specified in locksrv.conf,
+so if you have changed the default, you will need to pass "-T 4" to the
+upgrade command.
+
+SERVER SECURITY
+---------------
+
+An ISR account on the server is a regular Unix user account with some extra
+configuration, including a special restricted shell which only allows the
+user to perform ISR server operations.  This configuration is performed
+automatically when the account is created with "isr_admin adduser".  Note
+that server accounts created with OpenISR 0.9.7 and earlier were not
+configured to use the restricted shell, so by default such accounts will
+have shell access to the server.
+
+Depending on your configuration, the SSH daemon may allow users to perform
+certain additional actions, such as port forwarding, despite the existence
+of the restricted shell.  To prevent this, include the following lines in
+your SSH daemon configuration file (usually /etc/ssh/sshd_config):
+
+	AllowTcpForwarding no
+	X11Forwarding no
+	PermitTunnel no

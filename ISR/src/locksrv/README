@@ -1,0 +1,59 @@
+ISR Server Directory
+
+This directory contains the components that implement ISR operations on
+parcels in remote storage.
+
+Each component takes a -h command line argument that prints help info.
+
+Files:
+README
+	This file
+
+Server.pm	
+	Perl module that exports common functions.
+
+isr_admin
+	Administration tool which creates and deletes user accounts,
+	creates parcels, and does other miscellaneous tasks.
+
+isr_runserv
+	Wrapper script, placed in the user's PATH, which loads and
+	runs one of the below modules (specified in its first argument).
+
+srv_catlog.pm 
+	Appends a temporary session log to a user's permanent ISR log.
+
+srv_checkparcel.pm 
+	Checks a parcel and its predecessor for internal consistency.
+
+srv_commit.pm
+	Commits the contents of a temporary parcel cache that was 
+	produced by a checkpoint or a rollback to a new version. In
+	general this program is not idempotent. We expect it to run
+	to completion without any errors.
+
+srv_getconfig.pm	
+	Returns the contents of parcel.cfg via stdout. 
+
+srv_lock.pm
+	Acquires, releases, or checks a parcel lock.
+
+srv_ls.pm
+	Lists information about all of a user's parcels, or about a
+	particular parcel.
+
+srv_motd.pm
+	Prints the message of the day, if any.
+
+srv_rollback.pm
+	Creates a new (last) parcel version that is identical to some
+	previous version. For example, if the current version
+	is v6, a rollback to v2 will create a new v7 that is 
+	identical to v2 when it was checked in.
+
+srv_stat.pm
+	Returns the stat entries for a file as a set of
+	"key=value" pairs (one per line) on stdout. The keys
+	are DEV, INO, SIZE, MODE, NLINK, UID, GID, RDEV, SIZE,
+	ATIME, MTIME, CTIME, BLKSSIZE, BLOCKS, and SHA1.
+
