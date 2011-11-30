@@ -386,6 +386,9 @@ unless ($st) {
  	or errexit("Unable to make $isrdir");
 }
 
+# krha
+print($isrdir);
+
 #
 # Avoid symlink attacks if $isrdir is in a shared directory.
 #

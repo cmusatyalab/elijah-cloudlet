@@ -336,7 +336,6 @@ $server = $syscfg{server};
 #
 if (@ARGV == 0) {
     print("Try '$progname help' for a usage summary or 'man $progname' for an introduction to OpenISR.\n");
-    print("Debug21.\n");
     exit 0;
 }
 
@@ -386,6 +385,9 @@ unless ($st) {
     $st = lstat($isrdir)
  	or errexit("Unable to make $isrdir");
 }
+
+# krha
+print($isrdir);
 
 #
 # Avoid symlink attacks if $isrdir is in a shared directory.
