@@ -43,7 +43,8 @@ public class CloudletActivity extends Activity {
 //		serviceDiscovery.showDialogSelectOption();
 
 		// Connect Directly
-		connector.startConnection("192.168.2.4", 9090);
+		Button button = (Button)findViewById(R.id.connectButton);
+		button.setOnClickListener(clickListener);		
         
 		// Launching Application
 //		Intent intent = new Intent(CloudletActivity.this, CloudletCameraActivity.class);
@@ -79,7 +80,8 @@ public class CloudletActivity extends Activity {
 	View.OnClickListener clickListener = new View.OnClickListener() {
 		@Override
 		public void onClick(View v) {
-			serviceDiscovery.showDialogSelectOption();
+//			serviceDiscovery.showDialogSelectOption();
+			connector.startConnection("cage.coda.cs.cmu.edu", 9090);
 		}
 	};
 
