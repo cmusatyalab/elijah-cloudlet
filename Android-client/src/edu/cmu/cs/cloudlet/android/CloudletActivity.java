@@ -4,6 +4,7 @@ package edu.cmu.cs.cloudlet.android;
 import org.teleal.cling.android.AndroidUpnpServiceImpl;
 
 import edu.cmu.cs.cloudlet.android.application.CloudletCameraActivity;
+import edu.cmu.cs.cloudlet.android.application.face.ui.FaceRecClientCameraPreview;
 import edu.cmu.cs.cloudlet.android.network.CloudletConnector;
 import edu.cmu.cs.cloudlet.android.upnp.DeviceDisplay;
 import edu.cmu.cs.cloudlet.android.upnp.UPnPDiscovery;
@@ -24,7 +25,8 @@ import android.view.View;
 import android.widget.Button;
 
 public class CloudletActivity extends Activity {
-	public static final String TEST_CLOUDLET_SERVER = "cage.coda.cs.cmu.edu";
+	public static final String TEST_CLOUDLET_SERVER_IP = "cage.coda.cs.cmu.edu";
+	public static final int TEST_CLOUDLET_SERVER_PORT = 9090;
 	protected Button startConnectionButton;
 	protected CloudletConnector connector;
 	private UPnPDiscovery serviceDiscovery;
@@ -81,15 +83,19 @@ public class CloudletActivity extends Activity {
 			
 			if(v.getId() == R.id.testMOPED){
 //				CloudletEnv.instance().specifyVM("MOPED");
-				connector.startConnection(TEST_CLOUDLET_SERVER, 9090);
+				connector.startConnection(TEST_CLOUDLET_SERVER_IP, TEST_CLOUDLET_SERVER_PORT);
 			}else if(v.getId() == R.id.testFACE){
 //				CloudletEnv.instance().specifyVM("FACE");
-				connector.startConnection(TEST_CLOUDLET_SERVER, 9090);				
+				connector.startConnection(TEST_CLOUDLET_SERVER_IP, TEST_CLOUDLET_SERVER_PORT);				
 			}else if(v.getId() == R.id.runMOPEDApp){
 				Intent intent = new Intent(CloudletActivity.this, CloudletCameraActivity.class);
-				intent.putExtra("address", TEST_CLOUDLET_SERVER);
+				intent.putExtra("address", TEST_CLOUDLET_SERVER_IP);
 				startActivityForResult(intent, 0);				
-			}else if(v.getId() == R.id.runFACEApp){				
+			}else if(v.getId() == R.id.runFACEApp){
+				Intent intent = new Intent(CloudletActivity.this, FaceRecClientCameraPreview.class);
+				intent.putExtra("address", TEST_CLOUDLET_SERVER_IP);
+				intent.putExtra("port", TEST_CLOUDLET_SERVER_IP);
+				startActivityForResult(intent, 0);			
 			}
 		}
 	};
