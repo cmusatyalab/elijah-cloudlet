@@ -35,6 +35,7 @@ import java.io.IOException;
 import java.util.List;
 
 import android.app.Activity;
+import android.app.AlertDialog;
 import android.content.ComponentName;
 import android.content.Context;
 import android.content.Intent;
@@ -58,6 +59,7 @@ import android.os.IBinder;
 import android.os.Message;
 import android.util.DisplayMetrics;
 import android.util.Log;
+import android.view.Gravity;
 import android.view.SurfaceHolder;
 import android.view.SurfaceView;
 import android.view.View;
@@ -71,11 +73,14 @@ import android.widget.CheckBox;
 import android.widget.EditText;
 import android.widget.LinearLayout;
 import android.widget.Toast;
+import edu.cmu.cs.cloudlet.android.CloudletActivity;
+import edu.cmu.cs.cloudlet.android.R;
 import edu.cmu.cs.cloudlet.android.application.face.network.FacerecIOService;
 import edu.cmu.cs.cloudlet.android.application.face.network.IFacerecClientDataListener;
 import edu.cmu.cs.cloudlet.android.application.face.network.IFacerecClientDataProvider;
 import edu.cmu.cs.cloudlet.android.application.face.network.ImageResponseMessage;
 import edu.cmu.cs.cloudlet.android.application.face.network.RawPreviewImageInfo;
+import edu.cmu.cs.cloudlet.android.util.KLog;
 
 // Need the following import to get access to the app resources, since this
 // class is in a sub-package.
@@ -85,6 +90,10 @@ import edu.cmu.cs.cloudlet.android.application.face.network.RawPreviewImageInfo;
 
 public class FaceRecClientCameraPreview extends Activity implements
 		OnClickListener {
+	
+	protected long timeStart, timeFirstResponse, timeFirstFinding;
+	protected boolean isFirstFinding = false;
+	protected boolean isFirstResponse = false;
 
 	class VideoOverlayView extends View {
 
@@ -148,6 +157,16 @@ public class FaceRecClientCameraPreview extends Activity implements
 				// draw the rect first
 				Rect rect = new Rect(left, top, right, bottom);
 				canvas.drawRect(rect, paint);
+				
+				// For Time stamping
+				if(isFirstFinding == false){
+					timeFirstFinding = System.currentTimeMillis();
+					isFirstFinding = true;
+
+					final String message = "Time for First Finding\nstart: " + timeStart +"\nend:" + timeFirstFinding + "\ndiff: " + (timeFirstFinding - timeStart);
+					Log.d(LOG_TAG, message);
+					KLog.println(message);
+				}
 
 				if (imageResponseMsg.name != null
 						|| !imageResponseMsg.name.equalsIgnoreCase("")) {
@@ -234,8 +253,19 @@ public class FaceRecClientCameraPreview extends Activity implements
 			Message handlerMsg = dataThreadHandler.obtainMessage();
 			// set the response object
 			handlerMsg.obj = response;
-			// send the message to the UI thread
+			
+			// send the message to the UI thread			
 			dataThreadHandler.sendMessage(handlerMsg);
+			
+			// Time stamping
+			if(isFirstResponse == false){
+				timeFirstResponse = System.currentTimeMillis();
+				isFirstResponse = true;				
+				final String message = "Time for First Response\nstart: " + timeStart +"\nend:" + timeFirstResponse + "\ndiff: " + (timeFirstResponse- timeStart);
+				Log.d(LOG_TAG, message);
+				KLog.println(message);
+
+			}
 		}
 	};
 
@@ -322,6 +352,9 @@ public class FaceRecClientCameraPreview extends Activity implements
 		requestWindowFeature(Window.FEATURE_NO_TITLE);
 		getWindow().addFlags(WindowManager.LayoutParams.FLAG_FULLSCREEN);
 
+		// Time stamping
+		timeStart = System.currentTimeMillis();
+		
 		doServiceBinding();
 		createDataCallbackHandler();
 

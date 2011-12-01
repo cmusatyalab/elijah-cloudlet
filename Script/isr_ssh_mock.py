@@ -1,14 +1,9 @@
 #!/usr/bin/env python
-import xdelta3
 import os, commands, filecmp, sys, subprocess, getopt, time
 from datetime import datetime, timedelta
-import telnetlib
 import pylzma
 
-LAUNCH_COMMAND = 'Launching KVM...'
-launch_start = datetime.now()
-launch_end = datetime.now()
-
+PARCEL_ROOT = /home/krha/Cloudlet/src/ISR/parcel
 
 # Limiting Up/Down traffic bandwidth
 def bandwidth_limit(bandwidth):
@@ -29,23 +24,28 @@ def print_usage(program_name):
     print 'usage\t: %s operation [-p parcelname]' % program_name
     print 'operation list\n\n'
     print 'ls'
+    print 'motd'
+    print 'getconfig'
+    print 'lock'
+    print 'stat'
     print 'catlog'
     print 'checkparcel'
     print 'commit'
-    print 'getconfig'
-    print 'lock'
-    print 'ls'
-    print 'motd'
     print 'rollback'
-    print 'stat'
-
 
 def main(argv):
     if len(argv) < 2:
         print_usage(os.path.basename(argv[0]))
         sys.exit(2)
+
+    operation = argv[1]
+    operation_list = ("ls", "motd", "getconfig", "lock", "stat")
+    if operation_cmd not in operation_list:
+        print_usage(os.path.basename(argv[0]))
+        sys.exit(2)
+
     try:
-        optlist, args = getopt.getopt(argv[1:], 'hb:u:s:m:', ["help", "bandwidth", "user", "server", "machine"])
+        optlist, args = getopt.getopt(argv[2:], 'hp:u:s:p:', ["help", "user", "server", "vmname"])
     except getopt.GetoptError, err:
         print str(err)
         print_usage(os.path.basename(argv[0]))
@@ -55,59 +55,47 @@ def main(argv):
     user_name = None
     server_address = None
     vm_name = None
-    bandwidth = -1
 
     # parse argument
     for o, a in optlist:
         if o in ("-h", "--help"):
             print_usage(os.path.basename(argv[0]))
             sys.exit(0)
-        elif o in ("-b", "--bandwidth"):
-            bandwidth = int(a)
         elif o in ("-u", "--user"):
             user_name = a
         elif o in ("-s", "--server"):
             server_address = a
-        elif o in ("-m", "--machine"):
+        elif o in ("-p", "--vmname"):
             vm_name = a
         else:
             assert False, "unhandled option"
 
-    if user_name == None or server_address == None or vm_name == None or bandwidth == -1:
-        print_usage(os.path.basename(argv[0]))
-        print "username : %s, server_address = %s, vm_name = %s" % (user_name, server_address, vm_name)
+    if operation in ("ls"):
+        # let's say it is alwasy true
+        sys.exit(0)
+    elif operation in ("motd"):
+        # I don't know what this command means yet,
+        # will finish it later
+        sys.exit(0)
+    elif operation in ("getconfig"):
+        # return configuration file
+        if vm_name = None:
+            print "error, No VM Name is specifoed"
+            sys.exit(2)
+        parcel_path = os.path.join(PARCEL_ROOT, vm_name, 'parcel.cgf')
+        if os.path.exists(parcel_path) == False:
+            print "error, No such Path for parcel : ", parcel_path
+            sys.exit(2)
+        parcel_file = open(parcel_path, "r")
+        ret_string = parcel_file.read()
+        print ret_string
+        sys.exit(0)
+    elif operation in ("lock"):
+    elif operation in ("stat"):
+    else:
+        print "error, No such command : " + operation
         sys.exit(2)
 
-    # setup bandwidth limitation
-    bandwidth_limit(bandwidth)
-
-    # step1. login
-    ret, err = login(user_name, server_address)
-    if ret == False:
-        exit_error(err)
-
-    # step2. remove all cache
-    ret, err = remove_cache(user_name, server_address, vm_name)
-    if ret == False:
-        exit_error(err)
-
-    # step3. resume VM, wait until finish (close window)
-    start_time = datetime.now()
-    ret, err = resume_vm(user_name, server_address, vm_name)
-    if ret == False:
-        exit_error(err)
-       
-    end_time = datetime.now()
-
-    # step4. stop VM and clean up
-    ret, err = stop_vm(user_name, server_address, vm_name)
-    if ret == False:
-        exit_error(err)
-
-    print "SUCCESS"
-    print "[Total VM Run Time] : ", str(end_time-start_time)
-    print '[Launch Time] : ', str(launch_end-launch_start)
-    bandwidth_reset()
     sys.exit(0)
 
 

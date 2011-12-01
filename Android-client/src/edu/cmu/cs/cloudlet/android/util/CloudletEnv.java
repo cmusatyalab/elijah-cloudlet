@@ -21,7 +21,7 @@ public class CloudletEnv {
 	private String overlay_dir 			= "overlay";
     private String installation_file	= ".installed";
     private String preference_file		= ".preference";
-    private String socket_mock_file 	= ".mock_output";    
+    private String socket_mock_file 	= "cloudlet-";    
 	
 	protected static CloudletEnv env = null;
 	protected ArrayList<VMInfo> overlayVMList = null;
