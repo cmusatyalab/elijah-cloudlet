@@ -1650,12 +1650,13 @@ sub need_network () {
 	alarm(0);
     };
 
+	# krha, do not check network
     # Determine if the child established its connections in the allotted time.
-    if ($@ or $?) {
-	kill("TERM", $pid)
-	    if $@;
-	errexit("Couldn't contact $server.  Do you have a network connection?");
-    }
+	#if ($@ or $?) {
+	#kill("TERM", $pid)
+	#    if $@;
+	#errexit("Couldn't contact $server.  Do you have a network connection?");
+	#}
 }
 
 #
@@ -2027,10 +2028,10 @@ sub srun ($$%) {
     }
 
     # Perform the operation on remote storage
-	$ret = mysystem("ssh -o PasswordAuthentication=no -l $userid $server isr_runserv $operation $args");
+	# $ret = mysystem("ssh -o PasswordAuthentication=no -l $userid $server isr_runserv $operation $args");
 	
 	# krha
-	# $ret = mysystem("/home/krha/Cloudlet/src/Script/isr_ssh_mock.py $operation $args");
+	$ret = mysystem("/home/krha/Cloudlet/src/Script/isr_ssh_mock.py $operation $args");
     print("[krha], srun: ssh -o PasswordAuthentication=no -l $userid $server isr_runserv $operation $args\n");
     print("[krha], ops($operation), args($args)\n");
     print("[krha], ret : $ret\n");
