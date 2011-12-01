@@ -2,6 +2,7 @@ package edu.cmu.cs.cloudlet.android.application;
 
 import java.io.File;
 import java.io.FileFilter;
+import java.io.FileInputStream;
 import java.io.FileNotFoundException;
 import java.io.FileOutputStream;
 import java.io.IOException;
@@ -16,6 +17,7 @@ import edu.cmu.cs.cloudlet.android.R.id;
 import edu.cmu.cs.cloudlet.android.R.layout;
 
 import android.app.Activity;
+import android.app.AlertDialog;
 import android.app.ProgressDialog;
 import android.content.Intent;
 import android.hardware.Camera;
@@ -34,6 +36,8 @@ import android.widget.Button;
 
 public class CloudletCameraActivity extends Activity implements TextToSpeech.OnInitListener {
 	public static final String TAG = "krha_app";
+	public static final String TEST_IMAGE_PATH  = "/mnt/sdcard/Cloudlet/MOPED/test_image.jpg";
+	protected byte[] testImageData;
 	
 	protected static String server_ipaddress= "128.2.212.166";
 	protected static int server_port = 19092;
@@ -51,8 +55,8 @@ public class CloudletCameraActivity extends Activity implements TextToSpeech.OnI
 	protected TextToSpeech mTTS;
 	
 	// time stamp for test
-	protected long takePicStart;
-	protected long takePicEnd;
+	protected long startApp;
+	protected long endApp;
 
 	static protected final String OUTLOG_FILENAME = "/mnt/sdcard/cloulet_exp_result.txt";
 	static protected PrintWriter outlogWriter;		
@@ -81,11 +85,35 @@ public class CloudletCameraActivity extends Activity implements TextToSpeech.OnI
 			public void onClick(View v) {
 				// capture image
 				if (mPreview.mCamera != null) {
-					takePicStart = System.currentTimeMillis();
 					mPreview.mCamera.takePicture(null, null, mPictureCallbackJpeg);
 				}
 			}
 		});
+		
+
+		// For test Purpose, Erase it later
+		{
+			File testFile = new File(TEST_IMAGE_PATH);
+			if(testFile.exists() == false){
+				new AlertDialog.Builder(CloudletCameraActivity.this).setTitle("Error")
+				.setMessage("No test image at " + TEST_IMAGE_PATH)
+				.setIcon(R.drawable.ic_launcher)
+				.setNegativeButton("Confirm", null)
+				.show();
+			}
+			
+			testImageData = new byte[(int) testFile.length()];
+			try {
+				FileInputStream fs = new FileInputStream(testFile);
+				fs.read(testImageData , 0, testImageData.length);
+			} catch (FileNotFoundException e) {
+				e.printStackTrace();
+			} catch (IOException e) {
+				e.printStackTrace();
+			}
+		}
+		
+		
 		
 		// TextToSpeech.OnInitListener
 		mTTS = new TextToSpeech(this, this);
@@ -99,6 +127,7 @@ public class CloudletCameraActivity extends Activity implements TextToSpeech.OnI
 			if (msg.what == NetworkClient.FEEDBACK_RECEIVED) {
 				// Dissmiss Dialog
 				mDialog.dismiss();
+				endApp = System.currentTimeMillis();
 				
 				// Run TTS				
 				Bundle data = msg.getData();
@@ -113,6 +142,14 @@ public class CloudletCameraActivity extends Activity implements TextToSpeech.OnI
 	 */
 	private static final String FEEDBACK_PREFIX = "Found items are ";
 	private void TTSFeedback(String ttsString) {
+		// Show Application Runtime
+		String message = "Time for app run\n start: " + startApp + "\nend: " + endApp + "\ndiff: " + (endApp-startApp);		
+		new AlertDialog.Builder(CloudletCameraActivity.this).setTitle("Info")
+		.setMessage(message)
+		.setIcon(R.drawable.ic_launcher)
+		.setNegativeButton("Confirm", null)
+		.show();
+		
 		// Select a random hello.
 		Log.d("krha", "tts string origin: " + ttsString);
 		String[] objects = ttsString.split(" ");
@@ -133,6 +170,8 @@ public class CloudletCameraActivity extends Activity implements TextToSpeech.OnI
 			mTTS.setSpeechRate(0.8f);
 			mTTS.speak("We found " + sb.toString(), TextToSpeech.QUEUE_FLUSH, null);
 		}
+		
+		
 	}
 
 	// Implements TextToSpeech.OnInitListener
@@ -153,10 +192,7 @@ public class CloudletCameraActivity extends Activity implements TextToSpeech.OnI
 	 */
 	Camera.PictureCallback mPictureCallbackJpeg = new Camera.PictureCallback() {
 		public void onPictureTaken(byte[] data, Camera c) {
-			//time stamp
-			takePicEnd = System.currentTimeMillis();
-			Log.d("krha_app_time", "[TAKE_PIC]\t" + takePicEnd + " - " + takePicStart + " = " + (takePicEnd-takePicStart));
-			
+			//time stamp			
 			mImageData = data;
 			saveImage(mImageData);
 			mImageData = null;
@@ -186,11 +222,20 @@ public class CloudletCameraActivity extends Activity implements TextToSpeech.OnI
 				mDialog.dismiss();
 			}
 		}
-		
+
+
+		// For consistent test, we are using presaved file
+		startApp = System.currentTimeMillis();
+		if(client != null){
+			client.uploadImage(testImageData);			
+		}
+
+		/*
 		// upload image
 		if(client !=null){
-			client.uploadImage(data);			
+//			client.uploadImage(data);
 		}
+		*/
 	}
 	
 	Camera.AutoFocusCallback cb = new Camera.AutoFocusCallback() {
