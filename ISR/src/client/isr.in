@@ -386,9 +386,6 @@ unless ($st) {
  	or errexit("Unable to make $isrdir");
 }
 
-# krha
-# print($isrdir); --> ~/.isr/
-
 #
 # Avoid symlink attacks if $isrdir is in a shared directory.
 #
@@ -482,7 +479,6 @@ purge_completion_cache();
 
 # Basic commands
 if ($command eq "checkout") {
-	print("krha, in checkout\n");
     need_parcel();
     need_network();
     need_remote_parcel();
@@ -667,7 +663,6 @@ exit 0;
 # checkout - Lock a parcel and copy it from the server to the client
 #
 sub checkout () {
-	print("krha");
     my $clientname = hostname();
     my $sigset;
     my %map;
@@ -855,6 +850,7 @@ sub run () {
     # Find out what memory image type we have.
     $memtype = get_suspended();
 
+
     # See if the VMM plugin thinks the parcel is runnable.
     {
 	local $ENV{'SUSPENDED'} = $memtype;
@@ -917,6 +913,7 @@ sub run () {
 	local $ENV{'MEM'} = exists $cfg{'MEM'} ? $cfg{'MEM'} : 512;
 	local $ENV{'FULLSCREEN'} = $fullscreen ? "yes" : "no";
 	local $ENV{'SUSPENDED'} = $memtype;
+    print("[krha] in run, pkcmd : ($pkcmd), memtype: ($memtype), vmname($vmname), driver($driver), \n");
 	%results = run_vmm($driver, 'run', 1);
     }
 
@@ -1748,6 +1745,7 @@ sub parcelkeeper_cmd ($$) {
 	$cmd .= " --stderr-filter $syscfg{console_logmask}";
     }
     message("Running Parcelkeeper: $cmd");
+    print("[krha] Running Parcelkeeper: $cmd\n");
     return $cmd;
 }
 
@@ -2013,7 +2011,7 @@ sub srun ($$%) {
     my $ret;
     
     # Log the operation
-    message("srun: $operation $args");
+    message("[srun] $operation $args");
     
     # Redirect stdout to outfile if requested
     if (exists($opts{'OUTFILE'})) {
@@ -2029,7 +2027,13 @@ sub srun ($$%) {
     }
 
     # Perform the operation on remote storage
-    $ret = mysystem("ssh -o PasswordAuthentication=no -l $userid $server isr_runserv $operation $args");
+	$ret = mysystem("ssh -o PasswordAuthentication=no -l $userid $server isr_runserv $operation $args");
+	
+	# krha
+	# $ret = mysystem("/home/krha/Cloudlet/src/Script/isr_ssh_mock.py $operation $args");
+    print("[krha], srun: ssh -o PasswordAuthentication=no -l $userid $server isr_runserv $operation $args\n");
+    print("[krha], ops($operation), args($args)\n");
+    print("[krha], ret : $ret\n");
     
     # Check stderr for problems if necessary
     if (exists($opts{'CHECK_AUTH'}) and $opts{'CHECK_AUTH'}) {
@@ -2084,6 +2088,7 @@ sub run_vmm ($$$) {
 	    next unless defined $value;
 	    chomp $value;
 	    $results{$key} = $value;
+	    print("[krha], cmd($cmd), mode($mode), userid($userid), parcel($parcel), parceldir($parceldir)\n")
 	}
     }
     close VMM;
