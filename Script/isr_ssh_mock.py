@@ -71,7 +71,7 @@ def main(argv):
         sys.exit(2)
 
     try:
-        optlist, args = getopt.getopt(argv[2:], 'hp:u:s:p:arn:f:', ["help", "user", "server", "vmname", "acquire", "hostname", "filepath"])
+        optlist, args = getopt.getopt(argv[2:], 'hp:u:s:p:arn:f:C:', ["help", "user", "server", "vmname", "acquire", "hostname", "filepath"])
     except getopt.GetoptError, err:
         print str(err)
         print_usage(os.path.basename(argv[0]))
@@ -105,6 +105,8 @@ def main(argv):
             host_name = a
         elif o in ("-f", "--filepath"):
             filename = a
+        elif o in ("-C"):
+            a
         else:
             assert False, "unhandled option"
 
