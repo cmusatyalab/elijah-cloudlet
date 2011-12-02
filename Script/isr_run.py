@@ -28,13 +28,15 @@ def bandwidth_reset():
 
 # command Login
 def login(user_name, server_address):
+    return True, ''
+'''
     command_str = 'isr auth -s ' + server_address + ' -u ' + user_name
     ret, ret_string = commands.getstatusoutput(command_str)
 
     if ret == 0:
         return True, ''
     return False, "Cannot connected to Server %s, %s" % (server_address, ret_string)
-
+'''
 
 # remove all cache
 def remove_cache(user_name, server_address, vm_name):
@@ -75,8 +77,10 @@ def resume_vm(user_name, server_address, vm_name):
     print 'launch start : ', str(launch_start)
     proc = subprocess.Popen(command_str, shell=True, stdin=subprocess.PIPE, stdout=subprocess.PIPE)
     while True:
-        time.sleep(1)
+        time.sleep(0.1)
         output = proc.stdout.readline()
+        if len(output.strip()) != 0 and output.find("[krha]") == -1:
+            sys.stdout.write(output)
         if output.strip().find(LAUNCH_COMMAND) == 0:
             launch_end = datetime.now()
             print 'launch_end : ', str(launch_end)
