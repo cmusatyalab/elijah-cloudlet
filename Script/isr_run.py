@@ -1,42 +1,60 @@
 #!/usr/bin/env python
 import xdelta3
-import os, commands, filecmp, sys, subprocess, getopt, time
+import os, commands, filecmp, sys, subprocess, getopt, time, socket
 from datetime import datetime, timedelta
 import telnetlib
 import pylzma
 
+ISR_SRC_PATH = '/home/krha/Cloudlet/src/ISR/src'
 LAUNCH_COMMAND = 'Launching KVM...'
 launch_start = datetime.now()
 launch_end = datetime.now()
 
+def recompile_isr():
+    command_str = 'cd %s && sudo make && sudo make install' % (ISR_SRC_PATH)
+    print command_str
+    ret1, ret_string = commands.getstatusoutput(command_str)
+    if ret1 != 0:
+        raise "Cannot compile ISR"
+    return True
+
 
 # Limiting Up/Down traffic bandwidth
-def bandwidth_limit(bandwidth):
-    command_str = 'sudo wondershaper eth0 ' + str(bandwidth) + ' ' + str(bandwidth)
-    print command_str
-    ret, ret_string = commands.getstatusoutput(command_str)
-    print ret_string
+def bandwidth_limit(bandwidth, dest_ip):
+    command_str = 'sudo tc qdisc add dev eth0 root handle 1: htb default 30'
+    ret1, ret_string = commands.getstatusoutput(command_str)
+    command_str = 'sudo tc class add dev eth0 parent 1: classid 1:1 htb rate ' + str(bandwidth) + 'mbit'
+    ret2, ret_string = commands.getstatusoutput(command_str)
+    command_str = 'sudo tc class add dev eth0 parent 1: classid 1:2 htb rate ' + str(bandwidth) + 'mbit'
+    ret3, ret_string = commands.getstatusoutput(command_str)
+    command_str = 'sudo tc filter add dev eth0 protocol ip parent 1:0 prio 1 u32 match ip dst ' + dest_ip + '/32 flowid 1:1'
+    ret4, ret_string = commands.getstatusoutput(command_str)
+    command_str = 'sudo tc filter add dev eth0 protocol ip parent 1:0 prio 1 u32 match ip src ' + dest_ip + '/32 flowid 1:2'
+    ret5, ret_string = commands.getstatusoutput(command_str)
+    if ret1 != 0 or ret2 != 0 or ret3 !=0 or ret4 != 0 or ret5 !=0:
+        print 'Error, BW is not limited'
+        return False
+    print 'BW is limited to %s Mbit/s between localhost and %s' % (str(bandwidth), dest_ip)
+    return True
 
 
 # Reset traffic bandwidth limitation
 def bandwidth_reset():
-    command_str = 'sudo wondershaper clear eth0'
-    print command_str
+    command_str = 'sudo tc qdisc del dev eth0 root'
     ret, ret_string = commands.getstatusoutput(command_str)
-    print ret_string
+    print 'BW restriction is cleared'
+    return ret_string
 
 
 # command Login
 def login(user_name, server_address):
-    return True, ''
-'''
     command_str = 'isr auth -s ' + server_address + ' -u ' + user_name
     ret, ret_string = commands.getstatusoutput(command_str)
 
     if ret == 0:
         return True, ''
     return False, "Cannot connected to Server %s, %s" % (server_address, ret_string)
-'''
+
 
 # remove all cache
 def remove_cache(user_name, server_address, vm_name):
@@ -71,7 +89,7 @@ def remove_cache(user_name, server_address, vm_name):
 def resume_vm(user_name, server_address, vm_name):
     global launch_start
     global launch_end
-    command_str = 'isr resume ' + vm_name + ' -s ' + server_address + ' -u ' + user_name + ' -D -F'
+    command_str = 'isr resume ' + vm_name + ' -s ' + server_address + ' -u ' + user_name + ' -F'
     print command_str
     launch_start = datetime.now()
     print 'launch start : ', str(launch_start)
@@ -113,8 +131,8 @@ def exit_error(error_message):
 
 
 def print_usage(program_name):
-    print 'usage\t: %s [-b Bandwidth kb/s] [-u username] [-s server_address] [-m VM name]' % program_name
-    print 'example\t: ./isr_run.py -u test1 -s dagama.isr.cs.cmu.edu -m windowXP -b 100000'
+    print 'usage\t: %s [-b Bandwidth Mbit/s] [-u username] [-s server_address] [-m VM name]' % program_name
+    print 'example\t: ./isr_run.py -u test1 -s dagama.isr.cs.cmu.edu -m windowXP -b 10'
 
 
 def main(argv):
@@ -154,9 +172,14 @@ def main(argv):
         print_usage(os.path.basename(argv[0]))
         print "username : %s, server_address = %s, vm_name = %s" % (user_name, server_address, vm_name)
         sys.exit(2)
+    
+    # compile ISR again, because we have multiple version of ISR such as mock android
+    # This is not good approach, but easy for simple test
+    # I'll gonna erase this script after submission :(
+    recompile_isr()
 
     # setup bandwidth limitation
-    bandwidth_limit(bandwidth)
+    bandwidth_limit(bandwidth, socket.gethostbyname(server_address))
 
     # step1. login
     ret, err = login(user_name, server_address)
@@ -184,6 +207,7 @@ def main(argv):
     print "SUCCESS"
     print "[Total VM Run Time] : ", str(end_time-start_time)
     print '[Launch Time] : ', str(launch_end-launch_start)
+
     bandwidth_reset()
     sys.exit(0)
 

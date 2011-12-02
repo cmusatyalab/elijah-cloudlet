@@ -1,0 +1,16 @@
+# OpenISR: file(1) magic for OpenISR binary formats
+#
+0	belong 	0x51528038	OpenISR local cache,
+>20	byte	x		version %u,
+>20	byte	0
+>>12	belong	x		%u of
+>>4	belong	x		%u valid chunks,
+>20	byte	1
+>>4	belong	x		%u chunks,
+>>12	belong	&1		needs checking,
+>>12	belong	&2		damaged,
+>8	belong	x		header %u sectors
+
+0	belong 	0x51528039	OpenISR 0.8 binary keyring,
+>8	byte	x		version %u,
+>4	belong	x		%u entries

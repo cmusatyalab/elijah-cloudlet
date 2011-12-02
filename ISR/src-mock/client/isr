@@ -1,0 +1,3380 @@
+#!/usr/bin/perl
+###################################################################
+# isr - The ISR client program
+###################################################################
+
+#
+# isr - Client user interface for the Internet Suspend/Resume (R) system
+#
+# Copyright (C) 2004-2010 Carnegie Mellon University
+#
+# This software is distributed under the terms of the Eclipse Public
+# License, Version 1.0 which can be found in the file named LICENSE.Eclipse.
+# ANY USE, REPRODUCTION OR DISTRIBUTION OF THIS SOFTWARE CONSTITUTES
+# RECIPIENT'S ACCEPTANCE OF THIS AGREEMENT
+#
+
+###########################
+# Section 0. Helper classes
+###########################
+
+#
+# ConfigHash - Class that can be tied to a hash, such that lookups for
+#              nonexistent values cause errexit() to be called
+#
+package ConfigHash;
+use strict;
+use warnings;
+use Tie::Hash;
+# Inherit almost everything from the standard hash implementation
+our @ISA = "Tie::StdHash";
+
+sub FETCH ($$) {
+    my $self = shift;
+    my $key = shift;
+    
+    if (exists $self->{$key}) {
+	return $self->{$key};
+    } else {
+	main::errexit("Couldn't find lookup key $key");
+    }
+}
+
+#####################
+# Section 1. Prologue
+#####################
+
+package main;
+use Sys::Hostname;
+use Getopt::Long;
+use IO::Socket;
+use File::Basename;
+use File::Copy;
+use File::stat;
+use File::Spec;
+use File::Temp qw(tempfile tempdir);
+use Term::ANSIColor qw(:constants);
+use Time::HiRes qw(gettimeofday);
+use POSIX qw(strftime);
+use POSIX ":sys_wait_h";
+use POSIX ":signal_h";
+use Fcntl qw(:DEFAULT :seek :mode);
+use Errno qw(:POSIX);
+use Config;
+use strict;
+use warnings;
+
+use constant {
+    LIBDIR       => "/usr/local/lib/openisr",
+    SHAREDIR     => "/usr/local/share/openisr",
+    VMMDIR       => "/usr/local/share/openisr/vmm",
+    SYSCONFDIR   => "/usr/local/etc/openisr",
+    ISRVERSION   => "0.10.1",
+    RCS_REVISION => "0.10.1"
+};
+
+$| = 1; # Autoflush output on every print statement
+
+
+# Function prototypes
+sub checkout ();
+sub run ();
+sub checkin ();
+sub sync ($);
+sub poweroff ();
+sub discard ();
+sub disconnect ();
+sub listparcels ();
+sub authenticate ();
+sub deauthenticate ();
+sub passwd ();
+sub clean ($);
+sub cleanclient ();
+sub hoard ($);
+sub listhoard ();
+sub rmhoard ();
+sub checkhoard ();
+sub checkparcel ();
+sub statparcel ();
+sub dirtometer ();
+sub set_parcel_globals;
+sub valid_uuid ($);
+sub sync_parcel_uuid_from_name ();
+sub sync_parcel_name_from_uuid ();
+sub parse_cfgfile ($$);
+sub parse_parcelcfg ($);
+sub set_compression ();
+sub build_cache ();
+sub purge_completion_cache ();
+sub is_fully_hoarded ();
+sub check_for_fuse ();
+sub check_disk_space ();
+sub check_for_old_isrdir ();
+sub check_damaged_cache ();
+sub fuse_can_allow_root ();
+sub fuse_try_unmount ();
+sub get_parcelkeeper_pid ();
+sub fetch_parcel_file ($$$$$);
+sub keyroot_pipe ();
+sub encrypt_keyring ($$);
+sub decrypt_keyring ($);
+sub encrypt_cfg ($$);
+sub decrypt_cfg ($);
+sub block_sigint ();
+sub unblock_sigint ($);
+sub block_sigtstp ();
+sub mysystem ($);
+sub sys_sync ();
+sub mkdirs (@);
+sub touch ($$);
+sub mktempfile ();
+sub mktempdir ();
+sub dirsize ($);
+sub err ($);
+sub unix_err ($);
+sub system_err ($);
+sub errexit ($);
+sub unix_errexit ($);
+sub system_errexit ($);
+sub message ($);
+sub usage ($);
+sub version ();
+sub need_parcel ();
+sub need_uuid ();
+sub need_not_parcel ();
+sub need_checked_out ();
+sub need_network ();
+sub need_remote_parcel ();
+sub need_remote_parcel_and_lock ();
+sub need_credentials ();
+sub fcntl_lock ($$$);
+sub acquire_lock ($$$);
+sub release_lock ($);
+sub release_locks ();
+sub exit_handler ($);
+sub srun ($$%);
+sub run_vmm ($$$);
+sub get_suspended ();
+sub set_suspended (%);
+sub vmm_cleanup ();
+sub parcelkeeper_cmd ($$);
+sub run_parcelkeeper ($$);
+sub upload ();
+sub copy_dirtychunks ();
+sub commit ();
+sub clientcommit($);
+
+#########################
+# Section 2. Main routine
+#########################
+
+# Local variables
+my $result;
+
+# Command line arguments
+my $command;         # isr subcommand
+my $disconnected;    # Run disconnected
+my $longflag;        # Print default number of versions for ls long format
+my $longvers;        # Print specific number of versions for ls long format
+my $version;         # Rollback version
+my $checkstate = 0;  # Optionally check content consistency in some cmds
+my $remote = 0;      # Perform action on server rather than client
+my $fullscreen = 1;  # Run VMM in full-screen mode
+my $verbose = 1;     # Verbosity level; by default, we print a few messages
+my $bwlimit;         # Bandwidth limit (KBytes/sec) in ci and sync
+my $forceflag = 0;   # Force release of lock in cleanclient()
+my $do_splice = 0;   # checkp: Restore invalid chunks from prev-keyring
+my $do_dirtometer = 0; # Run dirtometer on resume
+my $do_compact = 0;  # Compact the hoard cache during checkhoard
+my $vmm;             # Override default VMM driver
+my @vmmopts;         # Option strings for the VMM driver
+my $compression;     # Override default compression profile
+
+# General global state, mostly about the parcel we are working with
+my $progname;        # $0 without the directory part
+my $isrdir;          # Path to toplevel ISR data directory
+my $server;          # Server domain name
+my $userid;          # ISR userid
+my $parcel;          # Parcel name
+my $uuid;            # Parcel UUID
+my $sessionid = 0;   # Unique session id (nonce from lock operation)
+my $memory_compress; # Compression algorithm for memory image
+my $disk_compress;   # Compression algorithm for disk chunks
+my $parceldir;       # Path to parcel directory (named after its UUID)
+my $uploaddir;       # Path to dir to be rsynced to the server at upload
+my $completiondir;   # Path to shell completion cache directory
+my $hoarddir;        # Path to hoard cache directory
+my $imgbase;         # Path to hoard image w/o the file extension (.cfg, .key)
+my $logfile;         # Path to the log file for this parcel
+my $cleancache_file; # Path to flag that local cache is clean vs. server
+my $cdcache_file;    # Path to flag that upload directory is consistent
+
+# State globals which track which cleanup actions will be necessary when
+# we exit
+my $no_shutdown = 0;# Set by forked children so the child won't run END
+my $unmount_pk = 0; # Set by run command, tells END handler to unmount VFS
+my $do_sync = 0;    # Set when the END handler should call sys_sync()
+my @locks;          # Names and FDs of open lock files
+my @temps;          # Paths to temporary files and directories we've created
+
+#
+# Write-once global variable: This hash contains the key/value pairs from
+# the parcel.cfg for the current parcel.  This variable is only written
+# by parse_parcelcfg() -- at startup when we have a parcel.cfg for the current
+# parcel, and after parcel.cfg has been acquired in the case of checkout()
+# and hoard().  This variable is tied such that accesses to nonexistent keys
+# will result in a call to errexit().
+#
+my %cfg = ();
+
+#
+# Write-once global variable containing the key/value pairs from the
+# global and per-user configuration files.  This variable is tied such that
+# accesses to nonexistent keys will result in a call to errexit().
+#
+my %syscfg = ();
+
+#####
+# Some initialization steps
+#
+
+#
+# Set program name as early as possible for logging
+#
+($progname = $0) =~ s#.*/##s;    # Strip off path from program name
+
+#
+# Define what we do on shutdown (placed here for clarity)
+#
+sub exit_handler ($) {
+    my $status = shift;
+    
+    my $obj;
+    
+    return if $no_shutdown;
+    
+    if ($unmount_pk && get_parcelkeeper_pid()) {
+        fuse_try_unmount();
+        print("Sent shutdown signal to Parcelkeeper.\n")
+            if $verbose;
+    }
+    sys_sync()
+        if $do_sync;
+    
+    # Remove temporary files and directories
+    foreach $obj (@temps) {
+	if (-d $obj) {
+	    system("rm -rf $obj");
+	} else {
+	    unlink($obj);
+	}
+    }
+    
+    message("Exit: $status");
+    release_locks();
+}
+
+#
+# Run the exit handler during normal termination
+#
+END {
+    my $status=$?;
+    exit_handler($status);
+    $? = $status;
+}
+
+#
+# Install a signal handler that catches ctrl-c
+#
+sub sigint_handler () {
+    message("Caught SIGINT");
+    # Call the exit handler, then unregister the signal handler and send the
+    # signal again (whereupon we will die).  This ensures that our exit status
+    # properly reports that we were killed by a signal.
+    exit_handler(-1);
+    $SIG{"INT"} = 'DEFAULT';
+    kill("INT", $$);
+};
+
+$SIG{"INT"} = \&sigint_handler;
+
+#
+# Parse config files
+#
+
+# This file must exist, since it provides our defaults
+parse_cfgfile(SHAREDIR . "/config", \%syscfg)
+    or errexit("Can't read defaults file " . SHAREDIR . "/config");
+# These may not exist, but can override the earlier ones
+parse_cfgfile(SYSCONFDIR . "/openisr.conf", \%syscfg);
+parse_cfgfile("$ENV{HOME}/.openisrrc", \%syscfg);
+
+#####
+# Various defaults
+#
+
+#
+# Check if the user is running as root
+#
+if ((getpwuid($<))[0] eq "root") {  # Reminder: '$<' is the UID 
+    errexit("Root is not allowed to run the isr client program.");
+}
+
+# The default ISR userid is defined by $syscfg{userid}.
+# If this is empty, then the default is the Unix login name.
+# Override using the -u flag.
+$userid = $syscfg{userid}
+    if exists($syscfg{userid});
+$userid = $ENV{USER}
+    if (!$userid);
+
+# Set the default server; may be overridden from command line
+$server = $syscfg{server};
+
+#
+# Handle the case where the user calls the program with no arguments
+#
+if (@ARGV == 0) {
+    print("Try '$progname help' for a usage summary or 'man $progname' for an introduction to OpenISR.\n");
+    exit 0;
+}
+
+#
+# Parse the command line
+#
+Getopt::Long::Configure("no_ignore_case", "bundling_override",
+			"no_getopt_compat");
+$result = GetOptions(
+		     "b|bwlimit=i"    => \$bwlimit,
+		     "c|checkstate"   => \$checkstate,
+		     "C|compression=s"=> \$compression,
+		     "d|disconnected" => \$disconnected,
+		     "D|dirtometer"   => \$do_dirtometer,
+		     "e|remote"       => \$remote,
+		     "f|force"        => \$forceflag,
+		     "F|no-fullscreen"=> sub { $fullscreen = 0 },
+		     "l|long"         => \$longflag,
+		     "L|longvers=i"   => \$longvers,
+		     "m|vmm=s"        => \$vmm,
+		     "o|vmmopt=s"     => \@vmmopts,
+		     "p|compact"      => \$do_compact,
+		     "q|quiet"        => sub { $verbose = 0 },
+		     "r|rollback=i"   => \$version,
+		     "s|server=s"     => \$server,
+		     "u|user=s"       => \$userid,
+		     "v|verbose+"     => \$verbose,
+		     "Y|splice"       => \$do_splice,
+		     );
+
+if ($result == 0) {
+    usage("Invalid option(s) specified");
+}
+
+#
+# Set the the directory where ISR parcels will be stored and if
+# it doesn't yet exist, create an empty one.
+#
+$isrdir = $syscfg{'isrdir'};
+$isrdir =~ s:\\u:$ENV{USER}:g;
+$isrdir =~ s:\\h:$ENV{HOME}:g;
+
+my $st = lstat($isrdir);
+
+unless ($st) {
+    mkdir($isrdir, 0700);
+    $st = lstat($isrdir)
+ 	or errexit("Unable to make $isrdir");
+}
+
+#
+# Avoid symlink attacks if $isrdir is in a shared directory.
+#
+S_ISLNK($st->mode)
+    and errexit("$isrdir is a symbolic link");
+S_ISDIR($st->mode)
+    or errexit("$isrdir is not a directory");
+$st->uid == $>
+    or errexit("$isrdir must be owned by user");
+S_IMODE($st->mode) == 0700
+    or errexit("$isrdir must be mode 0700");
+
+#
+# Extract the command name
+#
+if (@ARGV == 0) {
+    usage("Missing command");
+}
+if (@ARGV > 2) {
+    usage("Extraneous parameters on command line");
+}
+$command = $ARGV[0];
+
+#
+# Figure out what we know about the specified parcel.
+#
+if (valid_uuid($ARGV[1])) {
+    $uuid = $ARGV[1];
+    sync_parcel_name_from_uuid();
+} elsif ($ARGV[1]) {
+    $parcel = $ARGV[1];
+    sync_parcel_uuid_from_name();
+}
+
+#
+# Set other directory paths that we'll need, and read parcel.cfg if we
+# have it.
+#
+$completiondir = "$isrdir/completion";
+$hoarddir = "$isrdir/hoard";
+if ($uuid) {
+    set_parcel_globals();
+    if (-e "$parceldir/parcel.cfg") {
+        parse_parcelcfg("$parceldir/parcel.cfg");
+    }
+}
+
+#
+#
+# Assign aliases
+#
+if ($command eq "ci") {
+    $command = "checkin"
+}
+if ($command eq "co") {
+    $command = "checkout"
+}
+
+
+#####
+# Process the command
+#
+
+#
+# Set the session ID to the nonce value if the parcel is 
+# checked out, zero otherwise.
+#
+$sessionid = 0;
+if ($parceldir && -e "$parceldir/nonce" && open(NONCE, "$parceldir/nonce")) {
+    $sessionid = <NONCE>;
+    close(NONCE);
+    chomp($sessionid);
+}
+
+#
+# Log the fact that we are starting.
+#
+message("Starting: OpenISR " . ISRVERSION . ", revision " . RCS_REVISION);
+message("Command line: @ARGV");
+message("Session $sessionid on " . hostname());
+message("Running $command");
+
+#
+# Clean up the completion cache, if present.
+#
+purge_completion_cache();
+
+#
+# Now process the ISR command.
+#
+
+# Basic commands
+if ($command eq "checkout") {
+    need_parcel();
+    need_network();
+    need_remote_parcel();
+    $do_sync = 1;
+    # If the parcel isn't checked out, we don't know the UUID, so we take
+    # a "checkout lock" by parcel name.  This means that two different
+    # parcels with the same name can't be in "checkout" at the same time.
+    acquire_lock("checkout-$parcel", "Checkout", 0);
+    checkout();
+    release_lock("Checkout");
+    if ($disconnected) {
+	acquire_lock("parcel-$uuid", "Parcel", 0);
+	acquire_lock("hoard-$uuid", "Hoard cache", 0);
+	disconnect();
+    }
+} 
+elsif ($command eq "resume") {
+    need_parcel();
+    if ($disconnected) {
+	errexit("Parcel is not prepared for disconnected operation.\nRun \"isr checkout -d\" first.")
+	    unless $parceldir and -e $parceldir and is_fully_hoarded();
+    } else {
+    	need_network();
+	if ($parceldir and -e $parceldir) {
+	    # We already have a checkout.  Check that we still have the lock
+	    # on the server.
+	    need_remote_parcel_and_lock();
+	} else {
+	    need_remote_parcel();
+	}
+    }
+    $do_sync = 1;
+    # We call checkout() even if we're running disconnected so that it can
+    # print a status message
+    acquire_lock("checkout-$parcel", "Checkout", 0);
+    checkout();
+    release_lock("Checkout");
+    # We can't do this until we have the parcel.cfg
+    set_compression();
+    acquire_lock("parcel-$uuid", "Parcel", 0);
+    run();
+} 
+elsif ($command eq "checkin") {
+    need_parcel();
+    need_checked_out();
+    need_network();
+    need_remote_parcel_and_lock();
+    set_compression();
+    $do_sync = 1;
+    acquire_lock("parcel-$uuid", "Parcel", 0);
+    checkin();
+} 
+elsif ($command eq "sync") {
+    need_parcel();
+    need_checked_out();
+    need_network();
+    need_remote_parcel_and_lock();
+    set_compression();
+    $do_sync = 1;
+    acquire_lock("parcel-$uuid", "Parcel", 0);
+    sync(0);
+} 
+elsif ($command eq "poweroff") {
+    need_parcel();
+    need_checked_out();
+    $do_sync = 1;
+    acquire_lock("parcel-$uuid", "Parcel", 0);
+    poweroff();
+}
+elsif ($command eq "discard") {
+    need_parcel();
+    need_checked_out();
+    $do_sync = 1;
+    acquire_lock("parcel-$uuid", "Parcel", 0);
+    discard();
+}
+elsif ($command eq "hoard") {
+    need_parcel();
+    need_network();
+    need_remote_parcel();
+    $do_sync = 1;
+    # Locking is handled in hoard(), after we know the UUID
+    hoard(0);
+}
+elsif ($command eq "dirtometer") {
+    need_parcel();
+    need_checked_out();
+    dirtometer();
+}
+elsif ($command eq "stat") {
+    need_parcel();
+    need_checked_out();
+    statparcel();
+}
+elsif ($command eq "checkp") {
+    need_parcel();
+    if ($remote) {
+	need_network();
+	need_remote_parcel();
+    } else {
+	need_checked_out();
+	acquire_lock("parcel-$uuid", "Parcel", 0);
+    }
+    checkparcel();
+}
+elsif ($command eq "ls") {
+    need_network();
+    # listparcels() uses CHECK_AUTH, so there's no need for an explicit
+    # need_credentials() here
+    listparcels();
+}
+elsif ($command eq "lshoard") {
+    need_not_parcel();
+    listhoard();
+}
+elsif ($command eq "rmhoard") {
+    need_uuid();
+    acquire_lock("hoard-$uuid", "Hoard cache", 0);
+    rmhoard();
+}
+elsif ($command eq "checkhoard") {
+    need_not_parcel();
+    checkhoard();
+}
+elsif ($command eq "auth") {
+    need_not_parcel();
+    need_network();
+    authenticate();
+}
+elsif ($command eq "deauth") {
+    need_not_parcel();
+    deauthenticate();
+}
+elsif ($command eq "passwd") {
+    need_not_parcel();
+    need_network();
+    need_credentials();
+    passwd();
+}
+elsif ($command eq "clean") {
+    need_parcel();
+    # Don't require network, since the local component can still run.
+    #
+    # If we can't map the parcel to a UUID, cleanclient() becomes a
+    # server-side-only operation, but we still need the checkout lock
+    # to prevent checkout/clean races
+    acquire_lock("checkout-$parcel", "Checkout", 0);
+    acquire_lock("parcel-$uuid", "Parcel", 0)
+        if $uuid;
+    cleanclient();
+}
+elsif ($command eq "uuid") {
+    need_parcel();
+    need_checked_out();
+    print "$uuid\n";
+}
+elsif ($command eq "help") {
+    need_not_parcel();
+    usage("");
+}
+elsif ($command eq "version") {
+    need_not_parcel();
+    version();
+}
+# Everything else
+else {
+    usage("$command is an invalid command.");
+}    
+
+#
+# Clean up and exit
+#
+message("Finished: $command");
+exit 0;
+
+
+##########################################
+# Section 3. Definition of client commands
+##########################################
+
+#
+# checkout - Lock a parcel and copy it from the server to the client
+#
+sub checkout () {
+    my $clientname = hostname();
+    my $sigset;
+    my %map;
+
+    # Warn the user if they asked for checkstate and we're not going to give it
+    if (!$disconnected and $checkstate) {
+	errexit("--checkstate is only valid in combination with --disconnected");
+    }
+    
+    # If the parcel is already checked out on this machine, return immediately
+    if ($parceldir and -e $parceldir) {
+	if ($version) {
+	    print(YELLOW, "Parcel $userid/$parcel already checked out, but --rollback specified.\n--rollback option ignored.\n", RESET);
+	} else {
+	    print(GREEN, "Success: Parcel $userid/$parcel already checked out on this host. Ready to run.\n", RESET)
+		if $verbose;
+	}
+	return;
+    }
+    
+    # Fetch and print message-of-the-day from the server
+    print "Connecting to server.\n"
+    	if $verbose;
+    srun("motd", "-p $parcel") == 0
+	or system_err("Couldn't read message of the day from the server ($server).");
+
+    # Fetch and parse the config file from the server
+    print "Fetching configuration data for $userid/$parcel from server.\n"
+	if $verbose;
+    # Make sure the parcel.cfg will not be world-readable
+    touch("$isrdir/$parcel-parcel.cfg", 0600)
+        or unix_errexit("Could not create file $isrdir/$parcel-parcel.cfg");
+    if (srun("getconfig", "-p $parcel", OUTFILE => "$isrdir/$parcel-parcel.cfg")) {
+	unlink("$isrdir/$parcel-parcel.cfg");
+	errexit("Parcel $userid/$parcel does not exist on the server ($server).");
+    }
+    parse_parcelcfg("$isrdir/$parcel-parcel.cfg");
+    $uuid = $cfg{"UUID"};
+    set_parcel_globals();
+
+    # Catch UUID collisions and parcel directories without a valid parcel.cfg
+    if (-e $parceldir) {
+	unlink("$isrdir/$parcel-parcel.cfg");
+	errexit("Parcel directory already exists for UUID $uuid");
+    }
+
+    # From this point on, the operation should not be interrupted by the user
+    $sigset = block_sigint();
+
+    # Grab the lock from the server
+    print("Acquiring lock from server.\n")
+	if $verbose;
+
+    if (srun("lock", "-p $parcel -n $clientname -a",
+	     OUTFILE => "$isrdir/$parcel-nonce") != 0) {
+	unlink("$isrdir/$parcel-nonce");
+	errexit("Unable to acquire lock for $parcel.");
+    }
+
+    # Use the nonce from the lock operation as the unique session id
+    open(NONCE, "$isrdir/$parcel-nonce")
+        or errexit("Couldn't read nonce file");
+    $sessionid = <NONCE>;
+    close(NONCE);
+    chomp($sessionid);
+    message("Obtained lock for $parcel with nonce $sessionid");
+
+    # If requested, roll back to a previous version on the server
+    if ($version) {
+	if ($version < 1) {
+	    clean(0);
+	    errexit("Version numbers must be greater than zero.");
+	}
+	print("Rolling back to version $version.\n")
+	    if $verbose;
+	if (srun("rollback", "-p $parcel -v $version -N $sessionid") != 0) {
+	    clean(0);
+	    errexit("Unable to roll back to version $version");
+	}
+    }
+
+    # Set up the client's parcel directory. If anything goes wrong erase 
+    # all traces of the parcel on the client and release its lock.
+    if (!mkdir($parceldir, 0700)) {
+	clean(0);
+	errexit("Unable to create parcel dir $parceldir.");
+    }
+    if (!mkdirs($hoarddir, "$hoarddir/img")) {
+	clean(0);
+	errexit("Unable to create hoard dir $hoarddir/img.");
+    }
+
+    if (!rename("$isrdir/$parcel-nonce", "$parceldir/nonce")) {
+	clean(0);
+	errexit("Unable to move $isrdir/$parcel-nonce to $parceldir");
+    }
+    if (!rename("$isrdir/$parcel-parcel.cfg", "$parceldir/parcel.cfg") != 0) {
+	clean(0);
+	errexit("Unable to move $isrdir/$parcel-parcel.cfg to $parceldir");
+    }
+
+    #
+    # Fetch the parcel's virtualization files from the server
+    #
+    acquire_lock("image-$uuid", "Hoard image", 1);
+    if (fetch_parcel_file("keyring.enc", "$imgbase.key", "keyring", 0,
+		\$sigset)) {
+        # We now have an incomplete parcel directory.  Blow it away and
+        # release the server lock.
+        clean(0);
+        errexit("Could not fetch keyring");
+    }
+    if (fetch_parcel_file("cfg.tgz.enc", "$imgbase.cfg", "memory image", 1,
+		\$sigset)) {
+        # Ditto.
+        clean(0);
+        errexit("Could not fetch memory image");
+    }
+    
+    #
+    # Decrypt and unpack the virtualization and Parcelkeeper files
+    #
+    if (decrypt_keyring("$parceldir/prev-keyring")) {
+	clean(0);
+	errexit("Could not decrypt keyring.enc");
+    }
+    if (build_cache()) {
+	clean(0);
+	errexit("Could not create local cache");
+    }
+    release_lock("Hoard image");
+    
+    #
+    # Update the hoard cache reference list from the newly-obtained keyring
+    #
+    print "Updating hoard cache.\n"
+        if $verbose;
+    if (run_parcelkeeper("refresh", "parcel hoard log")) {
+        clean(0);
+        errexit("Could not refresh hoard cache");
+    }
+    
+    # Clean up and return
+    print(GREEN, "Success: Parcel $userid/$parcel now checked out (and lock acquired).\n", RESET)
+	if $verbose;
+    unblock_sigint($sigset);
+}
+
+#
+# run - Execute a parcel on the client
+#
+sub run () {
+    my $iters;
+    my $dirtometer_pid;
+    my %results;
+    my $vmname;
+    my $err;
+    my $memtype;
+    my $allow_root = "";
+    my $single_thread = $syscfg{resume_single_threaded} ? 'single-thread' : '';
+    
+    my $driver = (defined $vmm) ? $vmm : $cfg{'VMM'};
+    my $pkcmd = LIBDIR . "/parcelkeeper";
+
+    # Block receipt of the SIGTSTP (ctrl-z)
+    block_sigtstp();
+    
+    # Make sure that Parcelkeeper is where we expect it to be, that FUSE is
+    # loaded and accessible, and that there's enough disk space to resume the
+    # parcel.  Also give the user a chance to clean up old-style hoard caches.
+    if (!-e $pkcmd or !-x $pkcmd ) {
+	errexit("Could not find an executable Parcelkeeper binary.");
+    }
+    check_for_fuse();
+    check_for_old_isrdir();
+    check_disk_space();
+
+    # Reset the clean-cache flag, since we're about to make the cache dirty.
+    unlink($cleancache_file);
+
+    # Reset the consistent dirty cache flag, since any temporary dirty
+    # cache directory is about to become inconsistent with the local cache.
+    unlink($cdcache_file);
+    
+    # Find out what memory image type we have.
+    $memtype = get_suspended();
+
+
+    # See if the VMM plugin thinks the parcel is runnable.
+    {
+	local $ENV{'SUSPENDED'} = $memtype;
+	%results = run_vmm($driver, 'info', 1);
+    }
+    $vmname = $results{'VMM'} ? $results{'VMM'} : "UnknownVMM";
+    $err = $results{'RUNNABLE_REASON'} ? $results{'RUNNABLE_REASON'} :
+    			"Unknown error";
+    errexit("$vmname not runnable: $err")
+        if !defined $results{'RUNNABLE'} or $results{'RUNNABLE'} ne "yes";
+    if (defined $results{'USES_ROOT'} and $results{'USES_ROOT'} eq "yes") {
+        $allow_root = "allow-root";
+        errexit("$vmname requires \"user_allow_other\" to be " .
+                        "specified in /etc/fuse.conf.")
+            unless fuse_can_allow_root();
+    }
+
+    print("Running disconnected...\n")
+	if $disconnected and $verbose;
+
+    # See whether the parcel is safe to run
+    if (check_damaged_cache()) {
+    	print RED, "The local cache for $parcel is damaged.  You will not be able to check in.\n", RESET;
+	query("Resume the parcel anyway?") eq "y"
+	    or return;
+    }
+
+    # Launch Parcelkeeper. 
+    print("Launching Parcelkeeper...\n")
+	if $verbose;
+    $unmount_pk = 1;  # Tells the SIGINT handler to cleanly terminate PK
+    run_parcelkeeper("run", "parcel hoard chunk-cache compression log $allow_root $single_thread") == 0
+	or errexit("Unable to launch Parcelkeeper.");
+    
+    # Run dirtometer, if requested
+    if ($syscfg{'dirtometer'} or $do_dirtometer) {
+	print "Launching dirtometer...\n"
+	    if $verbose;
+	$dirtometer_pid = fork();
+	if (defined $dirtometer_pid) {
+	    if ($dirtometer_pid == 0) {
+		$no_shutdown = 1;
+		exec(LIBDIR . "/dirtometer -n $userid/$parcel $uuid")
+		    or unix_errexit("Unable to exec dirtometer");
+	    }
+	    # We never reap.  Eventually we'll exit and init will reap the
+	    # zombie.
+	} else {
+	    unix_err("Unable to fork for dirtometer");
+	} 
+    }
+
+    # Launch VMM
+    print "Launching $vmname...\n"
+	if $verbose;
+    {
+	local $ENV{'SECTORS'} = ($cfg{'CHUNKSIZE'} / 512) * $cfg{'NUMCHUNKS'};
+	# Some version-3 parcels don't have a MEM key in their parcel.cfg, so
+	# we pick a default
+	local $ENV{'MEM'} = exists $cfg{'MEM'} ? $cfg{'MEM'} : 512;
+	local $ENV{'FULLSCREEN'} = $fullscreen ? "yes" : "no";
+	local $ENV{'SUSPENDED'} = $memtype;
+    print("[krha] in run, pkcmd : ($pkcmd), memtype: ($memtype), vmname($vmname), driver($driver), \n");
+	%results = run_vmm($driver, 'run', 1);
+    }
+
+    # Wait here until the VMM exits
+    print "Shutting down $vmname.\n"
+	if $verbose;
+    $err = $results{'ERROR'} ? $results{'ERROR'} : "Unknown error";
+    err("$vmname returned error: $err")
+        if defined $results{'SUCCESS'} and $results{'SUCCESS'} ne "yes";
+    
+    # Write out the new memory image type
+    set_suspended(%results);
+    
+    # Signal Parcelkeeper to shut down and wait until it is gone
+    print "Shutting down Parcelkeeper..."
+	if $verbose;
+    fuse_try_unmount()
+        if get_parcelkeeper_pid();
+    $unmount_pk = 0;
+    message("Unmounted Parcelkeeper filesystem");
+    $iters = 0;
+    while (1) {
+	print qw(- \ | /)[$iters % 4] . "\b"
+	    if $verbose;
+	if (++$iters == 30 and $verbose) {
+	    print RED, " \nParcelkeeper is not shutting down.  Verify that " .
+				"the VMM has exited.\n", RESET;
+	    print "Still waiting for Parcelkeeper to exit...";
+	}
+	last
+	    if get_parcelkeeper_pid() == 0;
+	sleep(1);
+    }
+    print " \n"
+	if $verbose;
+}
+
+#
+# checkin - Sync and then release parcel
+#
+sub checkin () {
+    # Sync the dirty blocks on the server
+    sync(1);
+
+    # The release operation should not be interrupted by the user
+    block_sigint();
+
+    # Erase the parcel from the client and release its lock using the nonce
+    # (soft release)
+    print "Releasing parcel lock...\n"
+	if $verbose;
+    if (clean(0) == 0) {
+	print(GREEN, "Success: Parcel $userid/$parcel is now checked in (and lock released).\n", RESET)
+	    if $verbose;
+    } else {
+	print(RED, "Could not release parcel $userid/$parcel\n", RESET)
+	    if $verbose;
+    }
+}
+
+#
+# sync - Make local state clean
+#
+sub sync ($) {
+    my $releasing = shift;  # whether we're releasing the lock afterward
+
+    my $relstring = "";
+
+    # Tidy up the cfg directory
+    vmm_cleanup();
+
+    if (-e $cleancache_file) {
+	print "Local cache is clean.  Skipping upload and commit.\n"
+	    if $verbose;
+	return;
+    }
+
+    # Upload the dirty blocks in a cache directory on the server
+    upload();
+    
+    # Operations from this point on should not be interrupted by the user
+    block_sigint();
+    
+    # Commit a new version on the server
+    commit();
+
+    # If the server-side commit was successful, then do the
+    # client-side commit. 
+    clientcommit($releasing);
+
+    # If $releasing == 1, it is not safe to unblock SIGINT until the parceldir
+    # is removed by our caller, since the prev-keyring is not up-to-date.
+
+    $relstring = " (but not released)"
+	if !$releasing;
+    print(GREEN, "Success: Sync completed. Parcel checkpointed$relstring.\n", RESET)
+	if $verbose;
+}
+
+#
+# poweroff - Tell the VMM driver to delete the memory image
+#
+sub poweroff () {
+    my %results;
+    my $vmname;
+    my $err;
+    my $memtype;
+    my $reply;
+    
+    my $driver = (defined $vmm) ? $vmm : $cfg{'VMM'};
+
+    # Find out what memory image type we have.
+    $memtype = get_suspended();
+
+    # Get the VMM name.
+    {
+	local $ENV{'SUSPENDED'} = $memtype;
+	%results = run_vmm($driver, 'info', 1);
+    }
+    $vmname = $results{'VMM'} ? $results{'VMM'} : "UnknownVMM";
+
+    # Give users a chance to change their minds.
+    if ($verbose) {
+	$reply = query("This command forcibly powers off a suspended parcel. Proceed?");
+	if ($reply eq "n") {
+	    return;
+	}
+    }
+    print "Deleting $vmname memory image...\n"
+        if $verbose;
+
+    # Reset the clean-cache flag, since we're about to make the cache dirty.
+    unlink($cleancache_file);
+
+    # Reset the consistent dirty cache flag, since any temporary dirty
+    # cache directory is about to become inconsistent with the local cache.
+    unlink($cdcache_file);
+
+    # Delete the memory image.
+    {
+	local $ENV{'SUSPENDED'} = $memtype;
+	%results = run_vmm($driver, 'poweroff', 1);
+    }
+    $err = $results{'ERROR'} ? $results{'ERROR'} : "Unknown error";
+    errexit("$vmname returned error: $err")
+        if ! defined $results{'SUCCESS'} or $results{'SUCCESS'} ne "yes";
+    
+    # Write out the new memory image type.
+    set_suspended(%results);
+
+    print(GREEN, "Success: Parcel $userid/$parcel powered off.\n", RESET)
+	if $verbose;
+}
+
+#
+# discard - Remove the Parcelkeeper cache
+#
+sub discard () {
+    my $reply;
+
+    # Give users a chance to change their minds.
+    if ($verbose) {
+	$reply = query("This command deletes local session state on this host. Proceed?");
+	if ($reply eq "n") {
+	    return;
+	}
+    }
+
+    # This operation should not be interrupted by the user
+    block_sigint();
+    
+    # Even though we're about to delete the cfg directory, we still need to
+    # run VMM cleanup because the VMM might need to clean up external state
+    vmm_cleanup();
+
+    # Reset the consistent dirty cache flag, since any temporary dirty
+    # cache directory can no longer be consistent with an empty local cache.
+    unlink($cdcache_file);
+    
+    # Delete the dirty keyring and cfg directory.  If this fails, we'll
+    # notice it in build_cache().
+    mysystem("rm -rf $parceldir/cfg");
+    unlink("$parceldir/keyring");
+    
+    # Delete the local cache and SQLite journals (if they exist) and complain
+    # if we can't.
+    foreach my $file (qw/keyring-journal disk disk.idx disk.idx-journal/) {
+	unlink("$parceldir/$file");
+	errexit("Can't remove parcel data")
+            if -e "$parceldir/$file";
+    }
+
+    # Recreate the keyring and cfg directory
+    build_cache() == 0
+	or errexit("Parcel in inconsistent state.  Try discarding again.");
+
+    print(GREEN, "Success: Local changes to parcel $userid/$parcel discarded.\n", RESET)
+	if $verbose;
+}
+
+#
+# disconnect - Prepare the host to disconnect from a parcel
+#
+sub disconnect () {
+    print "Preparing client host to run parcel $userid/$parcel disconnected...\n";
+    
+    # Hoard the parcel if it's not already hoarded
+    if (!is_fully_hoarded()) {
+	hoard(1);
+    }
+
+    # Optionally check the hoard cache for consistency, and print a success
+    # message
+    if ($checkstate) {
+	checkhoard();
+	print(GREEN, "Success: You can safely run disconnected.\n", RESET)
+	    if $verbose;
+    } else {
+	print(GREEN, "Success: You can now run disconnected.\n", RESET)
+	    if $verbose;
+    }
+}
+
+#
+# listparcels - list information about a user's parcels
+#
+sub listparcels () {
+    my $line;
+    my $item;
+    my $lsargs;
+    
+    # Build the argument list for the server-side ls operation
+    $lsargs = "";
+    if ($parcel) {
+	$lsargs = "-p $parcel";
+    }
+    if ($longvers) {
+	$lsargs .= " -L $longvers -v";
+    } elsif ($longflag) {
+	$lsargs .= " -L $syscfg{ls_versions} -v";
+    }
+
+    # Run the remote ls program on the server.  Pass through server
+    # errors without further comment.
+    print "Parcels for $userid on server $server:\n";
+    srun("ls", $lsargs, CHECK_AUTH => 1) == 0
+        or errexit("Couldn't list remote parcels");
+}
+
+#
+# authenticate - Perform the SSH magic
+#
+sub authenticate () {
+    mysystem("ssh -A -l $userid $server ssh-add") == 0
+	or system_errexit("Unable to run ssh-add on the server ($server)");
+    # Remove stale completion cache, if any
+    unlink("$completiondir/$server-$userid");
+}
+
+#
+# deauthenticate - Remove all SSH keys
+#
+sub deauthenticate () {
+    my $file;
+    
+    mysystem("ssh-add -D") == 0
+	or system_errexit("Unable to run \"ssh-add -D\" on local machine");
+    # Remove all completion caches, since they are now stale
+    opendir(COMP, $completiondir)
+        or return;
+    while ($file = readdir(COMP)) {
+	unlink("$completiondir/$file");
+    }
+    closedir(COMP);
+}
+
+#
+# hoard - Copy all server disk blocks to the local client cache
+#
+sub hoard ($) {
+    my $safe = shift;   # True if $parceldir is guaranteed not to vanish
+    
+    my $retval;
+    
+    #
+    # Fetch copies of parcel.cfg and the keyring and put them into a temporary
+    # parcel directory.  Unless we're told it's safe to do so (via $safe == 1),
+    # we don't use the regular parcel directory -- even if it is checked out --
+    # in order to allow hoard to run concurrently with operations which remove
+    # the parcel directory (e.g., checkin and clean).  If the parcel lock
+    # is taken, so that checkin and clean cannot run, then $safe can be set
+    # to true.  Note that if $safe is true, the caller should take care of
+    # obtaining the hoard lock.  Note that if $safe is true, we don't refetch
+    # the keyring on hoard failure, since we assume that we already hold the
+    # parcel lock on the server.
+    #
+    if (!$safe) {
+	print "Fetching configuration data for $userid/$parcel from server.\n"
+	    if $verbose;
+	
+	# Assign a temporary parcel directory
+	$parceldir = mktempdir();
+    
+	# Fetch metadata from the server
+	mkdirs($hoarddir, "$hoarddir/img")
+	    or errexit("Unable to make $hoarddir/img");
+	srun("getconfig", "-p $parcel", OUTFILE => "$parceldir/parcel.cfg") == 0
+	    or errexit("Parcel $userid/$parcel does not exist on the server ($server).");
+	parse_parcelcfg("$parceldir/parcel.cfg");
+	$uuid = $cfg{"UUID"};
+	set_parcel_globals($parceldir);
+	# We couldn't acquire the hoard lock during startup, because we didn't
+	# know the UUID.  Now we can.
+	acquire_lock("hoard-$uuid", "Hoard cache", 0);
+    }
+    
+    while (1) {
+	if (!$safe) {
+	    acquire_lock("image-$uuid", "Hoard image", 1);
+	    fetch_parcel_file("keyring.enc", "$imgbase.key", "keyring", 0, undef) == 0
+		or errexit("Unable to fetch keyring.enc");
+	    decrypt_keyring("$parceldir/prev-keyring") == 0
+		or errexit("Unable to decrypt keyring.enc");
+	    release_lock("Hoard image");
+	    print "Updating hoard cache.\n"
+		if $verbose;
+	    run_parcelkeeper("refresh", "parcel hoard log") == 0
+	        or errexit("Couldn't update hoard cache");
+	}
+
+	# Ask Parcelkeeper to hoard all hdk blocks into local store. If the
+	# hoard operation returns an error, then either the network
+	# connection is down, the server is down, a chunk in the hoard
+	# somehow got corrupted, or a concurrent checkin created a new
+	# version on the server while the hoard was underway. In any case,
+	# we will restart the hoard operation until it succeeds.  We refetch
+	# the keyring as part of a restart (if the parcel lock is not held) to
+	# ensure that we properly handle concurrent checkins.
+	print("Hoarding any missing disk blocks from the server...\n")
+	    if $verbose;
+	
+	$retval = run_parcelkeeper("hoard", "parcel hoard log");
+	if ($retval == 0) {
+	    last; 
+	} elsif (WIFSIGNALED($retval)) {
+	    errexit("Interrupted");
+	}
+	print "Sleeping $syscfg{hoard_sleep} secs before restarting hoard...\n"
+	    if $verbose;
+	sleep($syscfg{hoard_sleep});
+    }
+
+    # The hoard finished without any errors. Declare success
+    print GREEN, "Success: The parcel $userid/$parcel is now fully hoarded on this host.\n", RESET
+	if $verbose;
+}
+
+#
+# checkparcel - Check a parcel for consistency
+#
+sub checkparcel () {
+    my $flags = "";
+    my $result;
+    my $state;
+    
+    if ($remote) {
+	# Ask the server the to check the consistency of the parcel
+	errexit("-Y only makes sense if -e is not specified")
+	    if $do_splice;
+	
+	if ($version) {
+	    $flags .= " -v $version";
+	}
+	if ($checkstate) {
+	    $flags .= " -c";
+	}
+	
+	srun("checkparcel", "-p $parcel -V $flags") == 0
+	     or errexit("There is something wrong with parcel $userid/$parcel on the server.");
+        
+	print(GREEN, "Success: The parcel $userid/$parcel looks OK on the server.\n", RESET)
+	    if $verbose;
+    } else {
+	# Check the local cache
+	errexit("-r only makes sense if -e is specified")
+	    if $version;
+	
+	# At least for now, -Y implies -c
+	$checkstate = 1
+	    if $do_splice;
+	$flags .= " full"
+	    if $checkstate;
+	$flags .= " splice"
+	    if $do_splice;
+	
+	$result = run_parcelkeeper("validate", "parcel log $flags");
+	$state = run_parcelkeeper("validate", "parcel check") >> 8;
+	
+	if ($result) {
+	    if ($state & 4) {
+		errexit("Cache validation failed.  The parcel is damaged and checkin will be disallowed.");
+	    } else {
+		errexit("Cache validation failed.");
+	    }
+	} else {
+	    if ($state & 4) {
+		errexit("The parcel is damaged.  Checkin will be disallowed.");
+	    } else {
+		print GREEN, "Success: The parcel $userid/$parcel looks OK.\n", RESET
+		    if $verbose;
+	    }
+	}
+    }
+}
+
+#
+# statparcel - Report general statistics about the hoard and local caches
+#
+sub statparcel () {
+    my $size;
+
+    #
+    # Display the size of the VMM state (memory image, VM metadata, etc.)
+    #
+    $size = dirsize("$parceldir/cfg") >> 11;
+    print "VMM state   : $size MB (uncompressed)\n";
+
+    #
+    # Display cache stats
+    #
+    run_parcelkeeper("examine", "parcel hoard log") == 0
+	or errexit("Could not examine cache");
+}
+
+#
+# listhoard - Show the status of the hoard cache
+#
+sub listhoard () {
+    # Statistics we're collecting
+    my %parcels;
+    my $shared;
+    my $unused;
+    
+    # Temporary variables
+    my %info;
+    my @fields;
+    my $file;
+    my $line;
+    my $key;
+    my $value;
+    my $uuid;
+    my $suffix;
+    my $stat;
+    my $parceldesc;
+    
+    #
+    # See what we know about parcels that hold chunk references
+    #
+    open(FD, "-|", parcelkeeper_cmd("listhoard", "hoard"))
+        or errexit("Couldn't run Parcelkeeper");
+    while ($line = <FD>) {
+	@fields = split(/[ \n]+/, $line);
+	if (valid_uuid($fields[0])) {
+	    $parcels{$fields[0]} = {
+		SERVER => $fields[1],
+		USER   => $fields[2],
+		PARCEL => $fields[3],
+		TOTAL  => $fields[4],
+		UNIQUE => $fields[5]
+	    };
+	} else {
+	    ($key, $value) = @fields;
+	    if ($key eq "shared") {
+		$shared = $value;
+	    } elsif ($key eq "unused") {
+	        $unused = $value;
+	    } else {
+		errexit("Parse error reading listhoard output");
+	    }
+	}
+    }
+    close(FD) && $? == 0
+        or errexit("Unable to query hoard cache");
+    
+    #
+    # See what we know about image files in the hoard cache
+    #
+    if (-d "$hoarddir/img") {
+	opendir(DIR, "$hoarddir/img")
+	    or errexit("Couldn't read hoard cache image directory");
+	while ($file = readdir(DIR)) {
+	    next if $file =~ /^\.{1,2}$/;
+	    ($uuid, $suffix) = split(/\./, $file)
+	        or next;
+	    if (!defined($parcels{$uuid})) {
+		# If the parcel is checked out, we may be able to recover
+		# its name.
+		if (-e "$isrdir/$uuid/parcel.cfg") {
+		    parse_cfgfile("$isrdir/$uuid/parcel.cfg", \%info);
+		    $parcels{$uuid} = {
+			SERVER => $info{"SERVER"},
+			USER   => $info{"USER"},
+			PARCEL => $info{"PARCEL"}
+		    };
+		} else {
+		    $parcels{$uuid} = {};
+		}
+	    }
+	    $stat = stat("$hoarddir/img/$file")
+	        or errexit("Couldn't stat $hoarddir/img/$file");
+	    if ($suffix eq "cfg") {
+		$parcels{$uuid}->{"MEMORY"} = $stat->size;
+	    } elsif ($suffix eq "key") {
+		$parcels{$uuid}->{"KEYRING"} = $stat->size;
+	    }
+	}
+	closedir(DIR);
+    }
+    
+    printf("%-15s %20s %15s %10s %15s\n", "Parcel", "Non-Shared Chunks",
+	                "Total Chunks", "Keyring", "Memory Image");
+    if ($longflag) {
+	printf("    %-36s %38s\n", "UUID", "Server");
+    }
+    print "-" x 79 . "\n";
+    foreach $uuid (sort keys %parcels) {
+	%info = %{$parcels{$uuid}};
+	if (exists($info{"SERVER"})) {
+	    $parceldesc = sprintf("%s/%s", $info{"USER"}, $info{"PARCEL"});
+	} else {
+	    $parceldesc = "<unknown>";
+	    $info{"SERVER"} = "<unknown>";
+	}
+	foreach $key ("UNIQUE", "TOTAL") {
+	    if (exists($info{$key})) {
+	        $info{$key} = int($info{$key} / 8) . " MB";
+	    } else {
+		$info{$key} = "-";
+	    }
+	}
+	foreach $key("KEYRING", "MEMORY") {
+	    if (exists($info{$key})) {
+		$info{$key} = ($info{$key} >> 20) . " MB";
+	    } else {
+		$info{$key} = "-";
+	    }
+	}
+	printf("%-20s %15s %15s %10s %15s\n", $parceldesc, $info{"UNIQUE"},
+	                $info{"TOTAL"}, $info{"KEYRING"}, $info{"MEMORY"});
+	if ($longflag) {
+	    printf("    %36s %38s\n", $uuid, $info{'SERVER'});
+	}
+    }
+    # XXX shared, unused chunks
+}
+
+#
+# rmhoard - Remove a parcel from the hoard cache
+#
+sub rmhoard () {
+    my $desc;
+    
+    if ($server and $userid and $parcel) {
+	$desc = "$server/$userid/$parcel";
+    } else {
+	$desc = $uuid;
+    }
+    
+    print "Removing $desc from the hoard cache...\n"
+        if $verbose;
+    run_parcelkeeper("rmhoard", "hoard uuid log") == 0
+        or errexit("Couldn't run Parcelkeeper rmhoard");
+    
+    #
+    # Now remove the img files.  We can always remove the keyring, but if
+    # the parcel is checked out we can't remove the memory image because
+    # "isr discard" will break.
+    #
+    acquire_lock("image-$uuid", "Hoard image", 1);
+    if (-e "$imgbase.key") {
+	unlink("$imgbase.key")
+	    or errexit("Couldn't unlink $imgbase.key");
+    }
+    if (-e "$imgbase.cfg") {
+	if (-e $parceldir) {
+	    print "Not removing memory image for $desc, since it is checked out\n"
+		if $verbose;
+	    message("Skipping unlink of memory image");
+	} else {
+	    unlink("$imgbase.cfg");
+	}
+    }
+    release_lock("Hoard image");
+}
+
+#
+# checkhoard - Reports on the consistency of the hoard cache
+# 
+sub checkhoard () {
+    my $flags = "";
+    
+    $flags .= $checkstate ? " full" : "";
+    $flags .= $do_compact ? " compact" : "";
+    
+    print "Checking hoard cache for internal consistency...\n"
+	if $verbose;
+    
+    run_parcelkeeper("checkhoard", "hoard $flags") == 0
+        or errexit("Hoard cache check failed");
+    
+    print GREEN, "Success: The hoard cache is consistent.\n", RESET
+        if $verbose;
+}
+
+#
+# passwd - Change the user's ISR passwd on the server
+#
+sub passwd () {
+    print "Changing password for ISR userid $userid:\n";
+    mysystem("ssh -o PasswordAuthentication=no -l $userid -t $server passwd") == 0
+	or errexit("Unable to change ISR password.");
+}
+
+#
+# cleanclient - Remove all traces of a parcel's session state
+#
+sub cleanclient() {
+    my $reply;
+
+    # Give users a chance to change their minds.
+    if ($verbose) {
+	$reply = query("This command deletes local session state on this host. Proceed?");
+	if ($reply eq "n") {
+	    return;
+	}
+    }
+
+    # Remove the parcel's session state
+    if ($verbose) {
+	if ($forceflag) {
+	    print "Removing session state and forcing release of server lock...\n";
+	} else {
+	    print "Removing session state and releasing server lock...\n";
+	}
+    }
+    if (clean($forceflag)) {
+	return;
+    }
+
+    print(GREEN, "Success: Parcel $userid/$parcel erased from client and server lock released.\n", RESET)
+	if $verbose;
+}
+
+sub dirtometer () {
+    # On error, the dirtometer should have already printed a helpful message.
+    mysystem(LIBDIR . "/dirtometer -n $userid/$parcel $uuid") == 0
+        or exit 1;
+}
+
+#############################
+# Section 4. Helper functions
+#############################
+
+#####
+# Subcommand sanity checks
+#
+
+#
+# Most commands require a parcel on the command line
+#
+sub need_parcel () {
+    usage("Missing parcel name")
+	if !$parcel;
+}
+
+#
+# Some commands require a UUID on the command line
+#
+sub need_uuid () {
+    usage("Missing parcel UUID")
+	if !$uuid;
+}
+
+#
+# Some commands don't work on a particular parcel
+#
+sub need_not_parcel () {
+    usage("\"$command\" does not take a parcel name/UUID")
+	if $parcel or $uuid;
+}
+
+#
+# Some commands expect the parcel to already be checked out
+#
+sub need_checked_out () {
+    errexit("Parcel $userid/$parcel not checked out. Checkout or resume first.")
+	if !$parceldir or !-e $parceldir;
+}
+
+#
+# Most commands require a network connection
+#
+sub need_network () {
+    my $pid;
+    
+    print "Checking network connection...\n"
+	if $verbose > 1;
+    
+    # We have to fork a child and timeout on the wait() because the bind
+    # client coopts SIGALRM signals. 
+    $pid = fork();
+
+    # The child tries to establish SSH and HTTP connections with the server
+    if ($pid == 0) {
+	$no_shutdown = 1;
+	IO::Socket::INET->new(PeerAddr => $server,
+			      PeerPort => "22",
+			      Proto    => "tcp",
+			      Type     => SOCK_STREAM)
+	    or exit 1;
+	IO::Socket::INET->new(PeerAddr => $server,
+			      PeerPort => "80",
+			      Proto    => "tcp",
+			      Type     => SOCK_STREAM)
+	    or exit 1;
+	exit 0;
+    }
+
+    # The parent waits a few seconds for the child to complete, then times out
+    eval {
+	local $SIG{'ALRM'} = sub {die "timeout"};
+	alarm($syscfg{connect_timeout});
+	waitpid($pid, 0);
+	alarm(0);
+    };
+
+	# krha, do not check network
+    # Determine if the child established its connections in the allotted time.
+	#if ($@ or $?) {
+	#kill("TERM", $pid)
+	#    if $@;
+	#errexit("Couldn't contact $server.  Do you have a network connection?");
+	#}
+}
+
+#
+# Error out if the specified parcel does not exist
+#
+sub need_remote_parcel () {
+    errexit("The remote parcel is not available.")
+        if srun("ls", "-p $parcel", OUTFILE => "/dev/null", CHECK_AUTH => 1);
+}
+
+#
+# Error out if the specified parcel does not exist, or if we do not hold
+# the parcel lock (perhaps because another client did "isr clean -f")
+#
+sub need_remote_parcel_and_lock () {
+    errexit("Parcel lock not held; aborting.")
+        unless $sessionid > 0;
+    return unless srun("lock", "-p $parcel -C $sessionid",
+	    OUTFILE => "/dev/null", CHECK_AUTH => 1);
+    # Okay, we have a problem.  Now make the extra RPC to determine which
+    # problem it is.
+    need_remote_parcel();
+    errexit("Parcel lock no longer held on server; aborting.");
+}
+
+#
+# Error out if we are not authenticated to the ISR server.  This is normally
+# subsumed by need_remote_parcel()/need_remote_parcel_and_lock() but is
+# available separately for when those are not appropriate.
+#
+sub need_credentials () {
+    # Reasonably close to a no-op, used for the CHECK_AUTH side-effect
+    srun("ls", "", OUTFILE => "/dev/null", CHECK_AUTH => 1);
+}
+
+#####
+# Parcelkeeper management functions
+# 
+
+#
+# parcelkeeper_cmd - Return the command string to execute Parcelkeeper with
+#                    the given parameters.
+#
+sub parcelkeeper_cmd ($$) {
+    my $mode = shift;
+    my $args = shift;
+    
+    my $cmd = LIBDIR . "/parcelkeeper $mode";
+    my $arg;
+    my $do_log = 0;
+    
+    foreach $arg (split(/\s+/, $args)) {
+	if ($arg eq "parcel") {
+	    $cmd .= " --parcel $parceldir";
+	} elsif ($arg eq "dest") {
+	    $cmd .= " --destdir $uploaddir/hdk";
+	} elsif ($arg eq "hoard") {
+	    $cmd .= " --hoard $hoarddir";
+	} elsif ($arg eq "chunk-cache") {
+	    $cmd .= " --chunk-cache $syscfg{chunk_cache}";
+	} elsif ($arg eq "compression") {
+	    $cmd .= " --compression $disk_compress";
+	} elsif ($arg eq "uuid") {
+	    $cmd .= " --uuid $uuid";
+	} elsif ($arg eq "check") {
+	    $cmd .= " --check";
+	} elsif ($arg eq "full") {
+	    $cmd .= " --full";
+	} elsif ($arg eq "splice") {
+	    $cmd .= " --splice";
+	} elsif ($arg eq "compact") {
+	    $cmd .= " --compact";
+	} elsif ($arg eq "allow-root") {
+	    $cmd .= " --allow-root";
+	} elsif ($arg eq "single-thread") {
+	    $cmd .= " --single-thread";
+	} elsif ($arg eq "log") {
+	    $do_log = 1;
+	} else {
+	    errexit("Unknown parcelkeeper parameter $arg");
+	}
+    }
+    
+    if ($do_log) {
+	$cmd .= " --log $logfile --log-filter $syscfg{logmask} --stderr-filter $syscfg{console_logmask}";
+    } else {
+	$cmd .= " --stderr-filter $syscfg{console_logmask}";
+    }
+    message("Running Parcelkeeper: $cmd");
+    print("[krha] Running Parcelkeeper: $cmd\n");
+    return $cmd;
+}
+
+#
+# run_parcelkeeper - Run the Parcelkeeper process and return its exit status.
+#
+sub run_parcelkeeper ($$) {
+    my $mode = shift;
+    my $args = shift;
+    
+    my $cmd = parcelkeeper_cmd($mode, $args);
+    
+    if ($mode eq "run") {
+	# Don't allow SIGINT
+        return system($cmd);
+    } else {
+	return mysystem($cmd);
+    }
+}
+
+#
+# get_parcelkeeper_pid - Returns the PID of the Parcelkeeper background
+#                        process associated with this parcel, or zero if none
+#                        are running.
+#
+sub get_parcelkeeper_pid () {
+    my $pidfile = "$parceldir/parcelkeeper.pid";
+    my $pid;
+    
+    -e $pidfile or return 0;
+    open(PIDFILE, $pidfile) or return 0;
+    defined($pid = <PIDFILE>) or return 0;
+    close(PIDFILE);
+    chomp($pid);
+    # Make sure the process is still alive
+    kill(0, $pid) or return 0;
+    return $pid;
+}
+
+
+#####
+# Checkin functions
+# 
+
+#
+# copy_dirtychunks - Build temp cache tree and populate it with dirty state
+#
+sub copy_dirtychunks () {
+    my $target;
+
+    #
+    # Build an empty temporary cache directory structure on the client
+    #
+    mysystem("rm -rf $uploaddir");
+    mkdirs($uploaddir, "$uploaddir/hdk")
+	or errexit("Unable to make temporary directory $uploaddir/hdk");
+    
+    #
+    # Make sure it's safe to upload
+    #
+    if (check_damaged_cache()) {
+	errexit("Local cache of $userid/$parcel is damaged; upload disallowed.");
+    }
+
+    # 
+    # Copy any dirty hdk chunks to the temporary cache directory
+    #
+    run_parcelkeeper("upload", "parcel dest hoard log") == 0
+    	or errexit("Unable to copy chunks to temporary cache dir");
+
+    #
+    # Create cfg tarball and encrypt it and the keyring
+    #
+    print("Compressing and encrypting virtual machine memory image...\n")
+	if $verbose;
+    encrypt_cfg("$parceldir/cfg", "$uploaddir/cfg.tgz.enc") == 0
+	or system_errexit("Unable to create cfg.tgz.enc.");
+    printf("Compressed size: %d MB\n", (stat("$uploaddir/cfg.tgz.enc")->size)/(1<<20))
+    	if $verbose;
+    encrypt_keyring("$parceldir/keyring", "$uploaddir/keyring.enc") == 0
+	or system_errexit("Unable to encrypt keyring.");
+    foreach $target ("cfg.tgz", "keyring") {
+	message(sprintf("Upload: $target.enc: %d", 
+			stat("$uploaddir/$target.enc")->size));
+    }
+}
+
+#
+# upload - Upload a copy of the parcel to temp cache on the server.
+#          Note: Upload is idempotent. You can run it over and over again 
+#          until it works.
+#
+sub upload () {
+    my $vflag = "-q";
+    my $bwflag = "";
+    my $i;
+
+    errexit("Inconsistent parcel directory $parceldir")
+        if (!-e "$parceldir/keyring" or !-d "$parceldir/cfg");
+
+    #
+    # Copy the dirty parcel state to a temporary dirty cache
+    # directory.  When the operation is finished, create a consistent
+    # dirty cache flag on disk that tells us that the dirty cache is
+    # consistent with the local cache, and thus the copy operation can
+    # be skipped if the subsequent upload operation is
+    # interrupted. This is an optimization that eliminates unnecessary
+    # compress and encrypt operations, and better exploits the features
+    # of rsync if the upload is interrupted and has to be restarted
+    # (mainly because tar is not idempotent).
+    #
+    if (!-e $cdcache_file) {
+	copy_dirtychunks();
+	touch($cdcache_file, 0666)
+	    or unix_errexit("Unable to create dirty cache flag ($cdcache_file)");
+    }
+    else {
+	print("Skipping local copy operation.\n")
+	    if $verbose;
+    }
+
+    mypause("Done with local copy, ready to upload: hit y to continue");
+
+    # 
+    # Transfer the dirty local cache state to the server
+    #
+    print("Sending modified disk state to server...\n")
+	if $verbose;
+    $vflag = "--progress"
+        if ($verbose);
+    $bwflag = "--bwlimit=$bwlimit"
+	if ($bwlimit);
+
+    # Retry if the upload fails
+    for ($i = 0; $i < $syscfg{retries}; $i++) {
+	last
+	    if mysystem("rsync -e 'ssh -o PasswordAuthentication=no' " .
+			"--delete --partial --recursive $vflag $bwflag " .
+			"$uploaddir/ $userid\@$cfg{WPATH}/cache/$sessionid")
+			== 0;
+	print "[isr] upload failed. Retrying...\n"
+	    if $verbose;
+    }
+    errexit("Upload failed. Aborting.")
+        if $i == $syscfg{retries};
+    mypause("Done with upload, ready to commit: hit y to continue");
+
+    # Return successful status
+    print("Upload completed, all updates have been sent to the server.\n")
+	if $verbose;
+}
+
+#
+# commit - Commit files that were copied to server-side cache by upload
+#
+sub commit () {
+    # Check the current version of the parcel for consistency
+    srun("checkparcel", "-p $parcel") == 0
+	or errexit("There is something wrong with the remote parcel. Aborting with no change to the remote parcel.");
+
+    #
+    # Trigger the server-side commit.
+    #
+    print("Checking uploaded cache dir before committing...\n");
+    srun("checkparcel", "-s $sessionid -p $parcel") == 0
+	or errexit("Something went wrong during upload.  Aborting with no change to the remote parcel.\n");
+    print("Committing updates on server...\n")
+	if $verbose;
+    message("Begin server side commit");
+    srun("commit", "-p $parcel -N $sessionid") == 0
+	or errexit("Server-side commit of parcel $userid/$parcel failed.");
+    message("End server side commit");
+
+    # Check the newly committed version for consistency
+    srun("checkparcel", "-p $parcel") == 0
+	 or errexit("Something went wrong during commit.  Remote parcel is inconsistent.");
+}
+
+#
+# clientcommit - Commit state on the client.  First, copy the keyring to
+#                prev-keyring.  Second, move the encrypted memory image and
+#                keyring into the hoard cache.  These actions ensure that the
+#                client remains consistent with the server-side last/.
+#
+sub clientcommit($) {
+    my $releasing = shift;
+
+    my $dirtyblocks = 0;
+    my $name;
+
+    print "Committing updates on client...\n"
+	if $verbose;
+
+    #
+    # Now that we have committed a new version, we can update the cached copy
+    # of the pristine keyring and memory image to match the server
+    #
+    if ($releasing) {
+	# There's no point in copying the keyring to prev-keyring if the
+	# whole directory tree is going to be removed; we just rename it so
+	# that the hoard cache refresh will work.  SIGINT is blocked, and
+	# must remain blocked until the lock is released.
+	message("Client side commit - skipping copy of keyring");
+	rename("$parceldir/keyring", "$parceldir/prev-keyring")
+	    or unix_errexit("Unable to move keyring to $parceldir/prev-keyring.");
+    } else {
+	message("Client side commit - start copying keyring");
+	copy("$parceldir/keyring", "$parceldir/prev-keyring")
+	    or unix_errexit("Unable to copy keyring to $parceldir/prev-keyring.");
+	message("Client side commit - finish copying keyring");
+    }
+
+    #
+    # Note that the upload cache is no longer correct
+    #
+    unlink($cdcache_file);
+
+    #
+    # Move the cfg.tgz.enc and keyring.enc files into the hoard cache
+    #
+    mkdirs($hoarddir, "$hoarddir/img")
+	or errexit("Couldn't make directory $hoarddir/img");
+    rename("$uploaddir/cfg.tgz.enc", "$hoarddir/img/$cfg{UUID}.cfg");
+    rename("$uploaddir/keyring.enc", "$hoarddir/img/$cfg{UUID}.key");
+    message("Client side commit - moved memory image into hoard cache");
+    
+    #
+    # Note that the local cache is consistent with the server
+    #
+    touch($cleancache_file, 0666)
+        or unix_errexit("Unable to create $cleancache_file");
+    
+    #
+    # Remove the upload directory
+    #
+    message("Client side commit - start removing upload directory");
+    system("rm -rf $uploaddir");
+    message("Client side commit - finish removing upload directory");
+
+    #
+    # Release hoard cache references for previous parcel version
+    #
+    message("Client side commit - start hoard cache reference update");
+    run_parcelkeeper("refresh", "parcel hoard log") == 0
+        or errexit("Could not refresh hoard cache");
+    message("Client side commit - end hoard cache reference update");
+}
+
+
+#####
+# Misc helper functions
+# 
+
+#
+# srun - Perform a server operation
+#
+sub srun ($$%) {
+    my $operation = shift;# requested operation
+    my $args = shift;     # argument string
+    my %opts = @_;        # key/value pairs giving optional arguments
+    
+    my $tmpfile;
+    my $ret;
+    
+    # Log the operation
+    message("[srun] $operation $args");
+    
+    # Redirect stdout to outfile if requested
+    if (exists($opts{'OUTFILE'})) {
+	$args .= " > $opts{'OUTFILE'}";
+    }
+    
+    # If requested, make a special check for unauthenticated access and
+    # print a helpful error message.  This option also prevents stderr
+    # from going to the terminal.
+    if (exists($opts{'CHECK_AUTH'}) and $opts{'CHECK_AUTH'}) {
+	$tmpfile = mktempfile();
+	$args .= " 2> $tmpfile";
+    }
+
+    # Perform the operation on remote storage
+	# $ret = mysystem("ssh -o PasswordAuthentication=no -l $userid $server isr_runserv $operation $args");
+	
+	# krha
+	$ret = mysystem("/home/krha/Cloudlet/src/Script/isr_ssh_mock.py $operation $args");
+    print("[krha], srun: ssh -o PasswordAuthentication=no -l $userid $server isr_runserv $operation $args\n");
+    print("[krha], ops($operation), args($args)\n");
+    print("[krha], ret : $ret\n");
+    
+    # Check stderr for problems if necessary
+    if (exists($opts{'CHECK_AUTH'}) and $opts{'CHECK_AUTH'}) {
+	open(ST, "<", $tmpfile)
+	    or errexit("Couldn't open $tmpfile");
+	while (<ST>) {
+	    errexit("No credentials for $userid\@$server; have you run \"isr auth\"?")
+	        if /^Permission denied/;
+	}
+	close(ST);
+    }
+    
+    return $ret;
+}
+
+#
+# run_vmm - Run the VMM driver (low-level routine)
+#
+sub run_vmm ($$$) {
+    my $driver = shift;
+    my $mode = shift;
+    my $with_opts = shift;
+
+    my $cmd = VMMDIR . "/$driver";
+    my %results;
+    my $key;
+    my $value;
+    my $pid;
+    my @signals;
+    my $sigint_val;
+
+    errexit("Couldn't find driver for VMM '$driver'")
+        unless -x $cmd;
+
+    # Set input variables common to all VMM driver modes
+    local $ENV{'NAME'} = "$userid/$parcel";
+    local $ENV{'UUID'} = $cfg{'UUID'};
+    local $ENV{'CFGDIR'} = "$parceldir/cfg";
+    local $ENV{'COMMAND'} = $syscfg{"$driver.command"}
+	if exists $syscfg{"$driver.command"};
+    local $ENV{'VERBOSE'} = $verbose > 1 ? "yes" : "no";
+    local $ENV{'OPTIONS'} = join(',', @vmmopts)
+        if $with_opts;
+
+    # While the driver is running, redirect SIGINT to the driver
+    {
+	local $SIG{'INT'} = sub { kill('INT', $pid) if $pid };
+	$pid = open(VMM, '-|', $cmd, $mode)
+	    or errexit("Couldn't launch driver for VMM '$driver'");
+	while (<VMM>) {
+	    ($key, $value) = split /=/, $_, 2;
+	    next unless defined $value;
+	    chomp $value;
+	    $results{$key} = $value;
+	    print("[krha], cmd($cmd), mode($mode), userid($userid), parcel($parcel), parceldir($parceldir)\n")
+	}
+    }
+    close VMM;
+
+    # Because we forward SIGINT to the driver, it may receive multiple SIGINTs
+    # if the user hits Ctrl-C: the kernel signals the driver directly because
+    # it's a member of the foreground process group, and then we signal the
+    # driver as well.  The Python interpreter, when it finishes executing
+    # Python code and starts shutting down its runtime, resets the SIGINT
+    # handler to SIG_DFL.  Therefore there is a race: if the VMM driver is
+    # implemented in Python and the second SIGINT arrives during interpreter
+    # shutdown, the interpreter will die on the signal.
+    #
+    # Ways to fix this:
+    # 1. Block SIGINT in the driver after it has been received once.  Python
+    #    doesn't provide sigprocmask(), so we'd have to use ctypes, which would
+    #    be gratuitously unportable because we'd have to hardcode the values
+    #    of constants from signal.h.
+    # 2. Prevent the driver from receiving duplicate signals by using
+    #    POSIX::sigaction() and a three-argument signal handler to check
+    #    whether this program received SIGINT from the kernel or from a
+    #    userspace process, and only forward SIGINT in the latter case.  This
+    #    assumes that a user running kill(1) will only target this process,
+    #    not the process group, but the kernel will target the whole process
+    #    group.  This bypasses Perl's "safe signal" infrastructure, possibly
+    #    to our peril.
+    # 3. Paper over the problem by treating "died on SIGINT" as success.
+    #
+    # We use option #3.
+    @signals = split(' ', $Config{sig_name});
+    for ($sigint_val = 0; ; $sigint_val++) {
+        last
+            if $signals[$sigint_val] eq 'INT';
+    }
+    errexit("VMM driver '$driver' returned $?")
+        if $? and $? != $sigint_val;
+    return %results;
+}
+
+#
+# get_suspended - Read and return the value of the "suspended" flag in the
+#                 cfg directory
+#
+sub get_suspended () {
+    my $suspflag = "$parceldir/cfg/suspended";
+    my $memtype;
+    
+    if (-e $suspflag) {
+	open(SUSP, $suspflag)
+	    or unix_errexit("Couldn't read $suspflag");
+	$memtype = <SUSP>;
+	chomp $memtype;
+	close SUSP;
+    } elsif ($cfg{'VMM'} eq "vmware") {
+	# Compatibility with old versions of OpenISR
+	$memtype = "vmware";
+    } else {
+	$memtype = "no";
+    }
+    return $memtype;
+}
+
+#
+# set_suspended - Update the value of the "suspended" flag in the cfg directory
+#
+sub set_suspended (%) {
+    my %results = @_;
+
+    # Write out the new memory image type
+    if (defined $results{'SUSPENDED'} and
+			open(SUSP, ">", "$parceldir/cfg/suspended")) {
+	print SUSP $results{'SUSPENDED'} . "\n";
+	close SUSP;
+    } else {
+	err("Couldn't save new memory image type");
+    }
+}
+
+#
+# vmm_cleanup - Ask each VMM driver in turn to tidy up the cfg directory
+#
+sub vmm_cleanup () {
+    my $vmm;
+    my %results;
+
+    print "Cleaning up temporary parcel data...\n"
+        if $verbose;
+    opendir(DRVS, VMMDIR)
+        or unix_errexit("Couldn't read " . VMMDIR);
+    foreach $vmm (readdir(DRVS)) {
+	next if $vmm =~ /^\.{1,2}$/;
+	%results = run_vmm($vmm, "cleanup", 0);
+	if (! exists $results{'SUCCESS'} or $results{'SUCCESS'} ne 'yes') {
+	    err("$vmm could not run cleanup: $results{ERROR}");
+	}
+    }
+    closedir(DRVS);
+}
+
+sub fcntl_lock ($$$) {
+    my $fh = shift;
+    my $type = shift;
+    my $wait = shift;
+    
+    my $lockstruct;
+    my $op;
+    
+    # This is black magic.  We don't want to make assumptions about whether
+    # we're using off_t or off64_t, or whether we're on a 64-bit architecture,
+    # or whether Perl is compiled to support 64-bit ints (so we can't use
+    # the "q" template flag).  Fortunately, we need to set both l_start
+    # and l_len to zero, and there's nothing after that whose alignment
+    # we care about.  So we just pad to the largest possible case, which
+    # is off64_t, in 32-bit chunks.  We do, however, still make assumptions
+    # about the ordering of the fields in the struct; there doesn't seem to
+    # be any way around that.
+    $lockstruct = pack("s!s!lllll", $type, SEEK_SET);
+    $op = $wait ? F_SETLKW : F_SETLK;
+    while (1) {
+	last if fcntl($fh, $op, $lockstruct);
+	next if $! == EINTR;
+	return $!;
+    }
+    return 0;
+}
+
+sub acquire_lock ($$$) {
+    my $file = shift;
+    my $desc = shift;
+    my $wait = shift;
+    
+    my $lockdir = "$isrdir/locks";
+    my $fh;
+    my $ret;
+    my $stat;
+    
+    mkdir($lockdir);
+    unix_errexit("Can't create lock directory $lockdir")
+        if ! -d $lockdir;
+    $file = "$lockdir/$file";
+    
+    while (1) {
+	open($fh, ">", $file)
+	    or unix_errexit("Can't open $file for writing");
+	$ret = fcntl_lock($fh, F_WRLCK, $wait);
+	errexit("$desc locked by another process")
+	    if $ret == EACCES or $ret == EAGAIN;
+	unix_errexit("Can't acquire lock")
+	    if $ret;
+	$stat = stat($fh);
+	errexit("Couldn't stat $file")
+	    if !$stat;
+	last if $stat->nlink == 1;
+	# We have a lock on a deleted lockfile.
+	close($fh);
+	$fh = undef;
+    }
+    push(@locks, {"DESC" => $desc, "NAME" => $file, "FH" => $fh});
+}
+
+sub release_lock ($) {
+    my $desc = shift;
+    
+    my $record;
+    my @newlocks;
+    
+    foreach $record (@locks) {
+	if ($record->{"DESC"} eq $desc) {
+	    unlink($record->{"NAME"});
+	    close($record->{"FH"});
+	} else {
+	    push @newlocks, $record;
+	}
+    }
+    @locks = @newlocks;
+}
+
+sub release_locks () {
+    my $record;
+    
+    while ($record = pop(@locks)) {
+	unlink($record->{"NAME"});
+	close($record->{"FH"});
+    }
+}
+
+#
+# clean - Erase all traces of a parcel from the client and do a soft
+#         (with nonce) or hard (no nonce) release of its lock.
+#
+sub clean ($) {
+    my $force = shift;     # do a hard release
+
+    my $ret = 0;
+    my $clientname = hostname();
+
+    # Make sure the current working directory exists
+    chdir($isrdir);
+    
+    # Now remove all traces of the parcel on the client and unlock it.
+    # If we don't know the parcel UUID, we can't remove the parceldir
+    # because we don't know what it's called.
+    if ($uuid) {
+	# Even though we're about to delete the cfg directory, we still need
+	# to run VMM cleanup because the VMM might need to clean up external
+	# state.  If there is no cfg directory, such as when bailing out of a
+	# failed checkout operation, it doesn't make sense to run VMM cleanup.
+	vmm_cleanup()
+	    if -d "$parceldir/cfg";
+
+	# Make sure we cannot be interrupted, since once the parcel.cfg
+	# is gone, another call to "isr clean" won't remove the rest of
+	# the parceldir.
+	if (system("rm -rf $parceldir") != 0) {
+	    err("Unable to remove $parceldir.");
+	    $ret = -1;
+	}
+    }
+
+    if (!$force) {
+        # Request a soft release
+	if ($sessionid == 0) {
+	    err("Unable to release lock for $parcel because its nonce is unknown.");
+	    $ret = -1;
+	} elsif (srun("lock", "-p $parcel -n $clientname -r $sessionid") != 0) {
+	    err("Unable to release lock for $parcel.");
+	    $ret = -1;
+	}
+    } else {
+        # Request a hard release
+	if (srun("lock", "-p $parcel -n $clientname -R") != 0) {
+	    err("Unable to release lock for $parcel.");
+	    $ret = -1;
+	}
+    }
+    
+    return $ret;
+}
+
+#
+# is_fully_hoarded - Return 1 if the parcel's disk is fully hoarded and 0
+#                    otherwise.
+#
+sub is_fully_hoarded () {
+    if (run_parcelkeeper("hoard", "parcel hoard check log") == 0) {
+	return 1;
+    } else {
+	return 0;
+    }
+}
+
+#
+# set_parcel_globals - Set global variables giving paths to parcel pieces.
+#                      If a parameter is provided, set the parcel dir to that
+#                      value rather than the default.
+#
+sub set_parcel_globals {
+    my $given_dir = shift;
+    
+    return if !$uuid;
+    
+    if ($given_dir) {
+	$parceldir = $given_dir;
+    } else {
+	$parceldir = "$isrdir/$uuid";
+    }
+    $uploaddir = "$parceldir/upload";
+    $imgbase = "$hoarddir/img/$uuid";
+    $logfile = "$isrdir/logs/$uuid";
+    # Existence of this file is a flag indicating that the local cache
+    # is identical to the most recent checkin.
+    $cleancache_file = "$parceldir/clean-cache-flag";
+    # Existence of this file is a flag indicating that the temporary
+    # dirty cache is consistent with the local cache.
+    $cdcache_file = "$parceldir/consistent-dirtycache-flag";
+}
+
+#
+# valid_uuid - Return 1 if the specified UUID is well-formed, 0 otherwise
+#
+sub valid_uuid ($) {
+    my $uuid = shift;
+    
+    return 0
+        if !defined $uuid;
+    return ($uuid =~ /^[[:xdigit:]]{8}-[[:xdigit:]]{4}-[[:xdigit:]]{4}-
+	               [[:xdigit:]]{4}-[[:xdigit:]]{12}$/x)
+}
+
+#
+# sync_parcel_uuid_from_name - Set $uuid global given $server, $user, and
+#                              $parcel, if the parcel is checked out.  Return
+#                              1 if successful, 0 otherwise.
+#
+sub sync_parcel_uuid_from_name () {
+    my $dir;
+    my %pcfg;
+    my $ret = 0;
+    
+    opendir(DIR, $isrdir)
+        or errexit("Can't read $isrdir");
+    while ($dir = readdir(DIR)) {
+	next
+	    if ! -d "$isrdir/$dir" or !valid_uuid($dir);
+	if (! -e "$isrdir/$dir/parcel.cfg") {
+	    err("Missing parcel.cfg file in $isrdir/$dir");
+	    next;
+	}
+	if (!parse_cfgfile("$isrdir/$dir/parcel.cfg", \%pcfg)) {
+	    err("Couldn't parse $isrdir/$dir/parcel.cfg");
+	    next;
+	}
+	if ($pcfg{"SERVER"} eq $server and $pcfg{"USER"} eq $userid
+                    and $pcfg{"PARCEL"} eq $parcel) {
+	    $uuid = $dir;
+	    $ret = 1;
+	    last;
+	}
+	undef %pcfg;
+    }
+    closedir(DIR);
+    return $ret;
+}
+
+#
+# sync_parcel_name_from_uuid - Set $server, $user, and $parcel globals from
+#                              $uuid, if the parcel is checked out.  Return
+#                              1 if successful, 0 otherwise.
+#
+sub sync_parcel_name_from_uuid () {
+    my %pcfg;
+    
+    return 0
+        unless -f "$isrdir/$uuid/parcel.cfg";
+    errexit("Couldn't parse $isrdir/$uuid/parcel.cfg")
+	if !parse_cfgfile("$isrdir/$uuid/parcel.cfg", \%pcfg);
+    $server = $pcfg{"SERVER"};
+    $userid = $pcfg{"USER"};
+    $parcel = $pcfg{"PARCEL"};
+    return 1;
+}
+
+#
+# parse_cfgfile - Read a file consisting of key=value pairs (and possibly
+#                 comments) and add them to the hash whose ref is provided by
+#                 the caller, overriding existing values with the same keys.
+#                 The hash is also tied to ConfigHash if not already tied.
+#                 Returns 0 on error, 1 otherwise.
+#
+sub parse_cfgfile ($$) {
+    my $infile = shift;
+    my $hashref = shift;
+
+    my $line;
+    my $key;
+    my $value;
+
+    # Cause accesses to nonexistent keys to call errexit()
+    tie(%$hashref, "ConfigHash")
+        if (!tied(%$hashref));
+    
+    # Load the key/value pairs into the hash
+    unless (open(INFILE, $infile)) {
+	# If the hash already has keys in it, then we're only trying to
+	# override existing defaults, so we don't warn if the cfgfile doesn't
+	# exist
+	unix_err("Config file $infile not found")
+	    if (!scalar %$hashref);
+	return 0;
+    }
+    while ($line = <INFILE>) {
+	chomp($line);
+
+	# Skip comment lines
+	if ($line =~ /^\s*\#/) {
+	    next;
+	}
+
+	# Otherwise parse out key and value
+	($key, $value) = split(/\s*=\s*/, $line);
+	if (defined $value) {
+	    $hashref->{$key} = $value;
+	}
+    }
+    unless (close(INFILE)) {
+	unix_err("Unable to close $infile");
+	return 0;
+    }
+
+    # Return success
+    return 1;
+}
+
+#
+# parse_parcelcfg - Read a local parcel.cfg file and populate %cfg with its
+#                   key/value pairs.
+#
+sub parse_parcelcfg ($) {
+    my $infile = shift;
+
+    # Load the key/value pairs into the hash
+    %cfg = ();
+    if (!parse_cfgfile($infile, \%cfg)) {
+	errexit("Couldn't parse parcel.cfg for $userid/$parcel");
+    }
+    
+    # Check parcel format version
+    errexit("Missing VERSION in parcel.cfg for parcel $userid/$parcel.")
+        unless exists $cfg{VERSION};
+    errexit("Unknown VERSION in parcel.cfg for parcel $userid/$parcel.")
+        unless $cfg{VERSION} == 3 or $cfg{VERSION} == 4;
+    
+    # Make sure the parcel.cfg matches the parcel we think we're working with
+    unless (exists $cfg{SERVER} and $cfg{SERVER} eq $server and
+	    exists $cfg{USER} and $cfg{USER} eq $userid and
+	    exists $cfg{PARCEL} and $cfg{PARCEL} eq $parcel) {
+        errexit("Parcel server/userid/name doesn't match parcel.cfg for parcel $userid/$parcel.");
+    }
+    
+    # Bail out on unsupported features
+    errexit("Read-only parcels are not supported")
+        if exists $cfg{READONLY} and $cfg{READONLY} ne "0";
+    
+    # Every read and write path gets appended with the userid and parcel
+    $cfg{RPATH} .= "/$userid/$parcel";
+    $cfg{WPATH} .= "/$userid/$parcel";
+}
+
+#
+# set_compression - Parse the specified compression profile, check it against
+#                   the supported algorithms in the parcel.cfg, and set
+#                   variables indicating the memory and disk compression
+#                   algorithms to use.
+#
+sub set_compression () {
+    my %mappings = (
+        # profile => [memory_alg, disk_alg]
+	disabled => ['none', 'none'],
+	mild => ['lzf', 'lzf'],
+	moderate => ['gzip', 'zlib'],
+	painful => ['lzma', 'zlib'],
+    );
+    my %supported_mem;
+    my %supported_disk;
+    my $profile;
+    my $cur;
+
+    # Determine which algorithms the parcel supports
+    if ($cfg{VERSION} >= 4) {
+	%supported_mem = map {$_, 1} ('none', split(/,/, $cfg{BLOBCOMPRESS}));
+    } else {
+	%supported_mem = (gzip => 1);
+    }
+    %supported_disk = map {$_, 1} ('none', split(/,/, $cfg{COMPRESS}));
+
+    # Check the profile requested by the user
+    if (defined $compression) {
+	$profile = $compression;
+    } else {
+	$profile = $syscfg{'compression'};
+    }
+    errexit("Unrecognized compression profile \"$profile\"; must be one of: " .
+			join(', ', sort keys %mappings))
+        unless exists $mappings{$profile};
+
+    # See if the chosen algorithms are supported.  If not, try fallbacks.
+    for $cur (@{$mappings{$profile}}[0], qw/gzip none/) {
+	if (defined $supported_mem{$cur}) {
+	    $memory_compress = $cur;
+	    last;
+	}
+    }
+    for $cur (@{$mappings{$profile}}[1], qw/zlib none/) {
+	if (defined $supported_disk{$cur}) {
+	    $disk_compress = $cur;
+	    last;
+	}
+    }
+}
+
+#
+# build_cache - Create a local Parcelkeeper cache
+#
+sub build_cache () {
+    my $name;
+
+    # Unpack the virtualization files
+    print("Decrypting and uncompressing virtual machine memory image...\n")
+	if $verbose;
+    if (-e "$parceldir/cfg") {
+	err("$parceldir/cfg already exists");
+	return -1;
+    }
+    if (decrypt_cfg($parceldir)) {
+	err("Could not decrypt and unpack cfg.tgz.enc");
+	return -1;
+    }
+
+    # Copy the keyring files
+    if (-e "$parceldir/keyring") {
+	err("$parceldir/keyring already exists");
+	return -1;
+    }
+    if (!copy("$parceldir/prev-keyring", "$parceldir/keyring")) {
+	unix_err("Unable to copy $parceldir/prev-keyring");
+	return -1;
+    }
+    
+    # Create the clean-cache flag
+    if (!touch($cleancache_file, 0666)) {
+	unix_err("Unable to create $cleancache_file");
+	return -1;
+    }
+    
+    return 0;
+}
+
+#
+# purge_completion_cache - Remove files in $completiondir older than 30 minutes
+#
+sub purge_completion_cache () {
+    my $file;
+    my $stat;
+    my $threshold = time() - (30 * 60);
+    
+    opendir(COMP, $completiondir)
+        or return;
+    while ($file = readdir(COMP)) {
+	$stat = stat("$completiondir/$file");
+	next if !$stat;
+	unlink("$completiondir/$file")
+	    if $stat->mtime < $threshold;
+    }
+    closedir(COMP);
+}
+
+#
+# check_for_fuse - Make sure FUSE is loaded and accessible
+#
+sub check_for_fuse () {
+    my $node = "/dev/fuse";
+    my $dir;
+    my $prog;
+    my $stat;
+    my $grp;
+    
+    # Check for fatal problems first
+    -e $node
+        or errexit("The FUSE kernel module does not appear to be loaded.");
+    foreach $dir (File::Spec->path()) {
+        # Note that libfuse hardcodes the path to fusermount and so doesn't use
+        # the search path when mounting the VFS.  However, we use the search
+        # path when unmounting.
+        if (-e "$dir/fusermount") {
+            $prog = "$dir/fusermount";
+            last;
+        }
+    }
+    errexit("Couldn't find fusermount")
+        unless $prog;
+
+    # Check device node permissions
+    if (! -r $node or ! -w $node) {
+	# Try to give the user an intelligent explanation of how to fix the
+	# problem.  Some Linux distributions require the user to be a member
+	# of the "fuse" group to use FUSE.  
+	$stat = stat($node)
+	    or errexit("Couldn't stat $node");
+	if (($stat->mode & 0060) == 0060 &&
+	    		!grep($_ == $stat->gid, split(/ /, $)))) {
+	    $grp = getgrgid($stat->gid);
+	    errexit("You must be a member of the \"$grp\" group to resume a parcel.")
+	        if $grp;
+	    errexit("You must be a member of group " . $stat->gid . " to resume a parcel.")
+	} else {
+	    errexit("You must have access to $node to resume a parcel.");
+	}
+    }
+
+    # Some Linux distributions have a world-writable /dev/fuse but restrictive
+    # permissions on fusermount
+    if (! -x $prog) {
+	$stat = stat($prog)
+	    or errexit("Couldn't stat $prog");
+	if (($stat->mode & 0010) && !grep($_ == $stat->gid, split(/ /, $)))) {
+	    $grp = getgrgid($stat->gid);
+	    errexit("You must be a member of the \"$grp\" group to resume a parcel.")
+	        if $grp;
+	    errexit("You must be a member of group " . $stat->gid . " to resume a parcel.")
+	} else {
+	    errexit("You must have execute permission on $prog to resume a parcel.");
+	}
+    }
+}
+
+#
+# check_disk_space - Show a warning if free disk space < MAXKB
+#
+sub check_disk_space () {
+    my $diskinfo;
+    my $diskspace;
+    my $fh;
+
+    open($fh, "-|", "df -P -k $isrdir")
+        or unix_errexit("Couldn't run df");
+    # Get the last line of the output
+    while (<$fh>) {
+        $diskinfo = $_;
+    }
+    close $fh
+        or system_errexit("df returned error");
+    $diskspace = (split(" ", $diskinfo))[3];
+    print YELLOW, "Free disk space below recommended minimum " .
+		   "($diskspace/$cfg{MAXKB} KB available)\n", RESET
+        if $diskspace < $cfg{MAXKB};
+}
+
+#
+# check_for_old_isrdir - walk $isrdir for old-style checkouts and hoard caches
+#                        and notify the user if any are found
+#
+sub check_for_old_isrdir () {
+    my $ientry;
+    my $uentry;
+    my $hentry;
+    my $size;
+
+    opendir(IDIR, $isrdir)
+        or errexit("Couldn't read $isrdir");
+    while ($ientry = readdir(IDIR)) {
+        next if valid_uuid($ientry);
+        next if ! -d "$isrdir/$ientry" or $ientry =~ /^\.{1,2}|lost\+found$/;
+        opendir(UDIR, "$isrdir/$ientry")
+            or errexit("Couldn't read $isrdir/$ientry");
+        while ($uentry = readdir(UDIR)) {
+            next if ! -d "$isrdir/$ientry/$uentry" or $uentry =~ /^\.{1,2}$/;
+            if ($uentry =~ /^(.+)-hoard$/) {
+                $size = 0;
+                opendir(HDIR, "$isrdir/$ientry/$uentry")
+                    or errexit("Couldn't read $isrdir/$ientry/$uentry");
+                while ($hentry = readdir(HDIR)) {
+                    next if $hentry =~ /^\.{1,2}$/;
+                    $size += stat("$isrdir/$ientry/$uentry/$hentry")->blocks;
+                }
+                closedir(HDIR);
+                $size >>= 11;
+                print YELLOW, "Found old-style hoard cache for $ientry/$1 ($size MB).\n", RESET;
+                if (query("Remove?") eq "y") {
+                    print "Removing... (this may take a while)\n";
+                    system("rm -rf $isrdir/$ientry/$uentry") == 0
+                        or system_errexit("Couldn't remove $isrdir/$ientry/$uentry");
+                }
+            } elsif (-e "$isrdir/$ientry/$uentry/parcel.cfg") {
+                err("Found old-style checkout $isrdir/$ientry/$uentry, ignoring");
+            }
+        }
+        closedir(UDIR);
+    }
+    closedir(IDIR);
+}
+
+#
+# check_damaged_cache - See if the local cache for this parcel is dirty
+#                       (that is, PK was not shut down cleanly) and validate
+#                       it if so.  Returns true if the local cache is damaged
+#                       (and thus checkin will be disallowed by PK), false
+#                       otherwise.
+#
+sub check_damaged_cache () {
+    my $ret;
+    
+    $ret = run_parcelkeeper("validate", "parcel check") >> 8;
+    errexit("Unable to run Parcelkeeper.")
+        if $ret == 1 or $ret > 6;
+    if ($ret & 2) {
+	print "The parcel needs to be checked for consistency.  Please wait.\n"
+	    if $verbose;
+	# If this fails, then either validation completed with errors or PK
+	# failed for other reasons.  We find out which by running with --check
+	# again.
+	run_parcelkeeper("validate", "parcel full log");
+	$ret = run_parcelkeeper("validate", "parcel check") >> 8;
+	errexit("Unable to run Parcelkeeper.")
+	    if $ret == 1 or $ret > 6;
+	# If the dirty flag is still set, the validation run did not arrive at
+	# a decision.
+	errexit("Unable to check parcel consistency.")
+	    if $ret & 2;
+	# The extra spaces are here to blank out the PK progress bar
+	print "Check complete.             \n"
+	    if $verbose;
+    }
+    return ($ret & 4) == 4;
+}
+
+#
+# fuse_can_allow_root - Returns true if FUSE has been configured to allow
+#                       filesystem implementations to allow root to access
+#                       files in their filesystems.
+#
+sub fuse_can_allow_root () {
+    my $fh;
+
+    open($fh, "<", "/etc/fuse.conf")
+        or return 0;
+    while (<$fh>) {
+        chomp;
+        if (/^user_allow_other$/) {
+            close($fh);
+            return 1;
+        }
+    }
+    close($fh);
+    return 0;
+}
+
+#
+# fuse_try_unmount - Try to unmount the FUSE virtual filesystem for the
+#                    current parcel.
+#
+sub fuse_try_unmount () {
+    my $mountpoint;
+
+    $mountpoint = readlink("$parceldir/vfs");
+    if (defined $mountpoint) {
+        system("fusermount -uz $mountpoint");
+    } else {
+        unix_err("Couldn't read $parceldir/vfs");
+    }
+}
+
+#
+# fetch_parcel_file - Copy a file from remote store to the local hoard cache,
+#                     unless the file is already up-to-date in the hoard cache.
+#                     The client will ignore SIGINT/SIGQUIT while the transfer
+#                     is in progress; -1 will be returned if one of these was
+#                     received by the child process, or if any other error
+#                     occurs.
+#
+sub fetch_parcel_file ($$$$$) {
+    my $remote_name = shift;
+    my $local_path = shift;
+    my $desc = shift;
+    my $show_progress = shift;
+    my $sigset = shift;
+    
+    my $retval;
+    my $tmpfile;
+    my $remote_size;
+    my $remote_hash;
+    my $local_hash = "";
+    my $flag = ($show_progress and $verbose) ? "" : "-sS";
+    my $i;
+    my $blobtool = LIBDIR . "/blobtool";
+    my %map;
+    
+    $tmpfile = mktempfile();
+    if (srun("stat", "-f $userid/$parcel/last/$remote_name",
+	     OUTFILE => $tmpfile) != 0) {
+	err("Unable to stat $remote_name file on server");
+	return -1;
+    }
+    parse_cfgfile($tmpfile, \%map);
+    $remote_size = $map{SIZE};
+    $remote_hash = $map{SHA1};
+
+    #
+    # Look aside to see if the file is available 
+    #
+    if (!$syscfg{disable_lookaside} and -e $local_path) {
+	chomp ($local_hash = `$blobtool -hi $local_path`);
+    }
+    
+    if ($remote_hash eq $local_hash) {
+	print "Found local match for encrypted $desc.\n"
+	    if $verbose;
+    } else {
+	printf("Fetching $desc (%d MB)...\n", int($remote_size/(1<<20)))
+	    if $verbose;
+
+	#
+	# If $sigset is not undef, we assume that SIGINT is currently blocked.
+	# We will ourselves block SIGINT while curl runs, in order to catch
+	# and clean up when curl dies on a signal.  But if SIGINT is already
+	# blocked, we need to unblock it and install a dummy signal handler so
+	# that curl doesn't end up blocking or ignoring SIGINT as well.  This
+	# means we lose SIGINTs which are pending from before we unblock.
+	#
+	if ($sigset) {
+	    $SIG{'INT'} = sub {};
+	    unblock_sigint($$sigset);
+	}
+	
+	# Retry if the get operation fails
+	for ($i = 0; $i < $syscfg{retries}; $i++) {
+	    $retval = system("curl --connect-timeout $syscfg{connect_timeout} $flag -f -G $cfg{RPATH}/last/$remote_name > $local_path");
+	    last if ($retval == 0 or WIFSIGNALED($retval));
+	    print "[isr] get operation failed. Retrying...\n"
+		if $verbose;
+	    sleep(1);
+	}
+	
+	if ($sigset) {
+	    $$sigset = block_sigint();
+	    $SIG{'INT'} = \&sigint_handler;
+	}
+	
+	if ($retval) {
+	    print "\n";
+	    # The $local_path file is now known to be invalid.  Kill it.
+	    unlink($local_path);
+	    if (WIFSIGNALED($retval)) {
+	        err("Fetch interrupted by signal");
+	    } else {
+	        err("Unable to fetch $remote_name file");
+	    }
+	    return -1;
+	}
+    }
+    return 0;
+}
+
+sub keyroot_pipe () {
+    my $rh;
+    my $wh;
+    my $flags;
+    
+    # Each end is automatically closed when it goes out of scope
+    pipe($rh, $wh)
+        or unix_errexit("Couldn't create pipe");
+    # Clear close-on-exec flag for the read end
+    $flags = fcntl($rh, F_GETFD, 0);
+    fcntl($rh, F_SETFD, $flags & ~FD_CLOEXEC);
+    print $wh $cfg{KEYROOT} . "\n";
+    # We can't just return fileno($rh) because $rh would drop out of scope
+    return ($rh, fileno($rh));
+}
+
+sub encrypt_keyring ($$) {
+    my $src = shift;
+    my $dest = shift;
+    
+    my ($rh, $fd) = keyroot_pipe();
+    
+    return mysystem(LIBDIR . "/blobtool -e -i $src -o $dest -k $fd");
+}
+
+sub decrypt_keyring ($) {
+    my $dest = shift;
+    
+    my ($rh, $fd) = keyroot_pipe();
+    
+    return mysystem(LIBDIR . "/blobtool -ed -i $imgbase.key -o $dest -k $fd");
+}
+
+sub encrypt_cfg ($$) {
+    my $src = shift;
+    my $dest = shift;
+    
+    my ($rh, $fd) = keyroot_pipe();
+    my $parent = dirname($src);
+    my $cur = basename($src);
+    
+    return mysystem(LIBDIR . "/blobtool -etp -o $dest -k $fd -C $parent " .
+			"-c $memory_compress $cur");
+}
+
+sub decrypt_cfg ($) {
+    my $dest = shift;
+    
+    my ($rh, $fd) = keyroot_pipe();
+    
+    return mysystem(LIBDIR . "/blobtool -etdp -i $imgbase.cfg -k $fd -C $dest");
+}
+
+#
+# block_sigint - Block receipt of SIGINT (ctrl-c) and return sigmask
+# 
+sub block_sigint () {
+    my $sigset = POSIX::SigSet->new(SIGINT);
+
+    sigprocmask(SIG_BLOCK, $sigset)
+	or errexit("Could not block SIGINT");
+    return $sigset;
+}
+
+#
+# unblock_sigint - Unblock receipt of SIGINT
+#
+sub unblock_sigint ($) {
+    my $sigset = shift;
+
+    sigprocmask(SIG_UNBLOCK, $sigset) 
+	or errexit("Could not unblock SIGINT");
+}
+
+#
+# block_sigtstp - Block receipt of SIGTSTP (ctrl-z) and return sigmask
+# 
+sub block_sigtstp () {
+    my $sigset = POSIX::SigSet->new(SIGTSTP);
+
+    sigprocmask(SIG_BLOCK, $sigset)
+	or errexit("Could not block SIGTSTP");
+    return $sigset;
+}
+
+#
+# mysystem - Version of Unix 'system' function that can be 
+#            interrupted with ctrl-c
+#
+sub mysystem ($) {
+    my $cmd = shift;
+    
+    my $pid;
+
+    if (!defined($pid = fork())) {
+	unix_errexit("Unable to fork in mysystem");
+    } 
+
+    # Child
+    elsif ($pid == 0) {
+	$no_shutdown = 1;
+	exec($cmd)
+	    or unix_errexit("Unable to exec $cmd in mysystem");
+    } 
+
+    # Parent
+    waitpid($pid, 0);
+    return $?; # Return exit status of the child
+}
+
+#
+# sys_sync - Call sync(2)
+#
+sub sys_sync () {
+    # The approved way to do this is to require syscall.ph and pull the
+    # syscall numbers from there, but several distributions ship with .ph
+    # files that are broken in various ways.  So, we hardcode the syscall
+    # numbers for architectures we recognize, and fall back on system("sync")
+    # otherwise.
+    if ($Config{'myarchname'} =~ /i.86-linux/) {
+	syscall(36);
+    } elsif ($Config{'myarchname'} =~ /x86_64-linux/) {
+	syscall(162);
+    } else {
+	mysystem("sync") == 0
+	    or system_err("Couldn't call sync");
+    }
+}
+
+#
+# mkdirs - Make the directories named by the argument list.  Returns true
+#          if, for each argument, the create was successful or the directory
+#          already existed; false otherwise.  The function stops after the
+#          first error.
+#
+sub mkdirs (@) {
+    my $dir;
+    
+    while ($dir = shift) {
+	mkdir($dir);
+	return 0
+	    if !-d $dir;
+    }
+    return 1;
+}
+
+#
+# touch - Create the specified file with the given permissions.  Returns true
+#         on success, false on error.
+#
+sub touch ($$) {
+    my $file = shift;
+    my $perms = shift;
+    
+    sysopen(FLAG, $file, O_WRONLY|O_CREAT, $perms)
+        or return 0;
+    close(FLAG);
+    return 1;
+}
+
+#
+# mktempfile - Create a unique temporary file and return its name.  The file
+#              will be automatically removed at exit.
+#
+sub mktempfile () {
+    my $fh;
+    my $file;
+    
+    # We can't use UNLINK because it doesn't run in the SIGINT path
+    ($fh, $file) = tempfile("isr-XXXXXXXX", DIR => File::Spec->tmpdir())
+        or errexit("Couldn't create temporary file");
+    close $fh;
+    # Racy, but that's OK
+    push @temps, $file;
+    return $file;
+}
+
+#
+# mktempdir - Create a unique temporary directory and return its name.  The
+#             directory will be automatically removed at exit.
+#
+sub mktempdir () {
+    my $dir;
+    
+    # We can't use CLEANUP because it doesn't run in the SIGINT path
+    $dir = tempdir("isr-XXXXXXXX", TMPDIR => 1)
+        or errexit("Couldn't create temporary directory");
+    # Racy, but that's OK
+    push @temps, $dir;
+    return $dir;
+}
+
+#
+# dirsize - Return the number of 512-byte blocks taken by the contents of the
+#           named directory, and recursively by the contents of its
+#           subdirectories
+#
+sub dirsize ($) {
+    my $dir = shift;
+    
+    my $dh;
+    my $file;
+    my $size = 0;
+    my $stat;
+    
+    opendir($dh, $dir)
+        or unix_errexit("Couldn't open directory $dir");
+    while ($file = readdir($dh)) {
+	next if $file =~ /^\.{1,2}$/;
+	$stat = stat("$dir/$file");
+	unix_errexit("Couldn't stat $dir/$file")
+	    if !$stat;
+	if (S_ISDIR($stat->mode)) {
+	    $size += dirsize("$dir/$file");
+	} elsif (S_ISREG($stat->mode)) {
+	    $size += $stat->blocks;
+	}
+    }
+    closedir($dh);
+    return $size;
+}
+
+######
+# Error reporting routines
+#
+
+#
+# err - Print an error message without exiting
+#
+sub err ($) {
+    my $msg = shift;
+
+    print "[$progname] Warning: $msg\n";
+    message("Warning: $msg");
+}
+
+#
+# unix_err - Print an error message (with Unix strerr)
+#
+sub unix_err ($) {
+    my $msg = shift;
+
+    err("$msg ($!)");
+}
+
+#
+# system_err - Print an error after the system() function fails
+#
+sub system_err ($) {
+    my $msg = shift;
+
+    my $exit_value = $? >> 8;
+
+    err("$msg ($exit_value)");
+}
+
+#
+# errexit - Print an error message and exit
+#
+sub errexit ($) {
+    my $msg = shift;
+
+    print RED, "[$progname] Error: $msg\n", RESET;
+    message("Error: $msg");
+    exit 1;
+}
+
+#
+# unix_errexit - Print an error message (with Unix strerr) and exit
+#
+sub unix_errexit ($) {
+    my $msg = shift;
+
+    errexit("$msg ($!)");
+}
+
+#
+# system_errexit - Print an error and exit after the system() function fails
+#
+sub system_errexit ($) {
+    my $msg = shift;
+
+    my $exit_value = $? >> 8;
+
+    errexit("$msg ($exit_value)");
+}
+
+#
+# message - Emits a message to the ISR client side session log
+#
+sub message ($) {
+    my $msg = shift;
+
+    my $logdir;
+    my @time = gettimeofday();
+    my $ms = sprintf("%.3d", int($time[1] / 1000));
+    my $date = strftime("%b %d %Y %H:%M:%S.$ms", localtime($time[0]));
+    my @logs;
+    my $file;
+
+    return
+        unless defined $isrdir;
+    $logdir = "$isrdir/logs";
+    if ($uuid) {
+	if (!mkdirs($logdir)) {
+	    # If we call errexit() we'll recurse forever
+	    print RED, "[$progname] Error: Couldn't make directory $logdir\n", RESET;
+	    # The shutdown handler likewise calls message().  Disable the
+	    # handler, which means that e.g. temporary files won't be cleaned
+	    # up.
+	    $no_shutdown = 1;
+	    exit 1;
+	}
+	push @logs, "$logdir/$uuid";
+    } else {
+	# No sense creating the directory, since we won't be writing to
+	# anything in it
+	opendir(DIR, $logdir)
+	    or return;
+	while ($file = readdir(DIR)) {
+	    if (-f "$logdir/$file") {
+		push @logs, "$logdir/$file";
+	    }
+	}
+	closedir(DIR);
+    }
+    foreach $file (@logs) {
+	open(LOG, ">>", $file)
+	    or next;
+	# Ignore lock and reseek errors; we'll get an approximation of the
+	# right thing in this case
+	fcntl_lock(\*LOG, F_WRLCK, 1);
+	# We've already seeked to EOF, but it might have moved since the open()
+	seek(LOG, 0, SEEK_END);
+	print LOG "$date $$ CLIENT: $msg\n";
+	close(LOG);
+    }
+}
+
+#
+# query - Ask the user a question and return the reply
+#
+sub query {
+    my $question = shift;
+
+    my $reply;
+
+    print RED, "$question (y/n): ", RESET;
+    $reply = <STDIN>;
+    chomp($reply);
+
+    # Keep asking until the user replies either y or n
+    while ($reply ne "y" and $reply ne "n") {
+	print RED, "$question (y/n): ", RESET;
+	$reply = <STDIN>;
+	chomp($reply);
+    }
+    return $reply;
+}
+
+#
+# mypause - Pause and then continue on 'y' and exit on 'n'
+#
+sub mypause($) {
+    my $msg = shift;
+
+    my $reply;
+
+    if ($verbose > 1) {
+	$reply = query($msg);
+	if ($reply eq "n") {
+	    exit;
+	}
+    }
+}
+
+#
+# usage - Print help message and terminate.  usage("") is special: it prints
+#         the long-form help.
+#
+sub usage ($) {
+    my $msg = shift;
+
+    if ($msg) {
+        print RED, "Error: $msg\n", RESET;
+    }
+
+    print RED, "Usage: $progname command [parcel] [options...]\n", RESET;
+    print BLUE, "Commands: auth, checkhoard, checkin (ci), checkout (co), checkp, clean, deauth,\n", RESET;
+    print BLUE, "          discard, help, hoard, ls, lshoard, passwd, poweroff, resume, rmhoard,\n", RESET;
+    print BLUE, "          stat, sync, uuid, version\n", RESET;
+    print BLUE, "Parcel is required for most commands\n", RESET;
+    if (!$msg) {
+	print "Basic commands:\n";
+	print "  auth       Authenticate to the ISR server (once per X session only)\n";
+	print "  ls         List info about your parcels (parcel, -lL optional)\n";
+ 	print "  resume     Checkout (if necessary) and run a parcel (-CdDFmor optional)\n";
+	print "  checkin    Sync parcel to server and check it in (-bC optional)\n";
+	print "  passwd     Change your ISR password on the server\n";
+	print "  help       Print help message\n";
+	print "Advanced commands:\n";
+	print "  stat       Display information about local state for a parcel\n";
+	print "  checkout   Checkout parcel without running it (-cdr optional)\n";
+	print "  sync       Sync parcel to server without checking it in (-bC optional)\n";
+	print "  discard    Discard all local changes to parcel since last checkout or sync\n";
+	print "  clean      Remove parcel from client and release its lock (-f optional)\n";
+	print "  hoard      Fetch entire virtual disk for improved performance\n";
+	print "  deauth     Remove authentication credentials from your client\n";
+	print "Debugging and maintenance commands:\n";
+	print "  dirtometer Launch dirtometer visualization tool for a running parcel\n";
+	print "  poweroff   Discard memory image for a suspended parcel (-mo optional)\n";
+	print "  checkp     Check parcel for consistency (-cerY optional)\n";
+	print "  checkhoard Check hoard cache for consistency (-cp optional)\n";
+	print "  lshoard    List info about the hoard cache (-l optional)\n";
+	print "  rmhoard    Remove a parcel from the hoard cache\n";
+	print "  uuid       Print the UUID for a parcel\n";
+	print "  version    Print OpenISR version\n";
+    }
+    print "Options:\n";
+    print "  -b,--bwlimit       Bandwidth limit (KBytes/s) [checkin, sync]\n";
+    print "  -c,--checkstate    Do extra checks [checkout, checkp, checkhoard]\n";
+    print "  -C,--compression   Override compression profile [checkin, resume, sync]\n";
+    print "  -d,--disconnected  Run disconnected (after hoarding) [checkout, resume]\n";
+    print "  -D,--dirtometer    Launch dirtometer visualization tool [resume]\n";
+    print "  -e,--remote        Perform action on server rather than client [checkp]\n";
+    print "  -f,--force         Release parcel lock even if we don't hold it [clean]\n";
+    print "  -F,--no-fullscreen Start VMM in windowed mode [resume]\n";
+    print "  -l,--long          Long listing [ls, lshoard, stat]\n";
+    print "  -L,--longvers      Long listing with specific number of versions [ls]\n";
+    print "  -m,--vmm           Override default VMM for this parcel [resume, poweroff]\n";
+    print "  -o,--vmmopt        Option string for the VMM [resume, poweroff]\n";
+    print "  -p,--compact       Compact the hoard cache [checkhoard]\n";
+    print "  -q,--quiet         Run silently (except if things go wrong)\n";
+    print "  -r,--rollback      Rollback to or check version [checkout, checkp, resume]\n";
+    print "  -s,--server        Server domain name (optional)\n";
+    print "  -u,--user          Your ISR user name (defaults to your login name)\n";
+    print "  -v,--verbose       Increment verbosity level\n";
+    print "  -Y,--splice        Restore invalid chunks from previous version [checkp]\n";
+    print "\n";
+    
+    exit 0;
+}
+
+sub version () {
+    my $vmms;
+
+    opendir(DRVS, VMMDIR)
+        or unix_errexit("Couldn't read " . VMMDIR);
+    $vmms = join ", ", grep {!/^\.{1,2}$/} sort readdir DRVS;
+    closedir(DRVS);
+    
+    print "OpenISR " . ISRVERSION . ", client revision " . RCS_REVISION . "\n";
+    print "Available VMM drivers: $vmms\n";
+    # These are the copyrights for the entire OpenISR client codebase, not
+    # just the user interface.
+    print <<END;
+
+Copyright (C) 2000-2011 Carnegie Mellon University and others
+The OpenISR system comes with ABSOLUTELY NO WARRANTY.  Different parts of
+this software are distributed under different licenses, including the
+Eclipse Public License, version 1.0; the GNU General Public License, version 2;
+and the GNU Lesser General Public License, version 2.1.  See the README file
+included with this software for details on which license applies to each
+component of the OpenISR system.
+END
+}

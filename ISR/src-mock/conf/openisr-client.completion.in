@@ -1,0 +1,339 @@
+#
+# openisr-client.completion - bash completions for isr command
+#
+# Copyright (C) 2007-2010 Carnegie Mellon University
+#
+# This program is free software; you can redistribute it and/or modify it
+# under the terms of version 2 of the GNU General Public License as published
+# by the Free Software Foundation.  A copy of the GNU General Public License
+# should have been distributed along with this program in the file
+# LICENSE.GPL.
+#
+# This program is distributed in the hope that it will be useful, but
+# WITHOUT ANY WARRANTY; without even the implied warranty of MERCHANTABILITY
+# or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU General Public License
+# for more details.
+#
+
+have isr && {
+
+_isr_find_word() {
+	local i
+	for (( i=0; $i < ${#COMP_WORDS[@]}; i++ )) ; do
+		if [ "${COMP_WORDS[$i]}" = "$1" ] ; then
+			echo $i
+			return
+		fi
+	done
+	echo -1
+}
+
+_isr_find_bareword() {
+	local i cur prev
+	for (( i=$1; $i < ${#COMP_WORDS[@]}; i++ )) ; do
+		cur="${COMP_WORDS[$i]}"
+		prev="${COMP_WORDS[$(($i - 1))]}"
+		# Ignore option arguments
+		if [ "${cur:0:1}" = "-" ] ; then
+			continue
+		fi
+		# Ignore parameters to option arguments
+		if _isr_parameter_takes_option $prev ; then
+			continue
+		fi
+		echo $i
+		return
+	done
+	echo -1
+}
+
+_isr_config_value() {
+	local ret file tmp
+	for file in !!SHAREDIR!!/config !!SYSCONFDIR!!/openisr.conf ~/.openisrrc
+	do
+		[ -r $file ] || continue
+		tmp=`awk -F '[ \t]*=[ \t]*' \
+				"\\$1 ~ /^[ \t]*$1$/ {print \\$2}" $file`
+		[ -n "$tmp" ] && ret="$tmp"
+	done
+	[ -n "$ret" ] && echo "$ret"
+}
+
+_isr_data_dir() {
+	_isr_config_value isrdir | sed -e "s:\\\u:$USER:g" -e "s:\\\h:$HOME:g"
+}
+
+_isr_cur_server() {
+	local ret i
+	i=`_isr_find_word -s`
+	[ $i == -1 ] && i=`_isr_find_word --server`
+	[ $i != -1 ] && ret="${COMP_WORDS[$(($i + 1))]}"
+	[ -z "$ret" ] && ret=`_isr_config_value server`
+	[ -n "$ret" ] && echo "$ret"
+}
+
+_isr_cur_user() {
+	local ret i
+	i=`_isr_find_word -u`
+	[ $i == -1 ] && i=`_isr_find_word --user`
+	[ $i != -1 ] && ret="${COMP_WORDS[$(($i + 1))]}"
+	[ -z "$ret" ] && ret=`_isr_config_value userid`
+	[ -z "$ret" ] && ret="$USER"
+	[ -n "$ret" ] && echo "$ret"
+}
+
+_isr_checked_out() {
+	local file
+	for file in "`_isr_data_dir`"/*/parcel.cfg
+	do
+		[ -r $file ] || continue
+		awk -F '[ \t]*=[ \t]*' \
+				'$1 ~ /^SERVER$/ { S=$2 } 
+				$1 ~ /^USER$/ { U=$2 }
+				$1 ~ /^PARCEL$/ { P=$2 }
+				$1 ~ /^UUID$/ { UU=$2 }
+				END { print UU, S, U, P }' $file
+	done | while read uu s u p ; do
+		[ -f "/dev/shm/openisr-chunkmap-$uu" ] && r=1 || r=0
+		echo "$uu" "$s" "$u" "$p" "$r"
+	done
+}
+
+_isr_query_hoard() {
+	local datadir
+	datadir=`_isr_data_dir`
+	[ -x !!LIBDIR!!/query -a -r "$datadir/hoard/hoard.idx" ] || return
+	!!LIBDIR!!/query "$datadir/hoard/hoard.idx" "$1" 2>/dev/null
+}
+
+_isr_local_parcel() {
+	local ret
+	ret=`_isr_checked_out | awk "\\$2 == \"$1\" && \\$3 == \"$2\" \
+				{ print \\$4 }"`
+	compgen -W "$ret" -- $3
+}
+
+_isr_running_parcel() {
+	local ret
+	ret=`_isr_checked_out | awk "\\$2 == \"$1\" && \\$3 == \"$2\" \
+				&& \\$5 == 1 { print \\$4 }"`
+	compgen -W "$ret" -- $3
+}
+
+_isr_remote_parcel() {
+	local dir file
+	dir="`_isr_data_dir`/completion"
+	file="$dir/$1-$2"
+	if [ ! -d "$dir" ] ; then
+		mkdir -p "$dir" 2>/dev/null || return
+	fi
+	# Proactively remove stale caches to cut down on the amount of
+	# semi-sensitive information we leave lying around.
+	find "$dir" -mmin +30 -exec rm {} \; 2>/dev/null
+	if [ ! -f "$file" ] ; then
+		if isr ls -s $1 -u $2 > "$file.$$" 2>/dev/null ; then
+			sed -re "s/.*\[[0-9]+m//" "$file.$$" | \
+				awk '!/Parcels for/ {print $1}' > "$file"
+		else
+			# "isr ls" returned an error.  Cache a negative result.
+			>"$file"
+		fi
+		rm -f "$file.$$"
+	fi
+	compgen -W "`cat "$file" 2>/dev/null`" -- $3
+}
+
+_isr_hoard_uuids() {
+	local ret uuid file
+	# Get UUIDs of hoard images
+	for file in "`_isr_data_dir`"/hoard/img/*-*-*-*.* ; do
+		uuid=`echo "$file" | sed -e "s:^.*/::" -e "s:\..*$::"`
+		ret=$ret$uuid$'\n'
+	done
+	# Get UUIDs in hoard cache index
+	ret="$ret`_isr_query_hoard 'SELECT uuid FROM parcels'`"
+	compgen -W "$ret" -- $1
+}
+
+_isr_servers() {
+	local ret
+	ret=`_isr_query_hoard "SELECT server FROM parcels"`
+	ret=$ret$'\n'`_isr_checked_out | awk '{print $2}'`
+	compgen -W "$ret" -- $1
+}
+
+_isr_users() {
+	local ret
+	ret=`_isr_query_hoard 'SELECT user FROM parcels'`
+	ret=$ret$'\n'`_isr_checked_out | awk '{print $3}'`
+	compgen -W "$ret" -- $1
+}
+
+_isr_vmms() {
+	local ret
+	ret=`find !!SHAREDIR!!/vmm -type f -printf "%f\n"`
+	compgen -W "$ret" -- $1
+}
+
+_isr_parameter_takes_option() {
+	case $1 in
+	-b|--bwlimit|-C|--compression|-L|--longvers|-m|--vmm|-r|--rollback|-s|--server|-u|--user)
+		return 0
+		;;
+	esac
+	return 1
+}
+
+_isr_subcommand_opts() {
+	local short long
+	case $1 in
+	auth|dirtometer|discard|hoard|passwd|stat)
+		short="-s -u"
+		long="--server --user"
+		;;
+	checkhoard)
+		short="-c -p"
+		long="--checkstate --compact"
+		;;
+	checkin|ci|sync)
+		short="-b -C -s -u"
+		long="--bwlimit --compression --server --user"
+		;;
+	checkout|co)
+		short="-c -d -r -s -u"
+		long="--checkstate --disconnected --rollback --server --user"
+		;;
+	checkp)
+		short="-c -e -r -s -u -Y"
+		long="--checkstate --remote --rollback --server --user --splice"
+		;;
+	clean)
+		short="-f -s -u"
+		long="--force --server --user"
+		;;
+	ls)
+		short="-l -L -s -u"
+		long="--long --longvers --server --user"
+		;;
+	lshoard)
+		short="-l"
+		long="--long"
+		;;
+	poweroff)
+		short="-m -s -u"
+		long="--server --user --vmm"
+		;;
+	resume)
+		short="-C -d -D -F -m -r -s -u"
+		long="--compression --disconnected --dirtometer --no-fullscreen --rollback --server --user --vmm"
+		;;
+	esac
+	short="-q -v $short"
+	long="--quiet --verbose $long"
+
+	if [ "${2:1:1}" = "-" ] ; then
+		compgen -W "$long" -- $2
+	elif [ "${2:0:1}" = "-" ] ; then
+		compgen -W "$short" -- $2
+	fi
+}
+
+_isr() {
+	local cur prev server user cmd_idx parcel_idx cmd
+	cur="$2"
+	prev="$3"
+
+	# Always offer to complete server, user, and VMM names, even if we
+	# haven't seen a subcommand yet.  We assume that the user knows what
+	# they're doing in this case, because the subcommand they haven't
+	# entered yet may not actually take -s/-u/-m.  (And therefore we don't
+	# offer to complete the options themselves.)
+	if [ "$prev" = "-s" -o "$prev" = "--server" ] ; then
+		COMPREPLY=(`_isr_servers $cur`)
+		return
+	fi
+	if [ "$prev" = "-u" -o "$prev" = "--user" ] ; then
+		COMPREPLY=(`_isr_users $cur`)
+		return
+	fi
+	if [ "$prev" = "-m" -o "$prev" = "--vmm" ] ; then
+		COMPREPLY=(`_isr_vmms $cur`)
+		return
+	fi
+	if [ "$prev" = "-C" -o "$prev" = "--compression" ] ; then
+		COMPREPLY=(`compgen -W "disabled mild moderate painful" -- $cur`)
+		return
+	fi
+
+	# Figure out what command and parcel we have
+	cmd_idx=`_isr_find_bareword 1`
+	if [ $cmd_idx != -1 ] ; then
+		cmd=${COMP_WORDS[$cmd_idx]}
+		parcel_idx=`_isr_find_bareword $(($cmd_idx + 1))`
+	else
+		parcel_idx=-1
+	fi
+
+	# Offer to complete options whether we know the subcommand or not,
+	# since at least -q/-v always work
+	if [ "${cur:0:1}" = "-" ] ; then
+		COMPREPLY=(`_isr_subcommand_opts "$cmd" $cur`)
+		return
+	fi
+
+	if [ $cmd_idx == -1 -o $cmd_idx == $COMP_CWORD -o \
+				\( $parcel_idx == -1 -a \
+				$COMP_CWORD -lt $cmd_idx \) ] ; then
+		COMPREPLY=(`compgen -W "auth checkhoard checkin ci checkout co checkp clean deauth dirtometer discard help hoard ls lshoard passwd poweroff resume rmhoard stat sync uuid version" -- $cur`)
+		return
+	fi
+
+	# Make sure it's appropriate to offer a parcel parameter here
+	[ $parcel_idx == -1 -o $parcel_idx == $COMP_CWORD ] || return
+
+	# Determine the server and userid to filter the parcel list against
+	server=`_isr_cur_server`
+	user=`_isr_cur_user`
+
+	case $cmd in
+	dirtometer)
+		# Need running parcel
+		COMPREPLY=(`_isr_running_parcel $server $user $cur`)
+		;;
+	ci|checkin|discard|poweroff|stat|sync|uuid)
+		# Need local parcel
+		COMPREPLY=(`_isr_local_parcel $server $user $cur`)
+		;;
+	co|checkout|hoard|resume|ls)
+		# Need local or remote parcel
+		COMPREPLY=(`_isr_remote_parcel $server $user $cur`)
+		;;
+	rmhoard)
+		# Need UUID from hoard cache index or image dir, or
+		# the name of a checked-out parcel
+		COMPREPLY=(`_isr_hoard_uuids $cur` \
+					`_isr_local_parcel $server $user $cur`)
+		;;
+	checkp)
+		# Need local or remote parcel depending on options
+		if [ `_isr_find_word -e` != "-1" -o \
+				`_isr_find_word --remote` != "-1" ] ; then
+			COMPREPLY=(`_isr_remote_parcel $server $user $cur`)
+		else
+			COMPREPLY=(`_isr_local_parcel $server $user $cur`)
+		fi
+		;;
+	clean)
+		# Need local or remote parcel depending on options
+		if [ `_isr_find_word -f` != "-1" -o \
+				`_isr_find_word --force` != "-1" ] ; then
+			COMPREPLY=(`_isr_remote_parcel $server $user $cur`)
+		else
+			COMPREPLY=(`_isr_local_parcel $server $user $cur`)
+		fi
+		;;
+	esac
+}
+complete -F _isr isr
+
+}

@@ -1,0 +1,197 @@
+#!!!PYTHONPATH!!
+#
+# viewer - VNC viewer for the OpenISR (R) system
+#
+# Copyright (C) 2009 Carnegie Mellon University
+#
+# This program is free software; you can redistribute it and/or modify it
+# under the terms of version 2 of the GNU General Public License as published
+# by the Free Software Foundation.  A copy of the GNU General Public License
+# should have been distributed along with this program in the file
+# LICENSE.GPL.
+#
+# This program is distributed in the hope that it will be useful, but
+# WITHOUT ANY WARRANTY; without even the implied warranty of MERCHANTABILITY
+# or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU General Public License
+# for more details.
+#
+
+import gtk
+import gtkvnc
+import optparse
+import socket
+
+class VncViewer(object):
+	HOSTKEY = gtk.gdk.keyval_from_name('Control_R')
+	HOSTKEY_HUMAN = 'Right Ctrl'
+	# Keys we translate from HostKey-<key> to Ctrl-Alt-<key>
+	FORWARD_KEYS = dict([(gtk.gdk.keyval_from_name(key), key) for key in
+				['Delete', 'BackSpace'] +
+				['F' + str(n) for n in range(1, 13)]])
+
+	def __init__(self, dest, fullscreen = False):
+		self.hostkey_down = False
+		self.fullscreen = False
+
+		self.wind = gtk.Window()
+		self.wind.connect('destroy', gtk.main_quit)
+		self.wind.connect('key-press-event', self._key_press)
+		self.wind.connect('key-release-event', self._key_release)
+		self.wind.connect('focus-out-event', self._focus_out)
+		self.wind.connect('window-state-event', self._window_state)
+		if fullscreen:
+			self.wind.fullscreen()
+
+		box = gtk.VBox()
+		self.wind.add(box)
+
+		self.vnc = gtkvnc.Display()
+		self.vnc.set_pointer_grab(True)
+		self.vnc.set_keyboard_grab(True)
+		self.vnc.connect('vnc-auth-credential', self._auth_cred)
+		self.vnc.connect('vnc-initialized', self._initialized)
+		self.vnc.connect('vnc-desktop-resize', self._vnc_resize)
+		self.vnc.connect('vnc-disconnected', gtk.main_quit)
+		box.pack_start(self.vnc)
+		# Since we're not going to show the VNC widget until later,
+		# we need to realize it by hand before using it
+		self.vnc.realize()
+
+		self.statusbar = gtk.HBox(spacing = 3)
+		self.statusbar.pack_start(gtk.Label())  # filler
+		box.pack_end(self.statusbar, expand = False)
+
+		theme = gtk.icon_theme_get_default()
+		def add_icon(name, sensitive = True):
+			icon = gtk.Image()
+			icon.set_from_pixbuf(theme.load_icon(name, 24, 0))
+			icon.set_sensitive(sensitive)
+			self.statusbar.pack_start(icon, expand = False)
+			return icon
+
+		hostkey_label = gtk.Label(self.HOSTKEY_HUMAN)
+		hostkey_label.set_alignment(0.5, 0.8)
+		hostkey_label.set_padding(3, 0)
+		self.statusbar.pack_start(hostkey_label, expand = False)
+
+		keyboard_icon = add_icon('input-keyboard', False)
+		mouse_icon = add_icon('input-mouse', False)
+		self.vnc.connect('vnc-keyboard-grab', self._grabbed,
+					keyboard_icon, True)
+		self.vnc.connect('vnc-keyboard-ungrab', self._grabbed,
+					keyboard_icon, False)
+		self.vnc.connect('vnc-pointer-grab', self._grabbed,
+					mouse_icon, True)
+		self.vnc.connect('vnc-pointer-ungrab', self._grabbed,
+					mouse_icon, False)
+
+		if dest.find('/') == -1:
+			# gtk-vnc has an open_host() method that will do
+			# this for us, but it has no error reporting: on
+			# any sort of failure it will just send a
+			# vnc-disconnected signal.
+			self.sock = socket.socket(socket.AF_INET)
+			if dest.find(':') == -1:
+				dest = (dest, 5900)
+			else:
+				host, port = dest.split(':', 1)
+				dest = (host, int(port))
+		else:
+			self.sock = socket.socket(socket.AF_UNIX)
+		self.sock.connect(dest)
+		self.vnc.open_fd(self.sock.fileno())
+
+	def _auth_cred(self, wid, ev):
+		gtk.main_quit()
+		raise Exception("Can't supply authentication credentials")
+
+	def _initialized(self, wid):
+		self.wind.set_title(self.vnc.get_name())
+		self.wind.show_all()
+
+	def _grabbed(self, wid, icon, grabbed):
+		icon.set_sensitive(grabbed)
+
+	def _vnc_resize(self, wid, width, height):
+		# Resize the window to the minimum allowed by its geometry
+		# constraints
+		if not self.fullscreen:
+			self.wind.resize(1, 1)
+
+	def _key_press(self, wid, ev):
+		key = gtk.gdk.keyval_from_name
+		lower = gtk.gdk.keyval_to_lower
+
+		if ev.keyval == self.HOSTKEY:
+			self.hostkey_down = True
+		if self.hostkey_down:
+			if lower(ev.keyval) == key('f'):
+				if self.fullscreen:
+					# Prevent Metacity from "helpfully"
+					# returning the window to fullscreen
+					self.wind.resize(1, 1)
+					self.wind.unfullscreen()
+				else:
+					self.wind.fullscreen()
+			elif lower(ev.keyval) == key('q'):
+				gtk.main_quit()
+			elif self.FORWARD_KEYS.has_key(ev.keyval):
+				self.vnc.send_keys(['Control_L', 'Alt_L',
+						self.FORWARD_KEYS[ev.keyval]])
+			# Squash the keystroke, whether we recognized it
+			# or not
+			return True
+		return False
+
+	def _key_release(self, wid, ev):
+		if ev.keyval == self.HOSTKEY:
+			self.hostkey_down = False
+			if not self.fullscreen:
+				self.vnc.force_grab(False)
+			return True
+		elif self.hostkey_down:
+			return True
+		return False
+
+	def _focus_out(self, wid, ev):
+		self.hostkey_down = False
+		return False
+
+	def _window_state(self, wid, ev):
+		fullscreen = (ev.new_window_state &
+					gtk.gdk.WINDOW_STATE_FULLSCREEN) == \
+					gtk.gdk.WINDOW_STATE_FULLSCREEN
+		maximized = (ev.new_window_state &
+					gtk.gdk.WINDOW_STATE_MAXIMIZED) == \
+					gtk.gdk.WINDOW_STATE_MAXIMIZED
+		if maximized and not fullscreen:
+			self.wind.fullscreen()
+			self.wind.unmaximize()
+		if self.fullscreen and not fullscreen:
+			self.statusbar.show()
+			# Resize the window to the minimum allowed by its
+			# geometry constraints
+			self.wind.resize(1, 1)
+		if fullscreen and not self.fullscreen:
+			self.statusbar.hide()
+		self.fullscreen = fullscreen
+		return False
+
+if __name__ == '__main__':
+	usage = '%prog [-fh] <vnc-server>'
+	description = 'Accepted forms of <vnc-server> are "host", ' +\
+				'"host:port", and "/path/to/unix/socket".'
+	parser = optparse.OptionParser(usage = usage,
+				description = description)
+	parser.add_option('-f', '--fullscreen', action = 'store_true',
+				help = 'Start in full-screen mode')
+
+	(opts, args) = parser.parse_args()
+	if len(args) < 1:
+		parser.error('No VNC server specified')
+	vnc = VncViewer(args[0], fullscreen = opts.fullscreen)
+
+	try:
+		gtk.main()
+	except KeyboardInterrupt:
+		pass

@@ -1,0 +1,191 @@
+This is the OpenISR (R) system, release 0.10.1.  For more information on
+the OpenISR system and Internet Suspend/Resume (R), please visit our website at
+<http://isr.cmu.edu>.
+
+REQUIREMENTS
+------------
+
+To run:
+- libfuse and the FUSE utilities
+- libcurl >= 7.12.3 and curl command-line utility
+- zlib
+- liblzma from XZ Utils
+- libuuid from e2fsprogs
+- libarchive
+- GTK+
+- PyGTK
+- gtk-vnc Python bindings
+- PyYAML
+- Perl
+- Python >= 2.4
+- ssh
+- rsync
+- ssh-agent running in your X session (most systems provide this by default)
+- VirtualBox, KVM, VMware Workstation, or VMware Player
+- An accessible OpenISR 0.9-series server
+
+To build from a source tarball:
+- All of the requirements for running the OpenISR system, plus:
+- Development headers for glibc, libcurl, zlib, GTK+, libuuid, libarchive,
+  liblzma, and libfuse
+- pkg-config
+
+To build from the Git repository:
+- All of the requirements for building the OpenISR system, plus:
+- Autoconf >= 2.59
+- Automake >= 1.10
+- libtool
+
+This release ships with an updated version of the ISR-3 server software.
+Future releases will include a completely new server implementation.
+
+INSTALLATION SUMMARY
+--------------------
+
+./autogen.sh      # Only if building from the Git repository
+./configure --sysconfdir=/etc --localstatedir=/var
+make
+make install      # As root
+
+VIRTUAL MACHINE MONITORS
+------------------------
+
+The OpenISR system currently includes drivers for the following virtual
+machine monitors.  The name of the driver is listed in parentheses.
+
+- VirtualBox >= 3.0.2 (virtualbox)
+
+- KVM (kvm)
+
+- VMware Workstation and VMware Player (vmware)
+	Newly created parcels for these VMMs require VMware Workstation 6.0
+	or greater, or VMware Player 2.0 or greater.  Legacy parcels may work
+	with older versions of VMware.
+
+- Shell (shell)
+	This is a stub VMM driver that merely launches a shell.  It can be
+	used for debugging, or to run a VMM for which a VMM driver does not
+	currently exist.  This driver is always built and installed unless
+	--disable-client is specified to configure, and is not affected
+	by the setting of --enable-vmm-drivers.
+
+- Dummy VMM (none)
+	This is a stub VMM driver that merely waits for the invoking ISR
+	client program to receive SIGINT, and then shuts down.  It can be
+	used by wrapper scripts to obtain access to a parcel's disk under
+	program control.  This driver is always built and installed unless
+	--disable-client is specified to configure, and is not affected
+	by the setting of --enable-vmm-drivers.
+
+CONFIGURE OPTIONS
+-----------------
+
+Aside from the standard options, the OpenISR configure script supports the
+following command line options:
+
+--with-zlib=DIR
+--with-curl=DIR
+--with-libarchive=DIR
+	Specifies an additional search path for zlib, curl, or libarchive,
+	respectively.  In addition to the specified paths, configure will
+	check a set of default paths for each component.
+
+--disable-client
+	Do not build or install components that are only used by the OpenISR
+	client.
+
+--enable-vmm-drivers=<list>
+--disable-vmm-drivers
+	List of VMM drivers to build and install, or --disable-vmm-drivers
+	not to build any.  The default is to build and install all supported
+	VMM drivers unless --disable-client is specified, in which case no
+	drivers are built.  <list> is a comma-separated list of VMM driver
+	names (virtualbox, kvm, etc.).  The special driver name "all" enables
+	all supported VMM drivers.  A driver name may be prefixed with the "-"
+	character to prevent building that driver; for example,
+	--enable-vmm-drivers=all,-vmware will build every driver except vmware.
+	The "shell" driver is always built and installed unless
+	--disable-client is specified, and is not affected by this option.
+
+--enable-server
+	Build and install components that are used by the OpenISR server.
+
+INSTALLATION PATHS
+------------------
+
+By default, the OpenISR bash completion rules are installed in a subdirectory
+of $prefix/etc.  However, most systems only look for such files in
+subdirectories of /etc.  To solve this problem, you can pass
+"--sysconfdir=/etc" to configure, or you can move the rules file into /etc
+by hand.
+
+During the build process, several pieces of the OpenISR system are configured
+to expect helper programs and data files in the locations specified to
+configure.  However, it is possible to install the OpenISR system to a
+different directory, though ISR will not work if it is run directly from
+there.  (You might want to do this while building a binary package, for
+example.)  To install to an alternate directory, set the DESTDIR environment
+variable to its absolute path when running "make install".
+
+COMPONENTS AND THEIR LICENSES
+-----------------------------
+
+The OpenISR system is composed of several components, licensed under several
+different software licenses.  Here is a short summary of each component:
+
+User interface
+	This is the "isr" command-line client, and is licensed under the
+	Eclipse Public License, version 1.0.  The code for this component
+	can be found in the "client" directory of the source tree.
+
+Parcelkeeper
+	This program manages the virtual disk provided by the OpenISR system
+	to guest VMs.  It is responsible for maintenance of the parcel
+	keyring, local cache, and hoard cache; runtime communication with
+	the server; and various maintenance tasks.  Parcelkeeper is launched
+	by the user interface code when necessary; most users will never need
+	to start it directly.  Parcelkeeper is licensed under version 2 of
+	the GNU General Public License.
+
+locksrv
+	This is the server component of the OpenISR system.  It includes
+	the programs implementing the server API, as well as a program
+	to perform various administrative tasks.  It can be found in the
+	"locksrv" directory of the source tree, and is licensed under the
+	Eclipse Public License, version 1.0.
+
+Miscellaneous tools
+	The "tools" directory contains a set of command-line tools used by
+	the client and/or server.  The programs found there are licensed
+	under the GNU General Public License, version 2.
+
+libisrcrypto
+	This is a library containing implementations of various cryptographic
+	algorithms.  The ISR user-space components use this library to perform
+	cryptography.  It is licensed under version 2.1 of the GNU Lesser
+	General Public License and can be found in the "crypto" subdirectory.
+
+libisrsql
+	This is a library which provides an embedded SQL database engine.
+	It includes an embedded copy of the third-party SQLite database
+	library, but does not export any SQLite symbols.  libisrsql is
+	licensed under version 2 of the GNU General Public License, and can
+	be found in the "sqlite" directory of the source tree.
+
+libisrutil
+	This is a utility library used by other parts of the OpenISR system.
+	It is licensed under version 2 of the GNU General Public License
+	and can be found in the "libutil" directory of the source tree.
+
+VMM drivers and support code
+	These are driver programs and associated support code which allow the
+	OpenISR client to interact with specific virtual machine monitors.
+	They are found in the "vmm" directory of the source tree, and are
+	licensed under the GNU General Public License, version 2.
+
+ACKNOWLEDGMENTS
+----------------
+
+Internet Suspend/Resume and OpenISR are registered trademarks of
+Carnegie Mellon University.  All other trademarks are the property of their
+respective owners.

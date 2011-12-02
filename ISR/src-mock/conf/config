@@ -1,0 +1,83 @@
+# Configuration file for OpenISR client
+#
+# This file is distributed with the OpenISR client, and changes made here
+# will be lost whenever the client is upgraded.  Configuration entries placed
+# in /etc/openisr/openisr.conf or ~/.openisrrc will override these defaults.
+
+# Default server domain name (override with -s)
+server = endurance.isr.cs.cmu.edu
+
+# Default userid (override with -u)
+# If this variable is undefined or empty, then it defaults to the Unix
+# login name
+userid = 
+
+# Top-level directory for ISR data.  Valid escape sequences:
+# \u - Local username
+# \h - User's home directory
+isrdir = \h/.isr
+
+# To override the default command used to start a particular VMM, provide an
+# entry of the form "<vmm>.command = <command>".
+
+# Parcelkeeper logging mask
+logmask = info,error,stats,slow
+
+# Parcelkeeper console logging mask
+console_logmask = error
+
+# How many seconds should elapse before we decide the client is unconnected
+connect_timeout = 10
+
+# How many seconds should elapse before we restart a failed hoard operation
+hoard_sleep = 5
+
+# How many times to retry if a read or write request fails
+retries = 5
+
+# By default, how many of the most recent versions should "ls -l" display
+ls_versions = 5
+
+# How hard we should try to compress newly-generated disk chunks (at runtime)
+# and memory images (at checkin/sync).
+#
+# Recognized values:
+#   disabled	- Do not compress at all.  This is intended for debugging
+#		  purposes only; "mild" will almost always perform better.
+#   mild	- Use a very fast algorithm which compresses poorly.  Choose
+#		  this option to improve runtime performance if you have a
+#		  LAN-speed connection to the server.
+#   moderate	- Use an algorithm which is reasonably good and reasonably
+#		  fast.  Choose this option for intermediate-bandwidth
+#		  connections such as fast broadband.
+#   painful	- Attempt to compress as much as possible, and spend a lot
+#		  of time doing it.  This option is appropriate for very slow
+#		  links.
+#
+# These values currently correspond to the following compression algorithms:
+#
+# Setting		Chunk compression	Memory image compression
+# disabled		none			none
+# mild			LZF			LZF
+# moderate		zlib			gzip
+# painful		zlib			LZMA
+#
+# Note, however, that these mappings may change in the future.  Older
+# parcels may not be configured to support all of these algorithms; in this
+# case, the closest match will be used.
+compression = mild
+
+# Parcelkeeper chunk cache size, in MB.  This specifies how much memory
+# will be used to cache decrypted parcel chunks while a parcel is running.
+chunk_cache = 32
+
+# Debug option: set to 1 to force the client to ignore cached keyrings and
+# memory images, always re-downloading them from the server
+disable_lookaside = 0
+
+# Whether to run the dirtometer when resuming a parcel
+dirtometer = 0
+
+# Debug option: set to 1 to run Parcelkeeper single-threaded when resuming
+# a parcel
+resume_single_threaded = 0
