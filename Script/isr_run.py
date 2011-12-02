@@ -18,9 +18,10 @@ def recompile_isr():
         raise "Cannot compile ISR"
     return True
 
-
 # Limiting Up/Down traffic bandwidth
 def bandwidth_limit(bandwidth, dest_ip):
+    bandwidth = bandwidth / 4.0 / 10.0; # tc module is not accuracy especially for download
+
     command_str = 'sudo tc qdisc add dev eth0 root handle 1: htb default 30'
     ret1, ret_string = commands.getstatusoutput(command_str)
     command_str = 'sudo tc class add dev eth0 parent 1: classid 1:1 htb rate ' + str(bandwidth) + 'mbit'
@@ -31,10 +32,11 @@ def bandwidth_limit(bandwidth, dest_ip):
     ret4, ret_string = commands.getstatusoutput(command_str)
     command_str = 'sudo tc filter add dev eth0 protocol ip parent 1:0 prio 1 u32 match ip src ' + dest_ip + '/32 flowid 1:2'
     ret5, ret_string = commands.getstatusoutput(command_str)
-    if ret1 != 0 or ret2 != 0 or ret3 !=0 or ret4 != 0 or ret5 !=0:
+
+    if ret1 != 0 or ret2 != 0 or ret3 !=0 or ret4 !=0 or ret5 !=0:
         print 'Error, BW is not limited'
         return False
-    print 'BW is limited to %s Mbit/s between localhost and %s' % (str(bandwidth), dest_ip)
+    print 'BW is limited to %s Mbit/s between localhost and %s' % (str(bandwidth*10*4.0), dest_ip)
     return True
 
 
@@ -201,6 +203,7 @@ def main(argv):
 
     # step4. stop VM and clean up
     ret, err = stop_vm(user_name, server_address, vm_name)
+    ret, err = remove_cache(user_name, server_address, vm_name)
     if ret == False:
         exit_error(err)
 
