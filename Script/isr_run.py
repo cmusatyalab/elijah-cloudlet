@@ -12,13 +12,14 @@ from datetime import datetime, timedelta
 import telnetlib
 import pylzma
 
-ISR_SRC_PATH = '/home/krha/Cloudlet/src/ISR/src'
+ISR_ORIGIN_SRC_PATH = '/home/krha/Cloudlet/src/ISR/src'
+ISR_ANDROID_SRC_PATH = '/home/krha/Cloudlet/src/ISR/src-mock'
 LAUNCH_COMMAND = 'Launching KVM...'
 launch_start = datetime.now()
 launch_end = datetime.now()
 
-def recompile_isr():
-    command_str = 'cd %s && sudo make && sudo make install' % (ISR_SRC_PATH)
+def recompile_isr(src_path):
+    command_str = 'cd %s && sudo make && sudo make install' % (src_path)
     print command_str
     ret1, ret_string = commands.getstatusoutput(command_str)
     if ret1 != 0:
@@ -140,52 +141,14 @@ def exit_error(error_message):
 
 
 def print_usage(program_name):
-    print 'usage\t: %s [-b Bandwidth Mbit/s] [-u username] [-s server_address] [-m VM name]' % program_name
-    print 'example\t: ./isr_run.py -u test1 -s dagama.isr.cs.cmu.edu -m windowXP -b 10'
+    print 'usage\t: %s [cloud|mobile] [-b Bandwidth Mbit/s] [-u username] [-s server_address] [-m VM name]' % program_name
+    print 'example\t: ./isr_run.py cloud -u test1 -s dagama.isr.cs.cmu.edu -m windowXP -b 10'
 
-
-def main(argv):
-    if len(argv) < 2:
-        print_usage(os.path.basename(argv[0]))
-        sys.exit(2)
-    try:
-        optlist, args = getopt.getopt(argv[1:], 'hb:u:s:m:', ["help", "bandwidth", "user", "server", "machine"])
-    except getopt.GetoptError, err:
-        print str(err)
-        print_usage(os.path.basename(argv[0]))
-        sys.exit(2)
-
-    # required input variables
-    user_name = None
-    server_address = None
-    vm_name = None
-    bandwidth = -1
-
-    # parse argument
-    for o, a in optlist:
-        if o in ("-h", "--help"):
-            print_usage(os.path.basename(argv[0]))
-            sys.exit(0)
-        elif o in ("-b", "--bandwidth"):
-            bandwidth = int(a)
-        elif o in ("-u", "--user"):
-            user_name = a
-        elif o in ("-s", "--server"):
-            server_address = a
-        elif o in ("-m", "--machine"):
-            vm_name = a
-        else:
-            assert False, "unhandled option"
-
-    if user_name == None or server_address == None or vm_name == None or bandwidth == -1:
-        print_usage(os.path.basename(argv[0]))
-        print "username : %s, server_address = %s, vm_name = %s" % (user_name, server_address, vm_name)
-        sys.exit(2)
-    
+def do_cloud_isr(user_name, vm_name, server_address, bandwidth):
     # compile ISR again, because we have multiple version of ISR such as mock android
     # This is not good approach, but easy for simple test
     # I'll gonna erase this script after submission :(
-    recompile_isr()
+    recompile_isr(ISR_ORIGIN_SRC_PATH)
 
     # setup bandwidth limitation
     bandwidth_limit(bandwidth, socket.gethostbyname(server_address))
@@ -221,6 +184,101 @@ def main(argv):
     bandwidth_reset()
     sys.exit(0)
 
+
+def do_mobile_isr(user_name, vm_name, server_address, bandwidth):
+    # compile ISR again, because we have multiple version of ISR such as mock android
+    # This is not good approach, but easy for simple test
+    # I'll gonna erase this script after submission :(
+    recompile_isr(ISR_ANDROID_SRC_PATH)
+
+    # setup bandwidth limitation
+    bandwidth_limit(bandwidth, socket.gethostbyname(server_address))
+
+    # step2. remove all cache
+    ret, err = remove_cache(user_name, server_address, vm_name)
+    if ret == False:
+        exit_error(err)
+
+    # step3. resume VM, wait until finish (close window)
+    start_time = datetime.now()
+    ret, err = resume_vm(user_name, server_address, vm_name)
+    if ret == False:
+        exit_error(err)
+       
+    end_time = datetime.now()
+
+    # step4. stop VM and clean up
+    ret, err = stop_vm(user_name, server_address, vm_name)
+    ret, err = remove_cache(user_name, server_address, vm_name)
+    if ret == False:
+        exit_error(err)
+
+    print "SUCCESS"
+    print "[Total VM Run Time] : ", str(end_time-start_time)
+    print '[Launch Time] : ', str(launch_end-launch_start)
+
+    bandwidth_reset()
+    sys.exit(0)
+
+    pass
+
+
+def main(argv):
+    if len(argv) < 3:
+        print_usage(os.path.basename(argv[0]))
+        sys.exit(2)
+
+    target = ("cloud", "mobile")
+    operation = argv[1]
+    if not operation in target:
+        print "Error, specify between clould and mobile"
+        print_usage(os.path.basename(argv[0]))
+        sys.exit(2)
+
+    try:
+        optlist, args = getopt.getopt(argv[2:], 'hb:u:s:m:', ["help", "bandwidth", "user", "server", "machine"])
+    except getopt.GetoptError, err:
+        print str(err)
+        print_usage(os.path.basename(argv[0]))
+        sys.exit(2)
+
+    # required input variables
+    user_name = None
+    server_address = None
+    vm_name = None
+    bandwidth = -1
+
+    # parse argument
+    for o, a in optlist:
+        if o in ("-h", "--help"):
+            print_usage(os.path.basename(argv[0]))
+            sys.exit(0)
+        elif o in ("-b", "--bandwidth"):
+            bandwidth = int(a)
+        elif o in ("-u", "--user"):
+            user_name = a
+        elif o in ("-s", "--server"):
+            server_address = a
+        elif o in ("-m", "--machine"):
+            vm_name = a
+        else:
+            assert False, "unhandled option"
+
+    if user_name == None or server_address == None or vm_name == None or bandwidth == -1:
+        print_usage(os.path.basename(argv[0]))
+        print "username : %s, server_address = %s, vm_name = %s" % (user_name, server_address, vm_name)
+        sys.exit(2)
+    
+    if operation == "cloud":
+        do_cloud_isr(user_name, vm_name, server_address, bandwidth)
+    elif operation == "mobile":
+        do_mobile_isr(user_name, vm_name, server_address, bandwidth)
+
+    else:
+        print_usage(os.path.basename(argv[0]))
+        sys.exit(2)
+
+    sys.exit(1)
 
 if __name__ == "__main__":
     main(sys.argv)
