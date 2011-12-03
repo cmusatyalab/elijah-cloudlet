@@ -192,9 +192,6 @@ public class CloudletActivity extends Activity {
 			}else if(v.getId() == R.id.testISRCloud){
 				showDialogSelectISRApplication(applications, "cloud");
 				
-//				Intent intent = new Intent(CloudletActivity.this, CloudletCameraActivity.class);
-//				intent.putExtra("address", TEST_CLOUDLET_SERVER_IP);
-//				startActivityForResult(intent, 0);			
 			}else if(v.getId() == R.id.testISRMobile){
 				showDialogSelectISRApplication(applications, "mobile");
 				
