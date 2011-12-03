@@ -1,6 +1,12 @@
 #!/usr/bin/env python
 import xdelta3
-import os, commands, filecmp, sys, subprocess, getopt, time
+import os
+import commands
+import filecmp
+import sys
+import subprocess
+import getopt
+import time
 from datetime import datetime, timedelta
 import telnetlib
 import pylzma

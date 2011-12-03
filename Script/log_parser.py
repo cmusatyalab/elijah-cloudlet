@@ -1,6 +1,10 @@
 #!/usr/bin/env python
 import xdelta3
-import os, commands, filecmp, sys, getopt
+import os
+import commands
+import filecmp
+import sys
+import getopt
 from datetime import datetime, timedelta
 
 CUR_DIR = os.getcwd()

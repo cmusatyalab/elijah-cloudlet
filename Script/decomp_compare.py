@@ -2,7 +2,9 @@
 
 import pylzma
 from datetime import datetime, timedelta
-import sys, commands, os
+import sys
+import commands
+import os
 
 def comp_lzma(inputname, outputname):
     prev_time = datetime.now()
