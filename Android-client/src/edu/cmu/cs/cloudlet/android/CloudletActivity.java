@@ -6,10 +6,9 @@ import java.util.ArrayList;
 
 import org.teleal.cling.android.AndroidUpnpServiceImpl;
 
-import edu.cmu.cs.cloudlet.android.application.CloudletCameraActivity;
-import edu.cmu.cs.cloudlet.android.application.face.ui.FaceRecClientCameraPreview;
 import edu.cmu.cs.cloudlet.android.data.VMInfo;
 import edu.cmu.cs.cloudlet.android.network.CloudletConnector;
+import edu.cmu.cs.cloudlet.android.network.HTTPCommandSender;
 import edu.cmu.cs.cloudlet.android.upnp.DeviceDisplay;
 import edu.cmu.cs.cloudlet.android.upnp.UPnPDiscovery;
 import edu.cmu.cs.cloudlet.android.util.CloudletEnv;
@@ -30,8 +29,9 @@ import android.widget.Button;
 
 public class CloudletActivity extends Activity {
 	public static final String TEST_CLOUDLET_SERVER_IP = "cage.coda.cs.cmu.edu";
-	public static final int TEST_CLOUDLET_SERVER_PORT = 9090;
-	public static final int TEST_CLOUDLET_FACE_PORT = 9876;
+	public static final int TEST_CLOUDLET_SERVER_PORT_ISR = 9092;
+	public static final int TEST_CLOUDLET_SERVER_PORT_SYNTHESIS = 9090;
+	public static final int TEST_CLOUDLET_APP_FACE_PORT = 9876;
 	protected Button startConnectionButton;
 	protected CloudletConnector connector;
 	private UPnPDiscovery serviceDiscovery;
@@ -52,8 +52,8 @@ public class CloudletActivity extends Activity {
 
 		// Connect Directly
 		findViewById(R.id.testSynthesis).setOnClickListener(clickListener);
-		findViewById(R.id.runMOPEDApp).setOnClickListener(clickListener);
-		findViewById(R.id.runFACEApp).setOnClickListener(clickListener);
+		findViewById(R.id.testISRCloud).setOnClickListener(clickListener);
+		findViewById(R.id.testISRMobile).setOnClickListener(clickListener);
         
 	}
 
@@ -66,7 +66,7 @@ public class CloudletActivity extends Activity {
 			vmList.add(selectedVM);			
 		}
 
-		connector.startConnection(TEST_CLOUDLET_SERVER_IP, TEST_CLOUDLET_SERVER_PORT);
+		connector.startConnection(TEST_CLOUDLET_SERVER_IP, TEST_CLOUDLET_SERVER_PORT_SYNTHESIS);
 	}
 	
 	private void showDialogSelectOverlay(ArrayList<VMInfo> vmList) {
@@ -97,7 +97,53 @@ public class CloudletActivity extends Activity {
 		});
 		ab.show();
 	}
+	
+	/*
+	 * ISR Client&Server Test method
+	 */
+	private void showDialogSelectISRApplication(final String[] applications, final String command) {
+		// Don't like to use String for passing command type.
+		// But, I more hate to use public CONSTANT for such as temperal test case.		
+		if(command.equalsIgnoreCase("cloud") == false && command.equalsIgnoreCase("mobile") == false){
+			new AlertDialog.Builder(CloudletActivity.this).setTitle("Info")
+			.setMessage("command is not cloud or mobile : " + command)
+			.setIcon(R.drawable.ic_launcher)
+			.setNegativeButton("Confirm", null)
+			.show();
+			return;
+		}
 
+		AlertDialog.Builder ab = new AlertDialog.Builder(this);
+		ab.setTitle("Application List");
+		ab.setIcon(R.drawable.ic_launcher);
+		ab.setSingleChoiceItems(applications, 0, new DialogInterface.OnClickListener() {
+			public void onClick(DialogInterface dialog, int position) {
+				selectedOveralyIndex = position;
+			}
+		}).setPositiveButton("Ok", new DialogInterface.OnClickListener() {
+			public void onClick(DialogInterface dialog, int position) {
+				if(position >= 0){
+					selectedOveralyIndex = position;
+				}else if(applications.length > 0){
+					selectedOveralyIndex = 0;
+				}
+				String application = applications[selectedOveralyIndex];
+				runHTTPConnection(command, application);
+			}
+		}).setNegativeButton("Cancel", new DialogInterface.OnClickListener() {
+			public void onClick(DialogInterface dialog, int position) {
+				return;
+			}
+		});
+		ab.show();
+	}
+	
+	protected void runHTTPConnection(String command, String application) {
+		HTTPCommandSender commandSender = new HTTPCommandSender(this, CloudletActivity.this, command, application);
+		commandSender.start();		
+	}
+	
+	
 	/*
 	 * Service Discovery Handler
 	 */
@@ -125,7 +171,10 @@ public class CloudletActivity extends Activity {
 	View.OnClickListener clickListener = new View.OnClickListener() {
 		@Override
 		public void onClick(View v) {
-//			serviceDiscovery.showDialogSelectOption();			
+			//show 
+//			serviceDiscovery.showDialogSelectOption();
+			
+			// This buttons are for MobiSys test
 			if(v.getId() == R.id.testSynthesis){
 				// Find All overlay and let user select one of them.
 				CloudletEnv.instance().resetOverlayList();
@@ -139,15 +188,21 @@ public class CloudletActivity extends Activity {
 					.setNegativeButton("Confirm", null)
 					.show();
 				}				
-			}else if(v.getId() == R.id.runMOPEDApp){
-				Intent intent = new Intent(CloudletActivity.this, CloudletCameraActivity.class);
-				intent.putExtra("address", TEST_CLOUDLET_SERVER_IP);
-				startActivityForResult(intent, 0);				
-			}else if(v.getId() == R.id.runFACEApp){
-				Intent intent = new Intent(CloudletActivity.this, FaceRecClientCameraPreview.class);
-				intent.putExtra("address", TEST_CLOUDLET_SERVER_IP);
-				intent.putExtra("port", TEST_CLOUDLET_FACE_PORT);
-				startActivityForResult(intent, 0);
+			}else if(v.getId() == R.id.testISRCloud){
+				String[] applications = {"MOPED", "FACE", "NULL"};
+				showDialogSelectISRApplication(applications, "cloud");
+				
+//				Intent intent = new Intent(CloudletActivity.this, CloudletCameraActivity.class);
+//				intent.putExtra("address", TEST_CLOUDLET_SERVER_IP);
+//				startActivityForResult(intent, 0);			
+			}else if(v.getId() == R.id.testISRMobile){
+				String[] applications = {"MOPED", "FACE", "NULL"};
+				showDialogSelectISRApplication(applications, "mobile");
+				
+//				Intent intent = new Intent(CloudletActivity.this, FaceRecClientCameraPreview.class);
+//				intent.putExtra("address", TEST_CLOUDLET_SERVER_IP);
+//				intent.putExtra("port", TEST_CLOUDLET_APP_FACE_PORT);
+//				startActivityForResult(intent, 0);
 			}
 		}
 	};

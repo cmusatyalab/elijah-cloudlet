@@ -27,24 +27,32 @@
         android:textSize = "25sp"
         android:gravity="center_vertical"
         android:layout_weight="1"
-        android:text="Application Start" />
+        android:text="ISR Clout Test" />
     
     <Button
-        android:id="@+id/runMOPEDApp"
+        android:id="@+id/testISRCloud"
         android:layout_width="fill_parent"
         android:layout_height="0dp"
         android:layout_gravity="bottom"
         android:layout_weight="1"
-        android:text="Run MOPED App" >
+        android:text="Start ISR Cloud" >
     </Button>
-
+    
+    <TextView
+        android:layout_width="fill_parent"
+        android:layout_height="0dp"
+        android:textSize = "25sp"
+        android:gravity="center_vertical"
+        android:layout_weight="1"
+        android:text="ISR Mobile Test" />
+    
     <Button
-        android:id="@+id/runFACEApp"
+        android:id="@+id/testISRMobile"
         android:layout_width="fill_parent"
         android:layout_height="0dp"
         android:layout_gravity="bottom"
         android:layout_weight="1"
-        android:text="Run FACE App" >
+        android:text="Start ISR Mobile" >
     </Button>
 
 </LinearLayout>
