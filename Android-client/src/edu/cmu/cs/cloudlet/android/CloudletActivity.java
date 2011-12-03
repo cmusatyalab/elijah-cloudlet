@@ -32,6 +32,7 @@ public class CloudletActivity extends Activity {
 	public static final int TEST_CLOUDLET_SERVER_PORT_ISR = 9092;
 	public static final int TEST_CLOUDLET_SERVER_PORT_SYNTHESIS = 9090;
 	public static final int TEST_CLOUDLET_APP_FACE_PORT = 9876;
+	public static final String[] applications = {"MOPED", "FACE", "NULL"};
 	protected Button startConnectionButton;
 	protected CloudletConnector connector;
 	private UPnPDiscovery serviceDiscovery;
@@ -189,14 +190,12 @@ public class CloudletActivity extends Activity {
 					.show();
 				}				
 			}else if(v.getId() == R.id.testISRCloud){
-				String[] applications = {"MOPED", "FACE", "NULL"};
 				showDialogSelectISRApplication(applications, "cloud");
 				
 //				Intent intent = new Intent(CloudletActivity.this, CloudletCameraActivity.class);
 //				intent.putExtra("address", TEST_CLOUDLET_SERVER_IP);
 //				startActivityForResult(intent, 0);			
 			}else if(v.getId() == R.id.testISRMobile){
-				String[] applications = {"MOPED", "FACE", "NULL"};
 				showDialogSelectISRApplication(applications, "mobile");
 				
 //				Intent intent = new Intent(CloudletActivity.this, FaceRecClientCameraPreview.class);

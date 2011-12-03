@@ -21,6 +21,7 @@ import edu.cmu.cs.cloudlet.android.util.KLog;
 import android.app.Activity;
 import android.app.ProgressDialog;
 import android.content.Context;
+import android.content.Intent;
 import android.widget.Toast;
 
 public class HTTPCommandSender extends Thread {
@@ -55,10 +56,20 @@ public class HTTPCommandSender extends Thread {
 			}
 		}
 
-//		String ret = httpCommand(httpURL, this.command, this.applicationName);
-//		if(mDialog != null){
-//			mDialog.dismiss();			
-//		}
+		/*
+		String ret = httpCommand(httpURL, this.command, this.applicationName);
+		if(mDialog != null){
+			mDialog.dismiss();			
+		}
+		if(ret != null && ret.equalsIgnoreCase("SUCCESS")){
+			if(applicationName.equalsIgnoreCase("MOPED")){
+				Intent intent = new Intent(CloudletActivity.this, CloudletCameraActivity.class);
+				intent.putExtra("address", TEST_CLOUDLET_SERVER_IP);
+				startActivityForResult(intent, 0);			
+			}
+		}
+		*/
+		
 	}
 
 	private String httpCommand(String httpURL, String runType, String applicationName) {
