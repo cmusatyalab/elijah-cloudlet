@@ -30,13 +30,13 @@ import android.view.View;
 import android.widget.Button;
 
 public class CloudletActivity extends Activity {
-	public static final String TEST_CLOUDLET_SERVER_IP = "cage.coda.cs.cmu.edu";
-	public static final int TEST_CLOUDLET_SERVER_PORT_ISR = 9095;
-	public static final int TEST_CLOUDLET_SERVER_PORT_SYNTHESIS = 9090;
+	public static final String TEST_CLOUDLET_SERVER_IP = "192.168.2.3";			// Cloudlet IP Address
+	public static final int TEST_CLOUDLET_SERVER_PORT_ISR = 9095;				// Cloudlet port for ISR related test
+	public static final int TEST_CLOUDLET_SERVER_PORT_SYNTHESIS = 9090;			// Cloudlet port for VM Synthesis test 
 
+	public static final String[] applications = {"MOPED", "FACE", "NULL"};
 	public static final int TEST_CLOUDLET_APP_MOPED_PORT = 10902;
 	public static final int TEST_CLOUDLET_APP_FACE_PORT = 9876;
-	public static final String[] applications = {"MOPED", "FACE", "NULL"};
 	
 	protected Button startConnectionButton;
 	protected CloudletConnector connector;
@@ -128,7 +128,7 @@ public class CloudletActivity extends Activity {
 			public void onClick(DialogInterface dialog, int position) {
 				if(position >= 0){
 					selectedOveralyIndex = position;
-				}else if(applications.length > 0){
+				}else if(applications.length > 0 && selectedOveralyIndex == -1){
 					selectedOveralyIndex = 0;
 				}
 				String application = applications[selectedOveralyIndex];
@@ -144,7 +144,8 @@ public class CloudletActivity extends Activity {
 
 	protected void runHTTPConnection(String command, String application) {
 		HTTPCommandSender commandSender = new HTTPCommandSender(this, CloudletActivity.this, command, application);
-		commandSender.start();		
+		commandSender.initSetup();
+		commandSender.start();
 	}
 	
 
@@ -164,7 +165,7 @@ public class CloudletActivity extends Activity {
 			public void onClick(DialogInterface dialog, int position) {
 				if(position >= 0){
 					selectedOveralyIndex = position;
-				}else if(applications.length > 0){
+				}else if(applications.length > 0 && selectedOveralyIndex == -1){
 					selectedOveralyIndex = 0;
 				}
 				String application = applications[selectedOveralyIndex];
@@ -176,11 +177,9 @@ public class CloudletActivity extends Activity {
 			}
 		});
 		ab.show();
-	}
-
+	}	
 	
-	
-	protected void runApplication(String application) {		
+	public void runApplication(String application) {		
 		if(application.equalsIgnoreCase("moped")){
 			Intent intent = new Intent(CloudletActivity.this, CloudletCameraActivity.class);			
 			intent.putExtra("address", TEST_CLOUDLET_SERVER_IP);
@@ -192,9 +191,9 @@ public class CloudletActivity extends Activity {
 			intent.putExtra("port", TEST_CLOUDLET_APP_FACE_PORT);
 			startActivityForResult(intent, 0);			
 		}else if(application.equalsIgnoreCase("null")){
-			showAlert("Error", "VM Matching Overlay VM and Application");
+			showAlert("Info", "NUll has no UI");
 		}else{
-			
+			showAlert("Error", "NO such Application : " + application);			
 		}
 	}
 	
@@ -245,7 +244,7 @@ public class CloudletActivity extends Activity {
 		}
 	};
 	
-	protected void showAlert(String type, String message){
+	public void showAlert(String type, String message){
 		new AlertDialog.Builder(CloudletActivity.this).setTitle(type)
 		.setMessage(message)
 		.setIcon(R.drawable.ic_launcher)

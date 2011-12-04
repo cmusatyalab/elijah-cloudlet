@@ -8,6 +8,7 @@ import org.apache.http.client.ClientProtocolException;
 import org.apache.http.client.HttpClient;
 import org.apache.http.client.methods.HttpPost;
 import org.apache.http.entity.mime.MultipartEntity;
+import org.apache.http.entity.mime.content.ByteArrayBody;
 import org.apache.http.entity.mime.content.StringBody;
 import org.apache.http.impl.client.BasicResponseHandler;
 import org.apache.http.impl.client.DefaultHttpClient;
@@ -16,64 +17,79 @@ import org.json.JSONObject;
 
 import edu.cmu.cs.cloudlet.android.CloudletActivity;
 import edu.cmu.cs.cloudlet.android.R;
+import edu.cmu.cs.cloudlet.android.upnp.DeviceDisplay;
+import edu.cmu.cs.cloudlet.android.upnp.UPnPDiscovery;
 import edu.cmu.cs.cloudlet.android.util.KLog;
 
 import android.app.Activity;
 import android.app.ProgressDialog;
 import android.content.Context;
 import android.content.Intent;
+import android.os.Handler;
+import android.os.Message;
 import android.widget.Toast;
 
 public class HTTPCommandSender extends Thread {
-	protected ProgressDialog mDialog;
+	protected static final int SUCCESS = 0;
+	protected static final int FAIL = 0;
 	
-	private Activity activity = null;
+	protected ProgressDialog mDialog;
+	protected String httpURL = "";
+	
+	private CloudletActivity activity = null;
 	protected Context context;
 	private String command = null;
 	private String applicationName = null;
 
-	public HTTPCommandSender(Activity activity, Context context, String command, String application) {
+	public HTTPCommandSender(CloudletActivity activity, Context context, String command, String application) {
 		this.activity = activity;
 		this.context = context;
 		this.command = command;
 		this.applicationName = application;
 	}
 
-	public void run() {
-		final String httpURL = CloudletActivity.TEST_CLOUDLET_SERVER_IP + File.separator + "isr_run";
-		activity.runOnUiThread(new Runnable() {
-			public void run() {
-				mDialog = ProgressDialog.show(context, "Info", "Connecting to " + httpURL + "\nwaiting for " + applicationName + " to run at " + command, true);		
-				mDialog.show();
-			}
-		});
-		while(true){
-			try {
-				Thread.sleep(1000);
-			} catch (InterruptedException e) {
-				// TODO Auto-generated catch block
-				e.printStackTrace();
+	public void initSetup() {
+		httpURL = "http://" + CloudletActivity.TEST_CLOUDLET_SERVER_IP + ":" + CloudletActivity.TEST_CLOUDLET_SERVER_PORT_ISR + "/" + "isr";
+		mDialog = ProgressDialog.show(context, "Info", "Connecting to " + httpURL + "\nwaiting for " + applicationName + " to run at " + command, true);		
+		mDialog.show();
+	}
+	
+	Handler networkHandler = new Handler() {
+		public void handleMessage(Message msg) {			
+			if (msg.what == HTTPCommandSender.SUCCESS) {
+				String applicationName = (String)msg.obj;
+				activity.runApplication(applicationName);
+			}else if(msg.what == HTTPCommandSender.FAIL){
+				String ret = (String)msg.obj;
+				activity.showAlert("Error", "Failed to connect to " + httpURL + "\n" + ret);
 			}
 		}
+	};
 
-		/*
+	public void run() {
 		String ret = httpCommand(httpURL, this.command, this.applicationName);
-		if(mDialog != null){
-			mDialog.dismiss();			
+		if(ret.equalsIgnoreCase("SUCCESS")){
+			if(ret != null && ret.equalsIgnoreCase("SUCCESS")){
+				Message message = Message.obtain();
+				message.what = HTTPCommandSender.SUCCESS;
+				message.obj = this.applicationName;
+				networkHandler.sendMessage(message);
+			}			
+		}else{
+			Message message = Message.obtain();
+			message.what = HTTPCommandSender.FAIL;
+			message.obj = ret;
+			networkHandler.sendMessage(message);
 		}
-		if(ret != null && ret.equalsIgnoreCase("SUCCESS")){
-			if(applicationName.equalsIgnoreCase("MOPED")){
-				Intent intent = new Intent(CloudletActivity.this, CloudletCameraActivity.class);
-				intent.putExtra("address", TEST_CLOUDLET_SERVER_IP);
-				startActivityForResult(intent, 0);			
-			}
-		}
-		*/
 		
+		
+		if(mDialog != null){
+			mDialog.dismiss();	
+		}
 	}
 
 	private String httpCommand(String httpURL, String runType, String applicationName) {
-		// Create a new HttpClient and Post Header
+		// Create a new HttpClient and Post Header		
 		HttpClient httpclient = new DefaultHttpClient();
 		HttpPost httppost = new HttpPost(httpURL);
 
@@ -87,22 +103,26 @@ public class HTTPCommandSender extends Thread {
 				KLog.printErr(e.toString());
 			}
 
-			KLog.println("connecting to " + httpURL);
+			KLog.println("connecting to " + httpURL);			
 			MultipartEntity entity = new MultipartEntity();
-			entity.addPart("metadata", new StringBody(json.toString()));
-			httppost.setEntity(entity);
+			entity.addPart("isr_info", new StringBody(json.toString()));
+			httppost.setEntity(entity);			
 
 			// Execute HTTP Post Request
 			HttpResponse response = httpclient.execute(httppost);
 			BasicResponseHandler myHandler = new BasicResponseHandler();
 			String endResult = myHandler.handleResponse(response);
-			KLog.println("Get Reponse from Server : " + endResult);
-			return endResult;
+			
+			return endResult;			
 		} catch (ClientProtocolException e) {
 			KLog.printErr(e.toString());
+			return e.toString();
 		} catch (IOException e) {
 			KLog.printErr(e.toString());
+			return e.toString();
+		} catch (IllegalStateException e){
+			KLog.printErr(e.toString());
+			return e.toString();			
 		}
-		return null;
 	}
 }

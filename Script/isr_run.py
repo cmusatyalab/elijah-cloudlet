@@ -11,12 +11,43 @@ import socket
 from datetime import datetime, timedelta
 import telnetlib
 import pylzma
+from flask import Flask,flash, request,render_template, Response,session,g
+from flask import Flask, request, session, g, redirect, url_for, abort, render_template, flash, Response
 
+# global constant and variable
+WEB_SERVER_PORT_NUMBER = 9095
 ISR_ORIGIN_SRC_PATH = '/home/krha/Cloudlet/src/ISR/src'
 ISR_ANDROID_SRC_PATH = '/home/krha/Cloudlet/src/ISR/src-mock'
 LAUNCH_COMMAND = 'Launching KVM...'
 launch_start = datetime.now()
 launch_end = datetime.now()
+
+# web server configuration
+app = Flask(__name__)
+app.config.from_object(__name__)
+
+# web server for receiving command
+@app.route("/irs", methods=['POST'])
+def isr():
+    print "Receive isr_info (run-type, application name) from client"
+    raw_metadata = request.form["isr_info"]
+    metadata = json.loads(raw_metadata)
+
+    run_type = metadata['run-type']
+    application_name = metadata['application']
+    print "Client request : %s, %s" % (run_type, application_name)
+    if run_type in ("cloud", "mobile", "CLOUD", "MOBILE") and  application_name in ("moped", "MOPED", "face", "FACE"):
+        # Run application
+        if run_type == "cloud":
+            do_cloud_isr(user_name, application_name, server_address)
+        elif run_type == "mobile":
+            do_mobile_isr(user_name, application_name, server_address)
+        
+        print "SUCCESS"
+        return json.dumps('SUCCESS')
+
+   return json.dump("False run_type " + run_type)
+
 
 def recompile_isr(src_path):
     command_str = 'cd %s && sudo make && sudo make install' % (src_path)
@@ -25,7 +56,6 @@ def recompile_isr(src_path):
     if ret1 != 0:
         raise "Cannot compile ISR"
     return True
-
 
 # Traffic shaping is not working for ingress traffic.
 # So this must be done at server side.
@@ -145,8 +175,8 @@ def exit_error(error_message):
 
 
 def print_usage(program_name):
-    print 'usage\t: %s [cloud|mobile] [-u username] [-s server_address] [-m VM name]' % program_name
-    print 'example\t: ./isr_run.py cloud -u cloudlet -s dagama.isr.cs.cmu.edu -m face'
+    print 'usage\t: %s [-u username] [-s server_address] ' % program_name
+    print 'example\t: ./isr_run.py -u cloudlet -s dagama.isr.cs.cmu.edu'
 
 def do_cloud_isr(user_name, vm_name, server_address):
     # compile ISR again, because we have multiple version of ISR such as mock android
@@ -214,25 +244,13 @@ def do_mobile_isr(user_name, vm_name, server_address):
     print "[Total VM Run Time] : ", str(end_time-start_time)
     print '[Launch Time] : ', str(launch_end-launch_start)
 
-    sys.exit(0)
-
-    pass
-
-
 def main(argv):
-    if len(argv) < 3:
-        print_usage(os.path.basename(argv[0]))
-        sys.exit(2)
-
-    target = ("cloud", "mobile")
-    operation = argv[1]
-    if not operation in target:
-        print "Error, specify between clould and mobile"
+    if len(argv) < 2:
         print_usage(os.path.basename(argv[0]))
         sys.exit(2)
 
     try:
-        optlist, args = getopt.getopt(argv[2:], 'hu:s:m:', ["help", "user", "server", "machine"])
+        optlist, args = getopt.getopt(argv[1:], 'hu:s:', ["help", "user", "server"])
     except getopt.GetoptError, err:
         print str(err)
         print_usage(os.path.basename(argv[0]))
@@ -241,7 +259,6 @@ def main(argv):
     # required input variables
     user_name = None
     server_address = None
-    vm_name = None
 
     # parse argument
     for o, a in optlist:
@@ -252,26 +269,14 @@ def main(argv):
             user_name = a
         elif o in ("-s", "--server"):
             server_address = a
-        elif o in ("-m", "--machine"):
-            vm_name = a
         else:
             assert False, "unhandled option"
 
-    if user_name == None or server_address == None or vm_name == None:
+    if user_name == None or server_address == None:
         print_usage(os.path.basename(argv[0]))
-        print "username : %s, server_address = %s, vm_name = %s" % (user_name, server_address, vm_name)
         sys.exit(2)
     
-    if operation == "cloud":
-        do_cloud_isr(user_name, vm_name, server_address)
-    elif operation == "mobile":
-        do_mobile_isr(user_name, vm_name, server_address)
-
-    else:
-        print_usage(os.path.basename(argv[0]))
-        sys.exit(2)
-
-    sys.exit(1)
 
 if __name__ == "__main__":
     main(sys.argv)
+    app.run(host='0.0.0.0', port=WEB_SERVER_PORT_NUMBER, processes = 10)

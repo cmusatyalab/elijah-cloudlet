@@ -39,8 +39,8 @@ public class CloudletCameraActivity extends Activity implements TextToSpeech.OnI
 	public static final String TEST_IMAGE_PATH  = "/mnt/sdcard/Cloudlet/MOPED/test_image.jpg";
 	protected byte[] testImageData;
 	
-	protected static String server_ipaddress= "128.2.212.166";
-	protected static int server_port = 19092;
+	protected static String server_ipaddress;
+	protected static int server_port;
 	protected NetworkClient client;
 	
 	protected ProgressDialog mDialog;
