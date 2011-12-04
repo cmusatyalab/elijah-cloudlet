@@ -13,6 +13,7 @@ import telnetlib
 import pylzma
 from flask import Flask,flash, request,render_template, Response,session,g
 from flask import Flask, request, session, g, redirect, url_for, abort, render_template, flash, Response
+import json
 
 # global constant and variable
 WEB_SERVER_PORT_NUMBER = 9095
@@ -27,26 +28,30 @@ app = Flask(__name__)
 app.config.from_object(__name__)
 
 # web server for receiving command
-@app.route("/irs", methods=['POST'])
+@app.route("/isr", methods=['POST'])
 def isr():
     print "Receive isr_info (run-type, application name) from client"
-    raw_metadata = request.form["isr_info"]
-    metadata = json.loads(raw_metadata)
+    json_data = request.form["isr_info"]
+    metadata = json.loads(json_data)
 
-    run_type = metadata['run-type']
-    application_name = metadata['application']
+    run_type = metadata['run-type'].lower()
+    application_name = metadata['application'].lower()
     print "Client request : %s, %s" % (run_type, application_name)
-    if run_type in ("cloud", "mobile", "CLOUD", "MOBILE") and  application_name in ("moped", "MOPED", "face", "FACE"):
+    if run_type in ("cloud", "mobile") and  application_name in ("moped", "face", "null"):
+        time.sleep(5)
+
+        '''
         # Run application
         if run_type == "cloud":
             do_cloud_isr(user_name, application_name, server_address)
         elif run_type == "mobile":
             do_mobile_isr(user_name, application_name, server_address)
+        '''
         
         print "SUCCESS"
         return json.dumps('SUCCESS')
-
-   return json.dump("False run_type " + run_type)
+   
+    return json.dump("False run_type " + run_type)
 
 
 def recompile_isr(src_path):
@@ -276,6 +281,9 @@ def main(argv):
         print_usage(os.path.basename(argv[0]))
         sys.exit(2)
     
+    
+    #application_name = "ubuntuLTS"
+    #do_cloud_isr("test1", application_name, server_address)
 
 if __name__ == "__main__":
     main(sys.argv)
