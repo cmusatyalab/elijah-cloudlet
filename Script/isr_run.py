@@ -26,6 +26,11 @@ def recompile_isr(src_path):
         raise "Cannot compile ISR"
     return True
 
+
+# Traffic shaping is not working for ingress traffic.
+# So this must be done at server side.
+# You can restric traffic between server and client using traffic_shaping script at "SERVER SIDE"
+'''
 # Limiting Up/Down traffic bandwidth
 def bandwidth_limit(bandwidth, dest_ip):
     bandwidth = bandwidth / 4.0 / 10.0; # tc module is not accuracy especially for download
@@ -54,7 +59,7 @@ def bandwidth_reset():
     ret, ret_string = commands.getstatusoutput(command_str)
     print 'BW restriction is cleared'
     return ret_string
-
+'''
 
 # command Login
 def login(user_name, server_address):
@@ -136,22 +141,18 @@ def stop_vm(user_name, server_address, vm_name):
 # Exit with error message
 def exit_error(error_message):
     print 'Error, ', error_message
-    bandwidth_reset()
     sys.exit(1)
 
 
 def print_usage(program_name):
-    print 'usage\t: %s [cloud|mobile] [-b Bandwidth Mbit/s] [-u username] [-s server_address] [-m VM name]' % program_name
-    print 'example\t: ./isr_run.py cloud -u test1 -s dagama.isr.cs.cmu.edu -m windowXP -b 10'
+    print 'usage\t: %s [cloud|mobile] [-u username] [-s server_address] [-m VM name]' % program_name
+    print 'example\t: ./isr_run.py cloud -u cloudlet -s dagama.isr.cs.cmu.edu -m face'
 
-def do_cloud_isr(user_name, vm_name, server_address, bandwidth):
+def do_cloud_isr(user_name, vm_name, server_address):
     # compile ISR again, because we have multiple version of ISR such as mock android
     # This is not good approach, but easy for simple test
     # I'll gonna erase this script after submission :(
     recompile_isr(ISR_ORIGIN_SRC_PATH)
-
-    # setup bandwidth limitation
-    bandwidth_limit(bandwidth, socket.gethostbyname(server_address))
 
     # step1. login
     ret, err = login(user_name, server_address)
@@ -181,18 +182,14 @@ def do_cloud_isr(user_name, vm_name, server_address, bandwidth):
     print "[Total VM Run Time] : ", str(end_time-start_time)
     print '[Launch Time] : ', str(launch_end-launch_start)
 
-    bandwidth_reset()
     sys.exit(0)
 
 
-def do_mobile_isr(user_name, vm_name, server_address, bandwidth):
+def do_mobile_isr(user_name, vm_name, server_address):
     # compile ISR again, because we have multiple version of ISR such as mock android
     # This is not good approach, but easy for simple test
     # I'll gonna erase this script after submission :(
     recompile_isr(ISR_ANDROID_SRC_PATH)
-
-    # setup bandwidth limitation
-    bandwidth_limit(bandwidth, socket.gethostbyname(server_address))
 
     # step2. remove all cache
     ret, err = remove_cache(user_name, server_address, vm_name)
@@ -217,7 +214,6 @@ def do_mobile_isr(user_name, vm_name, server_address, bandwidth):
     print "[Total VM Run Time] : ", str(end_time-start_time)
     print '[Launch Time] : ', str(launch_end-launch_start)
 
-    bandwidth_reset()
     sys.exit(0)
 
     pass
@@ -236,7 +232,7 @@ def main(argv):
         sys.exit(2)
 
     try:
-        optlist, args = getopt.getopt(argv[2:], 'hb:u:s:m:', ["help", "bandwidth", "user", "server", "machine"])
+        optlist, args = getopt.getopt(argv[2:], 'hu:s:m:', ["help", "user", "server", "machine"])
     except getopt.GetoptError, err:
         print str(err)
         print_usage(os.path.basename(argv[0]))
@@ -246,15 +242,12 @@ def main(argv):
     user_name = None
     server_address = None
     vm_name = None
-    bandwidth = -1
 
     # parse argument
     for o, a in optlist:
         if o in ("-h", "--help"):
             print_usage(os.path.basename(argv[0]))
             sys.exit(0)
-        elif o in ("-b", "--bandwidth"):
-            bandwidth = int(a)
         elif o in ("-u", "--user"):
             user_name = a
         elif o in ("-s", "--server"):
@@ -264,15 +257,15 @@ def main(argv):
         else:
             assert False, "unhandled option"
 
-    if user_name == None or server_address == None or vm_name == None or bandwidth == -1:
+    if user_name == None or server_address == None or vm_name == None:
         print_usage(os.path.basename(argv[0]))
         print "username : %s, server_address = %s, vm_name = %s" % (user_name, server_address, vm_name)
         sys.exit(2)
     
     if operation == "cloud":
-        do_cloud_isr(user_name, vm_name, server_address, bandwidth)
+        do_cloud_isr(user_name, vm_name, server_address)
     elif operation == "mobile":
-        do_mobile_isr(user_name, vm_name, server_address, bandwidth)
+        do_mobile_isr(user_name, vm_name, server_address)
 
     else:
         print_usage(os.path.basename(argv[0]))
