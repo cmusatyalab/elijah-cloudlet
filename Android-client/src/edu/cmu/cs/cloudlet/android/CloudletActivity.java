@@ -6,6 +6,8 @@ import java.util.ArrayList;
 
 import org.teleal.cling.android.AndroidUpnpServiceImpl;
 
+import edu.cmu.cs.cloudlet.android.application.CloudletCameraActivity;
+import edu.cmu.cs.cloudlet.android.application.face.ui.FaceRecClientCameraPreview;
 import edu.cmu.cs.cloudlet.android.data.VMInfo;
 import edu.cmu.cs.cloudlet.android.network.CloudletConnector;
 import edu.cmu.cs.cloudlet.android.network.HTTPCommandSender;
@@ -29,10 +31,13 @@ import android.widget.Button;
 
 public class CloudletActivity extends Activity {
 	public static final String TEST_CLOUDLET_SERVER_IP = "cage.coda.cs.cmu.edu";
-	public static final int TEST_CLOUDLET_SERVER_PORT_ISR = 9092;
+	public static final int TEST_CLOUDLET_SERVER_PORT_ISR = 9095;
 	public static final int TEST_CLOUDLET_SERVER_PORT_SYNTHESIS = 9090;
+
+	public static final int TEST_CLOUDLET_APP_MOPED_PORT = 10902;
 	public static final int TEST_CLOUDLET_APP_FACE_PORT = 9876;
 	public static final String[] applications = {"MOPED", "FACE", "NULL"};
+	
 	protected Button startConnectionButton;
 	protected CloudletConnector connector;
 	private UPnPDiscovery serviceDiscovery;
@@ -55,6 +60,7 @@ public class CloudletActivity extends Activity {
 		findViewById(R.id.testSynthesis).setOnClickListener(clickListener);
 		findViewById(R.id.testISRCloud).setOnClickListener(clickListener);
 		findViewById(R.id.testISRMobile).setOnClickListener(clickListener);
+		findViewById(R.id.runApplication).setOnClickListener(clickListener);
         
 	}
 
@@ -106,14 +112,11 @@ public class CloudletActivity extends Activity {
 		// Don't like to use String for passing command type.
 		// But, I more hate to use public CONSTANT for such as temperal test case.		
 		if(command.equalsIgnoreCase("cloud") == false && command.equalsIgnoreCase("mobile") == false){
-			new AlertDialog.Builder(CloudletActivity.this).setTitle("Info")
-			.setMessage("command is not cloud or mobile : " + command)
-			.setIcon(R.drawable.ic_launcher)
-			.setNegativeButton("Confirm", null)
-			.show();
+			showAlert("Error", "command is not cloud or mobile : " + command);
 			return;
 		}
 
+		// Show Dialog
 		AlertDialog.Builder ab = new AlertDialog.Builder(this);
 		ab.setTitle("Application List");
 		ab.setIcon(R.drawable.ic_launcher);
@@ -138,12 +141,62 @@ public class CloudletActivity extends Activity {
 		});
 		ab.show();
 	}
-	
+
 	protected void runHTTPConnection(String command, String application) {
 		HTTPCommandSender commandSender = new HTTPCommandSender(this, CloudletActivity.this, command, application);
 		commandSender.start();		
 	}
 	
+
+	/*
+	 * Launch Application as a Standalone
+	 */
+	private void showDialogSelectApp(final String[] applications) {
+		// Show Dialog
+		AlertDialog.Builder ab = new AlertDialog.Builder(this);
+		ab.setTitle("Application List");
+		ab.setIcon(R.drawable.ic_launcher);
+		ab.setSingleChoiceItems(applications, 0, new DialogInterface.OnClickListener() {
+			public void onClick(DialogInterface dialog, int position) {
+				selectedOveralyIndex = position;
+			}
+		}).setPositiveButton("Ok", new DialogInterface.OnClickListener() {
+			public void onClick(DialogInterface dialog, int position) {
+				if(position >= 0){
+					selectedOveralyIndex = position;
+				}else if(applications.length > 0){
+					selectedOveralyIndex = 0;
+				}
+				String application = applications[selectedOveralyIndex];
+				runApplication(application);
+			}
+		}).setNegativeButton("Cancel", new DialogInterface.OnClickListener() {
+			public void onClick(DialogInterface dialog, int position) {
+				return;
+			}
+		});
+		ab.show();
+	}
+
+	
+	
+	protected void runApplication(String application) {		
+		if(application.equalsIgnoreCase("moped")){
+			Intent intent = new Intent(CloudletActivity.this, CloudletCameraActivity.class);			
+			intent.putExtra("address", TEST_CLOUDLET_SERVER_IP);
+			intent.putExtra("port", TEST_CLOUDLET_APP_MOPED_PORT);
+			startActivityForResult(intent, 0);			
+		}else if(application.equalsIgnoreCase("face")){
+			Intent intent = new Intent(CloudletActivity.this, FaceRecClientCameraPreview.class);
+			intent.putExtra("address", TEST_CLOUDLET_SERVER_IP);
+			intent.putExtra("port", TEST_CLOUDLET_APP_FACE_PORT);
+			startActivityForResult(intent, 0);			
+		}else if(application.equalsIgnoreCase("null")){
+			showAlert("Error", "VM Matching Overlay VM and Application");
+		}else{
+			
+		}
+	}
 	
 	/*
 	 * Service Discovery Handler
@@ -160,11 +213,7 @@ public class CloudletActivity extends Activity {
 //				connector.startConnection("128.2.212.207", 9090);
 				
 			}else if(msg.what == UPnPDiscovery.USER_CANCELED){
-				new AlertDialog.Builder(CloudletActivity.this).setTitle("Info")
-				.setMessage("Select UPnP Server for Cloudlet Service")
-				.setIcon(R.drawable.ic_launcher)
-				.setNegativeButton("Confirm", null)
-				.show();
+				showAlert("Info", "Select UPnP Server for Cloudlet Service");
 			}
 		}
 	};
@@ -183,25 +232,26 @@ public class CloudletActivity extends Activity {
 				if(vmList.size() > 0){
 					showDialogSelectOverlay(vmList);			
 				}else{
-					new AlertDialog.Builder(CloudletActivity.this).setTitle("Error")
-					.setIcon(R.drawable.ic_launcher)
-					.setMessage("We found No Overlay")
-					.setNegativeButton("Confirm", null)
-					.show();
+					showAlert("Error", "We found No Overlay");
 				}				
 			}else if(v.getId() == R.id.testISRCloud){
 				showDialogSelectISRApplication(applications, "cloud");
-				
 			}else if(v.getId() == R.id.testISRMobile){
 				showDialogSelectISRApplication(applications, "mobile");
+			}else if(v.getId() == R.id.runApplication){
+				showDialogSelectApp(applications);
 				
-//				Intent intent = new Intent(CloudletActivity.this, FaceRecClientCameraPreview.class);
-//				intent.putExtra("address", TEST_CLOUDLET_SERVER_IP);
-//				intent.putExtra("port", TEST_CLOUDLET_APP_FACE_PORT);
-//				startActivityForResult(intent, 0);
 			}
 		}
 	};
+	
+	protected void showAlert(String type, String message){
+		new AlertDialog.Builder(CloudletActivity.this).setTitle(type)
+		.setMessage(message)
+		.setIcon(R.drawable.ic_launcher)
+		.setNegativeButton("Confirm", null)
+		.show();		
+	}
 
 
 	@Override 

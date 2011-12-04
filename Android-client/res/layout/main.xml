@@ -55,4 +55,20 @@
         android:text="Start ISR Mobile" >
     </Button>
 
+    <TextView
+        android:layout_width="fill_parent"
+        android:layout_height="0dp"
+        android:textSize = "25sp"
+        android:gravity="center_vertical"
+        android:layout_weight="1"
+        android:text="Standalone Application" />
+    
+    <Button
+        android:id="@+id/runApplication"
+        android:layout_width="fill_parent"
+        android:layout_height="0dp"
+        android:layout_gravity="bottom"
+        android:layout_weight="1"
+        android:text="Start Application" >
+    </Button>
 </LinearLayout>
