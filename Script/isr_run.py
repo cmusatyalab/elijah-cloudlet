@@ -19,7 +19,8 @@ import json
 WEB_SERVER_PORT_NUMBER = 9095
 ISR_ORIGIN_SRC_PATH = '/home/krha/Cloudlet/src/ISR/src'
 ISR_ANDROID_SRC_PATH = '/home/krha/Cloudlet/src/ISR/src-mock'
-LAUNCH_COMMAND = 'Launching KVM...'
+user_name = ''
+server_address = ''
 launch_start = datetime.now()
 launch_end = datetime.now()
 
@@ -30,23 +31,23 @@ app.config.from_object(__name__)
 # web server for receiving command
 @app.route("/isr", methods=['POST'])
 def isr():
+    global user_name
+    global server_address
+
     print "Receive isr_info (run-type, application name) from client"
     json_data = request.form["isr_info"]
     metadata = json.loads(json_data)
 
     run_type = metadata['run-type'].lower()
     application_name = metadata['application'].lower()
-    print "Client request : %s, %s" % (run_type, application_name)
     if run_type in ("cloud", "mobile") and  application_name in ("moped", "face", "null"):
-        time.sleep(5)
-
-        '''
         # Run application
         if run_type == "cloud":
+            print "Client request : %s, %s --> connecting to %s with %s" % (run_type, application_name, server_address, user_name)
             do_cloud_isr(user_name, application_name, server_address)
         elif run_type == "mobile":
+            print "Client request : %s, %s --> connecting to %s with %s" % (run_type, application_name, server_address, user_name)
             do_mobile_isr(user_name, application_name, server_address)
-        '''
         
         print "SUCCESS"
         return json.dumps('SUCCESS')
@@ -130,34 +131,49 @@ def remove_cache(user_name, server_address, vm_name):
     print command_str
     ret, ret_string = commands.getstatusoutput(command_str)
 
-    if ret != 0:
-        return False, "Cannot remove hoard, %s, %s" % (uuid, vm_name)
-    return True, ''
+    return True
 
 
 # resume VM, wait until finish (close window)
 def resume_vm(user_name, server_address, vm_name):
-    global launch_start
-    global launch_end
+    time_start = datetime.now()
+    time_end = datetime.now()
+    time_transfer_start = datetime.now()
+    time_transfer_end = datetime.now()
+    time_decomp_mem_start = datetime.now()
+    time_decomp_mem_end = datetime.now()
+    time_kvm_start = datetime.now()
+    time_kvm_end = datetime.now()
+
     command_str = 'isr resume ' + vm_name + ' -s ' + server_address + ' -u ' + user_name + ' -F'
     print command_str
-    launch_start = datetime.now()
-    print 'launch start : ', str(launch_start)
+    time_start = datetime.now()
     proc = subprocess.Popen(command_str, shell=True, stdin=subprocess.PIPE, stdout=subprocess.PIPE)
     while True:
         time.sleep(0.1)
         output = proc.stdout.readline()
         if len(output.strip()) != 0 and output.find("[krha]") == -1:
             sys.stdout.write(output)
-        if output.strip().find(LAUNCH_COMMAND) == 0:
-            launch_end = datetime.now()
-            print 'launch_end : ', str(launch_end)
+
+        # time stamping using log from isr_client
+        # Not reliable but fast for simple test
+        if output.strip().find("Fetching keyring") == 0:
+            time_transfer_start = datetime.now()
+        elif output.strip().find("Decrypting and uncompressing") == 0:
+            time_transfer_end = datetime.now()
+            time_decomp_mem_start = datetime.now()
+        elif output.strip().find("Updating hoard cache") == 0:
+            time_decomp_mem_end = datetime.now()
+            time_kvm_start = datetime.now()
+        elif output.strip().find("Launching KVM") == 0:
+            time_kvm_end = datetime.now()
             break;
 
     ret = proc.wait()
+    time_end = datetime.now()
     if ret == 0:
-        return True, ''
-    return False, 'Failed to Resume VM'
+        return True, str(time_end-time_start), str(time_transfer_end-time_transfer_start), str(time_decomp_mem_end-time_decomp_mem_start), str(time_kvm_end-time_kvm_start)
+    return False, '','',''
 
 
 # stop VM
@@ -168,20 +184,12 @@ def stop_vm(user_name, server_address, vm_name):
     proc.stdin.write('y\n')
     ret = proc.wait()
 
-    if ret == 0:
-        return True, ''
-    return False, "Cannot clean up resumed VM"
-
+    return True
 
 # Exit with error message
 def exit_error(error_message):
     print 'Error, ', error_message
     sys.exit(1)
-
-
-def print_usage(program_name):
-    print 'usage\t: %s [-u username] [-s server_address] ' % program_name
-    print 'example\t: ./isr_run.py -u cloudlet -s dagama.isr.cs.cmu.edu'
 
 def do_cloud_isr(user_name, vm_name, server_address):
     # compile ISR again, because we have multiple version of ISR such as mock android
@@ -201,23 +209,20 @@ def do_cloud_isr(user_name, vm_name, server_address):
 
     # step3. resume VM, wait until finish (close window)
     start_time = datetime.now()
-    ret, err = resume_vm(user_name, server_address, vm_name)
+    ret, total_time, transfer_time, decomp_time, kvm_time = resume_vm(user_name, server_address, vm_name)
     if ret == False:
         exit_error(err)
-       
     end_time = datetime.now()
 
-    # step4. stop VM and clean up
-    ret, err = stop_vm(user_name, server_address, vm_name)
-    ret, err = remove_cache(user_name, server_address, vm_name)
-    if ret == False:
-        exit_error(err)
+    # step4. clean all state
+    ret = stop_vm(user_name, server_address, vm_name)
+    ret = remove_cache(user_name, server_address, vm_name)
 
     print "SUCCESS"
-    print "[Total VM Run Time] : ", str(end_time-start_time)
-    print '[Launch Time] : ', str(launch_end-launch_start)
-
-    sys.exit(0)
+    print "[Total Time] : ", total_time 
+    print '[Transfer Time(Memory)] : ', transfer_time
+    print '[Decompression Time] : ', decomp_time
+    print '[KVM Time] : ', kvm_time
 
 
 def do_mobile_isr(user_name, vm_name, server_address):
@@ -233,29 +238,49 @@ def do_mobile_isr(user_name, vm_name, server_address):
 
     # step3. resume VM, wait until finish (close window)
     start_time = datetime.now()
-    ret, err = resume_vm(user_name, server_address, vm_name)
+    rret, total_time, transfer_time, decomp_time, kvm_time = resume_vm(user_name, server_address, vm_name)
     if ret == False:
         exit_error(err)
-       
     end_time = datetime.now()
 
-    # step4. stop VM and clean up
-    ret, err = stop_vm(user_name, server_address, vm_name)
-    ret, err = remove_cache(user_name, server_address, vm_name)
-    if ret == False:
-        exit_error(err)
+    # step4. clean all state
+    ret = stop_vm(user_name, server_address, vm_name)
+    ret = remove_cache(user_name, server_address, vm_name)
 
     print "SUCCESS"
-    print "[Total VM Run Time] : ", str(end_time-start_time)
-    print '[Launch Time] : ', str(launch_end-launch_start)
+    print "[Total Time] : ", total_time 
+    print '[Memory Transfer Time] : ', transfer_time
+    print '[Decompression Time] : ', decomp_time
+    print '[KVM Time] : ', kvm_time
+
+
+def isr_clean_all(server_address, user_name):
+    vm_names = ("face", "moped", "null")
+    for vm_name in vm_names:
+        ret = stop_vm(user_name, server_address, vm_name)
+        ret = remove_cache(user_name, server_address, vm_name)
+
+def print_usage(program_name):
+    print 'usage\t: %s [run|clean] [-u username] [-s server_address] ' % program_name
+    print 'example\t: isr_run.py run -u cloudlet -s dagama.isr.cs.cmu.edu'
+
 
 def main(argv):
-    if len(argv) < 2:
+    global user_name
+    global server_address
+
+    if len(argv) < 3:
+        print_usage(os.path.basename(argv[0]))
+        sys.exit(2)
+
+    operation = argv[1].lower()
+    if not operation in ("clean", "run"):
+        print "No supporing operation : ", operation
         print_usage(os.path.basename(argv[0]))
         sys.exit(2)
 
     try:
-        optlist, args = getopt.getopt(argv[1:], 'hu:s:', ["help", "user", "server"])
+        optlist, args = getopt.getopt(argv[2:], 'hu:s:', ["help", "user", "server"])
     except getopt.GetoptError, err:
         print str(err)
         print_usage(os.path.basename(argv[0]))
@@ -280,10 +305,11 @@ def main(argv):
     if user_name == None or server_address == None:
         print_usage(os.path.basename(argv[0]))
         sys.exit(2)
-    
-    
-    #application_name = "ubuntuLTS"
-    #do_cloud_isr("test1", application_name, server_address)
+
+    if operation == "clean":
+        isr_clean_all(server_address, user_name)
+        sys.exit(0)
+
 
 if __name__ == "__main__":
     main(sys.argv)
