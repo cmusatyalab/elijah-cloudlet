@@ -13,6 +13,7 @@ import telnetlib
 import pylzma
 from flask import Flask,flash, request,render_template, Response,session,g
 from flask import Flask, request, session, g, redirect, url_for, abort, render_template, flash, Response
+import re
 import json
 
 # global constant and variable
@@ -40,19 +41,40 @@ def isr():
 
     run_type = metadata['run-type'].lower()
     application_name = metadata['application'].lower()
+    print "Client request : %s, %s --> connecting to %s with %s" % (run_type, application_name, server_address, user_name)
+    
     if run_type in ("cloud", "mobile") and  application_name in ("moped", "face", "null"):
         # Run application
         if run_type == "cloud":
             print "Client request : %s, %s --> connecting to %s with %s" % (run_type, application_name, server_address, user_name)
-            do_cloud_isr(user_name, application_name, server_address)
+            ret = do_cloud_isr(user_name, application_name, server_address)
         elif run_type == "mobile":
             print "Client request : %s, %s --> connecting to %s with %s" % (run_type, application_name, server_address, user_name)
             do_mobile_isr(user_name, application_name, server_address)
         
-        print "SUCCESS"
-        return json.dumps('SUCCESS')
-   
-    return json.dump("False run_type " + run_type)
+        if ret:
+            print "SUCCESS"
+            return "SUCCESS"
+
+    ret_msg = "Wrong parameter " + run_type + ", " + application_name
+    print ret_msg
+    return ret_msg
+
+
+def isr_temp():
+    run_type = "cloud"
+    application_name = "face"
+    if run_type in ("cloud", "mobile") and  application_name in ("moped", "face", "null"):
+        # Run application
+        if run_type == "cloud":
+            print "Client request : %s, %s --> connecting to %s with %s" % (run_type, application_name, server_address, user_name)
+            ret = do_cloud_isr(user_name, application_name, server_address)
+        elif run_type == "mobile":
+            print "Client request : %s, %s --> connecting to %s with %s" % (run_type, application_name, server_address, user_name)
+            do_mobile_isr(user_name, application_name, server_address)
+        
+        if ret:
+            print "SUCCESS"
 
 
 def recompile_isr(src_path):
@@ -63,39 +85,6 @@ def recompile_isr(src_path):
         raise "Cannot compile ISR"
     return True
 
-# Traffic shaping is not working for ingress traffic.
-# So this must be done at server side.
-# You can restric traffic between server and client using traffic_shaping script at "SERVER SIDE"
-'''
-# Limiting Up/Down traffic bandwidth
-def bandwidth_limit(bandwidth, dest_ip):
-    bandwidth = bandwidth / 4.0 / 10.0; # tc module is not accuracy especially for download
-
-    command_str = 'sudo tc qdisc add dev eth0 root handle 1: htb default 30'
-    ret1, ret_string = commands.getstatusoutput(command_str)
-    command_str = 'sudo tc class add dev eth0 parent 1: classid 1:1 htb rate ' + str(bandwidth) + 'mbit'
-    ret2, ret_string = commands.getstatusoutput(command_str)
-    command_str = 'sudo tc class add dev eth0 parent 1: classid 1:2 htb rate ' + str(bandwidth) + 'mbit'
-    ret3, ret_string = commands.getstatusoutput(command_str)
-    command_str = 'sudo tc filter add dev eth0 protocol ip parent 1:0 prio 1 u32 match ip dst ' + dest_ip + '/32 flowid 1:1'
-    ret4, ret_string = commands.getstatusoutput(command_str)
-    command_str = 'sudo tc filter add dev eth0 protocol ip parent 1:0 prio 1 u32 match ip src ' + dest_ip + '/32 flowid 1:2'
-    ret5, ret_string = commands.getstatusoutput(command_str)
-
-    if ret1 != 0 or ret2 != 0 or ret3 !=0 or ret4 !=0 or ret5 !=0:
-        print 'Error, BW is not limited'
-        return False
-    print 'BW is limited to %s Mbit/s between localhost and %s' % (str(bandwidth*10*4.0), dest_ip)
-    return True
-
-
-# Reset traffic bandwidth limitation
-def bandwidth_reset():
-    command_str = 'sudo tc qdisc del dev eth0 root'
-    ret, ret_string = commands.getstatusoutput(command_str)
-    print 'BW restriction is cleared'
-    return ret_string
-'''
 
 # command Login
 def login(user_name, server_address):
@@ -134,7 +123,7 @@ def remove_cache(user_name, server_address, vm_name):
     return True
 
 
-# resume VM, wait until finish (close window)
+# resume VM
 def resume_vm(user_name, server_address, vm_name):
     time_start = datetime.now()
     time_end = datetime.now()
@@ -165,15 +154,18 @@ def resume_vm(user_name, server_address, vm_name):
         elif output.strip().find("Updating hoard cache") == 0:
             time_decomp_mem_end = datetime.now()
             time_kvm_start = datetime.now()
-        elif output.strip().find("Launching KVM") == 0:
+        elif output.strip().find("Launching") == 0:
             time_kvm_end = datetime.now()
             break;
 
-    ret = proc.wait()
+    # if we wait for process to end, we cannot return to web client
+    # ret = proc.wait()
     time_end = datetime.now()
-    if ret == 0:
-        return True, str(time_end-time_start), str(time_transfer_end-time_transfer_start), str(time_decomp_mem_end-time_decomp_mem_start), str(time_kvm_end-time_kvm_start)
-    return False, '','',''
+    print "Return from Resume"
+    print "[Total Time] : ", str(time_end-time_start)
+    print '[Transfer Time(Memory)] : ', str(time_transfer_end-time_transfer_start)
+    print '[Decompression Time] : ', str(time_decomp_mem_end-time_decomp_mem_start)
+    print '[KVM Time] : ', str(time_kvm_end-time_kvm_start)
 
 
 # stop VM
@@ -199,62 +191,38 @@ def do_cloud_isr(user_name, vm_name, server_address):
 
     # step1. login
     ret, err = login(user_name, server_address)
-    if ret == False:
-        exit_error(err)
+    if not ret:
+        return False
 
     # step2. remove all cache
     ret, err = remove_cache(user_name, server_address, vm_name)
-    if ret == False:
-        exit_error(err)
+    if not ret:
+        return False
 
     # step3. resume VM, wait until finish (close window)
     start_time = datetime.now()
-    ret, total_time, transfer_time, decomp_time, kvm_time = resume_vm(user_name, server_address, vm_name)
-    if ret == False:
-        exit_error(err)
+    resume_vm(user_name, server_address, vm_name)
     end_time = datetime.now()
 
-    # step4. clean all state
-    ret = stop_vm(user_name, server_address, vm_name)
-    ret = remove_cache(user_name, server_address, vm_name)
-
-    print "SUCCESS"
-    print "[Total Time] : ", total_time 
-    print '[Transfer Time(Memory)] : ', transfer_time
-    print '[Decompression Time] : ', decomp_time
-    print '[KVM Time] : ', kvm_time
+    return True
 
 
 def do_mobile_isr(user_name, vm_name, server_address):
-    # compile ISR again, because we have multiple version of ISR such as mock android
-    # This is not good approach, but easy for simple test
-    # I'll gonna erase this script after submission :(
-    recompile_isr(ISR_ANDROID_SRC_PATH)
-
-    # step2. remove all cache
-    ret, err = remove_cache(user_name, server_address, vm_name)
-    if ret == False:
-        exit_error(err)
-
-    # step3. resume VM, wait until finish (close window)
-    start_time = datetime.now()
-    rret, total_time, transfer_time, decomp_time, kvm_time = resume_vm(user_name, server_address, vm_name)
-    if ret == False:
-        exit_error(err)
-    end_time = datetime.now()
-
-    # step4. clean all state
-    ret = stop_vm(user_name, server_address, vm_name)
-    ret = remove_cache(user_name, server_address, vm_name)
-
-    print "SUCCESS"
-    print "[Total Time] : ", total_time 
-    print '[Memory Transfer Time] : ', transfer_time
-    print '[Decompression Time] : ', decomp_time
-    print '[KVM Time] : ', kvm_time
+    pass
 
 
 def isr_clean_all(server_address, user_name):
+    # kill all process that has 'isr'
+    # I really hate do this :(
+    command_str = 'ps aux | grep isr'
+    ret1, ret_string = commands.getstatusoutput(command_str)
+    for line in ret_string.split('\n'):
+        if line.find('/bin/sh -c isr resume') != -1 or line.find('/usr/bin/perl /usr/local/bin/isr') != -1 or line.find('/usr/local/lib/openisr/parcelkeeper') !=-1:
+            pid = re.search('[A-Za-z]+\s+(\d+).*', line).groups(0)[0]
+            command_str = 'kill -9 ' + pid
+            print 'kill /isr + \t', command_str
+            commands.getoutput(command_str)
+
     vm_names = ("face", "moped", "null")
     for vm_name in vm_names:
         ret = stop_vm(user_name, server_address, vm_name)
@@ -313,4 +281,6 @@ def main(argv):
 
 if __name__ == "__main__":
     main(sys.argv)
+    #isr_temp()
     app.run(host='0.0.0.0', port=WEB_SERVER_PORT_NUMBER, processes = 10)
+

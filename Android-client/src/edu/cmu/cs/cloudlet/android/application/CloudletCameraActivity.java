@@ -77,6 +77,7 @@ public class CloudletCameraActivity extends Activity implements TextToSpeech.OnI
 		
 		Bundle extras = getIntent().getExtras();
 		server_ipaddress = extras.getString("address");
+		server_port = extras.getInt("port");
 		
 		// buttons
 		mSendButton = (Button) findViewById(R.id.sendButton);

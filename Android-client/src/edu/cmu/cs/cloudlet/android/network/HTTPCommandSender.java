@@ -68,7 +68,7 @@ public class HTTPCommandSender extends Thread {
 
 	public void run() {
 		String ret = httpCommand(httpURL, this.command, this.applicationName);
-		if(ret.indexOf("SUCCESS") != -1){
+		if(ret.indexOf("\"SUCCESS\"") != -1){
 			if(ret != null && ret.equalsIgnoreCase("SUCCESS")){
 				Message message = Message.obtain();
 				message.what = HTTPCommandSender.SUCCESS;
