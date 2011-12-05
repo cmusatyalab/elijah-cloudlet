@@ -20,6 +20,7 @@ import json
 WEB_SERVER_PORT_NUMBER = 9095
 ISR_ORIGIN_SRC_PATH = '/home/krha/Cloudlet/src/ISR/src'
 ISR_ANDROID_SRC_PATH = '/home/krha/Cloudlet/src/ISR/src-mock'
+ISR_ANDROID_PARCEL_PATH = '/home/krha/Cloudlet/src/ISR/parcel'
 user_name = ''
 server_address = ''
 launch_start = datetime.now()
@@ -59,22 +60,6 @@ def isr():
     ret_msg = "Wrong parameter " + run_type + ", " + application_name
     print ret_msg
     return ret_msg
-
-
-def isr_temp():
-    run_type = "cloud"
-    application_name = "face"
-    if run_type in ("cloud", "mobile") and  application_name in ("moped", "face", "null"):
-        # Run application
-        if run_type == "cloud":
-            print "Client request : %s, %s --> connecting to %s with %s" % (run_type, application_name, server_address, user_name)
-            ret = do_cloud_isr(user_name, application_name, server_address)
-        elif run_type == "mobile":
-            print "Client request : %s, %s --> connecting to %s with %s" % (run_type, application_name, server_address, user_name)
-            do_mobile_isr(user_name, application_name, server_address)
-        
-        if ret:
-            print "SUCCESS"
 
 
 def recompile_isr(src_path):
@@ -174,7 +159,6 @@ def stop_vm(user_name, server_address, vm_name):
     print command_str
     proc = subprocess.Popen(command_str, shell=True, stdin=subprocess.PIPE, stdout=subprocess.PIPE)
     proc.stdin.write('y\n')
-    ret = proc.wait()
 
     return True
 
@@ -208,7 +192,46 @@ def do_cloud_isr(user_name, vm_name, server_address):
 
 
 def do_mobile_isr(user_name, vm_name, server_address):
-    pass
+    # compile ISR again, because we have multiple version of ISR such as mock android
+    # This is not good approach, but easy for simple test
+    # I'll gonna erase this script after submission :(
+    recompile_isr(ISR_ANDROID_SRC_PATH)
+
+    # Change parcel to indicate it to mobile address, which is specified at server_address
+    trick_parcel_address(ISR_ANDROID_PARCEL_PATH, vm_name, server_address)
+
+    # step1. remove all cache
+    ret, err = remove_cache(user_name, server_address, vm_name)
+    if not ret:
+        return False
+
+    # step2. resume VM, wait until finish (close window)
+    start_time = datetime.now()
+    resume_vm(user_name, server_address, vm_name)
+    end_time = datetime.now()
+    return True
+
+
+def trick_parcel_address(parcel_dir, vm_name, server_address):
+    parcel_path = os.path.join(parcel_dir, vm_name, 'parcel.cfg')
+    print parcel_path
+    if not os.path.exists(parcel_path):
+        print "Error, check you parcel file location : " + parcel_path
+        return False
+    lines = []
+    fr = open(parcel_path, 'r')
+    for line in fr:
+        key = line.split("=")[0].strip()
+        if key == "RPATH":
+            lines.append("RPATH = http://" + server_address + ":8080\n")
+        elif key == "SERVER":
+            lines.append("SERVER = " + server_address + "\n")
+        else:
+            lines.append(line)
+    fr.close()
+    fw = open(parcel_path, 'w')
+    fw.write(''.join(lines))
+    fw.close()
 
 
 def isr_clean_all(server_address, user_name):
@@ -281,6 +304,6 @@ def main(argv):
 
 if __name__ == "__main__":
     main(sys.argv)
-    #isr_temp()
+    #do_mobile_isr(user_name, "moped", server_address)
     app.run(host='0.0.0.0', port=WEB_SERVER_PORT_NUMBER, processes = 10)
 
