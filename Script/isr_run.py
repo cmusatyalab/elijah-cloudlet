@@ -42,7 +42,6 @@ def isr():
 
     run_type = metadata['run-type'].lower()
     application_name = metadata['application'].lower()
-    print "Client request : %s, %s --> connecting to %s with %s" % (run_type, application_name, server_address, user_name)
     
     if run_type in ("cloud", "mobile") and  application_name in ("moped", "face", "null"):
         # Run application
@@ -51,7 +50,7 @@ def isr():
             ret = do_cloud_isr(user_name, application_name, server_address)
         elif run_type == "mobile":
             print "Client request : %s, %s --> connecting to %s with %s" % (run_type, application_name, server_address, user_name)
-            do_mobile_isr(user_name, application_name, server_address)
+            ret = do_mobile_isr(user_name, application_name, server_address)
         
         if ret:
             print "SUCCESS"
@@ -100,10 +99,23 @@ def remove_cache(user_name, server_address, vm_name):
     if uuid == None:
         return True, ''
     
-    # erase cache
+    # erase disk cache
     command_str = 'isr rmhoard ' + uuid + ' -s ' + server_address + ' -u ' + user_name
     print command_str
     ret, ret_string = commands.getstatusoutput(command_str)
+
+    # erase memory
+    mem_dir = '/home/krha/.isr/hoard/img'
+    if os.path.exists(mem_dir):
+        command_str = "rm " + os.path.join(mem_dir, uuid) + "*"
+        print command_str
+        ret, ret_string = commands.getstatusoutput(command_str)
+
+    mem_dir = '/home/krha/.isr/'
+    if os.path.exists(mem_dir):
+        command_str = "rm -r " + os.path.join(mem_dir, uuid)
+        print command_str
+        ret, ret_string = commands.getstatusoutput(command_str)
 
     return True
 
