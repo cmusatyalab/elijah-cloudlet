@@ -217,7 +217,7 @@ def isr_clean_all(server_address, user_name):
     command_str = 'ps aux | grep isr'
     ret1, ret_string = commands.getstatusoutput(command_str)
     for line in ret_string.split('\n'):
-        if line.find('/bin/sh -c isr resume') != -1 or line.find('/usr/bin/perl /usr/local/bin/isr') != -1 or line.find('/usr/local/lib/openisr/parcelkeeper') !=-1:
+        if line.find('isr') != -1 and line.find('isr_run.py') == -1 and line.find('vi ') == -1:
             pid = re.search('[A-Za-z]+\s+(\d+).*', line).groups(0)[0]
             command_str = 'kill -9 ' + pid
             print 'kill /isr + \t', command_str

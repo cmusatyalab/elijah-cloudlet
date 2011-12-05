@@ -35,7 +35,7 @@ public class CloudletActivity extends Activity {
 	public static final int TEST_CLOUDLET_SERVER_PORT_SYNTHESIS = 9090;			// Cloudlet port for VM Synthesis test 
 
 	public static final String[] applications = {"MOPED", "FACE", "NULL"};
-	public static final int TEST_CLOUDLET_APP_MOPED_PORT = 10902;
+	public static final int TEST_CLOUDLET_APP_MOPED_PORT = 19092;
 	public static final int TEST_CLOUDLET_APP_FACE_PORT = 9876;
 	
 	protected Button startConnectionButton;
