@@ -11,12 +11,71 @@ import socket
 from datetime import datetime, timedelta
 import telnetlib
 import pylzma
+from flask import Flask,flash, request,render_template, Response,session,g
+from flask import Flask, request, session, g, redirect, url_for, abort, render_template, flash, Response
+import re
+import json
 
+# global constant and variable
+WEB_SERVER_PORT_NUMBER = 9095
 ISR_ORIGIN_SRC_PATH = '/home/krha/Cloudlet/src/ISR/src'
 ISR_ANDROID_SRC_PATH = '/home/krha/Cloudlet/src/ISR/src-mock'
-LAUNCH_COMMAND = 'Launching KVM...'
+user_name = ''
+server_address = ''
 launch_start = datetime.now()
 launch_end = datetime.now()
+
+# web server configuration
+app = Flask(__name__)
+app.config.from_object(__name__)
+
+# web server for receiving command
+@app.route("/isr", methods=['POST'])
+def isr():
+    global user_name
+    global server_address
+
+    print "Receive isr_info (run-type, application name) from client"
+    json_data = request.form["isr_info"]
+    metadata = json.loads(json_data)
+
+    run_type = metadata['run-type'].lower()
+    application_name = metadata['application'].lower()
+    print "Client request : %s, %s --> connecting to %s with %s" % (run_type, application_name, server_address, user_name)
+    
+    if run_type in ("cloud", "mobile") and  application_name in ("moped", "face", "null"):
+        # Run application
+        if run_type == "cloud":
+            print "Client request : %s, %s --> connecting to %s with %s" % (run_type, application_name, server_address, user_name)
+            ret = do_cloud_isr(user_name, application_name, server_address)
+        elif run_type == "mobile":
+            print "Client request : %s, %s --> connecting to %s with %s" % (run_type, application_name, server_address, user_name)
+            do_mobile_isr(user_name, application_name, server_address)
+        
+        if ret:
+            print "SUCCESS"
+            return "SUCCESS"
+
+    ret_msg = "Wrong parameter " + run_type + ", " + application_name
+    print ret_msg
+    return ret_msg
+
+
+def isr_temp():
+    run_type = "cloud"
+    application_name = "face"
+    if run_type in ("cloud", "mobile") and  application_name in ("moped", "face", "null"):
+        # Run application
+        if run_type == "cloud":
+            print "Client request : %s, %s --> connecting to %s with %s" % (run_type, application_name, server_address, user_name)
+            ret = do_cloud_isr(user_name, application_name, server_address)
+        elif run_type == "mobile":
+            print "Client request : %s, %s --> connecting to %s with %s" % (run_type, application_name, server_address, user_name)
+            do_mobile_isr(user_name, application_name, server_address)
+        
+        if ret:
+            print "SUCCESS"
+
 
 def recompile_isr(src_path):
     command_str = 'cd %s && sudo make && sudo make install' % (src_path)
@@ -26,40 +85,6 @@ def recompile_isr(src_path):
         raise "Cannot compile ISR"
     return True
 
-
-# Traffic shaping is not working for ingress traffic.
-# So this must be done at server side.
-# You can restric traffic between server and client using traffic_shaping script at "SERVER SIDE"
-'''
-# Limiting Up/Down traffic bandwidth
-def bandwidth_limit(bandwidth, dest_ip):
-    bandwidth = bandwidth / 4.0 / 10.0; # tc module is not accuracy especially for download
-
-    command_str = 'sudo tc qdisc add dev eth0 root handle 1: htb default 30'
-    ret1, ret_string = commands.getstatusoutput(command_str)
-    command_str = 'sudo tc class add dev eth0 parent 1: classid 1:1 htb rate ' + str(bandwidth) + 'mbit'
-    ret2, ret_string = commands.getstatusoutput(command_str)
-    command_str = 'sudo tc class add dev eth0 parent 1: classid 1:2 htb rate ' + str(bandwidth) + 'mbit'
-    ret3, ret_string = commands.getstatusoutput(command_str)
-    command_str = 'sudo tc filter add dev eth0 protocol ip parent 1:0 prio 1 u32 match ip dst ' + dest_ip + '/32 flowid 1:1'
-    ret4, ret_string = commands.getstatusoutput(command_str)
-    command_str = 'sudo tc filter add dev eth0 protocol ip parent 1:0 prio 1 u32 match ip src ' + dest_ip + '/32 flowid 1:2'
-    ret5, ret_string = commands.getstatusoutput(command_str)
-
-    if ret1 != 0 or ret2 != 0 or ret3 !=0 or ret4 !=0 or ret5 !=0:
-        print 'Error, BW is not limited'
-        return False
-    print 'BW is limited to %s Mbit/s between localhost and %s' % (str(bandwidth*10*4.0), dest_ip)
-    return True
-
-
-# Reset traffic bandwidth limitation
-def bandwidth_reset():
-    command_str = 'sudo tc qdisc del dev eth0 root'
-    ret, ret_string = commands.getstatusoutput(command_str)
-    print 'BW restriction is cleared'
-    return ret_string
-'''
 
 # command Login
 def login(user_name, server_address):
@@ -95,34 +120,52 @@ def remove_cache(user_name, server_address, vm_name):
     print command_str
     ret, ret_string = commands.getstatusoutput(command_str)
 
-    if ret != 0:
-        return False, "Cannot remove hoard, %s, %s" % (uuid, vm_name)
-    return True, ''
+    return True
 
 
-# resume VM, wait until finish (close window)
+# resume VM
 def resume_vm(user_name, server_address, vm_name):
-    global launch_start
-    global launch_end
+    time_start = datetime.now()
+    time_end = datetime.now()
+    time_transfer_start = datetime.now()
+    time_transfer_end = datetime.now()
+    time_decomp_mem_start = datetime.now()
+    time_decomp_mem_end = datetime.now()
+    time_kvm_start = datetime.now()
+    time_kvm_end = datetime.now()
+
     command_str = 'isr resume ' + vm_name + ' -s ' + server_address + ' -u ' + user_name + ' -F'
     print command_str
-    launch_start = datetime.now()
-    print 'launch start : ', str(launch_start)
+    time_start = datetime.now()
     proc = subprocess.Popen(command_str, shell=True, stdin=subprocess.PIPE, stdout=subprocess.PIPE)
     while True:
         time.sleep(0.1)
         output = proc.stdout.readline()
         if len(output.strip()) != 0 and output.find("[krha]") == -1:
             sys.stdout.write(output)
-        if output.strip().find(LAUNCH_COMMAND) == 0:
-            launch_end = datetime.now()
-            print 'launch_end : ', str(launch_end)
+
+        # time stamping using log from isr_client
+        # Not reliable but fast for simple test
+        if output.strip().find("Fetching keyring") == 0:
+            time_transfer_start = datetime.now()
+        elif output.strip().find("Decrypting and uncompressing") == 0:
+            time_transfer_end = datetime.now()
+            time_decomp_mem_start = datetime.now()
+        elif output.strip().find("Updating hoard cache") == 0:
+            time_decomp_mem_end = datetime.now()
+            time_kvm_start = datetime.now()
+        elif output.strip().find("Launching") == 0:
+            time_kvm_end = datetime.now()
             break;
 
-    ret = proc.wait()
-    if ret == 0:
-        return True, ''
-    return False, 'Failed to Resume VM'
+    # if we wait for process to end, we cannot return to web client
+    # ret = proc.wait()
+    time_end = datetime.now()
+    print "Return from Resume"
+    print "[Total Time] : ", str(time_end-time_start)
+    print '[Transfer Time(Memory)] : ', str(time_transfer_end-time_transfer_start)
+    print '[Decompression Time] : ', str(time_decomp_mem_end-time_decomp_mem_start)
+    print '[KVM Time] : ', str(time_kvm_end-time_kvm_start)
 
 
 # stop VM
@@ -133,20 +176,12 @@ def stop_vm(user_name, server_address, vm_name):
     proc.stdin.write('y\n')
     ret = proc.wait()
 
-    if ret == 0:
-        return True, ''
-    return False, "Cannot clean up resumed VM"
-
+    return True
 
 # Exit with error message
 def exit_error(error_message):
     print 'Error, ', error_message
     sys.exit(1)
-
-
-def print_usage(program_name):
-    print 'usage\t: %s [cloud|mobile] [-u username] [-s server_address] [-m VM name]' % program_name
-    print 'example\t: ./isr_run.py cloud -u cloudlet -s dagama.isr.cs.cmu.edu -m face'
 
 def do_cloud_isr(user_name, vm_name, server_address):
     # compile ISR again, because we have multiple version of ISR such as mock android
@@ -156,83 +191,64 @@ def do_cloud_isr(user_name, vm_name, server_address):
 
     # step1. login
     ret, err = login(user_name, server_address)
-    if ret == False:
-        exit_error(err)
+    if not ret:
+        return False
 
     # step2. remove all cache
     ret, err = remove_cache(user_name, server_address, vm_name)
-    if ret == False:
-        exit_error(err)
+    if not ret:
+        return False
 
     # step3. resume VM, wait until finish (close window)
     start_time = datetime.now()
-    ret, err = resume_vm(user_name, server_address, vm_name)
-    if ret == False:
-        exit_error(err)
-       
+    resume_vm(user_name, server_address, vm_name)
     end_time = datetime.now()
 
-    # step4. stop VM and clean up
-    ret, err = stop_vm(user_name, server_address, vm_name)
-    ret, err = remove_cache(user_name, server_address, vm_name)
-    if ret == False:
-        exit_error(err)
-
-    print "SUCCESS"
-    print "[Total VM Run Time] : ", str(end_time-start_time)
-    print '[Launch Time] : ', str(launch_end-launch_start)
-
-    sys.exit(0)
+    return True
 
 
 def do_mobile_isr(user_name, vm_name, server_address):
-    # compile ISR again, because we have multiple version of ISR such as mock android
-    # This is not good approach, but easy for simple test
-    # I'll gonna erase this script after submission :(
-    recompile_isr(ISR_ANDROID_SRC_PATH)
-
-    # step2. remove all cache
-    ret, err = remove_cache(user_name, server_address, vm_name)
-    if ret == False:
-        exit_error(err)
-
-    # step3. resume VM, wait until finish (close window)
-    start_time = datetime.now()
-    ret, err = resume_vm(user_name, server_address, vm_name)
-    if ret == False:
-        exit_error(err)
-       
-    end_time = datetime.now()
-
-    # step4. stop VM and clean up
-    ret, err = stop_vm(user_name, server_address, vm_name)
-    ret, err = remove_cache(user_name, server_address, vm_name)
-    if ret == False:
-        exit_error(err)
-
-    print "SUCCESS"
-    print "[Total VM Run Time] : ", str(end_time-start_time)
-    print '[Launch Time] : ', str(launch_end-launch_start)
-
-    sys.exit(0)
-
     pass
 
 
+def isr_clean_all(server_address, user_name):
+    # kill all process that has 'isr'
+    # I really hate do this :(
+    command_str = 'ps aux | grep isr'
+    ret1, ret_string = commands.getstatusoutput(command_str)
+    for line in ret_string.split('\n'):
+        if line.find('isr') != -1 and line.find('isr_run.py') == -1 and line.find('vi ') == -1:
+            pid = re.search('[A-Za-z]+\s+(\d+).*', line).groups(0)[0]
+            command_str = 'kill -9 ' + pid
+            print 'kill /isr + \t', command_str
+            commands.getoutput(command_str)
+
+    vm_names = ("face", "moped", "null")
+    for vm_name in vm_names:
+        ret = stop_vm(user_name, server_address, vm_name)
+        ret = remove_cache(user_name, server_address, vm_name)
+
+def print_usage(program_name):
+    print 'usage\t: %s [run|clean] [-u username] [-s server_address] ' % program_name
+    print 'example\t: isr_run.py run -u cloudlet -s dagama.isr.cs.cmu.edu'
+
+
 def main(argv):
+    global user_name
+    global server_address
+
     if len(argv) < 3:
         print_usage(os.path.basename(argv[0]))
         sys.exit(2)
 
-    target = ("cloud", "mobile")
-    operation = argv[1]
-    if not operation in target:
-        print "Error, specify between clould and mobile"
+    operation = argv[1].lower()
+    if not operation in ("clean", "run"):
+        print "No supporing operation : ", operation
         print_usage(os.path.basename(argv[0]))
         sys.exit(2)
 
     try:
-        optlist, args = getopt.getopt(argv[2:], 'hu:s:m:', ["help", "user", "server", "machine"])
+        optlist, args = getopt.getopt(argv[2:], 'hu:s:', ["help", "user", "server"])
     except getopt.GetoptError, err:
         print str(err)
         print_usage(os.path.basename(argv[0]))
@@ -241,7 +257,6 @@ def main(argv):
     # required input variables
     user_name = None
     server_address = None
-    vm_name = None
 
     # parse argument
     for o, a in optlist:
@@ -252,26 +267,20 @@ def main(argv):
             user_name = a
         elif o in ("-s", "--server"):
             server_address = a
-        elif o in ("-m", "--machine"):
-            vm_name = a
         else:
             assert False, "unhandled option"
 
-    if user_name == None or server_address == None or vm_name == None:
-        print_usage(os.path.basename(argv[0]))
-        print "username : %s, server_address = %s, vm_name = %s" % (user_name, server_address, vm_name)
-        sys.exit(2)
-    
-    if operation == "cloud":
-        do_cloud_isr(user_name, vm_name, server_address)
-    elif operation == "mobile":
-        do_mobile_isr(user_name, vm_name, server_address)
-
-    else:
+    if user_name == None or server_address == None:
         print_usage(os.path.basename(argv[0]))
         sys.exit(2)
 
-    sys.exit(1)
+    if operation == "clean":
+        isr_clean_all(server_address, user_name)
+        sys.exit(0)
+
 
 if __name__ == "__main__":
     main(sys.argv)
+    #isr_temp()
+    app.run(host='0.0.0.0', port=WEB_SERVER_PORT_NUMBER, processes = 10)
+

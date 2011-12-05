@@ -27,7 +27,7 @@
         android:textSize = "25sp"
         android:gravity="center_vertical"
         android:layout_weight="1"
-        android:text="ISR Clout Test" />
+        android:text="ISR Cloud Test" />
     
     <Button
         android:id="@+id/testISRCloud"
