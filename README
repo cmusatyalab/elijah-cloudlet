@@ -15,6 +15,9 @@ Prototype for Cloudlet
 	gvncviewer
 		vncview for VM interaction, gvncviewer can accommodate resolution changes
 		$ sudo apt-get install gvncviewer
+	flask
+		flask is python web server and cloudlet_cloud.py and isr_run.py has dependency on it
+		$ sudo easy_install flask
 
 3) Android-client
 	all java lib depedency is on Android-client/lib folder, so do not need additional install
