@@ -21,6 +21,7 @@ WEB_SERVER_PORT_NUMBER = 9095
 ISR_ORIGIN_SRC_PATH = '/home/krha/Cloudlet/src/ISR/src'
 ISR_ANDROID_SRC_PATH = '/home/krha/Cloudlet/src/ISR/src-mock'
 ISR_ANDROID_PARCEL_PATH = '/home/krha/Cloudlet/src/ISR/parcel'
+VNC_PATH = '/home/krha/.isr/'
 user_name = ''
 server_address = ''
 launch_start = datetime.now()
@@ -79,9 +80,7 @@ def login(user_name, server_address):
         return True, ''
     return False, "Cannot connected to Server %s, %s" % (server_address, ret_string)
 
-
-# remove all cache
-def remove_cache(user_name, server_address, vm_name):
+def get_uuid(user_name, server_address, vm_name):
     # list cache
     command_str = 'isr lshoard -l -s ' + server_address + ' -u ' + user_name
     print command_str
@@ -96,6 +95,12 @@ def remove_cache(user_name, server_address, vm_name):
         if line.find(vm_name) != -1 and len(lines) > (index+1):
             uuid = lines[index+1].lstrip().split(" ")[0]
 
+    return uuid
+
+
+# remove all cache
+def remove_cache(user_name, server_address, vm_name):
+    uuid = get_uuid(user_name, server_address, vm_name)
     if uuid == None:
         return True, ''
     
@@ -134,6 +139,7 @@ def resume_vm(user_name, server_address, vm_name):
     command_str = 'isr resume ' + vm_name + ' -s ' + server_address + ' -u ' + user_name + ' -F'
     print command_str
     time_start = datetime.now()
+    print "VM Resume Process start : " + str(time_start)
     proc = subprocess.Popen(command_str, shell=True, stdin=subprocess.PIPE, stdout=subprocess.PIPE)
     while True:
         time.sleep(0.1)
@@ -151,10 +157,20 @@ def resume_vm(user_name, server_address, vm_name):
         elif output.strip().find("Updating hoard cache") == 0:
             time_decomp_mem_end = datetime.now()
             time_kvm_start = datetime.now()
-        elif output.strip().find("Launching") == 0:
-            time_kvm_end = datetime.now()
-            break;
+            print "break"
+            break;A
 
+    # Waiting for kvm.vnc
+    # find UUID, which has vm_name
+    uuid = get_uuid(user_name, server_address, vm_name)
+    vnc_path = os.path.join(VNC_PATH, uuid, "cfg", "kvm.vnc")
+    for i in xrange(200):
+        if os.path.exists(vnc_path):
+            time_kvm_end = datetime.now()
+            print "VM Resume Process End : " + str(time_kvm_end)
+            break;
+        time.sleep(0.1)
+    
     # if we wait for process to end, we cannot return to web client
     # ret = proc.wait()
     time_end = datetime.now()
