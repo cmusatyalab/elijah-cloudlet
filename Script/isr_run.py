@@ -167,7 +167,7 @@ def resume_vm(user_name, server_address, vm_name):
 
 # stop VM
 def stop_vm(user_name, server_address, vm_name):
-    command_str = 'isr clean ' + vm_name + ' -s ' + server_address + ' -u ' + user_name
+    command_str = 'isr clean ' + vm_name + ' -s ' + server_address + ' -u ' + user_name + ' -f'
     print command_str
     proc = subprocess.Popen(command_str, shell=True, stdin=subprocess.PIPE, stdout=subprocess.PIPE)
     proc.stdin.write('y\n')

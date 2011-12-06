@@ -173,6 +173,7 @@ def run_snapshot(disk_image, memory_image, telnet_port, vnc_port, show_vnc):
     if telnet_port != 0 and vnc_port != -1:
         command_str += " -m " + VM_MEMORY + " -monitor telnet:localhost:" + str(telnet_port) + ",server,nowait -enable-kvm -net nic -net user -serial none -parallel none -usb -usbdevice tablet " + PORT_FORWARDING
         command_str += " -vnc :" + str(vnc_port) + " "
+        #command_str += " -vnc unix:./kvm.vnc"
     else:
         command_str += " -m " + VM_MEMORY + " -enable-kvm -net nic -net user -serial none -parallel none -usb -usbdevice tablet -redir tcp:2222::22"
     command_str += " -incoming \"exec:cat " + memory_image + "\""
