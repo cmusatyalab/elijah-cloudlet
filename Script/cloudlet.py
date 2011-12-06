@@ -12,8 +12,8 @@ import telnetlib
 import pylzma
 
 VM_MEMORY = "2048"
+VNC_VIEWER = "/home/krha/Cloudlet/src/Script/vnc_viewer"
 PORT_FORWARDING = "-redir tcp:9876::9876 -redir tcp:2222::22 -redir tcp:19092::9092"
-CUR_DIR = os.getcwd()
 
 def diff_files(source_file, target_file, output_file):
     if os.path.exists(source_file) == False:
@@ -168,24 +168,42 @@ def recover_snapshot(base_img, base_mem, comp_img, comp_mem):
     return recover_img, recover_mem
 
 def run_snapshot(disk_image, memory_image, telnet_port, vnc_port, show_vnc):
+    vm_path = os.path.dirname(memory_image)
+    vnc_file = os.path.join(vm_path, 'kvm.vnc')
+
+    # run kvm
     command_str = "kvm -hda "
     command_str += disk_image
     if telnet_port != 0 and vnc_port != -1:
         command_str += " -m " + VM_MEMORY + " -monitor telnet:localhost:" + str(telnet_port) + ",server,nowait -enable-kvm -net nic -net user -serial none -parallel none -usb -usbdevice tablet " + PORT_FORWARDING
-        command_str += " -vnc :" + str(vnc_port) + " "
-        #command_str += " -vnc unix:./kvm.vnc"
+        #command_str += " -vnc :" + str(vnc_port) + " "
+        command_str += " -vnc unix:" + vnc_file
     else:
         command_str += " -m " + VM_MEMORY + " -enable-kvm -net nic -net user -serial none -parallel none -usb -usbdevice tablet -redir tcp:2222::22"
     command_str += " -incoming \"exec:cat " + memory_image + "\""
     # print '[INFO] Run snapshot..'
     process = subprocess.Popen(command_str, shell=True)
-    time.sleep(1)
 
-    # Run VNC and wait until user finishes working
-    time.sleep(3)
-    vnc_process = subprocess.Popen("gvncviewer localhost:" + str(vnc_port), shell=True)
+    # wait for vnc file descriptor creation
+    for i in xrange(200):
+        time.sleep(0.1)
+        if os.path.exists(vnc_file):
+            break;
+
+    # Run VNC
+    vnc_process = subprocess.Popen(VNC_VIEWER + " " + vnc_file, shell=True, stdin=subprocess.PIPE, stdout=subprocess.PIPE)
+    # waiting for VNC show up
+    while True:
+        print "waiting..."
+        output = vnc_process.stdout.readline()
+        print output
+        if output.find('VNC Initiation Finished') != -1:
+            break;
+        time.sleep(0.1)
+
     if show_vnc == True:
         ret = vnc_process.wait()
+
 
 def run_migration(telnet_port, vnc_port, mig_path):
     # save Memory State

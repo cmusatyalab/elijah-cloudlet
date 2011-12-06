@@ -160,6 +160,19 @@ def resume_vm(user_name, server_address, vm_name):
             print "break"
             break;A
 
+    # wait for vnc process
+    while True:
+        time.sleep(0.1)
+        command_str = "ps aux | grep viewer"
+        proc = subprocess.Popen(command_str, shell=True, stdin=subprocess.PIPE, stdout=subprocess.PIPE)
+        output = proc.stdout.readline()
+        if output.find("/usr/local/share/openisr/viewer") != -1:
+            time_kvm_end = datetime.now()
+            print "VM Resume Process End : " + str(time_kvm_end)
+            break;
+        proc.wait()
+
+    '''
     # Waiting for kvm.vnc
     # find UUID, which has vm_name
     uuid = get_uuid(user_name, server_address, vm_name)
@@ -170,7 +183,8 @@ def resume_vm(user_name, server_address, vm_name):
             print "VM Resume Process End : " + str(time_kvm_end)
             break;
         time.sleep(0.1)
-    
+    '''
+
     # if we wait for process to end, we cannot return to web client
     # ret = proc.wait()
     time_end = datetime.now()
