@@ -243,6 +243,7 @@ public class CloudletConnector {
 						if(VMName.equalsIgnoreCase("ubuntuLTS")){
 							Intent intent = new Intent(mContext, CloudletCameraActivity.class);
 							intent.putExtra("address", ipaddress);
+							intent.putExtra("ip", CloudletActivity.TEST_CLOUDLET_APP_MOPED_PORT);
 							activity.startActivityForResult(intent, 0);								
 						}else if(VMName.equalsIgnoreCase("windowXP")){
 							Intent intent = new Intent(mContext, FaceRecClientCameraPreview.class);

@@ -319,12 +319,16 @@ sub run {
 	local $SIG{'INT'} = sub {};
 	$opts = ($FULLSCREEN eq "yes") ? "-f" : "";
 
+	print STDOUT "krha, VM Resumed!!\n";
+	print STDERR "krha, VM Resumed!!\n";
+
 	if ($vnc_sock_ready) {
 		run_program(SHAREDIR . "/viewer $opts $vncsock",
 			    sub { kill 'INT', shift });
 	} else {
 		print STDERR "Could not find a VNC socket.\n";
 	}
+
 
 	# Ask KVM to suspend.  If it has already exited, send_cmd() will
 	# silently fail.

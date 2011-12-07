@@ -20,6 +20,8 @@ import json
 WEB_SERVER_PORT_NUMBER = 9095
 ISR_ORIGIN_SRC_PATH = '/home/krha/Cloudlet/src/ISR/src'
 ISR_ANDROID_SRC_PATH = '/home/krha/Cloudlet/src/ISR/src-mock'
+ISR_ANDROID_PARCEL_PATH = '/home/krha/Cloudlet/src/ISR/parcel'
+VNC_PATH = '/home/krha/.isr/'
 user_name = ''
 server_address = ''
 launch_start = datetime.now()
@@ -41,7 +43,6 @@ def isr():
 
     run_type = metadata['run-type'].lower()
     application_name = metadata['application'].lower()
-    print "Client request : %s, %s --> connecting to %s with %s" % (run_type, application_name, server_address, user_name)
     
     if run_type in ("cloud", "mobile") and  application_name in ("moped", "face", "null"):
         # Run application
@@ -50,7 +51,7 @@ def isr():
             ret = do_cloud_isr(user_name, application_name, server_address)
         elif run_type == "mobile":
             print "Client request : %s, %s --> connecting to %s with %s" % (run_type, application_name, server_address, user_name)
-            do_mobile_isr(user_name, application_name, server_address)
+            ret = do_mobile_isr(user_name, application_name, server_address)
         
         if ret:
             print "SUCCESS"
@@ -59,22 +60,6 @@ def isr():
     ret_msg = "Wrong parameter " + run_type + ", " + application_name
     print ret_msg
     return ret_msg
-
-
-def isr_temp():
-    run_type = "cloud"
-    application_name = "face"
-    if run_type in ("cloud", "mobile") and  application_name in ("moped", "face", "null"):
-        # Run application
-        if run_type == "cloud":
-            print "Client request : %s, %s --> connecting to %s with %s" % (run_type, application_name, server_address, user_name)
-            ret = do_cloud_isr(user_name, application_name, server_address)
-        elif run_type == "mobile":
-            print "Client request : %s, %s --> connecting to %s with %s" % (run_type, application_name, server_address, user_name)
-            do_mobile_isr(user_name, application_name, server_address)
-        
-        if ret:
-            print "SUCCESS"
 
 
 def recompile_isr(src_path):
@@ -95,9 +80,7 @@ def login(user_name, server_address):
         return True, ''
     return False, "Cannot connected to Server %s, %s" % (server_address, ret_string)
 
-
-# remove all cache
-def remove_cache(user_name, server_address, vm_name):
+def get_uuid(user_name, server_address, vm_name):
     # list cache
     command_str = 'isr lshoard -l -s ' + server_address + ' -u ' + user_name
     print command_str
@@ -112,13 +95,32 @@ def remove_cache(user_name, server_address, vm_name):
         if line.find(vm_name) != -1 and len(lines) > (index+1):
             uuid = lines[index+1].lstrip().split(" ")[0]
 
+    return uuid
+
+
+# remove all cache
+def remove_cache(user_name, server_address, vm_name):
+    uuid = get_uuid(user_name, server_address, vm_name)
     if uuid == None:
         return True, ''
     
-    # erase cache
+    # erase disk cache
     command_str = 'isr rmhoard ' + uuid + ' -s ' + server_address + ' -u ' + user_name
     print command_str
     ret, ret_string = commands.getstatusoutput(command_str)
+
+    # erase memory
+    mem_dir = '/home/krha/.isr/hoard/img'
+    if os.path.exists(mem_dir):
+        command_str = "rm " + os.path.join(mem_dir, uuid) + "*"
+        print command_str
+        ret, ret_string = commands.getstatusoutput(command_str)
+
+    mem_dir = '/home/krha/.isr/'
+    if os.path.exists(mem_dir):
+        command_str = "rm -r " + os.path.join(mem_dir, uuid)
+        print command_str
+        ret, ret_string = commands.getstatusoutput(command_str)
 
     return True
 
@@ -137,6 +139,7 @@ def resume_vm(user_name, server_address, vm_name):
     command_str = 'isr resume ' + vm_name + ' -s ' + server_address + ' -u ' + user_name + ' -F'
     print command_str
     time_start = datetime.now()
+    print "VM Resume Process start : " + str(time_start)
     proc = subprocess.Popen(command_str, shell=True, stdin=subprocess.PIPE, stdout=subprocess.PIPE)
     while True:
         time.sleep(0.1)
@@ -154,9 +157,33 @@ def resume_vm(user_name, server_address, vm_name):
         elif output.strip().find("Updating hoard cache") == 0:
             time_decomp_mem_end = datetime.now()
             time_kvm_start = datetime.now()
-        elif output.strip().find("Launching") == 0:
+            print "break"
+            break;A
+
+    # wait for vnc process
+    while True:
+        time.sleep(0.1)
+        command_str = "ps aux | grep viewer"
+        proc = subprocess.Popen(command_str, shell=True, stdin=subprocess.PIPE, stdout=subprocess.PIPE)
+        output = proc.stdout.readline()
+        if output.find("/usr/local/share/openisr/viewer") != -1:
             time_kvm_end = datetime.now()
+            print "VM Resume Process End : " + str(time_kvm_end)
             break;
+        proc.wait()
+
+    '''
+    # Waiting for kvm.vnc
+    # find UUID, which has vm_name
+    uuid = get_uuid(user_name, server_address, vm_name)
+    vnc_path = os.path.join(VNC_PATH, uuid, "cfg", "kvm.vnc")
+    for i in xrange(200):
+        if os.path.exists(vnc_path):
+            time_kvm_end = datetime.now()
+            print "VM Resume Process End : " + str(time_kvm_end)
+            break;
+        time.sleep(0.1)
+    '''
 
     # if we wait for process to end, we cannot return to web client
     # ret = proc.wait()
@@ -170,11 +197,10 @@ def resume_vm(user_name, server_address, vm_name):
 
 # stop VM
 def stop_vm(user_name, server_address, vm_name):
-    command_str = 'isr clean ' + vm_name + ' -s ' + server_address + ' -u ' + user_name
+    command_str = 'isr clean ' + vm_name + ' -s ' + server_address + ' -u ' + user_name + ' -f'
     print command_str
     proc = subprocess.Popen(command_str, shell=True, stdin=subprocess.PIPE, stdout=subprocess.PIPE)
     proc.stdin.write('y\n')
-    ret = proc.wait()
 
     return True
 
@@ -208,7 +234,46 @@ def do_cloud_isr(user_name, vm_name, server_address):
 
 
 def do_mobile_isr(user_name, vm_name, server_address):
-    pass
+    # compile ISR again, because we have multiple version of ISR such as mock android
+    # This is not good approach, but easy for simple test
+    # I'll gonna erase this script after submission :(
+    recompile_isr(ISR_ANDROID_SRC_PATH)
+
+    # Change parcel to indicate it to mobile address, which is specified at server_address
+    trick_parcel_address(ISR_ANDROID_PARCEL_PATH, vm_name, server_address)
+
+    # step1. remove all cache
+    ret, err = remove_cache(user_name, server_address, vm_name)
+    if not ret:
+        return False
+
+    # step2. resume VM, wait until finish (close window)
+    start_time = datetime.now()
+    resume_vm(user_name, server_address, vm_name)
+    end_time = datetime.now()
+    return True
+
+
+def trick_parcel_address(parcel_dir, vm_name, server_address):
+    parcel_path = os.path.join(parcel_dir, vm_name, 'parcel.cfg')
+    print parcel_path
+    if not os.path.exists(parcel_path):
+        print "Error, check you parcel file location : " + parcel_path
+        return False
+    lines = []
+    fr = open(parcel_path, 'r')
+    for line in fr:
+        key = line.split("=")[0].strip()
+        if key == "RPATH":
+            lines.append("RPATH = http://" + server_address + ":8080\n")
+        elif key == "SERVER":
+            lines.append("SERVER = " + server_address + "\n")
+        else:
+            lines.append(line)
+    fr.close()
+    fw = open(parcel_path, 'w')
+    fw.write(''.join(lines))
+    fw.close()
 
 
 def isr_clean_all(server_address, user_name):
@@ -281,6 +346,6 @@ def main(argv):
 
 if __name__ == "__main__":
     main(sys.argv)
-    #isr_temp()
+    #do_mobile_isr(user_name, "moped", server_address)
     app.run(host='0.0.0.0', port=WEB_SERVER_PORT_NUMBER, processes = 10)
 
