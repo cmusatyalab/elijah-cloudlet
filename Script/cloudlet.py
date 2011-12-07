@@ -192,14 +192,17 @@ def run_snapshot(disk_image, memory_image, telnet_port, vnc_port, show_vnc):
 
     # Run VNC
     vnc_process = subprocess.Popen(VNC_VIEWER + " " + vnc_file, shell=True, stdin=subprocess.PIPE, stdout=subprocess.PIPE)
+    #vnc_process = subprocess.Popen("gvncviewer localhost:" + str(vnc_port), shell=True)
+
     # waiting for VNC show up
-    while True:
-        print "waiting..."
-        output = vnc_process.stdout.readline()
-        print output
-        if output.find('VNC Initiation Finished') != -1:
-            break;
+    for i in xrange(200):
         time.sleep(0.1)
+        command_str = "ps aux | grep viewer"
+        proc = subprocess.Popen(command_str, shell=True, stdin=subprocess.PIPE, stdout=subprocess.PIPE)
+        output = proc.stdout.readline()
+        if output.find(VNC_VIEWER) != -1:
+            print "VM Resume Process End : " + str(datetime.now())
+            break;
 
     if show_vnc == True:
         ret = vnc_process.wait()
