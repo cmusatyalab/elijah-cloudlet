@@ -240,12 +240,12 @@ public class CloudletConnector {
 							return;
 						}
 						
-						if(VMName.equalsIgnoreCase("ubuntuLTS")){
+						if(VMName.equalsIgnoreCase("moped") || VMName.equalsIgnoreCase("moped-disk")){
 							Intent intent = new Intent(mContext, CloudletCameraActivity.class);
 							intent.putExtra("address", ipaddress);
-							intent.putExtra("ip", CloudletActivity.TEST_CLOUDLET_APP_MOPED_PORT);
+							intent.putExtra("port", CloudletActivity.TEST_CLOUDLET_APP_MOPED_PORT);
 							activity.startActivityForResult(intent, 0);								
-						}else if(VMName.equalsIgnoreCase("windowXP")){
+						}else if(VMName.equalsIgnoreCase("face")){
 							Intent intent = new Intent(mContext, FaceRecClientCameraPreview.class);
 							intent.putExtra("address", ipaddress);
 							activity.startActivityForResult(intent, 0);			

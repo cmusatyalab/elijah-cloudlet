@@ -5,7 +5,7 @@
    "Memory-Size":"4",
    "VM":[
       {
-         "name":"ubuntuNULL",
+         "name":"NULL",
          "type":"baseVM",
          "OS":"Linux",
          "OS-version":"Ubuntu_10.04 LTS",

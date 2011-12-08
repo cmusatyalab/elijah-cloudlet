@@ -5,7 +5,7 @@
    "Memory-Size":"4",
    "VM":[
       {
-         "name":"windowXP",
+         "name":"face",
          "type":"baseVM",
          "OS":"Window",
          "OS-version":"Window XP SP2",

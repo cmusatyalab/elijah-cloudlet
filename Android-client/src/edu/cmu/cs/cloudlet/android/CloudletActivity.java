@@ -34,7 +34,7 @@ public class CloudletActivity extends Activity {
 	public static final int TEST_CLOUDLET_SERVER_PORT_ISR = 9095;				// Cloudlet port for ISR related test
 	public static final int TEST_CLOUDLET_SERVER_PORT_SYNTHESIS = 9090;			// Cloudlet port for VM Synthesis test 
 
-	public static final String[] applications = {"MOPED", "FACE", "NULL"};
+	public static final String[] applications = {"MOPED", "MOPED-Disk", "FACE", "NULL"};
 	public static final int TEST_CLOUDLET_APP_MOPED_PORT = 19092;
 	public static final int TEST_CLOUDLET_APP_FACE_PORT = 9876;
 	
@@ -180,7 +180,7 @@ public class CloudletActivity extends Activity {
 	}	
 	
 	public void runApplication(String application) {		
-		if(application.equalsIgnoreCase("moped")){
+		if(application.equalsIgnoreCase("moped") || application.equalsIgnoreCase("moped-disk")){
 			Intent intent = new Intent(CloudletActivity.this, CloudletCameraActivity.class);			
 			intent.putExtra("address", TEST_CLOUDLET_SERVER_IP);
 			intent.putExtra("port", TEST_CLOUDLET_APP_MOPED_PORT);
@@ -239,7 +239,6 @@ public class CloudletActivity extends Activity {
 				showDialogSelectISRApplication(applications, "mobile");
 			}else if(v.getId() == R.id.runApplication){
 				showDialogSelectApp(applications);
-				
 			}
 		}
 	};
