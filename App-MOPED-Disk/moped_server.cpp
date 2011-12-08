@@ -34,12 +34,17 @@ int init_moped(string &modelsPath);
 string* run_moped(string &image_name);
 int close_moped();
 
+// Load Model files after execution
+string modelsPath = "./moped/models";
+static bool is_first_run = true;
 
 int main( int argc, char **argv ) {
 	// Init MOPED module
 	printf("Init MOPED Module\n");
-	string modelsPath = "./moped/models";
-	init_moped(modelsPath);
+	printf("** Model will load after execution\n");
+	printf("** This is for monitoring on-Demand Effect\n");
+
+//	init_moped(modelsPath);
 
 	// Run Socket Server
 	if (init_client_manager() != 1) {
@@ -55,7 +60,6 @@ int main( int argc, char **argv ) {
 }
 
 int init_moped(string &modelsPath){
-
 	omp_set_num_threads(4);
 
 	DIR *dp;
@@ -73,6 +77,7 @@ int init_moped(string &modelsPath){
 
 	#pragma omp parallel for
 	for(int i=0; i<(int)fileNames.size(); i++) {
+		printf("Model file is loading..(%s)\n", fileNames[i].c_str());
 		sXML XMLModel;
 		XMLModel.fromFile(fileNames[i]);
 
@@ -85,6 +90,11 @@ int init_moped(string &modelsPath){
 }
 
 string* run_moped(string &image_name){
+	if(is_first_run == true){
+		init_moped(modelsPath);
+		is_first_run = false;
+	}
+
 	string* objects_list = new string;
 
 	IplImage *image = cvLoadImage(image_name.c_str());
@@ -131,13 +141,11 @@ int close_moped(){
 
 
 
-
-
 /*
  * Server
  */
 #define MAX_CLIENT_NUMBER 20
-#define TCP_SERVER_PORT			9092	// TCP port number for client connection
+#define TCP_SERVER_PORT			19092	// TCP port number for client connection
 #define MAX_CLIENT_NUMBER		20 		// Maximum concurrent number of client
 
 static void init_client(int client_handler);
@@ -154,7 +162,6 @@ typedef struct {
 static TCPClient clients[MAX_CLIENT_NUMBER];	// array structure for client fd
 
 pthread_mutex_t client_mutex;					// client socket mutex
-static int client_lock;
 static fd_set clients_fdset;
 
 /*

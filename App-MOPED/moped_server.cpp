@@ -137,7 +137,7 @@ int close_moped(){
  * Server
  */
 #define MAX_CLIENT_NUMBER 20
-#define TCP_SERVER_PORT			9092	// TCP port number for client connection
+#define TCP_SERVER_PORT			19092	// TCP port number for client connection
 #define MAX_CLIENT_NUMBER		20 		// Maximum concurrent number of client
 
 static void init_client(int client_handler);

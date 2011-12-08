@@ -13,7 +13,7 @@ import pylzma
 
 VM_MEMORY = "2048"
 VNC_VIEWER = "/home/krha/Cloudlet/src/Script/vnc_viewer"
-PORT_FORWARDING = "-redir tcp:9876::9876 -redir tcp:2222::22 -redir tcp:19092::9092"
+PORT_FORWARDING = "-redir tcp:9876::9876 -redir tcp:2222::22 -redir tcp:19092::19092"
 
 def diff_files(source_file, target_file, output_file):
     if os.path.exists(source_file) == False:
