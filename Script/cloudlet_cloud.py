@@ -4,7 +4,6 @@ import getopt
 import commands
 import sys
 import subprocess
-import time
 from datetime import datetime, timedelta
 from flask import Flask, flash, request,render_template, Response,session,g
 from flask import Flask, request, session, g, redirect, url_for, abort, render_template, flash, Response

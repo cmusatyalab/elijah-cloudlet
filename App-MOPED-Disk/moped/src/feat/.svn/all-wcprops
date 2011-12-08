@@ -1,0 +1,29 @@
+K 25
+svn:wc:ra_dav:version-url
+V 65
+/repos/pr/!svn/ver/7216/public/trunk/src/moped2/libmoped/src/feat
+END
+FEAT_SIFT_CPU.hpp
+K 25
+svn:wc:ra_dav:version-url
+V 83
+/repos/pr/!svn/ver/7216/public/trunk/src/moped2/libmoped/src/feat/FEAT_SIFT_CPU.hpp
+END
+FEAT_SIFT_GPU.hpp
+K 25
+svn:wc:ra_dav:version-url
+V 83
+/repos/pr/!svn/ver/7216/public/trunk/src/moped2/libmoped/src/feat/FEAT_SIFT_GPU.hpp
+END
+FEAT_DISPLAY.hpp
+K 25
+svn:wc:ra_dav:version-url
+V 82
+/repos/pr/!svn/ver/7216/public/trunk/src/moped2/libmoped/src/feat/FEAT_DISPLAY.hpp
+END
+FEAT_SURF_CPU.hpp
+K 25
+svn:wc:ra_dav:version-url
+V 83
+/repos/pr/!svn/ver/7216/public/trunk/src/moped2/libmoped/src/feat/FEAT_SURF_CPU.hpp
+END

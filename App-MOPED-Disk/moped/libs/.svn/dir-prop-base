@@ -1,0 +1,11 @@
+K 10
+svn:ignore
+V 63
+SiftGPU
+liblbfgs
+done
+levmar-2.4
+ann_1.1.1
+libsiftfast-1.1-src
+
+END
