@@ -28,6 +28,7 @@ struct pk_connection_pool {
 	struct pk_state *state;
 	GList *conns;
 	GMutex *lock;
+	unsigned long long total_io;
 };
 
 struct pk_connection {
@@ -117,6 +118,7 @@ static struct pk_connection *transport_conn_get(
 	if (el != NULL) {
 		conn = el->data;
 		cpool->conns = g_list_delete_link(cpool->conns, el);
+		conn->offset = 0;
 		g_mutex_unlock(cpool->lock);
 		return conn;
 	} else {
@@ -131,6 +133,7 @@ static void transport_conn_put(struct pk_connection *conn)
 
 	g_mutex_lock(cpool->lock);
 	cpool->conns = g_list_prepend(conn->pool->conns, conn);
+	cpool->total_io += conn->offset;
 	g_mutex_unlock(cpool->lock);
 }
 
@@ -157,6 +160,7 @@ void transport_pool_free(struct pk_connection_pool *cpool)
 {
 	GList *el;
 
+	pk_log(LOG_STATS, "%llu bytes transferred", cpool->total_io);
 	for (el = g_list_first(cpool->conns); el != NULL;
 				el = g_list_next(el))
 		transport_conn_free(el->data);
