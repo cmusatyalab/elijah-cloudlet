@@ -19,6 +19,8 @@ public class CloudletEnv {
 	
 	private String env_root 			= "Cloudlet";
 	private String overlay_dir 			= "overlay";
+	private String speech_subdir1		= "SPEECH" + File.separator + "log";
+	private String speech_subdir2		= "SPEECH" + File.separator + "myrecordings";
     private String installation_file	= ".installed";
     private String preference_file		= ".preference";
     private String socket_mock_file 	= "cloudlet-";    
@@ -43,13 +45,27 @@ public class CloudletEnv {
 			// create cloudlet root directory
 			if(env_dir.mkdir() == false){
 				Log.e("krha", "Cannot create Folder");
-			}
-			
+			}			
 			// create overlay directory
 			if(overay_dir.mkdir() == false){
 				Log.e("krha", "Cannot create Folder");				
+			}			
+		}
+
+		File speech_dir1 = new File(env_dir.getAbsolutePath() + File.separator + speech_subdir1);
+		File speech_dir2 = new File(env_dir.getAbsolutePath() + File.separator + speech_subdir2);
+		// create speech sub directory1
+		if(speech_dir1.exists() == false){
+			if(speech_dir1.mkdirs() == false){
+				Log.e("krha", "Cannot create Folder");
 			}
 		}
+		if(speech_dir2.exists() == false){
+			if(speech_dir2.mkdirs() == false){
+				Log.e("krha", "Cannot create Folder");
+			}
+		}
+
 	}
 	
 	public File getFilePath(int id){

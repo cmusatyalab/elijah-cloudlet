@@ -13,7 +13,8 @@ import pylzma
 
 VM_MEMORY = "2048"
 VNC_VIEWER = "/home/krha/Cloudlet/src/Script/vnc_viewer"
-PORT_FORWARDING = "-redir tcp:9876::9876 -redir tcp:2222::22 -redir tcp:19092::9092 -redir tcp:9092::9092"
+PORT_FORWARDING = "-redir tcp:9876::9876 -redir tcp:2222::22 -redir tcp:19092::9092 -redir tcp:6789::6789"
+
 
 def diff_files(source_file, target_file, output_file):
     if os.path.exists(source_file) == False:
@@ -182,7 +183,7 @@ def run_snapshot(disk_image, memory_image, telnet_port, vnc_port, wait_vnc_end):
         command_str += " -m " + VM_MEMORY + " -enable-kvm -net nic -net user -serial none -parallel none -usb -usbdevice tablet -redir tcp:2222::22"
     command_str += " -incoming \"exec:cat " + memory_image + "\""
     # print '[INFO] Run snapshot..'
-    print command_str
+    # print command_str
     process = subprocess.Popen(command_str, shell=True)
 
     # wait for vnc file descriptor creation
@@ -193,7 +194,7 @@ def run_snapshot(disk_image, memory_image, telnet_port, vnc_port, wait_vnc_end):
 
     # Run VNC
     vnc_process = subprocess.Popen(VNC_VIEWER + " " + vnc_file, shell=True, stdin=subprocess.PIPE, stdout=subprocess.PIPE)
-    print VNC_VIEWER + " " + vnc_file
+    # print VNC_VIEWER + " " + vnc_file
     #vnc_process = subprocess.Popen("gvncviewer localhost:" + str(vnc_port), shell=True)
 
     # waiting for VNC show up

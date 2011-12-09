@@ -8,6 +8,7 @@ import org.teleal.cling.android.AndroidUpnpServiceImpl;
 
 import edu.cmu.cs.cloudlet.android.application.CloudletCameraActivity;
 import edu.cmu.cs.cloudlet.android.application.face.ui.FaceRecClientCameraPreview;
+import edu.cmu.cs.cloudlet.android.application.speech.ClientActivity;
 import edu.cmu.cs.cloudlet.android.data.VMInfo;
 import edu.cmu.cs.cloudlet.android.network.CloudletConnector;
 import edu.cmu.cs.cloudlet.android.network.HTTPCommandSender;
@@ -34,7 +35,7 @@ public class CloudletActivity extends Activity {
 	public static final int TEST_CLOUDLET_SERVER_PORT_ISR = 9095;				// Cloudlet port for ISR related test
 	public static final int TEST_CLOUDLET_SERVER_PORT_SYNTHESIS = 9090;			// Cloudlet port for VM Synthesis test 
 
-	public static final String[] applications = {"MOPED", "MOPED-Disk", "FACE", "NULL"};
+	public static final String[] applications = {"MOPED", "MOPED_Disk", "FACE", "Speech", "NULL"};
 	public static final int TEST_CLOUDLET_APP_MOPED_PORT = 19092;
 	public static final int TEST_CLOUDLET_APP_FACE_PORT = 9876;
 	
@@ -47,16 +48,17 @@ public class CloudletActivity extends Activity {
 	public void onCreate(Bundle savedInstanceState) {
 		super.onCreate(savedInstanceState);
 		setContentView(R.layout.main);
+				
+		// Initiate Environment Settings
+		CloudletEnv.instance();
 
-		// upnp service binding
+		// upnp service binding and show dialog
 		this.serviceDiscovery = new UPnPDiscovery(this, CloudletActivity.this, discoveryHandler);
 		this.connector = new CloudletConnector(this, CloudletActivity.this);
-		getApplicationContext().bindService(new Intent(this, AndroidUpnpServiceImpl.class), this.serviceDiscovery.serviceConnection, Context.BIND_AUTO_CREATE);		
-
-		// show upnp discovery dialog 
+		getApplicationContext().bindService(new Intent(this, AndroidUpnpServiceImpl.class), this.serviceDiscovery.serviceConnection, Context.BIND_AUTO_CREATE);	
 //		serviceDiscovery.showDialogSelectOption();
 
-		// Connect Directly
+		// Performance Button
 		findViewById(R.id.testSynthesis).setOnClickListener(clickListener);
 		findViewById(R.id.testISRCloud).setOnClickListener(clickListener);
 		findViewById(R.id.testISRMobile).setOnClickListener(clickListener);
@@ -179,8 +181,10 @@ public class CloudletActivity extends Activity {
 		ab.show();
 	}	
 	
-	public void runApplication(String application) {		
-		if(application.equalsIgnoreCase("moped") || application.equalsIgnoreCase("moped-disk")){
+	public void runApplication(String application) {
+		application = application.trim();
+		
+		if(application.equalsIgnoreCase("moped") || application.equalsIgnoreCase("moped_disk")){
 			Intent intent = new Intent(CloudletActivity.this, CloudletCameraActivity.class);			
 			intent.putExtra("address", TEST_CLOUDLET_SERVER_IP);
 			intent.putExtra("port", TEST_CLOUDLET_APP_MOPED_PORT);
@@ -189,6 +193,9 @@ public class CloudletActivity extends Activity {
 			Intent intent = new Intent(CloudletActivity.this, FaceRecClientCameraPreview.class);
 			intent.putExtra("address", TEST_CLOUDLET_SERVER_IP);
 			intent.putExtra("port", TEST_CLOUDLET_APP_FACE_PORT);
+			startActivityForResult(intent, 0);			
+		}else if(application.equalsIgnoreCase("speech")){
+			Intent intent = new Intent(CloudletActivity.this, ClientActivity.class);;
 			startActivityForResult(intent, 0);			
 		}else if(application.equalsIgnoreCase("null")){
 			showAlert("Info", "NUll has no UI");

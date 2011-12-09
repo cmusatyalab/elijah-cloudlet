@@ -17,7 +17,7 @@
 
 3) Resume VM
 	$ isr resume parcel -C painful -m kvm -p ubuntu -D -F
-	$ isr resume ubuntuLTS -s dagama.isr.cs.cmu.edu -u test1 -D -F
+	$ isr resume ubuntuLTS -s dagama.isr.cs.cmu.edu -u test1 -C painful -D -F
 
 
 4. Stop VM

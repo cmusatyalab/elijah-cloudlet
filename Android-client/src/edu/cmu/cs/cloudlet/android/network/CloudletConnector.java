@@ -37,14 +37,14 @@ public class CloudletConnector {
 	public static final int FINISH_MESSAGE					= 4;
 	public static final int PROGRESS_MESSAGE_TRANFER		= 5;
 	
-	protected Activity activity;
+	protected CloudletActivity activity;
 	protected Context mContext;
 	protected NetworkClientSender networkClient;
 	protected ProgressDialog mDialog;
 
 	private VMInfo requestBaseVM;
 
-	public CloudletConnector(Activity activity, Context context) {
+	public CloudletConnector(CloudletActivity activity, Context context) {
 		this.activity = activity;
 		this.mContext = context;
 	}
@@ -240,22 +240,9 @@ public class CloudletConnector {
 							return;
 						}
 						
-						if(VMName.equalsIgnoreCase("moped") || VMName.equalsIgnoreCase("moped-disk")){
-							Intent intent = new Intent(mContext, CloudletCameraActivity.class);
-							intent.putExtra("address", ipaddress);
-							intent.putExtra("port", CloudletActivity.TEST_CLOUDLET_APP_MOPED_PORT);
-							activity.startActivityForResult(intent, 0);								
-						}else if(VMName.equalsIgnoreCase("face")){
-							Intent intent = new Intent(mContext, FaceRecClientCameraPreview.class);
-							intent.putExtra("address", ipaddress);
-							activity.startActivityForResult(intent, 0);			
-						}else if(VMName.equalsIgnoreCase("NULL")){
-							showAlertDialog("This is null test, No Application");							
-						}else{
-							// Error
-							showAlertDialog("VM Matching Overlay VM and Application");
-							return;							
-						}
+						// Launch Application
+						activity.runApplication(VMName);
+						
 					}					
 				})
 				.setNegativeButton("Done", null)

@@ -26,6 +26,7 @@ user_name = ''
 server_address = ''
 launch_start = datetime.now()
 launch_end = datetime.now()
+application_names = ("moped", "face", "null", "moped_disk")
 
 # web server configuration
 app = Flask(__name__)
@@ -44,7 +45,7 @@ def isr():
     run_type = metadata['run-type'].lower()
     application_name = metadata['application'].lower()
     
-    if run_type in ("cloud", "mobile") and  application_name in ("moped", "face", "null"):
+    if run_type in ("cloud", "mobile") and application_names:
         # Run application
         if run_type == "cloud":
             print "Client request : %s, %s --> connecting to %s with %s" % (run_type, application_name, server_address, user_name)
@@ -136,7 +137,7 @@ def resume_vm(user_name, server_address, vm_name):
     time_kvm_start = datetime.now()
     time_kvm_end = datetime.now()
 
-    command_str = 'isr resume ' + vm_name + ' -s ' + server_address + ' -u ' + user_name + ' -F'
+    command_str = 'isr resume ' + vm_name + ' -s ' + server_address + ' -u ' + user_name + ' -F -D'
     print command_str
     time_start = datetime.now()
     print "VM Resume Process start : " + str(time_start)
@@ -218,6 +219,7 @@ def do_cloud_isr(user_name, vm_name, server_address):
     # step1. login
     ret, err = login(user_name, server_address)
     if not ret:
+        print err
         return False
 
     # step2. remove all cache
@@ -259,6 +261,7 @@ def trick_parcel_address(parcel_dir, vm_name, server_address):
     print parcel_path
     if not os.path.exists(parcel_path):
         print "Error, check you parcel file location : " + parcel_path
+        sys.exit(2)
         return False
     lines = []
     fr = open(parcel_path, 'r')
@@ -277,8 +280,10 @@ def trick_parcel_address(parcel_dir, vm_name, server_address):
 
 
 def isr_clean_all(server_address, user_name):
+    global application_names
+
     # kill all process that has 'isr'
-    # I really hate do this :(
+    # I really hate this way, but it is almost only way that I can clean cache
     command_str = 'ps aux | grep isr'
     ret1, ret_string = commands.getstatusoutput(command_str)
     for line in ret_string.split('\n'):
@@ -288,8 +293,7 @@ def isr_clean_all(server_address, user_name):
             print 'kill /isr + \t', command_str
             commands.getoutput(command_str)
 
-    vm_names = ("face", "moped", "null")
-    for vm_name in vm_names:
+    for vm_name in application_names:
         ret = stop_vm(user_name, server_address, vm_name)
         ret = remove_cache(user_name, server_address, vm_name)
 
