@@ -20,10 +20,11 @@ FACE_MEM = WEB_SERVER_URL + '/FACE_2048/winxp-with-python_base_overlay.mem.lzma'
 NULL_DISK = WEB_SERVER_URL + '/NULL_2048/ubuntu_base_overlay.qcow2.lzma'
 NULL_MEM = WEB_SERVER_URL + '/NULL_2048/ubuntu_base_overlay.mem.lzma'
 
-WEB_SERVER_PORT_NUMBR = 9096
+WEB_SERVER_PORT_NUMBER = 9095
 VM_TELNET_COMMAND_PORT_NUMBER = 19999
 bandwidth = 0
 vm_name = ''
+application_names = ("moped", "face", "null")
 
 # BASE VM PATH
 MOPED_BASE_DISK = '/home/krha/Cloudlet/image/MOPED_BaseVM/ubuntu_base.qcow2'
@@ -39,18 +40,23 @@ app = Flask(__name__)
 app.config.from_object(__name__)
 
 # Web Server for receiving command
-@app.route('/cloudlet_from_cloud', methods=['POST'])
-def cloudlet_from_cloud():
+@app.route('/cloudlet', methods=['POST'])
+def cloudlet():
     global vm_name
-    print "Receive cloudlet downloading request"
-    json_data = request.form["cloudlet_info"]
+
+    print "Receive cloudlet info (run-type, application name) from client"
+    json_data = request.form["info"]
     metadata = json.loads(json_data)
 
-    vm_name = metadata['vm_name'].lower()
-    print "Client request : %s " % (vm_name)
+    run_type = metadata['run-type'].lower()
+    vm_name = metadata['application'].lower()
+    print "received info %s, %s" % (run_type, vm_name)
+    
+    if not vm_name in application_names:
+        return "FAILED"
 
     ## execute
-    disk_name, mem_name = download_overaly(vm_name)
+    download_overlay(vm_name, VM_TELNET_COMMAND_PORT_NUMBER)
     return "SUCCESS"
 
 
@@ -64,7 +70,7 @@ def execute_download_process(source, dest):
     proc.wait()
     return True
 
-def download_overaly(machine_name, telnet_por):
+def download_overlay(machine_name, telnet_port):
     url_disk = ''
     url_mem = ''
     base_disk = ''
@@ -144,8 +150,8 @@ def main(argv):
             print "Invalid bandwidth, it must be bigger than 0"
             sys.exit(2)
 
-        download_overaly('null', VM_TELNET_COMMAND_PORT_NUMBER) 
-        #app.run(host='0.0.0.0', port=WEB_SERVER_PORT_NUMBER, processes=10)
+        #download_overlay('moped', VM_TELNET_COMMAND_PORT_NUMBER) 
+        app.run(host='0.0.0.0', port=WEB_SERVER_PORT_NUMBER, processes=10)
 
 
 if __name__ == "__main__":

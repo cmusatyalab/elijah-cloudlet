@@ -48,8 +48,8 @@ public class HTTPCommandSender extends Thread {
 		this.applicationName = application;
 	}
 
-	public void initSetup() {
-		httpURL = "http://" + CloudletActivity.TEST_CLOUDLET_SERVER_IP + ":" + CloudletActivity.TEST_CLOUDLET_SERVER_PORT_ISR + "/" + "isr";
+	public void initSetup(String url) {
+		httpURL = "http://" + CloudletActivity.TEST_CLOUDLET_SERVER_IP + ":" + CloudletActivity.TEST_CLOUDLET_SERVER_PORT_ISR + "/" + url;
 		mDialog = ProgressDialog.show(context, "Info", "Connecting to " + httpURL + "\nwaiting for " + applicationName + " to run at " + command, true);		
 		mDialog.show();
 	}
@@ -105,7 +105,7 @@ public class HTTPCommandSender extends Thread {
 
 			KLog.println("connecting to " + httpURL);			
 			MultipartEntity entity = new MultipartEntity();
-			entity.addPart("isr_info", new StringBody(json.toString()));
+			entity.addPart("info", new StringBody(json.toString()));
 			httppost.setEntity(entity);			
 
 			// Execute HTTP Post Request

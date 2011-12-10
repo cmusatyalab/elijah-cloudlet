@@ -60,6 +60,7 @@ public class CloudletActivity extends Activity {
 
 		// Performance Button
 		findViewById(R.id.testSynthesis).setOnClickListener(clickListener);
+		findViewById(R.id.testSynthesisFromCloud).setOnClickListener(clickListener);
 		findViewById(R.id.testISRCloud).setOnClickListener(clickListener);
 		findViewById(R.id.testISRMobile).setOnClickListener(clickListener);
 		findViewById(R.id.runApplication).setOnClickListener(clickListener);
@@ -106,6 +107,37 @@ public class CloudletActivity extends Activity {
 		});
 		ab.show();
 	}
+
+	/*
+	 * Synthesis from Cloud Test
+	 */
+	private void showDialogForSynthesis(final String[] applications) {
+		// Show Dialog
+		AlertDialog.Builder ab = new AlertDialog.Builder(this);
+		ab.setTitle("Application List");
+		ab.setIcon(R.drawable.ic_launcher);
+		ab.setSingleChoiceItems(applications, 0, new DialogInterface.OnClickListener() {
+			public void onClick(DialogInterface dialog, int position) {
+				selectedOveralyIndex = position;
+			}
+		}).setPositiveButton("Ok", new DialogInterface.OnClickListener() {
+			public void onClick(DialogInterface dialog, int position) {
+				if(position >= 0){
+					selectedOveralyIndex = position;
+				}else if(applications.length > 0 && selectedOveralyIndex == -1){
+					selectedOveralyIndex = 0;
+				}
+				String application = applications[selectedOveralyIndex];
+				runHTTPConnection("cloud", application, "cloudlet");
+			}
+		}).setNegativeButton("Cancel", new DialogInterface.OnClickListener() {
+			public void onClick(DialogInterface dialog, int position) {
+				return;
+			}
+		});
+		ab.show();
+	}
+
 	
 	/*
 	 * ISR Client&Server Test method
@@ -134,7 +166,7 @@ public class CloudletActivity extends Activity {
 					selectedOveralyIndex = 0;
 				}
 				String application = applications[selectedOveralyIndex];
-				runHTTPConnection(command, application);
+				runHTTPConnection(command, application, "isr");
 			}
 		}).setNegativeButton("Cancel", new DialogInterface.OnClickListener() {
 			public void onClick(DialogInterface dialog, int position) {
@@ -144,9 +176,9 @@ public class CloudletActivity extends Activity {
 		ab.show();
 	}
 
-	protected void runHTTPConnection(String command, String application) {
+	protected void runHTTPConnection(String command, String application, String url) {
 		HTTPCommandSender commandSender = new HTTPCommandSender(this, CloudletActivity.this, command, application);
-		commandSender.initSetup();
+		commandSender.initSetup(url);
 		commandSender.start();
 	}
 	
@@ -240,6 +272,8 @@ public class CloudletActivity extends Activity {
 				}else{
 					showAlert("Error", "We found No Overlay");
 				}				
+			}else if(v.getId() == R.id.testSynthesisFromCloud){
+				showDialogForSynthesis(applications);
 			}else if(v.getId() == R.id.testISRCloud){
 				showDialogSelectISRApplication(applications, "cloud");
 			}else if(v.getId() == R.id.testISRMobile){

@@ -39,7 +39,7 @@ def isr():
     global server_address
 
     print "Receive isr_info (run-type, application name) from client"
-    json_data = request.form["isr_info"]
+    json_data = request.form["info"]
     metadata = json.loads(json_data)
 
     run_type = metadata['run-type'].lower()
@@ -102,28 +102,29 @@ def get_uuid(user_name, server_address, vm_name):
 # remove all cache
 def remove_cache(user_name, server_address, vm_name):
     uuid = get_uuid(user_name, server_address, vm_name)
-    if uuid == None:
-        return True, ''
-    
-    # erase disk cache
-    command_str = 'isr rmhoard ' + uuid + ' -s ' + server_address + ' -u ' + user_name
-    print command_str
-    ret, ret_string = commands.getstatusoutput(command_str)
+    if uuid != None:
+        # erase disk cache
+        command_str = 'isr rmhoard ' + uuid + ' -s ' + server_address + ' -u ' + user_name
+        ret, ret_string = commands.getstatusoutput(command_str)
 
     # erase memory
-    mem_dir = '/home/krha/.isr/hoard/img'
+    '''
+    mem_dir = '/home/krha/.isr/hoard/img/'
+    print 'aaaaaaaaaaaaaaaaaaaaaaaaaa'
     if os.path.exists(mem_dir):
-        command_str = "rm " + os.path.join(mem_dir, uuid) + "*"
+        print 'aaaaaaaaaaaaaaaaaaaaaaaaaa'
+        command_str = "rm -rf %s*" %(mem_dir)
         print command_str
         ret, ret_string = commands.getstatusoutput(command_str)
+    '''
 
     mem_dir = '/home/krha/.isr/'
     if os.path.exists(mem_dir):
-        command_str = "rm -r " + os.path.join(mem_dir, uuid)
+        command_str = "rm -rf %s" % (mem_dir)
         print command_str
         ret, ret_string = commands.getstatusoutput(command_str)
 
-    return True
+    return True, ''
 
 
 # resume VM
