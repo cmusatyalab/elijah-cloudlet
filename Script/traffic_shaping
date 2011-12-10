@@ -17,8 +17,8 @@ TC=/sbin/tc
 IF=eth0
 
 # Download and Upload Bandwidth
-DNLD=100mbit
-UPLD=100mbit
+DNLD=10mbit
+UPLD=10mbit
 
 # Destination Host
 # IP=128.2.212.207
