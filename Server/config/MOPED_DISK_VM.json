@@ -5,7 +5,7 @@
    "Memory-Size":"4",
    "VM":[
       {
-         "name":"moped-disk",
+         "name":"moped_disk",
          "type":"baseVM",
          "OS":"Linux",
          "OS-version":"Ubuntu_10.04 LTS",
