@@ -194,7 +194,7 @@ def run_snapshot(disk_image, memory_image, telnet_port, vnc_port, wait_vnc_end):
 
     # Run VNC
     vnc_process = subprocess.Popen(VNC_VIEWER + " " + vnc_file, shell=True, stdin=subprocess.PIPE, stdout=subprocess.PIPE)
-    # print VNC_VIEWER + " " + vnc_file
+    print VNC_VIEWER + " " + vnc_file
     #vnc_process = subprocess.Popen("gvncviewer localhost:" + str(vnc_port), shell=True)
 
     # waiting for VNC show up
