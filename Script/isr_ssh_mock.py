@@ -133,7 +133,7 @@ def main(argv):
     elif operation in ("lock"):
         # always give face lock
         if acquire == True:
-            sys.stdout.write("1111111111")
+            sys.stdout.write("lock acquired")
         sys.exit(0)
     elif operation in ("stat"):
         # returns file status

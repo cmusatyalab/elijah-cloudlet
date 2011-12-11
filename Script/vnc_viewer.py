@@ -1,4 +1,4 @@
-#/usr/bin/python
+#!/usr/bin/python
 #
 # viewer - VNC viewer for the OpenISR (R) system
 #
@@ -20,6 +20,9 @@ import gtk
 import gtkvnc
 import optparse
 import socket
+import sys
+import time
+from datetime import datetime, timedelta
 
 class VncViewer(object):
 	HOSTKEY = gtk.gdk.keyval_from_name('Control_R')
@@ -99,11 +102,8 @@ class VncViewer(object):
 		else:
 			self.sock = socket.socket(socket.AF_UNIX)
 		
-		print "krha, socket connection before"
 		self.sock.connect(dest)
-		print "krha, socket connection after"
 		self.vnc.open_fd(self.sock.fileno())
-		print "krha, open vnc fd"
 
 	def _auth_cred(self, wid, ev):
 		gtk.main_quit()
@@ -111,9 +111,8 @@ class VncViewer(object):
 
 	def _initialized(self, wid):
 		self.wind.set_title(self.vnc.get_name())
-		print "krha, before initialized method"
 		self.wind.show_all()
-		print "krha, after initialized method"
+		self.vnc_launch_time = datetime.now()
 
 	def _grabbed(self, wid, icon, grabbed):
 		icon.set_sensitive(grabbed)
@@ -182,6 +181,17 @@ class VncViewer(object):
 			self.statusbar.hide()
 		self.fullscreen = fullscreen
 		return False
+	
+	# krha
+	def main(self):
+	    try:
+	        gtk.main()
+	    except KeyboardInterrupt:
+	        pass
+
+	# krha
+	def launch_time(self):
+	    return self.vnc_launch_time
 
 if __name__ == '__main__':
 	usage = '%prog [-fh] <vnc-server>'
@@ -197,8 +207,5 @@ if __name__ == '__main__':
 		parser.error('No VNC server specified')
 	
 	vnc = VncViewer(args[0], fullscreen = opts.fullscreen)
-
-	try:
-		gtk.main()
-	except KeyboardInterrupt:
-		pass
+	vnc.main()
+	print "launch time : ", vnc.launch_time()
