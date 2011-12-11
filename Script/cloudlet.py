@@ -12,7 +12,7 @@ import telnetlib
 import pylzma
 
 VM_MEMORY = "2048"
-VNC_VIEWER = "/home/krha/Cloudlet/src/Script/vnc_viewer"
+VNC_VIEWER = "/home/krha/Cloudlet/src/Script/vnc_viewer.py"
 PORT_FORWARDING = "-redir tcp:9876::9876 -redir tcp:2222::22 -redir tcp:19092::9092 -redir tcp:6789::6789"
 
 
@@ -168,7 +168,37 @@ def recover_snapshot(base_img, base_mem, comp_img, comp_mem):
     os.remove(overlay_mem)
     return recover_img, recover_mem
 
+
+def telnet_connection_waiting(telnet_port):
+    # waiting for valid connection
+    is_connected = False
+    for i in xrange(200):
+        tn = telnetlib.Telnet('localhost', telnet_port)
+        try:
+            ret = tn.read_until("(qemu)", 0.1)
+            if ret.find("(qemu)") != -1:
+                is_connected = True
+                break;
+        except EOFError:
+            pass
+        tn.close()
+
+    if is_connected:
+        tn.write('info status\n')
+        for i in xrange(200):
+            ret = tn.read_until("(qemu)", 0.1)
+            if ret.find("running") != -1:
+                break;
+        tn.close()
+        return True
+    else:
+        print "No connection to KVM" 
+        return False
+
+
 def run_snapshot(disk_image, memory_image, telnet_port, vnc_port, wait_vnc_end):
+    start_time = datetime.now()
+    print "KVM Command Start time : ", start_time
     vm_path = os.path.dirname(memory_image)
     vnc_file = os.path.join(vm_path, 'kvm.vnc')
 
@@ -184,31 +214,38 @@ def run_snapshot(disk_image, memory_image, telnet_port, vnc_port, wait_vnc_end):
     command_str += " -incoming \"exec:cat " + memory_image + "\""
     # print '[INFO] Run snapshot..'
     # print command_str
-    process = subprocess.Popen(command_str, shell=True)
+    subprocess.Popen(command_str, shell=True)
 
-    # wait for vnc file descriptor creation
+    # wait for QEMU to run its communication telnet port
     for i in xrange(200):
-        time.sleep(0.1)
-        if os.path.exists(vnc_file):
-            break;
-
-    # Run VNC
-    vnc_process = subprocess.Popen(VNC_VIEWER + " " + vnc_file, shell=True, stdin=subprocess.PIPE, stdout=subprocess.PIPE)
-    # print VNC_VIEWER + " " + vnc_file
-    #vnc_process = subprocess.Popen("gvncviewer localhost:" + str(vnc_port), shell=True)
-
-    # waiting for VNC show up
-    for i in xrange(200):
-        time.sleep(0.1)
-        command_str = "ps aux | grep viewer"
+        command_str = "netstat -an | grep 127.0.0.1:" + str(telnet_port)
         proc = subprocess.Popen(command_str, shell=True, stdin=subprocess.PIPE, stdout=subprocess.PIPE)
         output = proc.stdout.readline()
-        if output.find(VNC_VIEWER) != -1:
-            print "VM Resume Process End : " + str(datetime.now())
+        if output.find("LISTEN") != -1:
             break;
+        time.sleep(0.1)
 
-    if wait_vnc_end:
-        ret = vnc_process.wait()
+    # Getting VM Status information
+    ret = telnet_connection_waiting(telnet_port)
+    end_time = datetime.now()
+
+    if ret == True:
+        # Run VNC
+        vnc_process = subprocess.Popen(VNC_VIEWER + " " + vnc_file, shell=True, stdin=subprocess.PIPE, stdout=subprocess.PIPE)
+        # vnc_process = subprocess.Popen("gvncviewer localhost:" + str(vnc_port), shell=True)
+        if wait_vnc_end:
+            ret = vnc_process.wait()
+
+        return end_time
+    else:
+        return datetime.now()
+
+    '''
+    vnc = VncViewer(vnc_file, fullscreen=False)
+    vnc.main()
+    print "VM Resume End : ", vnc.launch_time()
+    print "[Time] KVM Resume Time : ", str(vnc.launch_time() - start_time)
+    '''
 
 
 def run_migration(telnet_port, vnc_port, mig_path):
@@ -275,7 +312,6 @@ def run_image(disk_image, telnet_port, vnc_port):
     process = subprocess.Popen(command_str, shell=True)
 
     # Run VNC and wait until user finishes working
-    counter = 0
     time.sleep(3)
     vnc_process = subprocess.Popen("gvncviewer localhost:" + str(vnc_port), shell=True)
     ret = vnc_process.wait()
@@ -333,8 +369,8 @@ def main(argv):
         recover_img, recover_mem = recover_snapshot(base_img, base_mem, comp_img, comp_mem)
         # run snapshot non-blocking mode
         prev_time = datetime.now()
-        run_snapshot(recover_img, recover_mem, telnet_port, vnc_port, wait_vnc_end=False)
-        print '[Time] Run Snapshot - ', str(datetime.now()-prev_time)
+        end_time = run_snapshot(recover_img, recover_mem, telnet_port, vnc_port, wait_vnc_end=False)
+        print '[Time] Run Snapshot - ', str(end_time-prev_time)
         sys.exit(0)
     elif o in ("-s", "--stop"):
         if len(args) != 1:
