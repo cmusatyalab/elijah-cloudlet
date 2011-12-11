@@ -1,4 +1,4 @@
-#!/usr/bin/python
+#/usr/bin/python
 #
 # viewer - VNC viewer for the OpenISR (R) system
 #
@@ -99,8 +99,11 @@ class VncViewer(object):
 		else:
 			self.sock = socket.socket(socket.AF_UNIX)
 		
+		print "krha, socket connection before"
 		self.sock.connect(dest)
+		print "krha, socket connection after"
 		self.vnc.open_fd(self.sock.fileno())
+		print "krha, open vnc fd"
 
 	def _auth_cred(self, wid, ev):
 		gtk.main_quit()
@@ -108,7 +111,9 @@ class VncViewer(object):
 
 	def _initialized(self, wid):
 		self.wind.set_title(self.vnc.get_name())
+		print "krha, before initialized method"
 		self.wind.show_all()
+		print "krha, after initialized method"
 
 	def _grabbed(self, wid, icon, grabbed):
 		icon.set_sensitive(grabbed)
