@@ -216,31 +216,6 @@ def run_snapshot(disk_image, memory_image, telnet_port, vnc_port, wait_vnc_end):
     # print command_str
     subprocess.Popen(command_str, shell=True)
 
-    # wait for QEMU to run its communication telnet port
-    for i in xrange(200):
-<<<<<<< HEAD
-        time.sleep(0.1)
-        if os.path.exists(vnc_file):
-            break;
-
-    # Run VNC
-    vnc_process = subprocess.Popen(VNC_VIEWER + " " + vnc_file, shell=True, stdin=subprocess.PIPE, stdout=subprocess.PIPE)
-    print VNC_VIEWER + " " + vnc_file
-    #vnc_process = subprocess.Popen("gvncviewer localhost:" + str(vnc_port), shell=True)
-
-    # waiting for VNC show up
-    for i in xrange(200):
-        time.sleep(0.1)
-        command_str = "ps aux | grep viewer"
-=======
-        command_str = "netstat -an | grep 127.0.0.1:" + str(telnet_port)
->>>>>>> 77cdf27855b14c9176dc36105f3d156aeadac468
-        proc = subprocess.Popen(command_str, shell=True, stdin=subprocess.PIPE, stdout=subprocess.PIPE)
-        output = proc.stdout.readline()
-        if output.find("LISTEN") != -1:
-            break;
-        time.sleep(0.1)
-
     # Getting VM Status information
     ret = telnet_connection_waiting(telnet_port)
     end_time = datetime.now()
