@@ -9,6 +9,7 @@ import getopt
 import time
 from datetime import datetime, timedelta
 import telnetlib
+import socket
 import pylzma
 
 VM_MEMORY = "2048"
@@ -173,18 +174,20 @@ def telnet_connection_waiting(telnet_port):
     # waiting for valid connection
     is_connected = False
     start_time = datetime.now()
-    for i in xrange(200):
-        tn = telnetlib.Telnet('localhost', telnet_port)
+    for i in xrange(20):
         try:
-            ret = tn.read_until("(qemu)", 0.1)
+            tn = telnetlib.Telnet('localhost', telnet_port, 1)
+            ret = tn.read_until("(qemu)", 1)
             if ret.find("(qemu)") != -1:
                 is_connected = True
                 break;
         except EOFError:
             pass
+        except socket.timeout:
+            pass
         tn.close()
 
-    print "Socket connection time : ", str(datetime.now()-start_time)
+    #print "Socket connection time : ", str(datetime.now()-start_time)
 
     start_time = datetime.now()
     if is_connected:
@@ -194,7 +197,7 @@ def telnet_connection_waiting(telnet_port):
             if ret.find("running") != -1:
                 break;
         tn.close()
-        print "info status time: ", str(datetime.now()-start_time)
+        #print "info status time: ", str(datetime.now()-start_time)
         return True
     else:
         print "No connection to KVM" 
@@ -228,7 +231,6 @@ def run_snapshot(disk_image, memory_image, telnet_port, vnc_port, wait_vnc_end):
         if output.find("LISTEN") != -1:
             break;
         time.sleep(0.1)
-    print "TCP generation waiting time : ", str(datetime.now() - start_time)
 
     # Getting VM Status information through Telnet
     ret = telnet_connection_waiting(telnet_port)
