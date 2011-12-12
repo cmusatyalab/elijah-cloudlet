@@ -172,6 +172,7 @@ def recover_snapshot(base_img, base_mem, comp_img, comp_mem):
 def telnet_connection_waiting(telnet_port):
     # waiting for valid connection
     is_connected = False
+    start_time = datetime.now()
     for i in xrange(200):
         tn = telnetlib.Telnet('localhost', telnet_port)
         try:
@@ -183,6 +184,9 @@ def telnet_connection_waiting(telnet_port):
             pass
         tn.close()
 
+    print "Socket connection time : ", str(datetime.now()-start_time)
+
+    start_time = datetime.now()
     if is_connected:
         tn.write('info status\n')
         for i in xrange(200):
@@ -190,6 +194,7 @@ def telnet_connection_waiting(telnet_port):
             if ret.find("running") != -1:
                 break;
         tn.close()
+        print "info status time: ", str(datetime.now()-start_time)
         return True
     else:
         print "No connection to KVM" 
@@ -197,8 +202,6 @@ def telnet_connection_waiting(telnet_port):
 
 
 def run_snapshot(disk_image, memory_image, telnet_port, vnc_port, wait_vnc_end):
-    start_time = datetime.now()
-    print "KVM Command Start time : ", start_time
     vm_path = os.path.dirname(memory_image)
     vnc_file = os.path.join(vm_path, 'kvm.vnc')
 
@@ -215,8 +218,19 @@ def run_snapshot(disk_image, memory_image, telnet_port, vnc_port, wait_vnc_end):
     # print '[INFO] Run snapshot..'
     # print command_str
     subprocess.Popen(command_str, shell=True)
+    start_time = datetime.now()
+    
+    # waiting for TCP socket open
+    for i in xrange(200):
+        command_str = "netstat -an | grep 127.0.0.1:" + str(telnet_port)
+        proc = subprocess.Popen(command_str, shell=True, stdin=subprocess.PIPE, stdout=subprocess.PIPE)
+        output = proc.stdout.readline()
+        if output.find("LISTEN") != -1:
+            break;
+        time.sleep(0.1)
+    print "TCP generation waiting time : ", str(datetime.now() - start_time)
 
-    # Getting VM Status information
+    # Getting VM Status information through Telnet
     ret = telnet_connection_waiting(telnet_port)
     end_time = datetime.now()
 
@@ -227,9 +241,9 @@ def run_snapshot(disk_image, memory_image, telnet_port, vnc_port, wait_vnc_end):
         if wait_vnc_end:
             ret = vnc_process.wait()
 
-        return end_time
+        return str(end_time-start_time)
     else:
-        return datetime.now()
+        return 0
 
     '''
     vnc = VncViewer(vnc_file, fullscreen=False)
@@ -359,9 +373,8 @@ def main(argv):
         # recover image from overlay
         recover_img, recover_mem = recover_snapshot(base_img, base_mem, comp_img, comp_mem)
         # run snapshot non-blocking mode
-        prev_time = datetime.now()
-        end_time = run_snapshot(recover_img, recover_mem, telnet_port, vnc_port, wait_vnc_end=False)
-        print '[Time] Run Snapshot - ', str(end_time-prev_time)
+        execution_time = run_snapshot(recover_img, recover_mem, telnet_port, vnc_port, wait_vnc_end=False)
+        print '[Time] Run Snapshot - ', execution_time
         sys.exit(0)
     elif o in ("-s", "--stop"):
         if len(args) != 1:

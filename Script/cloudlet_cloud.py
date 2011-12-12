@@ -101,9 +101,8 @@ def download_overlay(machine_name, telnet_port):
     print "[krha] overlay transfer time: " + str(datetime.now() - prev_time)
 
     recover_img, recover_mem = recover_snapshot(base_disk, base_mem, dest_disk, dest_mem)
-    prev_time = datetime.now()
-    run_snapshot(recover_img, recover_mem, VM_TELNET_COMMAND_PORT_NUMBER, 5, wait_vnc_end=False)
-    print '[Time] Run Snapshot - ', str(datetime.now()-prev_time)
+    time = run_snapshot(recover_img, recover_mem, VM_TELNET_COMMAND_PORT_NUMBER, 5, wait_vnc_end=False)
+    print '[Time] Run Snapshot - ', time
 
     return dest_disk, dest_mem
 
