@@ -173,11 +173,11 @@ def recover_snapshot(base_img, base_mem, comp_img, comp_mem):
 def telnet_connection_waiting(telnet_port):
     # waiting for valid connection
     is_connected = False
-    start_time = datetime.now()
-    for i in xrange(20):
+    #start_time = datetime.now()
+    for i in xrange(200):
         try:
-            tn = telnetlib.Telnet('localhost', telnet_port, 1)
-            ret = tn.read_until("(qemu)", 1)
+            tn = telnetlib.Telnet('localhost', telnet_port, 0.1)
+            ret = tn.read_until("(qemu)", 0.1)
             if ret.find("(qemu)") != -1:
                 is_connected = True
                 break;
@@ -191,13 +191,16 @@ def telnet_connection_waiting(telnet_port):
 
     start_time = datetime.now()
     if is_connected:
+        tn = telnetlib.Telnet('localhost', telnet_port, 0.1)
         tn.write('info status\n')
         for i in xrange(200):
+            # print "request ret : "
             ret = tn.read_until("(qemu)", 0.1)
+            # print ret
             if ret.find("running") != -1:
                 break;
         tn.close()
-        #print "info status time: ", str(datetime.now()-start_time)
+        # print "info status time: ", str(datetime.now()-start_time)
         return True
     else:
         print "No connection to KVM" 
@@ -219,7 +222,7 @@ def run_snapshot(disk_image, memory_image, telnet_port, vnc_port, wait_vnc_end):
         command_str += " -m " + VM_MEMORY + " -enable-kvm -net nic -net user -serial none -parallel none -usb -usbdevice tablet -redir tcp:2222::22"
     command_str += " -incoming \"exec:cat " + memory_image + "\""
     # print '[INFO] Run snapshot..'
-    # print command_str
+    print command_str
     subprocess.Popen(command_str, shell=True)
     start_time = datetime.now()
     
