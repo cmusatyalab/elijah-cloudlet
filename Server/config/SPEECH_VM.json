@@ -9,8 +9,8 @@
          "type":"baseVM",
          "OS":"Window",
          "OS-version":"Window XP SP2",
-         "diskimg_path":"/home/krha/Cloudlet/image/SPEECH_BaseVM/winxp-with-python_base.qcow2",
-         "memorysnapshot_path":"/home/krha/Cloudlet/image/SPEECH_BaseVM/winxp-with-python_base.mem"
+         "diskimg_path":"/home/krha/Cloudlet/image/SPEECH_BaseVM/winxp-with-jre7_base.qcow2",
+         "memorysnapshot_path":"/home/krha/Cloudlet/image/SPEECH_BaseVM/winxp-with-jre7_base.mem"
       }
    ]
 }

@@ -42,6 +42,7 @@ app.config.from_object(__name__)
 # Web Server for receiving command
 @app.route('/cloudlet', methods=['POST'])
 def cloudlet():
+    start_time = datetime.now()
     global vm_name
 
     print "Receive cloudlet info (run-type, application name) from client"
@@ -57,6 +58,7 @@ def cloudlet():
 
     ## execute
     download_overlay(vm_name, VM_TELNET_COMMAND_PORT_NUMBER)
+    print "[Time] Total Time : ", str(datetime.now()-start_time)
     return "SUCCESS"
 
 

@@ -31,8 +31,8 @@ import android.view.View;
 import android.widget.Button;
 
 public class CloudletActivity extends Activity {
-//	public static final String TEST_CLOUDLET_SERVER_IP = "192.168.2.3";			// Cloudlet IP Address
-	public static final String TEST_CLOUDLET_SERVER_IP = "desk.krha.kr";			// Cloudlet IP Address
+	public static final String TEST_CLOUDLET_SERVER_IP = "192.168.2.3";			// Cloudlet IP Address
+//	public static final String TEST_CLOUDLET_SERVER_IP = "desk.krha.kr";			// Cloudlet IP Address
 	public static final int TEST_CLOUDLET_SERVER_PORT_ISR = 9095;				// Cloudlet port for ISR related test
 	public static final int TEST_CLOUDLET_SERVER_PORT_SYNTHESIS = 9090;			// Cloudlet port for VM Synthesis test 
 
