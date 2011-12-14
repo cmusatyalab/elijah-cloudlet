@@ -13,26 +13,30 @@ from cloudlet import run_snapshot, stop_vm, recover_snapshot
 # Global constant
 # VM Overlay List
 WEB_SERVER_URL = 'http://dagama.isr.cs.cmu.edu/cloudlet'
-MOPED_DISK = WEB_SERVER_URL + '/moped_2048/ubuntu_base_overlay.qcow2.lzma'
-MOPED_MEM = WEB_SERVER_URL + '/moped_2048/ubuntu_base_overlay.mem.lzma'
-FACE_DISK = WEB_SERVER_URL + '/FACE_2048/winxp-with-python_base_overlay.qcow2.lzma'
-FACE_MEM = WEB_SERVER_URL + '/FACE_2048/winxp-with-python_base_overlay.mem.lzma'
-NULL_DISK = WEB_SERVER_URL + '/NULL_2048/ubuntu_base_overlay.qcow2.lzma'
-NULL_MEM = WEB_SERVER_URL + '/NULL_2048/ubuntu_base_overlay.mem.lzma'
+MOPED_DISK = WEB_SERVER_URL + '/overlays/moped.qcow2.lzma'
+MOPED_MEM = WEB_SERVER_URL + '/overlays/moped.mem.lzma'
+FACE_DISK = WEB_SERVER_URL + '/overlays/face.qcow2.lzma'
+FACE_MEM = WEB_SERVER_URL + '/overlays/face.mem.lzma'
+SPEECH_DISK = WEB_SERVER_URL + '/overlays/speech.qcow2.lzma'
+SPEECH_MEM = WEB_SERVER_URL + '/overlays/speech.mem.lzma'
+NULL_DISK = WEB_SERVER_URL + '/overlays/null.qcow2.lzma'
+NULL_MEM = WEB_SERVER_URL + '/overlays/null.mem.lzma'
 
 WEB_SERVER_PORT_NUMBER = 9095
 VM_TELNET_COMMAND_PORT_NUMBER = 19999
 bandwidth = 0
 vm_name = ''
-application_names = ("moped", "face", "null")
+application_names = ("moped", "face", "speech", "null")
 
 # BASE VM PATH
-MOPED_BASE_DISK = '/home/krha/Cloudlet/image/MOPED_BaseVM/ubuntu_base.qcow2'
-MOPED_BASE_MEM = '/home/krha/Cloudlet/image/MOPED_BaseVM/ubuntu_base.mem'
-FACE_BASE_DISK = '/home/krha/Cloudlet/image/FACE_BaseVM/winxp-with-python_base.qcow2'
-FACE_BASE_MEM = '/home/krha/Cloudlet/image/FACE_BaseVM/winxp-with-python_base.mem'
-NULL_BASE_DISK = '/home/krha/Cloudlet/image/NULL_ubuntu/ubuntu_base.qcow2'
-NULL_BASE_MEM = '/home/krha/Cloudlet/image/NULL_ubuntu/ubuntu_base.mem'
+MOPED_BASE_DISK = '/home/krha/Cloudlet/image/Ubuntu10_Base/ubuntu_base.qcow2'
+MOPED_BASE_MEM = '/home/krha/Cloudlet/image/Ubuntu10_Base/ubuntu_base.mem'
+NULL_BASE_DISK = MOPED_BASE_DISK
+NULL_BASE_MEM = MOPED_BASE_MEM
+FACE_BASE_DISK = '/home/krha/Cloudlet/image/WindowXP_Base/winxp-with-jre7_base.qcow2'
+FACE_BASE_MEM = '/home/krha/Cloudlet/image/WindowXP_Base/winxp-with-jre7_base.mem'
+SPEECH_BASE_DISK = FACE_BASE_DISK
+SPEECH_BASE_MEM = FACE_BASE_MEM
 
 
 # Web Server configuration

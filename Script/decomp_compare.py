@@ -7,6 +7,8 @@ import commands
 import os
 
 def comp_lzma(inputname, outputname):
+    # comparable with 'xz -7 [filename]', which uses 200 MB Dictionary'
+    # original 723218356, this: 145385481, xz: 143296700
     prev_time = datetime.now()
     in_file = open(inputname, 'rb')
     ret_file = open(outputname, 'wb')
@@ -84,11 +86,13 @@ if __name__ == "__main__":
 
     tmp_name, time_str, bw_str = comp_lzma(inputname, inputname + ".lzma")
     print 'lzma compression time : %s, %s' % (time_str, bw_str)
+    '''
     out_name, time_str, bw_str = decomp_lzma(tmp_name, outputname)
     print 'lzma decompression time : %s, %s ' % (time_str, bw_str)
     tmp_name, time_str, bw_str = comp_gzip(inputname, inputname + ".gz")
     print 'gzip compression time : %s, %s' % (time_str, bw_str)
     out_name, time_str, bw_str = decomp_gzip(tmp_name, outputname)
     print 'gzip decompression time : %s, %s ' % (time_str, bw_str)
+    '''
     sys.exit(0)
  
