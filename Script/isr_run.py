@@ -344,8 +344,9 @@ def main(argv):
         print_usage(os.path.basename(argv[0]))
         sys.exit(2)
 
+    # Always strat from the clean state
+    isr_clean_all(server_address, user_name)
     if operation == "clean":
-        isr_clean_all(server_address, user_name)
         sys.exit(0)
 
 

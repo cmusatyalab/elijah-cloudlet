@@ -32,12 +32,14 @@ import android.widget.Button;
 
 public class CloudletActivity extends Activity {
 	public static final String TEST_CLOUDLET_SERVER_IP = "192.168.2.3";			// Cloudlet IP Address
+//	public static final String TEST_CLOUDLET_SERVER_IP = "desk.krha.kr";			// Cloudlet IP Address
 	public static final int TEST_CLOUDLET_SERVER_PORT_ISR = 9095;				// Cloudlet port for ISR related test
 	public static final int TEST_CLOUDLET_SERVER_PORT_SYNTHESIS = 9090;			// Cloudlet port for VM Synthesis test 
 
 	public static final String[] applications = {"MOPED", "MOPED_Disk", "FACE", "Speech", "NULL"};
 	public static final int TEST_CLOUDLET_APP_MOPED_PORT = 19092;
 	public static final int TEST_CLOUDLET_APP_FACE_PORT = 9876;
+	private static final int TEST_CLOUDLET_APP_SPEECH_PORT = 6789;
 	
 	protected Button startConnectionButton;
 	protected CloudletConnector connector;
@@ -227,7 +229,9 @@ public class CloudletActivity extends Activity {
 			intent.putExtra("port", TEST_CLOUDLET_APP_FACE_PORT);
 			startActivityForResult(intent, 0);			
 		}else if(application.equalsIgnoreCase("speech")){
-			Intent intent = new Intent(CloudletActivity.this, ClientActivity.class);;
+			Intent intent = new Intent(CloudletActivity.this, ClientActivity.class);
+			intent.putExtra("address", TEST_CLOUDLET_SERVER_IP);
+			intent.putExtra("port", TEST_CLOUDLET_APP_SPEECH_PORT);
 			startActivityForResult(intent, 0);			
 		}else if(application.equalsIgnoreCase("null")){
 			showAlert("Info", "NUll has no UI");
