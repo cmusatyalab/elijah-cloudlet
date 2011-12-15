@@ -13,14 +13,14 @@ from cloudlet import run_snapshot, stop_vm, recover_snapshot
 # Global constant
 # VM Overlay List
 WEB_SERVER_URL = 'http://dagama.isr.cs.cmu.edu/cloudlet'
-MOPED_DISK = WEB_SERVER_URL + '/overlays/moped.qcow2.lzma'
-MOPED_MEM = WEB_SERVER_URL + '/overlays/moped.mem.lzma'
-FACE_DISK = WEB_SERVER_URL + '/overlays/face.qcow2.lzma'
-FACE_MEM = WEB_SERVER_URL + '/overlays/face.mem.lzma'
-SPEECH_DISK = WEB_SERVER_URL + '/overlays/speech.qcow2.lzma'
-SPEECH_MEM = WEB_SERVER_URL + '/overlays/speech.mem.lzma'
-NULL_DISK = WEB_SERVER_URL + '/overlays/null.qcow2.lzma'
-NULL_MEM = WEB_SERVER_URL + '/overlays/null.mem.lzma'
+MOPED_DISK = WEB_SERVER_URL + '/overlay/moped/overlay1/moped.qcow2.lzma'
+MOPED_MEM = WEB_SERVER_URL + '/overlay/moped/overlay1/moped.mem.lzma'
+FACE_DISK = WEB_SERVER_URL + '/overlay/face/overlay1/face.qcow2.lzma'
+FACE_MEM = WEB_SERVER_URL + '/overlay/face/overlay1/face.mem.lzma'
+SPEECH_DISK = WEB_SERVER_URL + '/overlay/speech/overlay1/speech.qcow2.lzma'
+SPEECH_MEM = WEB_SERVER_URL + '/overlay/speech/overlay1/speech.mem.lzma'
+NULL_DISK = WEB_SERVER_URL + '/overlay/null/overlay1/null.qcow2.lzma'
+NULL_MEM = WEB_SERVER_URL + '/overlay/null/overlay1/null.mem.lzma'
 
 WEB_SERVER_PORT_NUMBER = 9095
 VM_TELNET_COMMAND_PORT_NUMBER = 19999
@@ -96,6 +96,11 @@ def download_overlay(machine_name, telnet_port):
         url_mem = NULL_MEM
         base_disk = NULL_BASE_DISK
         base_mem = NULL_BASE_MEM
+    elif machine_name.lower() == "speech":
+        url_disk = SPEECH_DISK
+        url_mem = SPEECH_MEM
+        base_disk = SPEECH_BASE_DISK
+        base_mem = SPEECH_BASE_MEM
 
     dest_disk = os.path.join('/tmp/', os.path.basename(url_disk))
     dest_mem = os.path.join('/tmp/', os.path.basename(url_mem))
