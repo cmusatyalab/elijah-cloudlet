@@ -234,6 +234,7 @@ sub run {
 	# Calculate command-line options
 	$opts  = "-name \"$NAME\" -hda \"$diskpath\" -m $MEM";
 	$opts .= " -monitor unix:$sockpath -vnc unix:$vncsock";
+	# krha	#$opts .= " -monitor telnet:localhost:9998 -vnc unix:$vncsock";
 	$opts .= " -enable-kvm"
 		if $need_enable_kvm;
 	$opts .= get_config;
@@ -318,9 +319,6 @@ sub run {
 	# the memory image.
 	local $SIG{'INT'} = sub {};
 	$opts = ($FULLSCREEN eq "yes") ? "-f" : "";
-
-	print STDOUT "krha, VM Resumed!!\n";
-	print STDERR "krha, VM Resumed!!\n";
 
 	if ($vnc_sock_ready) {
 		run_program(SHAREDIR . "/viewer $opts $vncsock",

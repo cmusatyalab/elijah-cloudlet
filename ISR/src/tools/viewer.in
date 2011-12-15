@@ -97,7 +97,12 @@ class VncViewer(object):
 				host, port = dest.split(':', 1)
 				dest = (host, int(port))
 		else:
-			self.sock = socket.socket(socket.AF_UNIX)
+		    # krha
+		    # make temp file to check VNC is running
+		    import os
+		    self.vnc_dir = os.path.dirname(dest)
+
+		    self.sock = socket.socket(socket.AF_UNIX)
 		self.sock.connect(dest)
 		self.vnc.open_fd(self.sock.fileno())
 
@@ -108,6 +113,15 @@ class VncViewer(object):
 	def _initialized(self, wid):
 		self.wind.set_title(self.vnc.get_name())
 		self.wind.show_all()
+		print "krha, VNC initialized callback End"
+		import os
+		if os.path.exists(self.vnc_dir):
+		    vnc_check_file = os.path.join(self.vnc_dir, 'kvm_run.tmp')
+		    f=open(vnc_check_file, 'w')
+		    f.write('Launched\n')
+		    f.close()
+		else:
+		    print "krha, VNC is not opened"
 
 	def _grabbed(self, wid, icon, grabbed):
 		icon.set_sensitive(grabbed)

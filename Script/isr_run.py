@@ -15,7 +15,6 @@ from flask import Flask,flash, request,render_template, Response,session,g
 from flask import Flask, request, session, g, redirect, url_for, abort, render_template, flash, Response
 import re
 import json
-from cloudlet import telnet_connection_waiting
 
 # global constant and variable
 WEB_SERVER_PORT_NUMBER = 9095
@@ -27,7 +26,7 @@ user_name = ''
 server_address = ''
 launch_start = datetime.now()
 launch_end = datetime.now()
-application_names = ("moped", "face", "null", "moped_disk")
+application_names = ("moped", "face", "null", "moped_disk", "speech")
 
 # web server configuration
 app = Flask(__name__)
@@ -160,22 +159,19 @@ def resume_vm(user_name, server_address, vm_name):
         elif output.strip().find("Updating hoard cache") == 0:
             time_decomp_mem_end = datetime.now()
             time_kvm_start = datetime.now()
-            print "break"
-            break;A
+            break;
 
-    telnet_port = 19999 # It is default at revised ISR client
-    # waiting for TCP socket open
+
+    # Waiting for kvm.vnc
+    # find UUID, which has vm_name
+    uuid = get_uuid(user_name, server_address, vm_name)
+    vnc_path = os.path.join(VNC_PATH, uuid, "cfg", "kvm_run.tmp")
     for i in xrange(200):
-        command_str = "netstat -an | grep 127.0.0.1:" + str(telnet_port)
-        proc = subprocess.Popen(command_str, shell=True, stdin=subprocess.PIPE, stdout=subprocess.PIPE)
-        output = proc.stdout.readline()
-        if output.find("LISTEN") != -1:
+        if os.path.exists(vnc_path):
+            time_kvm_end = datetime.now()
+            print "VM Resume Process End : " + str(time_kvm_end)
             break;
         time.sleep(0.1)
-
-    # Getting VM Status information through Telnet
-    telnet_connection_waiting(telnet_port)
-    time_kvm_end = datetime.now()
 
     '''
     # wait for vnc process
