@@ -1,0 +1,4 @@
+[Time] Decompression -  0:00:25.579007
+[Time] Recover(xdelta) image -  0:00:21.753328
+kvm -hda /home/krha/Cloudlet/image/WindowXP_Base/recover.qcow2 -m 2048 -monitor telnet:localhost:9862,server,nowait -enable-kvm -net nic -net user -serial none -parallel none -usb -usbdevice tablet -redir tcp:9876::9876 -redir tcp:2222::22 -redir tcp:19092::9092 -redir tcp:6789::6789 -vnc unix:/home/krha/Cloudlet/image/WindowXP_Base/kvm.vnc -incoming "exec:cat /home/krha/Cloudlet/image/WindowXP_Base/recover.mem"
+[Time] Run Snapshot -  0:00:04.881613

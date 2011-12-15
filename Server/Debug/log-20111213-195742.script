@@ -1,0 +1,10 @@
+[Time] Decompression -  0:00:23.267762
+[Time] Recover(xdelta) image -  0:00:18.469766
+kvm -hda /home/krha/Cloudlet/image/MOPED_BaseVM/recover.qcow2 -m 2048 -monitor telnet:localhost:9862,server,nowait -enable-kvm -net nic -net user -serial none -parallel none -usb -usbdevice tablet -redir tcp:9876::9876 -redir tcp:2222::22 -redir tcp:19092::9092 -redir tcp:6789::6789 -vnc unix:/home/krha/Cloudlet/image/MOPED_BaseVM/kvm.vnc -incoming "exec:cat /home/krha/Cloudlet/image/MOPED_BaseVM/recover.mem"
+Socket connection time :  0:00:04.862107
+connection request
+request ret :  i[K[Din[K[D[Dinf[K[D[D[Dinfo[K[D[D[D[Dinfo [K[D[D[D[D[Dinfo s[K[D[D[D[D[D[Dinfo st[K[D[D[D[D[D[D[Dinfo sta[K[D[D[D[D[D[D[D[Dinfo stat[K[D[D[D[D[D[D[D[D[Dinfo statu[K[D[D[D[D[D[D[D[D[D[Dinfo status[K
+VM status: running
+(qemu), 2011-12-13 19:59:36.722500
+info status time:  0:00:00.138819
+[Time] Run Snapshot -  0:00:05.161903
