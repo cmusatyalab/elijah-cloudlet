@@ -15,6 +15,7 @@ from flask import Flask,flash, request,render_template, Response,session,g
 from flask import Flask, request, session, g, redirect, url_for, abort, render_template, flash, Response
 import re
 import json
+from cloudlet import telnet_connection_waiting
 
 # global constant and variable
 WEB_SERVER_PORT_NUMBER = 9095
@@ -162,6 +163,21 @@ def resume_vm(user_name, server_address, vm_name):
             print "break"
             break;A
 
+    telnet_port = 19999 # It is default at revised ISR client
+    # waiting for TCP socket open
+    for i in xrange(200):
+        command_str = "netstat -an | grep 127.0.0.1:" + str(telnet_port)
+        proc = subprocess.Popen(command_str, shell=True, stdin=subprocess.PIPE, stdout=subprocess.PIPE)
+        output = proc.stdout.readline()
+        if output.find("LISTEN") != -1:
+            break;
+        time.sleep(0.1)
+
+    # Getting VM Status information through Telnet
+    telnet_connection_waiting(telnet_port)
+    time_kvm_end = datetime.now()
+
+    '''
     # wait for vnc process
     while True:
         time.sleep(0.1)
@@ -174,7 +190,6 @@ def resume_vm(user_name, server_address, vm_name):
             break;
         proc.wait()
 
-    '''
     # Waiting for kvm.vnc
     # find UUID, which has vm_name
     uuid = get_uuid(user_name, server_address, vm_name)

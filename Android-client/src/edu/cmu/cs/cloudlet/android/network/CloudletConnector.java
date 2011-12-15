@@ -221,7 +221,23 @@ public class CloudletConnector {
 			ipaddress = response.getJsonPayload().getString(VMInfo.JSON_KEY_LAUNCH_VM_IP);
 			if(checkVMValidity(response, this.requestBaseVM) == true){
 				String synthesisInfo = "Finish VM Synthesis\n" + Measure.printInfo() + "\nServer IP: " + ipaddress;
-				// Run Application
+
+				// Launch Application
+				ArrayList<VMInfo> vmList = CloudletEnv.instance().getOverlayDirectoryInfo();
+				if(vmList == null && vmList.size() != 1){
+					showAlertDialog("No Overlay VM List is suit");
+					return;
+				}				
+				String VMName = vmList.get(0).getInfo(VMInfo.JSON_KEY_NAME);
+				if(VMName == null){
+					// Error
+					showAlertDialog("VM Name is NULL");
+					return;
+				}
+				activity.runApplication(VMName);
+				
+				/*
+				// Show Dialog for Selecting Application
 				new AlertDialog.Builder(mContext).setTitle("SUCCESS")
 				.setMessage(synthesisInfo)
 				.setPositiveButton("Run App", new DialogInterface.OnClickListener(){
@@ -247,6 +263,7 @@ public class CloudletConnector {
 				})
 				.setNegativeButton("Done", null)
 				.show();
+				*/
 			}else{
 				this.showAlertDialog("Retuned VM information is wrong, check # of received VM Information");		
 			}

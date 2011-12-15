@@ -94,6 +94,14 @@ public class FaceRecClientCameraPreview extends Activity implements
 	protected long timeStart, timeFirstResponse, timeFirstFinding;
 	protected boolean isFirstFinding = false;
 	protected boolean isFirstResponse = false;
+	
+	public void showInfoDialog(String message){
+		new AlertDialog.Builder(FaceRecClientCameraPreview.this).setTitle("Info")
+		.setMessage(message)
+		.setIcon(R.drawable.ic_launcher)
+		.setNegativeButton("Confirm", null)
+		.show();	
+	}
 
 	class VideoOverlayView extends View {
 
@@ -159,14 +167,18 @@ public class FaceRecClientCameraPreview extends Activity implements
 				canvas.drawRect(rect, paint);
 				
 				// For Time stamping
+				String message = "First runtime : ";
 				if(isFirstFinding == false){
 					timeFirstFinding = System.currentTimeMillis();
 					isFirstFinding = true;
 
-					final String message = "Time for First Finding\nstart: " + timeStart +"\nend:" + timeFirstFinding + "\ndiff: " + (timeFirstFinding - timeStart);
+					message += "" + (timeFirstFinding - timeStart);
 					Log.d(LOG_TAG, message);
 					KLog.println(message);
+					showInfoDialog(message);
 				}
+
+				canvas.drawText(message, 200, 100, paint);
 
 				if (imageResponseMsg.name != null
 						|| !imageResponseMsg.name.equalsIgnoreCase("")) {
@@ -254,8 +266,6 @@ public class FaceRecClientCameraPreview extends Activity implements
 			// set the response object
 			handlerMsg.obj = response;
 			
-			// send the message to the UI thread			
-			dataThreadHandler.sendMessage(handlerMsg);
 			
 			// Time stamping
 			if(isFirstResponse == false){
@@ -264,8 +274,16 @@ public class FaceRecClientCameraPreview extends Activity implements
 				final String message = "Time for First Response\nstart: " + timeStart +"\nend:" + timeFirstResponse + "\ndiff: " + (timeFirstResponse- timeStart);
 				Log.d(LOG_TAG, message);
 				KLog.println(message);
+				runOnUiThread(new Runnable() {
+					public void run() {						
+						showInfoDialog(message);
+					}
+				});
 
 			}
+
+			// send the message to the UI thread			
+			dataThreadHandler.sendMessage(handlerMsg);
 		}
 	};
 
