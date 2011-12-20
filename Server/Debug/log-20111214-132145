@@ -1,8 +1,0 @@
-[Time] [START] Receive vmlist command - 13:21:49.467463
-[Time] Save disk image Start - 13:21:49.570510
-[Time] Save disk image End - 13:22:00.095366
-[Time] Save memory image Start - 13:22:00.095421
-[Time] Save memory image End - 13:22:32.417713
-[Time] VM Launch Start - 13:22:32.417872
-[Time] VM Launch End - 13:23:00.404981
-[Time] [END] Send VM Launch Command - 13:23:00.405336

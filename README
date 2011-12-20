@@ -4,6 +4,7 @@ Prototype for Cloudlet
 1) C Server
 	glib-2.0
 	libjson0-dev (JSON manipulation library)
+
 2) Python Script
 	xdelta
 		binary diff
@@ -12,9 +13,6 @@ Prototype for Cloudlet
 		compression
 		$ sudo apt-get install python-setuptools python-dev build-essential
 		$ sudo easy_install pylzma
-	gvncviewer
-		vncview for VM interaction, gvncviewer can accommodate resolution changes
-		$ sudo apt-get install gvncviewer
 	flask
 		flask is python web server and cloudlet_cloud.py and isr_run.py has dependency on it
 		$ sudo easy_install flask
