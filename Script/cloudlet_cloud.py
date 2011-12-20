@@ -1,4 +1,4 @@
-#!/usr/bin/env python
+#!usr/bin/env python
 import os
 import getopt
 import commands
@@ -114,6 +114,8 @@ def download_overlay(machine_name, telnet_port):
     recover_img, recover_mem = recover_snapshot(base_disk, base_mem, dest_disk, dest_mem)
     time = run_snapshot(recover_img, recover_mem, VM_TELNET_COMMAND_PORT_NUMBER, 5, wait_vnc_end=False)
     print '[Time] Run Snapshot - ', time
+
+    # TODO: measure it from qemu monitor Give time to
 
     return dest_disk, dest_mem
 
