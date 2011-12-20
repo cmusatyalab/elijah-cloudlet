@@ -21,6 +21,7 @@ import gtkvnc
 import optparse
 import socket
 
+
 class VncViewer(object):
 	HOSTKEY = gtk.gdk.keyval_from_name('Control_R')
 	HOSTKEY_HUMAN = 'Right Ctrl'
@@ -97,7 +98,7 @@ class VncViewer(object):
 				host, port = dest.split(':', 1)
 				dest = (host, int(port))
 		else:
-			self.sock = socket.socket(socket.AF_UNIX)
+		    self.sock = socket.socket(socket.AF_UNIX)
 		self.sock.connect(dest)
 		self.vnc.open_fd(self.sock.fileno())
 

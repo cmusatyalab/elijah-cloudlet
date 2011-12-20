@@ -27,7 +27,7 @@ user_name = ''
 server_address = ''
 launch_start = datetime.now()
 launch_end = datetime.now()
-application_names = ("moped", "face", "null", "moped_disk")
+application_names = ("moped", "face", "null", "moped_disk", "speech")
 
 # web server configuration
 app = Flask(__name__)
@@ -159,12 +159,14 @@ def resume_vm(user_name, server_address, vm_name):
             time_decomp_mem_start = datetime.now()
         elif output.strip().find("Updating hoard cache") == 0:
             time_decomp_mem_end = datetime.now()
+        elif output.strip().find("Launching KVM") == 0:
             time_kvm_start = datetime.now()
-            print "break"
-            break;A
+            break;
 
-    telnet_port = 19999 # It is default at revised ISR client
     # waiting for TCP socket open
+    # predefined for test, it is opened at ISR/vmm/kvm
+    # So, no multiple ISR Client at one machine
+    telnet_port = 9998 
     for i in xrange(200):
         command_str = "netstat -an | grep 127.0.0.1:" + str(telnet_port)
         proc = subprocess.Popen(command_str, shell=True, stdin=subprocess.PIPE, stdout=subprocess.PIPE)
@@ -178,18 +180,6 @@ def resume_vm(user_name, server_address, vm_name):
     time_kvm_end = datetime.now()
 
     '''
-    # wait for vnc process
-    while True:
-        time.sleep(0.1)
-        command_str = "ps aux | grep viewer"
-        proc = subprocess.Popen(command_str, shell=True, stdin=subprocess.PIPE, stdout=subprocess.PIPE)
-        output = proc.stdout.readline()
-        if output.find("/usr/local/share/openisr/viewer") != -1:
-            time_kvm_end = datetime.now()
-            print "VM Resume Process End : " + str(time_kvm_end)
-            break;
-        proc.wait()
-
     # Waiting for kvm.vnc
     # find UUID, which has vm_name
     uuid = get_uuid(user_name, server_address, vm_name)

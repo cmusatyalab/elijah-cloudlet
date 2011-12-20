@@ -134,6 +134,7 @@ static void transport_conn_put(struct pk_connection *conn)
 	g_mutex_lock(cpool->lock);
 	cpool->conns = g_list_prepend(conn->pool->conns, conn);
 	cpool->total_io += conn->offset;
+	pk_log(LOG_STATS, "%llu bytes transferred : ", cpool->total_io);
 	g_mutex_unlock(cpool->lock);
 }
 
