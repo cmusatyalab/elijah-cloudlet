@@ -1,3 +1,0 @@
-sha1-compress-amd64.lo: sha1-compress-amd64.S ../config.h
-
-../config.h:

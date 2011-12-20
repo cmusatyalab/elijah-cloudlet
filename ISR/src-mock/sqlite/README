@@ -1,7 +1,0 @@
-We build against our own copy of SQLite rather than using the one installed
-on the host system.  This allows us to avoid handling behavior changes across
-SQLite releases (including data corruption bugs) and gives us a more
-predictable runtime environment.
-
-We use "the amalgamation", a single C file which contains the entire SQLite
-implementation, as provided by the official download site at sqlite.org.
