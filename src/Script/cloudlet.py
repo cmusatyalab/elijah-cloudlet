@@ -24,7 +24,7 @@ def diff_files(source_file, target_file, output_file):
     if os.path.exists(target_file) == False:
         print '[Error] No such file %s' % (target_file)
         return None
-    if os.path.exists(output_file) == True:
+    if os.path.exists(output_file):
         os.remove(output_file)
 
     print '[INFO] %s(base) - %s  =  %s' % (os.path.basename(source_file), os.path.basename(target_file), os.path.basename(output_file))
@@ -107,9 +107,9 @@ def create_overlay(base_image, base_mem):
 
     if os.path.exists(tmp_mem) == False:
         print '[ERROR] new memory snapshot (%s) is not exit' % tmp_mem
-        if os.path.exists(tmp_mem) == True:
+        if os.path.exists(tmp_mem):
             os.remove(tmp_mem)
-        if os.path.exists(tmp_disk) == True:
+        if os.path.exists(tmp_disk):
             os.remove(tmp_disk)
         return None, None, None, None
 
@@ -118,9 +118,9 @@ def create_overlay(base_image, base_mem):
     print '[TIME] time for creating overlay disk : ', str(datetime.now()-prev_time)
     if ret == None:
         print '[ERROR] cannot create overlay disk'
-        if os.path.exists(tmp_mem) == True:
+        if os.path.exists(tmp_mem):
             os.remove(tmp_mem)
-        if os.path.exists(tmp_disk) == True:
+        if os.path.exists(tmp_disk):
             os.remove(tmp_disk)
         return None, None, None, None
     
@@ -129,9 +129,9 @@ def create_overlay(base_image, base_mem):
     print '[TIME] time for creating overlay memory : ', str(datetime.now()-prev_time)
     if ret == None:
         print '[ERROR] cannot create overlay_mem'
-        if os.path.exists(tmp_mem) == True:
+        if os.path.exists(tmp_mem):
             os.remove(tmp_mem)
-        if os.path.exists(tmp_disk) == True:
+        if os.path.exists(tmp_disk):
             os.remove(tmp_disk)
         return None, None, None, None
 
@@ -244,7 +244,7 @@ def run_snapshot(disk_image, memory_image, telnet_port, vnc_port, wait_vnc_end):
     ret = telnet_connection_waiting(telnet_port)
     end_time = datetime.now()
 
-    if ret == True:
+    if ret:
         # Run VNC
         vnc_process = subprocess.Popen(VNC_VIEWER + " " + vnc_file, shell=True, stdin=subprocess.PIPE, stdout=subprocess.PIPE)
         # vnc_process = subprocess.Popen("gvncviewer localhost:" + str(vnc_port), shell=True)
@@ -275,7 +275,7 @@ def run_migration(telnet_port, vnc_port, mig_path):
     tn.write(migration_cmd)
     while (1):
         tn_read = tn.read_some()
-        if tn_read.find("qemu") == True:
+        if tn_read.find("qemu"):
             break;
     tn.write("quit\n")
     ret = tn.read_until("(qemu)", 10)

@@ -132,7 +132,7 @@ def main(argv):
         sys.exit(0)
     elif operation in ("lock"):
         # always give face lock
-        if acquire == True:
+        if acquire:
             sys.stdout.write("lock acquired")
         sys.exit(0)
     elif operation in ("stat"):
