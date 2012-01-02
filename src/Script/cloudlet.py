@@ -274,8 +274,9 @@ def run_migration(telnet_port, vnc_port, mig_path):
     print 'waiting telnet ', ret
     tn.write(migration_cmd)
     while (1):
+        time.sleep(1)
         tn_read = tn.read_some()
-        if tn_read.find("qemu"):
+        if tn_read.find("(qemu)"):
             break;
     tn.write("quit\n")
     ret = tn.read_until("(qemu)", 10)
@@ -329,6 +330,7 @@ def run_image(disk_image, telnet_port, vnc_port):
     # Run VNC and wait until user finishes working
     time.sleep(3)
     vnc_process = subprocess.Popen("gvncviewer localhost:" + str(vnc_port), shell=True)
+    #vnc_process = subprocess.Popen(VNC_VIEWER + " " + vnc_file, shell=True, stdin=subprocess.PIPE, stdout=subprocess.PIPE)
     ret = vnc_process.wait()
 
 

@@ -1,18 +1,17 @@
 #!/usr/bin/env python
-import xdelta3
 import os
-import commands
-import filecmp
 import sys
-import subprocess
-import getopt
-import time
-from datetime import datetime, timedelta
-import telnetlib
-import socket
-import pylzma
-import optparse
+import urllib2
 from optparse import OptionParser
+import time
+from multiprocessing import Process, Queue, Pipe, JoinableQueue
+import pylzma
+
+# PIPLINING
+CHUCK_SIZE = 1024*8
+END_OF_FILE = "Transfer End"
+download_queue = JoinableQueue()
+decomp_queue = JoinableQueue()
 
 application_names = ("moped", "face", "speech", "null")
 WEB_SERVER_URL = 'http://dagama.isr.cs.cmu.edu/cloudlet'
@@ -64,19 +63,82 @@ def get_download_url(machine_name):
 
     return url_disk, url_mem, base_disk, base_mem
 
+def network_worker(overlay_url, bandwidth, queue):
+    prev = time.time()
+    data_size = 0
+    url = urllib2.urlopen(overlay_url)
+    counter = 0
+    while True:
+        counter = counter + 1
+        chuck = url.read(CHUCK_SIZE)
+        data_size = data_size + len(chuck)
+        if chuck:
+            queue.put(chuck)
+            #conn.send(chuck)
+        else:
+            break
+
+    queue.put(END_OF_FILE)
+    time_delta = time.time()-prev
+    print "[Time] transfer : %s (loop: %d)" % (str(time_delta), counter)
+    print "Bandwidth: %d Mbps(%d/%d)" % (data_size*8.0/time_delta/1000/1000, data_size, time_delta)
+
+
+def decomp_worker(in_queue, out_queue):
+    data_size = 0
+    counter = 0
+    tmp_file = open(os.path.join(".", "test.tmp"), "wb")
+    obj = pylzma.decompressobj()
+    while True:
+        chuck = in_queue.get()
+        if chuck == END_OF_FILE:
+            break;
+
+        counter = counter + 1
+        data_size = data_size + len(chuck)
+        decomp_chuck = obj.decompress(chuck)
+
+        tmp_file.write(decomp_chuck)
+        in_queue.task_done()
+        out_queue.put(decomp_chuck)
+
+    out_queue.put(END_OF_FILE)
+    print "Total looping : %d" % (counter)
+
+
+def delta_worker(in_queue, out_file):
+    data_size = 0
+    counter = 0
+    while True:
+        chuck = in_queue.get()
+        if chuck == END_OF_FILE:
+            break;
+
+        counter = counter + 1
+        data_size = data_size + len(chuck)
+        print "in delta : %d, %d" %(counter, data_size)
+        out_file.write(chuck)
+        in_queue.task_done()
+
+
 def piping_synthesis(vm_name, bandwidth):
+    global download_queue
+    global decomp_queue
+    global CHUCK_SIZE
     disk_url, mem_url, base_disk, base_mem = get_download_url(vm_name)
-    dest_disk = os.path.join('/tmp/', os.path.basename(disk_url))
-    dest_mem = os.path.join('/tmp/', os.path.basename(mem_url))
-    # download
-    command_str = "wget --limit-rate=" + str(bandwidth) + " -O " + dest_disk +  " " + disk_url
-    print command_str 
-    proc = subprocess.Popen(command_str, shell=True, stdin=subprocess.PIPE, stdout=subprocess.PIPE)
-    output = proc.stdout.readline()
-    if len(output.strip()) != 0:
-        print output
-    proc.wait()
-    return 0
+    tmp_disk_file = open(os.path.join(".", disk_url.split("/")[-1] + ".tmp"), "wb")
+
+    prev = time.time()
+    download_process = Process(target=network_worker, args=(disk_url, bandwidth, download_queue))
+    decomp_process = Process(target=decomp_worker, args=(download_queue, decomp_queue))
+    delta_process = Process(target=delta_worker, args=(decomp_queue, tmp_disk_file))
+
+    download_process.start()
+    decomp_process.start()
+    delta_process.start()
+
+    delta_process.join()
+    print "[Time] Total Time : " + str(time.time()-prev)
 
 
 def process_command_line(argv):
