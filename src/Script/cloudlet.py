@@ -7,7 +7,7 @@ import sys
 import subprocess
 import getopt
 import time
-from datetime import datetime, timedelta
+from datetime import datetime
 import telnetlib
 import socket
 import pylzma
@@ -37,8 +37,10 @@ def diff_files(source_file, target_file, output_file):
 
 def merge_file(source_file, overlay_file, output_file):
     command_patch = ['xdelta3', '-df', '-s', source_file, overlay_file, output_file]
+    #print command_patch
     ret = xdelta3.xd3_main_cmdline(command_patch)
     if ret == 0:
+        #print "output : %s (%d)" % (output_file, os.path.getsize(output_file))
         return output_file
     else:
         return None
@@ -159,6 +161,9 @@ def recover_snapshot(base_img, base_mem, comp_img, comp_mem):
     # merge with base image
     recover_img = os.path.join(os.path.dirname(base_img), 'recover.qcow2'); 
     recover_mem = os.path.join(os.path.dirname(base_mem), 'recover.mem');
+    for recover_file in (recover_img, recover_mem):
+        if os.path.exists(recover_file):
+            os.remove(recover_file)
 
     prev_time = datetime.now()
     merge_file(base_img, overlay_img, recover_img)
