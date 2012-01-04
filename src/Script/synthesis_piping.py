@@ -7,13 +7,20 @@ from datetime import datetime
 from multiprocessing import Process, Queue, Pipe, JoinableQueue
 import subprocess
 import pylzma
+from flask import Flask, request, session, g, redirect, url_for, abort, render_template, flash, Response
+import json
 
 # PIPLINING
 CHUNK_SIZE = 1024*8
 END_OF_FILE = "Transfer End"
-
+operation_mode = ('run', 'mock')
 application_names = ("moped", "face", "speech", "null")
 WEB_SERVER_URL = 'http://dagama.isr.cs.cmu.edu/cloudlet'
+
+# Web server for Andorid Client
+WEB_SERVER_PORT_NUMBER = 8021
+app = Flask(__name__)
+app.config.from_object(__name__)
 
 # Overlya URL
 MOPED_DISK = WEB_SERVER_URL + '/overlay/moped/overlay1/moped.qcow2.lzma'
@@ -80,8 +87,10 @@ def network_worker(overlay_url, chunk_size, queue):
     queue.put(END_OF_FILE)
     end_time = datetime.now()
     time_delta= end_time-start_time
-    print "[Download] time : (%s)-(%s)=(%s) (%d, %d)" % (start_time.strftime('%X'), end_time.strftime('%X'), str(end_time-start_time), counter, data_size)
-    print "Bandwidth: %d Mbps(%d/%d)" % (data_size*8.0/time_delta.seconds/1000/1000, data_size, time_delta.seconds)
+    try:
+        print "[Download] time : (%s)-(%s)=(%s) (%d, %d, %d)" % (start_time.strftime('%X'), end_time.strftime('%X'), str(end_time-start_time), counter, data_size, data_size*8.0/time_delta.seconds/1000/1000)
+    except ZeroDivisionError:
+        print "[Download] time : (%s)-(%s)=(%s) (%d, %d)" % (start_time.strftime('%X'), end_time.strftime('%X'), str(end_time-start_time), counter, data_size)
 
 
 def decomp_worker(in_queue, out_queue):
@@ -171,27 +180,55 @@ def piping_synthesis(vm_name, bandwidth):
 
 
 def process_command_line(argv):
-    parser = OptionParser()
+    global operation_mode
+
+    parser = OptionParser(usage="usage: %prog" + " [%s] [option]" % ('|'.join(mode for mode in operation_mode)),
+            version="Cloudlet Synthesys(piping) 0.1")
+    parser.add_option(
+            '-c', '--config', action='store', type='string', dest='config_filename',
+            help='[run mode] Set configuration file, which has base VM information, to work as a server mode.')
     parser.add_option(
             '-b', '--bandwidth', action='store', type='int', dest='bandwidth', default=100,
-            help='Set bandwidth for receiving overlay VM (Mbps).')
+            help='[test mode] Set bandwidth for receiving overlay VM (Mbps).')
     parser.add_option(
-            '-n', '--name', action='store', type='string', dest='vmname',
-            help='Set VM name')
+            '-n', '--name', type='choice', choices=application_names, action='store', dest='vmname',
+            help="[test mode] Set VM name among %s" % (str(application_names)))
 
     settings, args = parser.parse_args(argv)
+    if len(args) == 0 or args[0] not in operation_mode:
+        parser.error('program takes no command-line arguments; "%s" ignored.' % (args,))
+    mode = args[0]
+    if mode == operation_mode[0] and settings.config_filename == None:
+        parser.error('program need configuration file for running mode')
+    if mode == operation_mode[1] and settings.vmname == None:
+        parser.error('program need vmname for mock mode')
 
-    if args:
-        parser.error('program takes no command-line arguments; '
-                '"%s" ignored. ' % (args,))
-    if settings.vmname == None or settings.vmname not in application_names:
-        parser.error('program need vm name to run. (ex. moped, speech, face)')
+    return mode, settings, args
 
-    return settings, args
+def parse_configfile(filename):
+    if not os.path.exists(filename):
+        return Null, "configuration file is not exist : " + filename
+
+    try:
+        json = json.loads(open(filename, 'r').read())
+    except ValueError:
+        return Null, "Invlid JSON format : " + open(filename, 'r').read()
+
+    print json
+
+    return json
 
 def main(argv=None):
-    settings, args = process_command_line(sys.argv[1:])
-    piping_synthesis(settings.vmname, settings.bandwidth*1000*1000)
+    mode, settings, args = process_command_line(sys.argv[1:])
+    if mode == operation_mode[0]: # run mode
+        config_file, error_msg = parse_configfile(settings.config_filename)
+        if error_msg:
+            print error_msg
+            sys.exit(2)
+        #app.run(host='0.0.0.0', port=WEB_SERVER_PORT_NUMBER, processes=10)
+
+    elif mode == operation_mode[1]: # mock mode
+        piping_synthesis(settings.vmname, settings.bandwidth*1000*1000)
     return 0
 
 

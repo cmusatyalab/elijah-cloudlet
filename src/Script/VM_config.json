@@ -1,0 +1,24 @@
+{
+   "python-script":"/home/krha/Cloudlet/src/Script/cloudet.py",
+   "CPU-Clock":"2.13",
+   "CPU-Core":"2",
+   "Memory-Size":"4",
+   "VM":[
+      {
+         "name":"ubuntuLTS",
+         "type":"baseVM",
+         "OS":"Linux",
+         "OS-version":"Ubuntu_10.04 LTS",
+         "diskimg_path":"home/krha/Cloudlet/image/Ubuntu10_Base/ubuntu_base.qcow2",
+         "memorysnapshot_path":"/home/krha/Cloudlet/image/Ubuntu10_Base/ubuntu_base.mem"
+      },
+      {
+         "name":"window7",
+         "type":"baseVM",
+         "OS":"Window",
+         "OS-version":"Window7",
+         "diskimg_path":"/home/krha/Cloudlet/image/WindowXP_Base/winxp-with-jre7_base.qcow2"
+         "memorysnapshot_path":"/home/krha/Cloudlet/image/WindowXP_Base/winxp-with-jre7_base.mem"
+      }
+   ]
+}
