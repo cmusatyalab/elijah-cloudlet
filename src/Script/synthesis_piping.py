@@ -88,13 +88,13 @@ def cloudlet():
         download_process.start()
         decomp_process.start()
         delta_process.start()
-        delta_process.join()
+    delta_process.join()
 
-    print "\n[Time] Total Time except VM Resume : " + str(datetime.now()-prev)
     telnet_port = 9999
     vnc_port = 2
     exe_time = run_snapshot(recover_file[0], recover_file[1], telnet_port, vnc_port, wait_vnc_end=False)
     print "[Time] VM Resume : " + exe_time
+    print "\n[Time] Total Time except VM Resume : " + str(datetime.now()-prev)
 
     return "SUCCESS"
 
@@ -215,26 +215,38 @@ def delta_worker(in_queue, base_filename, out_filename):
         return False
 
 
-def piping_synthesis(vm_name, bandwidth):
+def piping_synthesis(vm_name):
     disk_url, mem_url, base_disk, base_mem = get_download_url(vm_name)
     prev = datetime.now()
+    recover_file = []
+    delta_processes = []
+    tmp_dir = tempfile.mkdtemp()
     for (overlay_url, base_name) in ((disk_url, base_disk), (mem_url, base_mem)):
         download_queue = JoinableQueue()
         decomp_queue = JoinableQueue()
         (download_pipe_in, download_pipe_out) = Pipe()
         (decomp_pipe_in, decomp_pipe_out) = Pipe()
-        out_filename = os.path.join(".", overlay_url.split("/")[-1] + ".recover")
+        out_filename = os.path.join(tmp_dir, overlay_url.split("/")[-1] + ".recover")
+        recover_file.append(out_filename)
         
         url = urllib2.urlopen(overlay_url)
         download_process = Process(target=network_worker, args=(url, CHUNK_SIZE, download_queue))
         decomp_process = Process(target=decomp_worker, args=(download_queue, decomp_queue))
         delta_process = Process(target=delta_worker, args=(decomp_queue, base_name, out_filename))
+        delta_processes.append(delta_process)
         
         download_process.start()
         decomp_process.start()
         delta_process.start()
-        delta_process.join()
-    print "[Time] Total Time : " + str(datetime.now()-prev)
+
+    for delta_p in delta_processes:
+        delta_p.join()
+
+    telnet_port = 9999
+    vnc_port = 2
+    exe_time = run_snapshot(recover_file[0], recover_file[1], telnet_port, vnc_port, wait_vnc_end=False)
+    print "[Time] VM Resume : " + exe_time
+    print "\n[Time] Total Time except VM Resume : " + str(datetime.now()-prev)
 
 
 def process_command_line(argv):
@@ -245,9 +257,6 @@ def process_command_line(argv):
     parser.add_option(
             '-c', '--config', action='store', type='string', dest='config_filename',
             help='[run mode] Set configuration file, which has base VM information, to work as a server mode.')
-    parser.add_option(
-            '-b', '--bandwidth', action='store', type='int', dest='bandwidth', default=100,
-            help='[test mode] Set bandwidth for receiving overlay VM (Mbps).')
     parser.add_option(
             '-n', '--name', type='choice', choices=application_names, action='store', dest='vmname',
             help="[test mode] Set VM name among %s" % (str(application_names)))
@@ -296,7 +305,7 @@ def main(argv=None):
         app.run(host='0.0.0.0', port=WEB_SERVER_PORT_NUMBER, processes=10)
 
     elif mode == operation_mode[1]: # mock mode
-        piping_synthesis(settings.vmname, settings.bandwidth*1000*1000)
+        piping_synthesis(settings.vmname)
     return 0
 
 
