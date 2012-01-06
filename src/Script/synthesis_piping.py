@@ -19,6 +19,7 @@ WEB_SERVER_URL = 'http://dagama.isr.cs.cmu.edu/cloudlet'
 
 # Web server for Andorid Client
 WEB_SERVER_PORT_NUMBER = 8021
+BaseVM_list = []
 app = Flask(__name__)
 app.config.from_object(__name__)
 
@@ -206,17 +207,27 @@ def process_command_line(argv):
     return mode, settings, args
 
 def parse_configfile(filename):
+    global BaseVM_list
     if not os.path.exists(filename):
-        return Null, "configuration file is not exist : " + filename
+        return None, "configuration file is not exist : " + filename
 
     try:
-        json = json.loads(open(filename, 'r').read())
+        json_data = json.load(open(filename, 'r'), "UTF-8")
     except ValueError:
-        return Null, "Invlid JSON format : " + open(filename, 'r').read()
+        return None, "Invlid JSON format : " + open(filename, 'r').read()
+    if not json_data.has_key('VM'):
+        return None, "JSON Does not have 'VM' Key"
 
-    print json
+    VM_list = json_data['VM']
+    print "*Configuration List"
+    for vm_info in VM_list:
+        if vm_info['type'].lower() == 'basevm':
+            BaseVM_list.append(vm_info)
+            print "%s : (%s, %s)" % (vm_info['name'], vm_info['diskimg_path'], vm_info['memorysnapshot_path'])
+    print ""
 
-    return json
+    return json_data, None
+
 
 def main(argv=None):
     mode, settings, args = process_command_line(sys.argv[1:])
@@ -225,7 +236,7 @@ def main(argv=None):
         if error_msg:
             print error_msg
             sys.exit(2)
-        #app.run(host='0.0.0.0', port=WEB_SERVER_PORT_NUMBER, processes=10)
+        app.run(host='0.0.0.0', port=WEB_SERVER_PORT_NUMBER, processes=10)
 
     elif mode == operation_mode[1]: # mock mode
         piping_synthesis(settings.vmname, settings.bandwidth*1000*1000)
