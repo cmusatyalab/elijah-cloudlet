@@ -9,7 +9,7 @@
          "type":"baseVM",
          "OS":"Linux",
          "OS-version":"Ubuntu_10.04 LTS",
-         "diskimg_path":"home/krha/Cloudlet/image/Ubuntu10_Base/ubuntu_base.qcow2",
+         "diskimg_path":"/home/krha/Cloudlet/image/Ubuntu10_Base/ubuntu_base.qcow2",
          "memorysnapshot_path":"/home/krha/Cloudlet/image/Ubuntu10_Base/ubuntu_base.mem"
       },
       {

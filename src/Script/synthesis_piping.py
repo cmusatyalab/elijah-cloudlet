@@ -9,6 +9,8 @@ import subprocess
 import pylzma
 from flask import Flask, request, session, g, redirect, url_for, abort, render_template, flash, Response
 import json
+import tempfile
+from cloudlet import run_snapshot
 
 # PIPLINING
 CHUNK_SIZE = 1024*8
@@ -42,6 +44,61 @@ FACE_BASE_MEM = '/home/krha/Cloudlet/image/WindowXP_Base/winxp-with-jre7_base.me
 SPEECH_BASE_DISK = FACE_BASE_DISK
 SPEECH_BASE_MEM = FACE_BASE_MEM
 
+
+# Web Server
+@app.route('/synthesis', methods=['POST'])
+def cloudlet():
+    global BaseVM_list
+    print "Receive Client POST request"
+
+    json_data = request.form["info"]
+    basevm_request = json.loads(json_data)
+    vm_name = basevm_request['VM'][0]['name']
+    print "received info %s" % (vm_name)
+    
+    base_disk_path = None
+    base_mem_path = None
+    for base_vm in BaseVM_list:
+        if vm_name.lower() == base_vm['name'].lower():
+            base_disk_path = base_vm['diskimg_path']
+            base_mem_path = base_vm['memorysnapshot_path']
+
+    if base_disk_path == None or base_mem_path == None:
+        return "Failed, No such base VM exist"
+
+    overlay_disk = request.files['disk_file']
+    overlay_mem = request.files['mem_file']
+
+    ## execute
+    prev = datetime.now()
+    tmp_dir = tempfile.mkdtemp()
+    recover_file = []
+    for overlay, base in ((overlay_disk, base_disk_path), (overlay_mem, base_mem_path)):
+        download_queue = JoinableQueue()
+        decomp_queue = JoinableQueue()
+        (download_pipe_in, download_pipe_out) = Pipe()
+        (decomp_pipe_in, decomp_pipe_out) = Pipe()
+        out_filename = os.path.join(tmp_dir, overlay.name + ".recover")
+        recover_file.append(out_filename)
+        
+        download_process = Process(target=network_worker, args=(overlay, CHUNK_SIZE, download_queue))
+        decomp_process = Process(target=decomp_worker, args=(download_queue, decomp_queue))
+        delta_process = Process(target=delta_worker, args=(decomp_queue, base, out_filename))
+        
+        download_process.start()
+        decomp_process.start()
+        delta_process.start()
+        delta_process.join()
+
+    print "\n[Time] Total Time except VM Resume : " + str(datetime.now()-prev)
+    telnet_port = 9999
+    vnc_port = 2
+    exe_time = run_snapshot(recover_file[0], recover_file[1], telnet_port, vnc_port, wait_vnc_end=False)
+    print "[Time] VM Resume : " + exe_time
+
+    return "SUCCESS"
+
+
 def get_download_url(machine_name):
     url_disk = ''
     url_mem = ''
@@ -71,10 +128,9 @@ def get_download_url(machine_name):
     return url_disk, url_mem, base_disk, base_mem
 
 
-def network_worker(overlay_url, chunk_size, queue):
+def network_worker(url, chunk_size, queue):
     start_time= datetime.now()
     data_size = 0
-    url = urllib2.urlopen(overlay_url)
     counter = 0
     while True:
         counter = counter + 1
@@ -169,7 +225,8 @@ def piping_synthesis(vm_name, bandwidth):
         (decomp_pipe_in, decomp_pipe_out) = Pipe()
         out_filename = os.path.join(".", overlay_url.split("/")[-1] + ".recover")
         
-        download_process = Process(target=network_worker, args=(overlay_url, CHUNK_SIZE, download_queue))
+        url = urllib2.urlopen(overlay_url)
+        download_process = Process(target=network_worker, args=(url, CHUNK_SIZE, download_queue))
         decomp_process = Process(target=decomp_worker, args=(download_queue, decomp_queue))
         delta_process = Process(target=delta_worker, args=(decomp_queue, base_name, out_filename))
         

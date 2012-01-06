@@ -18,6 +18,7 @@ Prototype for Cloudlet
 		$ sudo easy_install flask
 	gtkvncview
 		$ sudo apt-get install gtkvncviewer
+	
 
 3) Android-client
 	all java lib depedency is on Android-client/lib folder, so do not need additional install
