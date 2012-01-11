@@ -32,7 +32,6 @@ import android.widget.Button;
 
 public class CloudletActivity extends Activity {
 	public static final String TEST_CLOUDLET_SERVER_IP = "192.168.2.3";			// Cloudlet IP Address
-//	public static final String TEST_CLOUDLET_SERVER_IP = "desk.krha.kr";			// Cloudlet IP Address
 	public static final int TEST_CLOUDLET_SERVER_PORT_ISR = 9095;				// Cloudlet port for ISR related test
 	public static final int TEST_CLOUDLET_SERVER_PORT_SYNTHESIS = 9090;			// Cloudlet port for VM Synthesis test 
 
@@ -61,28 +60,13 @@ public class CloudletActivity extends Activity {
 //		serviceDiscovery.showDialogSelectOption();
 
 		// Performance Button
-		findViewById(R.id.testSynthesis).setOnClickListener(clickListener);
-		findViewById(R.id.testSynthesisFromCloud).setOnClickListener(clickListener);
-		findViewById(R.id.testISRCloud).setOnClickListener(clickListener);
-		findViewById(R.id.testISRMobile).setOnClickListener(clickListener);
+		findViewById(R.id.testSynthesis).setOnClickListener(clickListener);;
 		findViewById(R.id.runApplication).setOnClickListener(clickListener);
-        
-	}
-
-	private void upadteVMList() {
-		ArrayList<VMInfo> vmList = CloudletEnv.instance().getOverlayDirectoryInfo();
-		VMInfo selectedVM = null;
-		if(selectedOveralyIndex >= 0){
-			selectedVM = vmList.get(selectedOveralyIndex);
-			vmList.clear();
-			vmList.add(selectedVM);			
-		}
-
-		connector.startConnection(TEST_CLOUDLET_SERVER_IP, TEST_CLOUDLET_SERVER_PORT_SYNTHESIS);
 	}
 	
+	
 	private void showDialogSelectOverlay(ArrayList<VMInfo> vmList) {
-		String[] nameList = new String[vmList.size()];
+		final String[] nameList = new String[vmList.size()];
 		for(int i = 0; i < nameList.length; i++){
 			nameList[i] = new String(vmList.get(i).getInfo(VMInfo.JSON_KEY_NAME));			
 		}
@@ -99,8 +83,8 @@ public class CloudletActivity extends Activity {
 				if(position >= 0){
 					selectedOveralyIndex = position;
 				}
-				
-				upadteVMList();
+                String application = nameList[selectedOveralyIndex];
+                runHTTPConnection("cloud", application, "synthesis");
 			}
 		}).setNegativeButton("Cancel", new DialogInterface.OnClickListener() {
 			public void onClick(DialogInterface dialog, int position) {
@@ -109,84 +93,18 @@ public class CloudletActivity extends Activity {
 		});
 		ab.show();
 	}
-
-	/*
-	 * Synthesis from Cloud Test
-	 */
-	private void showDialogForSynthesis(final String[] applications) {
-		// Show Dialog
-		AlertDialog.Builder ab = new AlertDialog.Builder(this);
-		ab.setTitle("Application List");
-		ab.setIcon(R.drawable.ic_launcher);
-		ab.setSingleChoiceItems(applications, 0, new DialogInterface.OnClickListener() {
-			public void onClick(DialogInterface dialog, int position) {
-				selectedOveralyIndex = position;
-			}
-		}).setPositiveButton("Ok", new DialogInterface.OnClickListener() {
-			public void onClick(DialogInterface dialog, int position) {
-				if(position >= 0){
-					selectedOveralyIndex = position;
-				}else if(applications.length > 0 && selectedOveralyIndex == -1){
-					selectedOveralyIndex = 0;
-				}
-				String application = applications[selectedOveralyIndex];
-				runHTTPConnection("cloud", application, "cloudlet");
-			}
-		}).setNegativeButton("Cancel", new DialogInterface.OnClickListener() {
-			public void onClick(DialogInterface dialog, int position) {
-				return;
-			}
-		});
-		ab.show();
-	}
-
 	
 	/*
-	 * ISR Client&Server Test method
+	 * Synthesis initiation through HTTP Post
 	 */
-	private void showDialogSelectISRApplication(final String[] applications, final String command) {
-		// Don't like to use String for passing command type.
-		// But, I more hate to use public CONSTANT for such as temperal test case.		
-		if(command.equalsIgnoreCase("cloud") == false && command.equalsIgnoreCase("mobile") == false){
-			showAlert("Error", "command is not cloud or mobile : " + command);
-			return;
-		}
-
-		// Show Dialog
-		AlertDialog.Builder ab = new AlertDialog.Builder(this);
-		ab.setTitle("Application List");
-		ab.setIcon(R.drawable.ic_launcher);
-		ab.setSingleChoiceItems(applications, 0, new DialogInterface.OnClickListener() {
-			public void onClick(DialogInterface dialog, int position) {
-				selectedOveralyIndex = position;
-			}
-		}).setPositiveButton("Ok", new DialogInterface.OnClickListener() {
-			public void onClick(DialogInterface dialog, int position) {
-				if(position >= 0){
-					selectedOveralyIndex = position;
-				}else if(applications.length > 0 && selectedOveralyIndex == -1){
-					selectedOveralyIndex = 0;
-				}
-				String application = applications[selectedOveralyIndex];
-				runHTTPConnection(command, application, "isr");
-			}
-		}).setNegativeButton("Cancel", new DialogInterface.OnClickListener() {
-			public void onClick(DialogInterface dialog, int position) {
-				return;
-			}
-		});
-		ab.show();
-	}
-
 	protected void runHTTPConnection(String command, String application, String url) {
 		HTTPCommandSender commandSender = new HTTPCommandSender(this, CloudletActivity.this, command, application);
 		commandSender.initSetup(url);
 		commandSender.start();
 	}
-	
 
 	/*
-	 * Launch Application as a Standalone
+	 * Launch Application as a Stand-Alone Program
 	 */
 	private void showDialogSelectApp(final String[] applications) {
 		// Show Dialog
@@ -205,7 +123,7 @@ public class CloudletActivity extends Activity {
 					selectedOveralyIndex = 0;
 				}
 				String application = applications[selectedOveralyIndex];
-				runApplication(application);
+				runStandAlone(application);
 			}
 		}).setNegativeButton("Cancel", new DialogInterface.OnClickListener() {
 			public void onClick(DialogInterface dialog, int position) {
@@ -215,7 +133,7 @@ public class CloudletActivity extends Activity {
 		ab.show();
 	}	
 	
-	public void runApplication(String application) {
+	public void runStandAlone(String application) {
 		application = application.trim();
 		
 		if(application.equalsIgnoreCase("moped") || application.equalsIgnoreCase("moped_disk")){
@@ -262,11 +180,7 @@ public class CloudletActivity extends Activity {
 
 	View.OnClickListener clickListener = new View.OnClickListener() {
 		@Override
-		public void onClick(View v) {
-			//show 
-//			serviceDiscovery.showDialogSelectOption();
-			
-			// This buttons are for MobiSys test
+		public void onClick(View v) {			
 			if(v.getId() == R.id.testSynthesis){
 				// Find All overlay and let user select one of them.
 				CloudletEnv.instance().resetOverlayList();
@@ -275,13 +189,7 @@ public class CloudletActivity extends Activity {
 					showDialogSelectOverlay(vmList);			
 				}else{
 					showAlert("Error", "We found No Overlay");
-				}				
-			}else if(v.getId() == R.id.testSynthesisFromCloud){
-				showDialogForSynthesis(applications);
-			}else if(v.getId() == R.id.testISRCloud){
-				showDialogSelectISRApplication(applications, "cloud");
-			}else if(v.getId() == R.id.testISRMobile){
-				showDialogSelectISRApplication(applications, "mobile");
+				}			
 			}else if(v.getId() == R.id.runApplication){
 				showDialogSelectApp(applications);
 			}

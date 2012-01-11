@@ -58,7 +58,7 @@ public class HTTPCommandSender extends Thread {
 		public void handleMessage(Message msg) {			
 			if (msg.what == HTTPCommandSender.SUCCESS) {
 				String applicationName = (String)msg.obj;
-				activity.runApplication(applicationName);
+				activity.runStandAlone(applicationName);
 			}else if(msg.what == HTTPCommandSender.FAIL){
 				String ret = (String)msg.obj;
 				activity.showAlert("Error", "Failed to connect to " + httpURL + "\n" + ret);
