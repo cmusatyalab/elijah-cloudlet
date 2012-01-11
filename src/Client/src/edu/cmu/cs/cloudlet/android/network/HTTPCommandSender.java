@@ -109,8 +109,7 @@ public class HTTPCommandSender extends Thread {
 			KLog.println("connecting to " + httpURL);
 //			MultipartEntity entity = new MultipartEntity();
 			MultipartEntity entity = new MultipartEntity(HttpMultipartMode.BROWSER_COMPATIBLE);
-
-            System.out.println("executing request " + httppost.getRequestLine());			
+			
 			
 			File tempFile = new File(CloudletCameraActivity.TEST_IMAGE_PATH);
 			byte[] data = new byte[(int) tempFile.length()];
@@ -123,10 +122,11 @@ public class HTTPCommandSender extends Thread {
 			} catch (IOException e) {
 				e.printStackTrace();
 			}	
-			entity.addPart("info", new StringBody(json.toString()));			
-			entity.addPart("disk_file", new FileBody(overlayDisk));
-			entity.addPart("mem_file", new FileBody(overlayMem));
-			
+			entity.addPart("disk_file", new InputStreamBody(new FileInputStream(overlayDisk), overlayDisk.getName()));
+
+//			entity.addPart("info", new StringBody(json.toString()));
+//			entity.addPart("disk_file", new FileBody(overlayDisk));
+//			entity.addPart("mem_file", new FileBody(overlayMem));			
 //			entity.addPart("disk_file", new InputStreamBody(new FileInputStream(overlayDisk), overlayDisk.getName()));
 //			entity.addPart("mem_file", new InputStreamBody(new FileInputStream(overlayMem), overlayMem.getName()));
 			httppost.setEntity(entity);

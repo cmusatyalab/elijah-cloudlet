@@ -23,6 +23,8 @@ WEB_SERVER_URL = 'http://dagama.isr.cs.cmu.edu/cloudlet'
 WEB_SERVER_PORT_NUMBER = 8021
 BaseVM_list = []
 app = Flask(__name__)
+app.config['DEBUG'] = True
+app.config['TRAP_BAD_REQUEST_ERRORS'] = True
 app.config.from_object(__name__)
 
 # Overlya URL
@@ -45,6 +47,39 @@ SPEECH_BASE_DISK = FACE_BASE_DISK
 SPEECH_BASE_MEM = FACE_BASE_MEM
 
 
+class StreamWrapper(object):
+    def __init__(self, stream):
+        self._stream = stream
+        print "init stream wrapper : %s" % (str(type(stream)))
+
+    def read(self, bytes):
+        #print "read : %d"  % (bytes)
+        rv = self._stream.read(bytes)
+        # do something with rv
+        return rv
+
+    def readline(self):
+        rv = self._stream.readline()
+        return rv
+
+# Streaming Test
+@app.route('/synthesis', methods=['POST'])
+def cloudlet():
+    request.environ['wsgi.input'] = StreamWrapper(request.environ['wsgi.input'])
+
+    print "Receive Client POST request"
+    print request.headers
+    print "\n\n"
+
+    print "before request.files  " + str(datetime.now())
+    overlay_disk = request.files['disk_file']
+    print "after request.files  " + str(datetime.now())
+    print "after read file  " + str(datetime.now())
+
+
+    return "SUCCESS"
+
+'''
 # Web Server
 @app.route('/synthesis', methods=['POST'])
 def cloudlet():
@@ -103,7 +138,7 @@ def cloudlet():
     print "[temp] time from request : " + str(datetime.now()-prev_time)
 
     return "SUCCESS"
-
+'''
 
 def get_download_url(machine_name):
     url_disk = ''
