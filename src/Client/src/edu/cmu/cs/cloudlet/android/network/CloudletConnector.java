@@ -234,7 +234,7 @@ public class CloudletConnector {
 					showAlertDialog("VM Name is NULL");
 					return;
 				}
-				activity.runApplication(VMName);
+				activity.runStandAlone(VMName);
 				
 				/*
 				// Show Dialog for Selecting Application

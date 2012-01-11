@@ -27,57 +27,6 @@
         android:textSize = "25sp"
         android:gravity="center_vertical"
         android:layout_weight="1"
-        android:text="Synthesis From Cloud" />
-
-    <Button
-        android:id="@+id/testSynthesisFromCloud"
-        android:layout_width="fill_parent"
-        android:layout_height="0dp"
-        android:layout_gravity="bottom"
-        android:layout_weight="1"
-        android:text="Cloud VM Synthesis" >
-    </Button>
-    
-    <TextView
-        android:layout_width="fill_parent"
-        android:layout_height="0dp"
-        android:textSize = "25sp"
-        android:gravity="center_vertical"
-        android:layout_weight="1"
-        android:text="ISR Cloud Test" />
-    
-    <Button
-        android:id="@+id/testISRCloud"
-        android:layout_width="fill_parent"
-        android:layout_height="0dp"
-        android:layout_gravity="bottom"
-        android:layout_weight="1"
-        android:text="Start ISR Cloud" >
-    </Button>
-    
-    <TextView
-        android:layout_width="fill_parent"
-        android:layout_height="0dp"
-        android:textSize = "25sp"
-        android:gravity="center_vertical"
-        android:layout_weight="1"
-        android:text="ISR Mobile Test" />
-    
-    <Button
-        android:id="@+id/testISRMobile"
-        android:layout_width="fill_parent"
-        android:layout_height="0dp"
-        android:layout_gravity="bottom"
-        android:layout_weight="1"
-        android:text="Start ISR Mobile" >
-    </Button>
-
-    <TextView
-        android:layout_width="fill_parent"
-        android:layout_height="0dp"
-        android:textSize = "25sp"
-        android:gravity="center_vertical"
-        android:layout_weight="1"
         android:text="Standalone Application" />
     
     <Button
@@ -88,4 +37,12 @@
         android:layout_weight="1"
         android:text="Start Application" >
     </Button>
+    
+    <TextView
+        android:layout_width="fill_parent"
+        android:layout_height="0dp"
+        android:textSize = "25sp"
+        android:gravity="center_vertical"
+        android:layout_weight="2"
+        android:text="    " />
 </LinearLayout>
