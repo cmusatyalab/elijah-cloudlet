@@ -18,6 +18,9 @@ Prototype for Cloudlet
 		$ sudo easy_install flask
 	gtkvncview
 		$ sudo apt-get install gtkvncviewer
+	poster
+		Only used at emulated_client.py for Multipart HTTP POST
+		$ sudo easy_install poster
 	
 
 3) Android-client

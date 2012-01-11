@@ -95,16 +95,16 @@ public class CloudletEnv {
 		// Get information From overlay directory
 		File env_dir = new File(SD_ROOT + File.separator + env_root);
 		File overay_root = new File(env_dir.getAbsolutePath() + File.separator + overlay_dir);
-		File[] VMDirs = overay_root.listFiles();
+		File[] baseVMDirs = overay_root.listFiles();
 		
-		// Enumerate multiple VMs
-		for(int i = 0; i < VMDirs.length; i++){
-			File VMDir = VMDirs[i];
-			File[] overlaydir = VMDir.listFiles();
+		// Enumerate base VMs
+		for(int i = 0; i < baseVMDirs.length; i++){
+			File baseVMDir = baseVMDirs[i];
+			File[] overlayDirs = baseVMDir.listFiles();
 			// Enumerate multiple Version of Overlay
-			for(int j = 0; j < overlaydir.length; j++){
-				File overlay = overlaydir[j];
-				VMInfo newVM = new VMInfo(overlay, VMDir.getName());
+			for(int j = 0; j < overlayDirs.length; j++){
+				File overlayDir = overlayDirs[j];
+				VMInfo newVM = new VMInfo(overlayDir, baseVMDir.getName(), overlayDir.getName());
 				this.overlayVMList.add(newVM);
 			}
 		}

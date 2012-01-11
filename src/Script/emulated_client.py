@@ -25,10 +25,17 @@ def run_client(server_address):
     datagen, headers = multipart_encode(post_data)
 
     # Create the Request object
-    print "connecting to %s" % (server_address)
+    print "JSON format : \n" +  json.dumps(request_option, indent=4)
+    print "connecting to (%s)" % (server_address)
     request = urllib2.Request(server_address, datagen, headers)
+
     # Actually do the request, and get the response
-    print urllib2.urlopen(request).read()
+    ret = ''
+    try:
+        ret = urllib2.urlopen(request).read()
+    except urllib2.URLError:
+        print "Connection Error (%s)" % (server_address)
+    print ret
 
 
 def process_command_line(argv):
@@ -37,7 +44,7 @@ def process_command_line(argv):
     parser = OptionParser(usage="usage: %prog" + " [option]",
             version="Cloudlet (Android)Emulated Client")
     parser.add_option(
-            '-a', '--address', type='string', action='store', dest='address', default="http://localhost:8021/synthesis",
+            '-s', '--server', type='string', action='store', dest='address', default="http://server.krha.kr:8021/synthesis",
             help='Set Server HTTP Address, default is localhost:8021')
 
     settings, args = parser.parse_args(argv)

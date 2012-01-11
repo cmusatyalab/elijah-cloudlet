@@ -17,6 +17,7 @@ public class VMInfo {
 	protected TreeMap<String, String> data = new TreeMap<String, String>();
 	protected File rootDirectory = null;
 	
+	public static final String JSON_KEY_BASE_NAME 				= "base_name";
 	public static final String JSON_KEY_NAME 					= "name";
 	public static final String JSON_KEY_TYPE 					= "type";
 	public static final String JSON_KEY_UUID 					= "uuid";
@@ -41,10 +42,11 @@ public class VMInfo {
 //	protected String version;
 	
 	
-	public VMInfo(File overlayDirectory, String vmName){
+	public VMInfo(File overlayDirectory, String baseName, String vmName){
 		rootDirectory = overlayDirectory;
 		File[] files = rootDirectory.listFiles();
 		
+		this.data.put(JSON_KEY_BASE_NAME, baseName);
 		this.data.put(JSON_KEY_NAME, vmName);
 		this.data.put(JSON_KEY_TYPE, "overlay");
 		for(int i = 0; i < files.length; i++){

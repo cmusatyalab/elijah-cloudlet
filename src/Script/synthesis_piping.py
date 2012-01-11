@@ -50,6 +50,8 @@ SPEECH_BASE_MEM = FACE_BASE_MEM
 def cloudlet():
     global BaseVM_list
     print "Receive Client POST request"
+    print request.headers
+    prev_time = datetime.now()
 
     json_data = request.form["info"]
     basevm_request = json.loads(json_data)
@@ -68,11 +70,14 @@ def cloudlet():
 
     overlay_disk = request.files['disk_file']
     overlay_mem = request.files['mem_file']
+    #overlay_disk = request.stream['disk_file']
+    #overlay_mem = request.stream['mem_file']
 
     ## execute
     prev = datetime.now()
     tmp_dir = tempfile.mkdtemp()
     recover_file = []
+    print "Launch Process for piplining " + str(datetime.now())
     for overlay, base in ((overlay_disk, base_disk_path), (overlay_mem, base_mem_path)):
         download_queue = JoinableQueue()
         decomp_queue = JoinableQueue()
@@ -95,6 +100,7 @@ def cloudlet():
     exe_time = run_snapshot(recover_file[0], recover_file[1], telnet_port, vnc_port, wait_vnc_end=False)
     print "[Time] VM Resume : " + exe_time
     print "\n[Time] Total Time except VM Resume : " + str(datetime.now()-prev)
+    print "[temp] time from request : " + str(datetime.now()-prev_time)
 
     return "SUCCESS"
 
@@ -285,7 +291,7 @@ def parse_configfile(filename):
         return None, "JSON Does not have 'VM' Key"
 
     VM_list = json_data['VM']
-    print "*Configuration List"
+    print "* Configuration List"
     for vm_info in VM_list:
         if vm_info['type'].lower() == 'basevm':
             BaseVM_list.append(vm_info)

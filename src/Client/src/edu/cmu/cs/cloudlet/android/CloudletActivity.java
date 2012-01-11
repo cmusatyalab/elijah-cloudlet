@@ -31,9 +31,9 @@ import android.view.View;
 import android.widget.Button;
 
 public class CloudletActivity extends Activity {
-	public static final String TEST_CLOUDLET_SERVER_IP = "192.168.2.3";			// Cloudlet IP Address
-	public static final int TEST_CLOUDLET_SERVER_PORT_ISR = 9095;				// Cloudlet port for ISR related test
-	public static final int TEST_CLOUDLET_SERVER_PORT_SYNTHESIS = 9090;			// Cloudlet port for VM Synthesis test 
+	public static final String TEST_CLOUDLET_SERVER_IP = "128.2.212.178";			// Cloudlet IP Address
+//	public static final String TEST_CLOUDLET_SERVER_IP = "192.168.2.3";			// Cloudlet IP Address
+	public static final int SYNTHESIS_HTTP_PORT = 8021;			// Cloudlet port for VM Synthesis test 
 
 	public static final String[] applications = {"MOPED", "MOPED_Disk", "FACE", "Speech", "NULL"};
 	public static final int TEST_CLOUDLET_APP_MOPED_PORT = 19092;
@@ -65,8 +65,8 @@ public class CloudletActivity extends Activity {
 	}
 	
 	
-	private void showDialogSelectOverlay(ArrayList<VMInfo> vmList) {
-		final String[] nameList = new String[vmList.size()];
+	private void showDialogSelectOverlay(final ArrayList<VMInfo> vmList) {
+		String[] nameList = new String[vmList.size()];
 		for(int i = 0; i < nameList.length; i++){
 			nameList[i] = new String(vmList.get(i).getInfo(VMInfo.JSON_KEY_NAME));			
 		}
@@ -83,8 +83,8 @@ public class CloudletActivity extends Activity {
 				if(position >= 0){
 					selectedOveralyIndex = position;
 				}
-                String application = nameList[selectedOveralyIndex];
-                runHTTPConnection("cloud", application, "synthesis");
+                VMInfo overlayVM = vmList.get(selectedOveralyIndex);
+                runHTTPConnection("cloud", overlayVM, "synthesis");
 			}
 		}).setNegativeButton("Cancel", new DialogInterface.OnClickListener() {
 			public void onClick(DialogInterface dialog, int position) {
@@ -97,8 +97,8 @@ public class CloudletActivity extends Activity {
 	/*
 	 * Synthesis initiation through HTTP Post
 	 */
-	protected void runHTTPConnection(String command, String application, String url) {
-		HTTPCommandSender commandSender = new HTTPCommandSender(this, CloudletActivity.this, command, application);
+	protected void runHTTPConnection(String command, VMInfo overlayVM, String url) {
+		HTTPCommandSender commandSender = new HTTPCommandSender(this, CloudletActivity.this, command, overlayVM);
 		commandSender.initSetup(url);
 		commandSender.start();
 	}
