@@ -13,10 +13,10 @@ MOPED_MEMORY = BASE_DIR + '/overlay/moped/overlay1/moped.mem.lzma'
 
 def run_client(server_address, server_port):
     request_option = {'CPU-core':'2', 'Memory-Size':'4GB'}
-    VM_info = [{"base_name":"ubuntuLTS", "type":"baseVM", "version":"linux"}]
+    VM_info = {"base_name":"ubuntuLTS", "type":"baseVM", "version":"linux"}
     VM_info['overlay_disk_size'] = str(os.path.getsize(MOPED_DISK))
     VM_info['overlay_memory_size'] = str(os.path.getsize(MOPED_MEMORY))
-    request_option['VM'] = VM_info
+    request_option['VM'] = [VM_info]
     json_str = json.dumps(request_option)
 
     disk_file = open(MOPED_DISK, "rb")
@@ -39,6 +39,9 @@ def run_client(server_address, server_port):
         sock.send(json_str)
         sock.send(disk_file.read())
         sock.send(memory_file.read())
+
+        ret = sock.recv(1024)
+        print ret
     except socket.error:
         print "Connection Error to %s" % (server_address + ":"  + str(server_port))
     finally:
