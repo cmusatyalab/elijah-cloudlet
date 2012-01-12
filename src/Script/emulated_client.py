@@ -13,7 +13,9 @@ MOPED_MEMORY = BASE_DIR + '/overlay/moped/overlay1/moped.mem.lzma'
 
 def run_client(server_address, server_port):
     request_option = {'CPU-core':'2', 'Memory-Size':'4GB'}
-    VM_info = [{"name":"ubuntuLTS", "type":"baseVM", "version":"linux"}]
+    VM_info = [{"base_name":"ubuntuLTS", "type":"baseVM", "version":"linux"}]
+    VM_info['overlay_disk_size'] = str(os.path.getsize(MOPED_DISK))
+    VM_info['overlay_memory_size'] = str(os.path.getsize(MOPED_MEMORY))
     request_option['VM'] = VM_info
     json_str = json.dumps(request_option)
 
@@ -31,11 +33,7 @@ def run_client(server_address, server_port):
 
         # Send Size
         length32int = struct.pack("I", len(json_str))
-        sock.send(length32int)
-        length32int = struct.pack("I", os.path.getsize(MOPED_DISK))
-        sock.send(length32int)
-        length32int = struct.pack("I", os.path.getsize(MOPED_MEMORY))
-        sock.send(length32int)
+        sock.send(length32int);
 
         # Send JSON Header
         sock.send(json_str)
