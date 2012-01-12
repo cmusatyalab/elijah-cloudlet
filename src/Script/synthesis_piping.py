@@ -15,7 +15,7 @@ import struct
 
 # PIPLINING
 CHUNK_SIZE = 1024*8
-END_OF_FILE = "Transfer End"
+END_OF_FILE = "Overlay Transfer End Marker"
 operation_mode = ('run', 'mock')
 application_names = ("moped", "face", "speech", "null")
 
@@ -76,16 +76,11 @@ def network_worker(data, queue, chunk_size, data_size=sys.maxint):
     start_time= datetime.now()
     total_read_size = 0
     counter = 0
-    while True:
+    while total_read_size < data_size:
         read_size = min(data_size-total_read_size, chunk_size)
         counter = counter + 1
         chunk = data.read(read_size)
         total_read_size = total_read_size + len(chunk)
-        if total_read_size >= data_size:
-            if chunk:
-                queue.put(chunk)
-            break
-
         if chunk:
             queue.put(chunk)
         else:
@@ -112,7 +107,7 @@ def decomp_worker(in_queue, out_queue):
             break
         data_size = data_size + len(chunk)
         decomp_chunk = obj.decompress(chunk)
-        print "in decomp : %d %d" % (data_size, len(decomp_chunk))
+        #print "in decomp : %d %d" % (data_size, len(decomp_chunk))
 
         in_queue.task_done()
         out_queue.put(decomp_chunk)
@@ -189,9 +184,6 @@ def piping_synthesis(vm_name):
         download_process.start()
         decomp_process.start()
         delta_process.start()
-        print "waiting for end of first download"
-        download_process.join()
-        print "end of first download"
 
     for delta_p in delta_processes:
         delta_p.join()
@@ -283,6 +275,7 @@ class SynthesisTCPHandler(SocketServer.StreamRequestHandler):
         prev_time = datetime.now()
         tmp_dir = tempfile.mkdtemp()
         recover_file = []
+        delta_processes = []
         for overlay_name, file_size, base in (('disk', disk_size, base_disk_path), ('memory', mem_size, base_mem_path)):
             download_queue = JoinableQueue()
             decomp_queue = JoinableQueue()
@@ -297,13 +290,22 @@ class SynthesisTCPHandler(SocketServer.StreamRequestHandler):
             download_process.start()
             decomp_process.start()
             delta_process.start()
+            delta_processes.append(delta_process)
 
-        delta_process.join()
+            print "Waiting for download disk first"
+            download_process.join()
+            
+        for delta_p in delta_processes:
+            delta_p.join()
+
         telnet_port = 9999
         vnc_port = 2
         exe_time = run_snapshot(recover_file[0], recover_file[1], telnet_port, vnc_port, wait_vnc_end=False)
         print "[Time] VM Resume : " + exe_time
         print "\n[Time] Total Time except VM Resume : " + str(datetime.now()-prev_time)
+
+        self.shutdown()
+
 
 
 def main(argv=None):
