@@ -4,6 +4,7 @@ import java.io.IOException;
 import java.util.ArrayList;
 import java.util.Vector;
 
+import org.apache.http.util.ByteArrayBuffer;
 import org.json.JSONArray;
 import org.json.JSONException;
 import org.json.JSONObject;
@@ -42,14 +43,15 @@ public class CloudletConnector {
 	protected NetworkClientSender networkClient;
 	protected ProgressDialog mDialog;
 
-	private VMInfo requestBaseVM;
+	private VMInfo requestBaseVMInfo;
 
 	public CloudletConnector(CloudletActivity activity, Context context) {
 		this.activity = activity;
 		this.mContext = context;
 	}
 	
-	public void startConnection(String ipAddress, int port) {
+	public void startConnection(String ipAddress, int port, VMInfo requestBaseVMInfo) {
+		this.requestBaseVMInfo = requestBaseVMInfo; 
 		if(mDialog == null){						 
 			mDialog = ProgressDialog.show(this.mContext, "Info", "Connecting to " + ipAddress , true);
 			mDialog.setIcon(R.drawable.ic_launcher);
@@ -66,10 +68,10 @@ public class CloudletConnector {
 		networkClient.setConnector(this);
 		networkClient.setConnection(ipAddress, port);		
 		networkClient.start();
-		mDialog.setMessage("Step 1. Waiting for VM Lists");
+		mDialog.setMessage("Step 1. Requesting VM Synthesis");
 		
 		// Send VM Request Message 
-		NetworkMsg networkMsg = NetworkMsg.MSG_OverlayList();
+		NetworkMsg networkMsg = NetworkMsg.MSG_SelectedVM(this.requestBaseVMInfo);
 		networkClient.requestCommand(networkMsg);
 	}
 	
@@ -78,7 +80,6 @@ public class CloudletConnector {
 			mDialog.setMessage(dialogMessage);
 		}
 	}
-	
 
 	public void close() {
 		if(this.networkClient != null)
@@ -111,41 +112,32 @@ public class CloudletConnector {
 				String message = msg.getData().getString("message");
 				showAlertDialog(message);
 			}else if(msg.what == CloudletConnector.PROGRESS_MESSAGE){
-				Bundle data = msg.getData();
-				NetworkMsg response = (NetworkMsg) msg.obj;
+				// Response parsing
+				ByteArrayBuffer responseArray = (ByteArrayBuffer) msg.obj;
+				String resString = new String(responseArray.toByteArray());
+				KLog.println(resString);
+				NetworkMsg response = null;
+				try {
+					response = new NetworkMsg(new JSONObject(resString));
+				} catch (JSONException e) {
+					KLog.printErr(e.toString());
+					showAlertDialog("Not valid JSON response : " + resString);
+					return;
+				}				
 								
-				// Check JSON there is error message or not.
+				// Check JSON to see an error message if it has.
 				if(checkErrorStutus(response.getJsonPayload()) == true){
 					return;
 				}
 				
-				// Handle Cloudlet response
+				// Handle Response
 				if(response != null){
-					switch(response.getCommandNumber()){
-					case NetworkMsg.COMMAND_ACK_VMLIST: 						
-						KLog.println("1. COMMAND_ACK_VMLIST message received");
-						updateMessage("Step 2. Sending overlay VM ..");
-						Measure.put(Measure.NET_ACK_VMLIST);
-						responseVMList(response);
-						break;
+					switch(response.getCommandType()){
 					case NetworkMsg.COMMAND_ACK_TRANSFER_START:
 						KLog.println("2. COMMAND_ACK_TRANSFER_START message received");
-						updateMessage("Step 3. Waiting for VM Synthesis ..");
+						updateMessage("Step 2. Synthesis is done..");
 						Measure.put(Measure.NET_ACK_OVERLAY_TRASFER);
 						responseTransferStart(response);
-						break;
-					case NetworkMsg.COMMAND_ACK_VM_LAUNCH:
-						KLog.println("3. COMMAND_ACK_VM_LAUNCH message received");
-						updateMessage("Step 3. VM is ready.");
-						Measure.put(Measure.VM_LAUNCHED);
-						responseVMLaunch(response);
-						mDialog.dismiss();
-						break;
-					case NetworkMsg.COMMAND_ACK_VM_STOP:
-						KLog.println("4. COMMAND_ACK_VM_STOP message received");
-						responseVMStop(response);
-						break;
-					default:
 						break;
 					}
 				}
@@ -153,134 +145,15 @@ public class CloudletConnector {
 		}
 	};
 
-	private void responseVMList(NetworkMsg response) {
-		ArrayList<VMInfo> overlayVMList = CloudletEnv.instance().getOverlayDirectoryInfo();
-		Vector<VMInfo> matchingVMList = new Vector<VMInfo>();
-		VMInfo overlayVM = null;
-		
-		// find matching VM
-		/*
-		try {
-			JSONObject json = response.getJsonPayload();
-			JSONArray vms = json.getJSONArray("VM");
-			for(int i = 0; i < vms.length(); i++){
-				JSONObject vm = (JSONObject) vms.get(i);
-				VMInfo newVM = new VMInfo(vm);
-				for(int j = 0; j < overlayVMList.size(); j++){
-					// matching with mobile overlay list
-					String name = overlayVMList.get(j).getInfo(VMInfo.JSON_KEY_NAME);
-					if(name.equalsIgnoreCase(newVM.getInfo(VMInfo.JSON_KEY_NAME))){
-						if(matchingVMList.contains(newVM) == false){
-							matchingVMList.add(newVM);
-							overlayVM = overlayVMList.get(j);
-						}
-					}
-				}
-				KLog.println(newVM.toJSON().toString());
-			}
-		} catch (JSONException e) {
-			KLog.printErr(e.toString());
-		}
-		*/
-		// For Test, Select the first VM
-		try{
-			JSONObject json = response.getJsonPayload();
-			JSONArray vms = json.getJSONArray("VM");
-			for(int i = 0; i < Math.min(vms.length(), 1); i++){
-				JSONObject vm = (JSONObject) vms.get(i);
-				VMInfo newVM = new VMInfo(vm);
-				matchingVMList.add(newVM);
-				overlayVM = overlayVMList.get(0);
-			}
-		} catch (JSONException e) {
-			e.printStackTrace();
-		}
-		
-		// Send VM Transfer Message
-		if(matchingVMList.size() == 1){
-			VMInfo baseVM = matchingVMList.get(0);
-			NetworkMsg sendMsg = NetworkMsg.MSG_SelectedVM(baseVM, overlayVM);
-			this.networkClient.requestCommand(sendMsg);
-			
-			//save requested VM Information
-			this.requestBaseVM = baseVM;								
-			
-		}else{
-			// No matching VM List
-			this.showAlertDialog("No Matching VM with Cloudlet");
-		}		
-	}
-
 	private void responseTransferStart(NetworkMsg response) {
-		// Now do nothing			
-	}
-
-	private void responseVMLaunch(NetworkMsg response) {
 		final String ipaddress;
 		try {
 			ipaddress = response.getJsonPayload().getString(VMInfo.JSON_KEY_LAUNCH_VM_IP);
-			if(checkVMValidity(response, this.requestBaseVM) == true){
-				String synthesisInfo = "Finish VM Synthesis\n" + Measure.printInfo() + "\nServer IP: " + ipaddress;
-
-				// Launch Application
-				ArrayList<VMInfo> vmList = CloudletEnv.instance().getOverlayDirectoryInfo();
-				if(vmList == null && vmList.size() != 1){
-					showAlertDialog("No Overlay VM List is suit");
-					return;
-				}				
-				String VMName = vmList.get(0).getInfo(VMInfo.JSON_KEY_NAME);
-				if(VMName == null){
-					// Error
-					showAlertDialog("VM Name is NULL");
-					return;
-				}
-				activity.runStandAlone(VMName);
-				
-				/*
-				// Show Dialog for Selecting Application
-				new AlertDialog.Builder(mContext).setTitle("SUCCESS")
-				.setMessage(synthesisInfo)
-				.setPositiveButton("Run App", new DialogInterface.OnClickListener(){
-					public void onClick(DialogInterface dialog, int which) {
-						ArrayList<VMInfo> vmList = CloudletEnv.instance().getOverlayDirectoryInfo();
-						if(vmList == null && vmList.size() != 1){
-							// Error
-							showAlertDialog("No Overlay VM List is suit");
-							return;
-						}
-						
-						String VMName = vmList.get(0).getInfo(VMInfo.JSON_KEY_NAME);
-						if(VMName == null){
-							// Error
-							showAlertDialog("VM Name is NULL");
-							return;
-						}
-						
-						// Launch Application
-						activity.runApplication(VMName);
-						
-					}					
-				})
-				.setNegativeButton("Done", null)
-				.show();
-				*/
-			}else{
-				this.showAlertDialog("Retuned VM information is wrong, check # of received VM Information");		
-			}
+			activity.runStandAlone(this.requestBaseVMInfo.getInfo(VMInfo.JSON_KEY_NAME));			
 		} catch (JSONException e) {
 			KLog.printErr(e.toString());
 		}
 	}
-
-	private void responseVMStop(NetworkMsg response) {
-		ArrayList<VMInfo> vms = response.getVMList();
-		
-		// Get Residue URL
-		
-		// Get Residue Data
-	}
-
-
 	
 	/*
 	 * Check Error Message in JSON
@@ -297,24 +170,6 @@ public class CloudletConnector {
 			return true;
 		}
 		return false;
-	}
-	
-	private boolean checkVMValidity(NetworkMsg response, VMInfo requestBaseVM2) {
-		JSONObject json = response.getJsonPayload();
-		JSONArray vms = null;
-		try {
-			vms = json.getJSONArray("VM");
-		} catch (JSONException e) {
-			// TODO Auto-generated catch block
-			e.printStackTrace();
-		}
-				
-		if(vms != null && vms.length() == 1){
-			return true;
-		}else{
-			return false;
-		}
-			
 	}
 	
 	private void showAlertDialog(String errorMsg) {

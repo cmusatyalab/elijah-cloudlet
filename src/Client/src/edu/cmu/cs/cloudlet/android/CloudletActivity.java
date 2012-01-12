@@ -31,9 +31,8 @@ import android.view.View;
 import android.widget.Button;
 
 public class CloudletActivity extends Activity {
-	public static final String TEST_CLOUDLET_SERVER_IP = "128.2.212.178";			// Cloudlet IP Address
-//	public static final String TEST_CLOUDLET_SERVER_IP = "192.168.2.3";			// Cloudlet IP Address
-	public static final int SYNTHESIS_HTTP_PORT = 8021;			// Cloudlet port for VM Synthesis test 
+	public static final String SYNTHESIS_SERVER_IP = "128.2.212.178";		// Cloudlet IP Address
+	public static final int SYNTHESIS_PORT = 8021;			// Cloudlet port for VM Synthesis test 
 
 	public static final String[] applications = {"MOPED", "MOPED_Disk", "FACE", "Speech", "NULL"};
 	public static final int TEST_CLOUDLET_APP_MOPED_PORT = 19092;
@@ -84,7 +83,7 @@ public class CloudletActivity extends Activity {
 					selectedOveralyIndex = position;
 				}
                 VMInfo overlayVM = vmList.get(selectedOveralyIndex);
-                runHTTPConnection("cloud", overlayVM, "synthesis");
+                runConnection(SYNTHESIS_SERVER_IP, SYNTHESIS_PORT, overlayVM);
 			}
 		}).setNegativeButton("Cancel", new DialogInterface.OnClickListener() {
 			public void onClick(DialogInterface dialog, int position) {
@@ -97,10 +96,8 @@ public class CloudletActivity extends Activity {
 	/*
 	 * Synthesis initiation through HTTP Post
 	 */
-	protected void runHTTPConnection(String command, VMInfo overlayVM, String url) {
-		HTTPCommandSender commandSender = new HTTPCommandSender(this, CloudletActivity.this, command, overlayVM);
-		commandSender.initSetup(url);
-		commandSender.start();
+	protected void runConnection(String address, int port, VMInfo overlayVM) {
+		connector.startConnection(address, port, overlayVM);
 	}
 
 	/*
@@ -138,17 +135,17 @@ public class CloudletActivity extends Activity {
 		
 		if(application.equalsIgnoreCase("moped") || application.equalsIgnoreCase("moped_disk")){
 			Intent intent = new Intent(CloudletActivity.this, CloudletCameraActivity.class);			
-			intent.putExtra("address", TEST_CLOUDLET_SERVER_IP);
+			intent.putExtra("address", SYNTHESIS_SERVER_IP);
 			intent.putExtra("port", TEST_CLOUDLET_APP_MOPED_PORT);
 			startActivityForResult(intent, 0);			
 		}else if(application.equalsIgnoreCase("face")){
 			Intent intent = new Intent(CloudletActivity.this, FaceRecClientCameraPreview.class);
-			intent.putExtra("address", TEST_CLOUDLET_SERVER_IP);
+			intent.putExtra("address", SYNTHESIS_SERVER_IP);
 			intent.putExtra("port", TEST_CLOUDLET_APP_FACE_PORT);
 			startActivityForResult(intent, 0);			
 		}else if(application.equalsIgnoreCase("speech")){
 			Intent intent = new Intent(CloudletActivity.this, ClientActivity.class);
-			intent.putExtra("address", TEST_CLOUDLET_SERVER_IP);
+			intent.putExtra("address", SYNTHESIS_SERVER_IP);
 			intent.putExtra("port", TEST_CLOUDLET_APP_SPEECH_PORT);
 			startActivityForResult(intent, 0);			
 		}else if(application.equalsIgnoreCase("null")){

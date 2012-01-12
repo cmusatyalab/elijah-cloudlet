@@ -18,7 +18,7 @@ public class VMInfo {
 	protected File rootDirectory = null;
 	
 	public static final String JSON_KEY_BASE_NAME 				= "base_name";
-	public static final String JSON_KEY_NAME 					= "name";
+	public static final String JSON_KEY_NAME 					= "overlay_name";
 	public static final String JSON_KEY_TYPE 					= "type";
 	public static final String JSON_KEY_UUID 					= "uuid";
 	public static final String JSON_KEY_DISKIMAGE_PATH 			= "diskimg_path";
@@ -38,9 +38,6 @@ public class VMInfo {
 	public static final String JSON_VALUE_VM_TYPE_BASE			= "baseVM";
 	public static final String JSON_VALUE_VM_TYPE_OVERLAY		= "overlay";
 
-//	protected String uuid;
-//	protected String version;
-	
 	
 	public VMInfo(File overlayDirectory, String baseName, String vmName){
 		rootDirectory = overlayDirectory;

@@ -26,7 +26,6 @@ import android.os.Message;
 
 public class NetworkClientSender extends Thread {
 	private boolean isThreadRun = true;
-	private static boolean IS_MOCK = true;
 	private Context mContext;
 	private Handler mHandler;
 
@@ -104,37 +103,24 @@ public class NetworkClientSender extends Thread {
 				continue;
 			}
 			
-			NetworkMsg command = commandQueue.remove(0);
-			this.sendCommand(command);
+			NetworkMsg networkCommand = commandQueue.remove(0);
+			this.sendCommand(networkCommand);
 			
-			// Performance(Time) Measure
-			switch(command.commandNumber){
-			case NetworkMsg.COMMAND_REQ_VMLIST:
-				Measure.put(Measure.NET_REQ_VMLIST);
-				break;
+			switch(networkCommand.getCommandType()){
 			case NetworkMsg.COMMAND_REQ_TRANSFER_START:
-				Measure.put(Measure.NET_REQ_OVERLAY_TRASFER);
-				break;				
-			}
-			
-			// Send Overlay VM after we request VM Transfer Start
-			if(command.commandNumber == NetworkMsg.COMMAND_REQ_TRANSFER_START){
-				// send data
-				VMInfo overlayVM = null;
-				ArrayList<VMInfo> vmList = command.getVMList();
-				for(int i = 0; i < vmList.size(); i++){
-					if(vmList.get(i).getInfo(VMInfo.JSON_KEY_TYPE).equalsIgnoreCase("overlay") == true){
-						overlayVM = vmList.get(i);
-					} 
-				}
-				if(overlayVM != null){
-					File image = new File(overlayVM.getInfo(VMInfo.JSON_KEY_DISKIMAGE_PATH));
-					File mem = new File(overlayVM.getInfo(VMInfo.JSON_KEY_MEMORYSNAPSHOT_PATH));
+				// Send overlay binary
+				VMInfo overlayVMInfo = networkCommand.getOverlayInfo();
+				if(overlayVMInfo != null){
+					File image = new File(overlayVMInfo.getInfo(VMInfo.JSON_KEY_DISKIMAGE_PATH));
+					File mem = new File(overlayVMInfo.getInfo(VMInfo.JSON_KEY_MEMORYSNAPSHOT_PATH));
 					Measure.setOverlaySize(image.length(), mem.length());
 					Measure.put(Measure.OVERLAY_TRANSFER_START);
 					this.sendOverlayImage(image, mem);
 					Measure.put(Measure.OVERLAY_TRANSFER_END);
 				}
+				
+				Measure.put(Measure.NET_REQ_OVERLAY_TRASFER);
+				break;				
 			}
 		}
 	}
@@ -143,8 +129,8 @@ public class NetworkClientSender extends Thread {
 		try {
 			byte[] byteMsg = msg.toNetworkByte();
 			networkWriter.write(byteMsg);
-			networkWriter.flush(); // flush for accurate time measure
-			KLog.println("Send Message " + msg);			
+			networkWriter.flush(); 		// flush everytime for accurate time measure
+			KLog.println("Send Message " + msg);
 		} catch (IOException e) {
 			e.printStackTrace();
 		}

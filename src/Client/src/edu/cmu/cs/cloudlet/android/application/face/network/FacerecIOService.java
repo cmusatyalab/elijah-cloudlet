@@ -191,7 +191,7 @@ public class FacerecIOService extends Service implements
 		super.onCreate();		
 		// krha
 		// loadVMServerInfo();
-		serverIPAddress = CloudletActivity.TEST_CLOUDLET_SERVER_IP;
+		serverIPAddress = CloudletActivity.SYNTHESIS_SERVER_IP;
 		serverPort = CloudletActivity.TEST_CLOUDLET_APP_FACE_PORT;		
 		initSocketAndThreads();
 	}

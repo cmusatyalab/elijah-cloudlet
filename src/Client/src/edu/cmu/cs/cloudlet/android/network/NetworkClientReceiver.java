@@ -2,6 +2,11 @@ package edu.cmu.cs.cloudlet.android.network;
 
 import java.io.DataInputStream;
 import java.io.IOException;
+
+import org.apache.http.util.ByteArrayBuffer;
+import org.json.JSONException;
+import org.json.JSONObject;
+
 import edu.cmu.cs.cloudlet.android.util.KLog;
 
 import android.os.Bundle;
@@ -21,7 +26,7 @@ public class NetworkClientReceiver extends Thread {
 	@Override
 	public void run() {
 		while(isThreadRun == true){
-			NetworkMsg msg;
+			ByteArrayBuffer msg;
 			try {
 				msg = this.receiveMsg(networkReader);
 			} catch (IOException e) {
@@ -39,7 +44,7 @@ public class NetworkClientReceiver extends Thread {
 		}
 	}
 	
-	private void notifyStatus(int command, String string, NetworkMsg recvMsg) {
+	private void notifyStatus(int command, String string, ByteArrayBuffer recvMsg) {
 		Message msg = Message.obtain();
 		msg.what = command;
 		msg.obj = recvMsg;
@@ -49,15 +54,16 @@ public class NetworkClientReceiver extends Thread {
 		this.mHandler.sendMessage(msg);
 	}
 
-	private NetworkMsg receiveMsg(DataInputStream reader) throws IOException {
+	private ByteArrayBuffer receiveMsg(DataInputStream reader) throws IOException {
 		NetworkMsg receiveMsg = null;
-		int msgNumber = reader.readInt();
-		int payloadLength = reader.readInt();
-		byte[] jsonByte = new byte[payloadLength];
-		reader.read(jsonByte, 0, jsonByte.length);			
-		receiveMsg = new NetworkMsg(msgNumber, payloadLength, jsonByte);
+		int jsonLength = reader.readInt();
+		byte[] jsonByte = new byte[jsonLength];
+		reader.read(jsonByte, 0, jsonByte.length);
+		
+		ByteArrayBuffer jsonByteArray = new ByteArrayBuffer(jsonLength);
+		jsonByteArray.append(jsonByte, 0, jsonByte.length);
 	
-		return receiveMsg;
+		return jsonByteArray;
 	}
 
 	/*
