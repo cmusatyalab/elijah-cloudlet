@@ -2,6 +2,7 @@
 import os
 import sys
 import SocketServer
+import socket
 import urllib2
 from optparse import OptionParser
 from datetime import datetime
@@ -12,6 +13,7 @@ import json
 import tempfile
 from cloudlet import run_snapshot
 import struct
+import atexit
 
 # PIPLINING
 CHUNK_SIZE = 1024*8
@@ -20,7 +22,7 @@ operation_mode = ('run', 'mock')
 application_names = ("moped", "face", "speech", "null")
 
 # Web server for Andorid Client
-SERVER_PORT_NUMBER = 8021
+SERVER_PORT_NUMBER = 8022
 BaseVM_list = []
 
 # Overlya URL
@@ -218,6 +220,7 @@ def process_command_line(argv):
 
     return mode, settings, args
 
+
 def parse_configfile(filename):
     global BaseVM_list
     if not os.path.exists(filename):
@@ -243,21 +246,42 @@ def parse_configfile(filename):
 
 class SynthesisTCPHandler(SocketServer.StreamRequestHandler):
 
+    def finish(self):
+        pass
+
+    def ret_fail(self, message):
+        print "Error, %s" % str(message)
+        json_str = {"Error":message}
+        self.wfile.write(json.dumps(json_str))
+
+    def ret_success(self):
+        print "SUCCESS to launch VM"
+        json_str = {"SUCCESS":"SUCCESS"}
+        self.wfile.write(json.dumps(json_str))
+
     def handle(self):
         # self.request is the YCP socket connected to the clinet
         data = self.request.recv(4)
         json_size = struct.unpack("I", data)[0]
-        data = self.request.recv(4)
-        disk_size = struct.unpack("I", data)[0]
-        data = self.request.recv(4)
-        mem_size = struct.unpack("I", data)[0]
-        print "header size : %d %d %d" % (json_size, disk_size, mem_size)
 
         # recv JSON header
         json_str = self.request.recv(json_size)
         json_data = json.loads(json_str)
-        vm_name = json_data['VM'][0]['name']
-        print "received info %s" % (vm_name)
+        if 'VM' not in json_data or len(json_data['VM']) == 0:
+            self.ret_fail("No VM Key at JSON")
+            return
+
+        vm_name = ''
+        try:
+            vm_name = json_data['VM'][0]['base_name']
+            disk_size = int(json_data['VM'][0]['overlay_disk_size'])
+            mem_size = int(json_data['VM'][0]['overlay_memory_size'])
+            print "received info %s" % (vm_name)
+        except KeyError:
+            message = 'No key is in JSON'
+            print message
+            self.ret_fail(message)
+            return
 
         # check base VM
         base_disk_path = None
@@ -303,9 +327,7 @@ class SynthesisTCPHandler(SocketServer.StreamRequestHandler):
         exe_time = run_snapshot(recover_file[0], recover_file[1], telnet_port, vnc_port, wait_vnc_end=False)
         print "[Time] VM Resume : " + exe_time
         print "\n[Time] Total Time except VM Resume : " + str(datetime.now()-prev_time)
-
-        self.shutdown()
-
+        self.ret_success()
 
 
 def main(argv=None):
@@ -316,11 +338,20 @@ def main(argv=None):
             print error_msg
             sys.exit(2)
 
-        server_address = ("localhost", SERVER_PORT_NUMBER)
+        server_address = ("server.krha.kr", SERVER_PORT_NUMBER)
         print "Open TCP Server (%s)" % (str(server_address))
         server = SocketServer.TCPServer(server_address, SynthesisTCPHandler)
         server.allow_reuse_address = True
-        server.serve_forever()
+        server.socket.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+
+        #atexit.register(server.socket.close)
+        #atexit.register(server.shutdown)
+
+        try:
+            server.serve_forever()
+        except KeyboardInterrupt:
+            sys.exit(0)
+
 
     elif mode == operation_mode[1]: # mock mode
         piping_synthesis(settings.vmname)
