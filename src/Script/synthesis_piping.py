@@ -1,33 +1,30 @@
 #!/usr/bin/env python
 import os
 import sys
+import SocketServer
 import urllib2
 from optparse import OptionParser
 from datetime import datetime
 from multiprocessing import Process, Queue, Pipe, JoinableQueue
 import subprocess
 import pylzma
-from flask import Flask, request, session, g, redirect, url_for, abort, render_template, flash, Response
 import json
 import tempfile
 from cloudlet import run_snapshot
+import struct
 
 # PIPLINING
 CHUNK_SIZE = 1024*8
 END_OF_FILE = "Transfer End"
 operation_mode = ('run', 'mock')
 application_names = ("moped", "face", "speech", "null")
-WEB_SERVER_URL = 'http://dagama.isr.cs.cmu.edu/cloudlet'
 
 # Web server for Andorid Client
-WEB_SERVER_PORT_NUMBER = 8021
+SERVER_PORT_NUMBER = 8021
 BaseVM_list = []
-app = Flask(__name__)
-app.config['DEBUG'] = True
-app.config['TRAP_BAD_REQUEST_ERRORS'] = True
-app.config.from_object(__name__)
 
 # Overlya URL
+WEB_SERVER_URL = 'http://dagama.isr.cs.cmu.edu/cloudlet'
 MOPED_DISK = WEB_SERVER_URL + '/overlay/moped/overlay1/moped.qcow2.lzma'
 MOPED_MEM = WEB_SERVER_URL + '/overlay/moped/overlay1/moped.mem.lzma'
 FACE_DISK = WEB_SERVER_URL + '/overlay/face/overlay1/face.qcow2.lzma'
@@ -45,39 +42,6 @@ FACE_BASE_DISK = '/home/krha/Cloudlet/image/WindowXP_Base/winxp-with-jre7_base.q
 FACE_BASE_MEM = '/home/krha/Cloudlet/image/WindowXP_Base/winxp-with-jre7_base.mem'
 SPEECH_BASE_DISK = FACE_BASE_DISK
 SPEECH_BASE_MEM = FACE_BASE_MEM
-
-
-class StreamWrapper(object):
-    def __init__(self, stream):
-        self._stream = stream
-        print "init stream wrapper : %s" % (str(type(stream)))
-
-    def read(self, bytes):
-        #print "read : %d"  % (bytes)
-        rv = self._stream.read(bytes)
-        # do something with rv
-        return rv
-
-    def readline(self):
-        rv = self._stream.readline()
-        return rv
-
-# Streaming Test
-@app.route('/synthesis', methods=['POST'])
-def cloudlet():
-    request.environ['wsgi.input'] = StreamWrapper(request.environ['wsgi.input'])
-
-    print "Receive Client POST request"
-    print request.headers
-    print "\n\n"
-
-    print "before request.files  " + str(datetime.now())
-    overlay_disk = request.files['disk_file']
-    print "after request.files  " + str(datetime.now())
-    print "after read file  " + str(datetime.now())
-
-
-    return "SUCCESS"
 
 '''
 # Web Server
@@ -335,6 +299,41 @@ def parse_configfile(filename):
 
     return json_data, None
 
+class SynthesisTCPHandler(SocketServer.StreamRequestHandler):
+    """
+    It is instantiated once per conecction to the server
+    """
+
+    def handle(self):
+        # self.request is the YCP socket connected to the clinet
+        data = self.request.recv(4)
+        json_size = struct.unpack("I", data)[0]
+        data = self.request.recv(4)
+        disk_size = struct.unpack("I", data)[0]
+        data = self.request.recv(4)
+        mem_size = struct.unpack("I", data)[0]
+
+
+        print "header size : %d %d %d" % (json_size, disk_size, mem_size)
+        json_str = self.request.recv(json_size)
+        print json_str
+        json_data = json.loads(json_str)
+        print json.dumps(json_data, indent=4)
+        overlay_disk = self.rfile
+
+        for file_size in (disk_size, mem_size):
+            print "start reading %d ..." % (file_size)
+            total_read_size = 0
+            while True:
+                read_size = min(file_size-total_read_size, CHUNK_SIZE)
+                chunk = overlay_disk.read(read_size)
+                total_read_size = total_read_size + len(chunk)
+                print "read %d, %d bytes ..." % (len(chunk), total_read_size)
+                if total_read_size >= file_size:
+                    break;
+            print "done reading %d ..." % (file_size)
+
+
 
 def main(argv=None):
     mode, settings, args = process_command_line(sys.argv[1:])
@@ -343,7 +342,12 @@ def main(argv=None):
         if error_msg:
             print error_msg
             sys.exit(2)
-        app.run(host='0.0.0.0', port=WEB_SERVER_PORT_NUMBER, processes=10)
+
+        server_address = ("localhost", SERVER_PORT_NUMBER)
+        print "Open TCP Server (%s)" % (str(server_address))
+        server = SocketServer.TCPServer(server_address, SynthesisTCPHandler)
+        server.allow_reuse_address = True
+        server.serve_forever()
 
     elif mode == operation_mode[1]: # mock mode
         piping_synthesis(settings.vmname)

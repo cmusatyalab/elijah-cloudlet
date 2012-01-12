@@ -1,41 +1,50 @@
 #!/usr/bin/env python
+import os
 import sys
-import urllib2
 from optparse import OptionParser
 import json
-import httplib, urllib
-from poster.encode import multipart_encode
-from poster.streaminghttp import register_openers
-import urllib2
+import struct
+import socket
 
 # Overlya URL
 BASE_DIR = '/home/krha/Cloudlet/image/overlay'
 MOPED_DISK = BASE_DIR + '/overlay/moped/overlay1/moped.qcow2.lzma'
 MOPED_MEMORY = BASE_DIR + '/overlay/moped/overlay1/moped.mem.lzma'
 
-def run_client(server_address):
+def run_client(server_address, server_port):
     request_option = {'CPU-core':'2', 'Memory-Size':'4GB'}
     VM_info = [{"name":"ubuntuLTS", "type":"baseVM", "version":"linux"}]
     request_option['VM'] = VM_info
+    json_str = json.dumps(request_option)
 
-    register_openers()
     disk_file = open(MOPED_DISK, "rb")
     memory_file = open(MOPED_MEMORY, "rb")
-    post_data={"info":json.dumps(request_option), "disk_file":disk_file, "mem_file":memory_file}
-    datagen, headers = multipart_encode(post_data)
 
     # Create the Request object
     print "JSON format : \n" +  json.dumps(request_option, indent=4)
     print "connecting to (%s)" % (server_address)
-    request = urllib2.Request(server_address, datagen, headers)
 
     # Actually do the request, and get the response
-    ret = ''
+    sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
     try:
-        ret = urllib2.urlopen(request).read()
-    except urllib2.URLError:
-        print "Connection Error (%s)" % (server_address)
-    print ret
+        sock.connect((server_address, server_port))
+
+        # Send Size
+        length32int = struct.pack("I", len(json_str))
+        sock.send(length32int)
+        length32int = struct.pack("I", os.path.getsize(MOPED_DISK))
+        sock.send(length32int)
+        length32int = struct.pack("I", os.path.getsize(MOPED_MEMORY))
+        sock.send(length32int)
+
+        # Send JSON Header
+        sock.send(json_str)
+        sock.send(disk_file.read())
+        sock.send(memory_file.read())
+    except socket.error:
+        print "Connection Error to %s" % (server_address + ":"  + str(server_port))
+    finally:
+        sock.close()
 
 
 def process_command_line(argv):
@@ -44,8 +53,11 @@ def process_command_line(argv):
     parser = OptionParser(usage="usage: %prog" + " [option]",
             version="Cloudlet (Android)Emulated Client")
     parser.add_option(
-            '-s', '--server', type='string', action='store', dest='address', default="http://server.krha.kr:8021/synthesis",
-            help='Set Server HTTP Address, default is localhost:8021')
+            '-s', '--server', type='string', action='store', dest='address', default="localhost",
+            help='Set Server Address, default is  localhost')
+    parser.add_option(
+            '-p', '--port', type='int', action='store', dest='port', default="8021",
+            help='Set Server port number, default is 8021')
 
     settings, args = parser.parse_args(argv)
     if args:
@@ -56,7 +68,7 @@ def process_command_line(argv):
 
 def main(argv=None):
     settings, args = process_command_line(sys.argv[1:])
-    run_client(settings.address)
+    run_client(settings.address, settings.port)
     return 0
 
 if __name__ == "__main__":
