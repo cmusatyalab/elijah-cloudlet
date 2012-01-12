@@ -2,6 +2,7 @@ package edu.cmu.cs.cloudlet.android.network;
 
 import java.io.UnsupportedEncodingException;
 import java.nio.ByteBuffer;
+import java.nio.ByteOrder;
 import java.util.ArrayList;
 
 import org.json.JSONArray;
@@ -104,10 +105,13 @@ public class NetworkMsg {
 	
 	public byte[] toNetworkByte(){
 		String jsonString = jsonToString(0);
+		byte[] jsonBytes = jsonString.getBytes();
 		if(jsonString != null){
-			ByteBuffer byteBuffer = ByteBuffer.allocate(4 + jsonString.length());
-			byteBuffer.putInt(jsonString.length());
-			return byteBuffer.array();			
+			ByteBuffer byteBuffer = ByteBuffer.allocate(4 + jsonBytes.length);
+			byteBuffer.order(ByteOrder.LITTLE_ENDIAN);
+			byteBuffer.putInt(jsonBytes.length);
+			byteBuffer.put(jsonBytes);
+			return byteBuffer.array();
 		}
 		return null;
 	}

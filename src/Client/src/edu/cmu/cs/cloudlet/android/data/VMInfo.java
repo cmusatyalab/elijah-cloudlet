@@ -23,8 +23,8 @@ public class VMInfo {
 	public static final String JSON_KEY_UUID 					= "uuid";
 	public static final String JSON_KEY_DISKIMAGE_PATH 			= "diskimg_path";
 	public static final String JSON_KEY_DISKIMAGE_SIZE 			= "diskimg_size";
-	public static final String JSON_KEY_MEMORYSNAPSHOT_PATH 	= "memorysnapshot_path";
-	public static final String JSON_KEY_MEMORYSNAPSHOT_SIZE 	= "memorysnapshot_size";
+	public static final String JSON_KEY_MEMORYSNAPSHOT_PATH 	= "memory_snapshot_path";
+	public static final String JSON_KEY_MEMORYSNAPSHOT_SIZE 	= "memory_snapshot_size";
 	public static final String JSON_KEY_VERSION					= "version";
 
 	public static final String JSON_KEY_ERROR					= "Error";

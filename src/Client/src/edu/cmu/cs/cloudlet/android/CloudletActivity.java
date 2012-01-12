@@ -1,7 +1,6 @@
 package edu.cmu.cs.cloudlet.android;
 
 
-import java.security.acl.LastOwnerException;
 import java.util.ArrayList;
 
 import org.teleal.cling.android.AndroidUpnpServiceImpl;
@@ -11,7 +10,6 @@ import edu.cmu.cs.cloudlet.android.application.face.ui.FaceRecClientCameraPrevie
 import edu.cmu.cs.cloudlet.android.application.speech.ClientActivity;
 import edu.cmu.cs.cloudlet.android.data.VMInfo;
 import edu.cmu.cs.cloudlet.android.network.CloudletConnector;
-import edu.cmu.cs.cloudlet.android.network.HTTPCommandSender;
 import edu.cmu.cs.cloudlet.android.upnp.DeviceDisplay;
 import edu.cmu.cs.cloudlet.android.upnp.UPnPDiscovery;
 import edu.cmu.cs.cloudlet.android.util.CloudletEnv;
@@ -22,7 +20,6 @@ import android.app.AlertDialog;
 import android.content.Context;
 import android.content.DialogInterface;
 import android.content.Intent;
-import android.content.ServiceConnection;
 import android.os.Bundle;
 import android.os.Handler;
 import android.os.Message;
@@ -31,7 +28,8 @@ import android.view.View;
 import android.widget.Button;
 
 public class CloudletActivity extends Activity {
-	public static final String SYNTHESIS_SERVER_IP = "128.2.212.178";		// Cloudlet IP Address
+//	public static final String SYNTHESIS_SERVER_IP = "128.2.212.178";		// Cloudlet IP Address
+	public static final String SYNTHESIS_SERVER_IP = "server.krha.kr";		// Cloudlet IP Address
 	public static final int SYNTHESIS_PORT = 8021;			// Cloudlet port for VM Synthesis test 
 
 	public static final String[] applications = {"MOPED", "MOPED_Disk", "FACE", "Speech", "NULL"};

@@ -16,13 +16,14 @@ import struct
 import atexit
 
 # PIPLINING
-CHUNK_SIZE = 1024*8
+CHUNK_SIZE = 1024*1
 END_OF_FILE = "Overlay Transfer End Marker"
 operation_mode = ('run', 'mock')
 application_names = ("moped", "face", "speech", "null")
 
 # Web server for Andorid Client
-SERVER_PORT_NUMBER = 8022
+LOCAL_IPADDRESS = 'localhost'
+SERVER_PORT_NUMBER = 8021
 BaseVM_list = []
 
 # Overlya URL
@@ -92,7 +93,7 @@ def network_worker(data, queue, chunk_size, data_size=sys.maxint):
     end_time = datetime.now()
     time_delta= end_time-start_time
     try:
-        print "[Download] time : (%s)-(%s)=(%s) (%d, %d, %d)" % (start_time.strftime('%X'), end_time.strftime('%X'), str(end_time-start_time), counter, total_read_size, total_read_size*8.0/time_delta.seconds/1000/1000)
+        print "[Download] time : (%s)-(%s)=(%s) (%d loop, %d bytes, %d Mbps)" % (start_time.strftime('%X'), end_time.strftime('%X'), str(end_time-start_time), counter, total_read_size, total_read_size*8.0/time_delta.seconds/1024/1024)
     except ZeroDivisionError:
         print "[Download] time : (%s)-(%s)=(%s) (%d, %d)" % (start_time.strftime('%X'), end_time.strftime('%X'), str(end_time-start_time), counter, total_read_size)
 
@@ -255,8 +256,9 @@ class SynthesisTCPHandler(SocketServer.StreamRequestHandler):
         self.wfile.write(json.dumps(json_str))
 
     def ret_success(self):
+        global LOCAL_IPADDRESS
         print "SUCCESS to launch VM"
-        json_str = {"SUCCESS":"SUCCESS"}
+        json_str = {"command":22, "return":"SUCCESS", "LaunchVM-IP":LOCAL_IPADDRESS}
         self.wfile.write(json.dumps(json_str))
 
     def handle(self):
@@ -274,9 +276,9 @@ class SynthesisTCPHandler(SocketServer.StreamRequestHandler):
         vm_name = ''
         try:
             vm_name = json_data['VM'][0]['base_name']
-            disk_size = int(json_data['VM'][0]['overlay_disk_size'])
-            mem_size = int(json_data['VM'][0]['overlay_memory_size'])
-            print "received info %s" % (vm_name)
+            disk_size = int(json_data['VM'][0]['diskimg_size'])
+            mem_size = int(json_data['VM'][0]['memory_snapshot_size'])
+            #print "received info %s" % (vm_name)
         except KeyError:
             message = 'No key is in JSON'
             print message
@@ -329,16 +331,25 @@ class SynthesisTCPHandler(SocketServer.StreamRequestHandler):
         print "\n[Time] Total Time except VM Resume : " + str(datetime.now()-prev_time)
         self.ret_success()
 
+def get_local_ipaddress():
+    s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+    s.connect(("gmail.com",80))
+    ipaddress = (s.getsockname()[0])
+    s.close()
+    return ipaddress
 
 def main(argv=None):
+    global LOCAL_IPADDRESS
     mode, settings, args = process_command_line(sys.argv[1:])
+
     if mode == operation_mode[0]: # run mode
         config_file, error_msg = parse_configfile(settings.config_filename)
         if error_msg:
             print error_msg
             sys.exit(2)
 
-        server_address = ("server.krha.kr", SERVER_PORT_NUMBER)
+        LOCAL_IPADDRESS = get_local_ipaddress()
+        server_address = (LOCAL_IPADDRESS, SERVER_PORT_NUMBER)
         print "Open TCP Server (%s)" % (str(server_address))
         server = SocketServer.TCPServer(server_address, SynthesisTCPHandler)
         server.allow_reuse_address = True

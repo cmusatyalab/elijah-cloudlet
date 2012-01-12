@@ -2,6 +2,8 @@ package edu.cmu.cs.cloudlet.android.network;
 
 import java.io.DataInputStream;
 import java.io.IOException;
+import java.nio.ByteBuffer;
+import java.nio.ByteOrder;
 
 import org.apache.http.util.ByteArrayBuffer;
 import org.json.JSONException;
@@ -55,8 +57,14 @@ public class NetworkClientReceiver extends Thread {
 	}
 
 	private ByteArrayBuffer receiveMsg(DataInputStream reader) throws IOException {
-		NetworkMsg receiveMsg = null;
-		int jsonLength = reader.readInt();
+		ByteBuffer buffer = ByteBuffer.allocate(4);
+		ByteBuffer buffer1 = ByteBuffer.allocate(4);
+		int jsonRead = reader.readInt();
+		buffer.order(ByteOrder.BIG_ENDIAN).putInt(jsonRead).flip();
+		buffer1.order(ByteOrder.BIG_ENDIAN).putInt(jsonRead);
+		
+		int jsonLength = buffer.order(ByteOrder.LITTLE_ENDIAN).getInt();
+		int test = buffer1.order(ByteOrder.LITTLE_ENDIAN).getInt();
 		byte[] jsonByte = new byte[jsonLength];
 		reader.read(jsonByte, 0, jsonByte.length);
 		
