@@ -32,7 +32,7 @@ def run_client(server_address, server_port):
         sock.connect((server_address, server_port))
 
         # Send Size
-        length32int = struct.pack("I", len(json_str))
+        length32int = struct.pack("!I", len(json_str))
         sock.send(length32int);
 
         # Send JSON Header
@@ -40,8 +40,12 @@ def run_client(server_address, server_port):
         sock.send(disk_file.read())
         sock.send(memory_file.read())
 
-        ret = sock.recv(1024)
-        print ret
+        data = sock.recv(4)
+        json_length = struct.unpack("!I", data)[0]
+        print "JSON Length : " + str(json_length)
+        json_str = sock.recv(json_length)
+        print "JSON String : " + json_str
+
     except socket.error:
         print "Connection Error to %s" % (server_address + ":"  + str(server_port))
     finally:

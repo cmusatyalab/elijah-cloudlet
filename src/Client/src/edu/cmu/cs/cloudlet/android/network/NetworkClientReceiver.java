@@ -57,14 +57,8 @@ public class NetworkClientReceiver extends Thread {
 	}
 
 	private ByteArrayBuffer receiveMsg(DataInputStream reader) throws IOException {
-		ByteBuffer buffer = ByteBuffer.allocate(4);
-		ByteBuffer buffer1 = ByteBuffer.allocate(4);
-		int jsonRead = reader.readInt();
-		buffer.order(ByteOrder.BIG_ENDIAN).putInt(jsonRead).flip();
-		buffer1.order(ByteOrder.BIG_ENDIAN).putInt(jsonRead);
-		
-		int jsonLength = buffer.order(ByteOrder.LITTLE_ENDIAN).getInt();
-		int test = buffer1.order(ByteOrder.LITTLE_ENDIAN).getInt();
+		int jsonLength = reader.readInt();
+		KLog.println("Received JSON Header size : " + jsonLength);
 		byte[] jsonByte = new byte[jsonLength];
 		reader.read(jsonByte, 0, jsonByte.length);
 		

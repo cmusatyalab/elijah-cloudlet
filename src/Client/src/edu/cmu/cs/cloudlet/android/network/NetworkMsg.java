@@ -108,7 +108,7 @@ public class NetworkMsg {
 		byte[] jsonBytes = jsonString.getBytes();
 		if(jsonString != null){
 			ByteBuffer byteBuffer = ByteBuffer.allocate(4 + jsonBytes.length);
-			byteBuffer.order(ByteOrder.LITTLE_ENDIAN);
+			byteBuffer.order(ByteOrder.BIG_ENDIAN);
 			byteBuffer.putInt(jsonBytes.length);
 			byteBuffer.put(jsonBytes);
 			return byteBuffer.array();
@@ -121,9 +121,9 @@ public class NetworkMsg {
 		try {
 			command = this.jsonHeader.getInt(JSON_COMMAND_TYPE);
 		} catch (JSONException e) {
-			// TODO Auto-generated catch block
 			e.printStackTrace();
 		}
+		KLog.println("Recived Command : " + command);
 		return command;
 	}
 }

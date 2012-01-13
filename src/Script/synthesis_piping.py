@@ -93,7 +93,7 @@ def network_worker(data, queue, chunk_size, data_size=sys.maxint):
     end_time = datetime.now()
     time_delta= end_time-start_time
     try:
-        print "[Download] time : (%s)-(%s)=(%s) (%d loop, %d bytes, %d Mbps)" % (start_time.strftime('%X'), end_time.strftime('%X'), str(end_time-start_time), counter, total_read_size, total_read_size*8.0/time_delta.seconds/1024/1024)
+        print "[Download] time : (%s)-(%s)=(%s) (%d loop, %d bytes, %lf Mbps)" % (start_time.strftime('%X'), end_time.strftime('%X'), str(end_time-start_time), counter, total_read_size, total_read_size*8.0/time_delta.seconds/1024/1024)
     except ZeroDivisionError:
         print "[Download] time : (%s)-(%s)=(%s) (%d, %d)" % (start_time.strftime('%X'), end_time.strftime('%X'), str(end_time-start_time), counter, total_read_size)
 
@@ -252,19 +252,23 @@ class SynthesisTCPHandler(SocketServer.StreamRequestHandler):
 
     def ret_fail(self, message):
         print "Error, %s" % str(message)
-        json_str = {"Error":message}
-        self.wfile.write(json.dumps(json_str))
+        json_ret = json.dumps({"Error":message})
+        json_size = struct.pack("!I", len(json_ret))
+        self.request.send(json_size)
+        self.wfile.write(json_ret)
 
     def ret_success(self):
         global LOCAL_IPADDRESS
+        json_ret = json.dumps({"command":0x22, "return":"SUCCESS", "LaunchVM-IP":LOCAL_IPADDRESS})
         print "SUCCESS to launch VM"
-        json_str = {"command":22, "return":"SUCCESS", "LaunchVM-IP":LOCAL_IPADDRESS}
-        self.wfile.write(json.dumps(json_str))
+        json_size = struct.pack("!I", len(json_ret))
+        self.request.send(json_size)
+        self.wfile.write(json_ret)
 
     def handle(self):
         # self.request is the YCP socket connected to the clinet
         data = self.request.recv(4)
-        json_size = struct.unpack("I", data)[0]
+        json_size = struct.unpack("!I", data)[0]
 
         # recv JSON header
         json_str = self.request.recv(json_size)
