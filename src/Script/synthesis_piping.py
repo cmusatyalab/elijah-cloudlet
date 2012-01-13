@@ -16,7 +16,7 @@ import struct
 import atexit
 
 # PIPLINING
-CHUNK_SIZE = 1024*1
+CHUNK_SIZE = 1024*16
 END_OF_FILE = "Overlay Transfer End Marker"
 operation_mode = ('run', 'mock')
 application_names = ("moped", "face", "speech", "null")
@@ -209,7 +209,9 @@ def process_command_line(argv):
     parser.add_option(
             '-n', '--name', type='choice', choices=application_names, action='store', dest='vmname',
             help="[test mode] Set VM name among %s" % (str(application_names)))
-
+    parser.add_option(
+            '-s', '--chunk', action='store', dest='chunk_size', default=16,
+            help="Set chunk size(K) for process")
     settings, args = parser.parse_args(argv)
     if len(args) == 0 or args[0] not in operation_mode:
         parser.error('program takes no command-line arguments; "%s" ignored.' % (args,))
@@ -322,7 +324,7 @@ class SynthesisTCPHandler(SocketServer.StreamRequestHandler):
             delta_process.start()
             delta_processes.append(delta_process)
 
-            print "Waiting for download disk first"
+            #print "Waiting for download disk first"
             download_process.join()
             
         for delta_p in delta_processes:
@@ -335,6 +337,7 @@ class SynthesisTCPHandler(SocketServer.StreamRequestHandler):
         print "\n[Time] Total Time except VM Resume : " + str(datetime.now()-prev_time)
         self.ret_success()
 
+
 def get_local_ipaddress():
     s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
     s.connect(("gmail.com",80))
@@ -342,9 +345,16 @@ def get_local_ipaddress():
     s.close()
     return ipaddress
 
+
 def main(argv=None):
     global LOCAL_IPADDRESS
+    global CHUNK_SIZE
     mode, settings, args = process_command_line(sys.argv[1:])
+
+    if settings.chunk_size:
+        CHUNK_SIZE = int(settings.chunk_size)*1024
+        print "CHUNK SIZE : " + str(CHUNK_SIZE)
+
 
     if mode == operation_mode[0]: # run mode
         config_file, error_msg = parse_configfile(settings.config_filename)
@@ -365,8 +375,8 @@ def main(argv=None):
         try:
             server.serve_forever()
         except KeyboardInterrupt:
+            server.socket.close()
             sys.exit(0)
-
 
     elif mode == operation_mode[1]: # mock mode
         piping_synthesis(settings.vmname)

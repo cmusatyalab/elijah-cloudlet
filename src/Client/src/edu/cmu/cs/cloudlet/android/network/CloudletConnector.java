@@ -96,9 +96,6 @@ public class CloudletConnector {
 				if(mDialog != null){
 					mDialog.dismiss();
 				}
-				if(networkClient != null){
-					networkClient.close();
-				}
 				
 				String message = msg.getData().getString("message");
 				showAlertDialog(message);
@@ -110,6 +107,7 @@ public class CloudletConnector {
 					networkClient.close();
 				}
 				String message = msg.getData().getString("message");
+				
 				showAlertDialog(message);
 			}else if(msg.what == CloudletConnector.PROGRESS_MESSAGE){
 				// Response parsing
@@ -137,6 +135,10 @@ public class CloudletConnector {
 						KLog.println("2. COMMAND_ACK_TRANSFER_START message received");
 						updateMessage("Step 2. Synthesis is done..");
 						Measure.put(Measure.NET_ACK_OVERLAY_TRASFER);
+
+						if(mDialog != null){
+							mDialog.dismiss();
+						}
 						responseTransferStart(response);
 						break;
 					}
@@ -146,9 +148,8 @@ public class CloudletConnector {
 	};
 
 	private void responseTransferStart(NetworkMsg response) {
-		final String ipaddress;
 		try {
-			ipaddress = response.getJsonPayload().getString(VMInfo.JSON_KEY_LAUNCH_VM_IP);
+			String ipaddress = response.getJsonPayload().getString(VMInfo.JSON_KEY_LAUNCH_VM_IP);
 			activity.runStandAlone(this.requestBaseVMInfo.getInfo(VMInfo.JSON_KEY_NAME));			
 		} catch (JSONException e) {
 			KLog.printErr(e.toString());
