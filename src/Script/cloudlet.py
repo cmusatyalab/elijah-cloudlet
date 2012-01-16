@@ -229,12 +229,13 @@ def run_snapshot(disk_image, memory_image, telnet_port, vnc_port, wait_vnc_end):
     if telnet_port != 0 and vnc_port != -1:
         command_str += " -m " + VM_MEMORY + " -monitor telnet:localhost:" + str(telnet_port) + ",server,nowait -enable-kvm -net nic -net user -serial none -parallel none -usb -usbdevice tablet " + PORT_FORWARDING
         #command_str += " -vnc :" + str(vnc_port) + " "
+        command_str += " -balloon virtio"
         command_str += " -vnc unix:" + vnc_file
     else:
         command_str += " -m " + VM_MEMORY + " -enable-kvm -net nic -net user -serial none -parallel none -usb -usbdevice tablet -redir tcp:2222::22"
     command_str += " -incoming \"exec:cat " + memory_image + "\""
-    # print '[INFO] Run snapshot..'
-    # print command_str
+    print '[INFO] Run snapshot..'
+    print command_str
     subprocess.Popen(command_str, shell=True)
     start_time = datetime.now()
     
