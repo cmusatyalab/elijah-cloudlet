@@ -45,7 +45,7 @@ public class CloudletEnv {
 			// create cloudlet root directory
 			if(env_dir.mkdir() == false){
 				Log.e("krha", "Cannot create Folder");
-			}			
+			}
 			// create overlay directory
 			if(overay_dir.mkdir() == false){
 				Log.e("krha", "Cannot create Folder");				

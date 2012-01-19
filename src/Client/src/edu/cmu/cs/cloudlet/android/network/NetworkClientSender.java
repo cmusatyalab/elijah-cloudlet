@@ -130,7 +130,7 @@ public class NetworkClientSender extends Thread {
 			byte[] byteMsg = msg.toNetworkByte();
 			networkWriter.write(byteMsg);
 			networkWriter.flush(); 		// flush everytime for accurate time measure
-			KLog.println("Send Message " + msg);
+//			KLog.println("Send Message " + msg);
 		} catch (IOException e) {
 			e.printStackTrace();
 		}
@@ -146,7 +146,7 @@ public class NetworkClientSender extends Thread {
 				networkWriter.write(imageSendingBuffer, 0, sendByte);
 				totalByte += sendByte;
 				String statusMsg = "Sending Disk.. " + (int)(100.0*totalByte/image.length()) + "%, (" + totalByte + "/" + image.length() + ")";
-				KLog.println(statusMsg);
+//				KLog.println(statusMsg);
 				this.notifyTransferStatus("Step 2. Sending overlay VM ..\n" + statusMsg);
 			}
 			bi.close();
@@ -158,7 +158,7 @@ public class NetworkClientSender extends Thread {
 				networkWriter.write(imageSendingBuffer, 0, sendByte);
 				totalByte += sendByte;
 				String statusMsg = "Sending Memory.. " + (int)(100.0*totalByte/mem.length()) + "%, (" + totalByte + "/" + mem.length() + ")";
-				KLog.println(statusMsg);
+//				KLog.println(statusMsg);
 				this.notifyTransferStatus("Step 2. Sending overlay VM ..\n" + statusMsg);
 			}
 			bi.close();

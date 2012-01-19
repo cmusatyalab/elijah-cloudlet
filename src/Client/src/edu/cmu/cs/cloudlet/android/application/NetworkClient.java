@@ -46,6 +46,8 @@ public class NetworkClient extends Thread {
 	protected long dataSendEnd;
 	protected long dataReceiveStart;
 	protected long dataReceiveEnd;
+	protected String sendingLog = "N/A";
+	protected String receivingLog = "N/A";
 	
 	public NetworkClient(Context context, Handler handler) {
 		mContext = context;
@@ -94,7 +96,8 @@ public class NetworkClient extends Thread {
 
 				//time stamp
 				dataReceiveStart = dataSendEnd = System.currentTimeMillis();
-				Log.d("krha_app", "[DATA_SEND]\t" + dataSendEnd + " - " + dataSendStart + " = " + (dataSendEnd-dataSendStart));
+				this.sendingLog  = "[Image Sending]\t" + (dataSendEnd-dataSendStart) + " (ms)";
+				Log.d("krha_app", this.sendingLog);
 				
 				String ret_string = "None";
 				if(networkReader != null){
@@ -115,7 +118,8 @@ public class NetworkClient extends Thread {
 
 				// time stamp
 				dataReceiveEnd = System.currentTimeMillis();
-				Log.d("krha_app", "[DATA_RECEIVE]\t" + dataReceiveEnd + " - " + dataReceiveStart + " = " + (dataReceiveEnd-dataReceiveStart));
+				this.receivingLog = "[Result Waiting]\t" + (dataReceiveEnd-dataReceiveStart) + " (ms)"; 
+				Log.d("krha_app", this.receivingLog);
 				
 				// callback
 				Message msg = Message.obtain();
@@ -134,6 +138,10 @@ public class NetworkClient extends Thread {
 
 	public void uploadImage(byte[] data) {
 		mData = data;
+	}
+	
+	public String getTimeLog(){
+		return this.sendingLog + "\n" + this.receivingLog;
 	}
 
 	public void close() {

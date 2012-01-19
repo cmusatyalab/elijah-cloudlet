@@ -51,10 +51,11 @@ public class CloudletActivity extends Activity {
 		CloudletEnv.instance();
 
 		// upnp service binding and show dialog
-		this.serviceDiscovery = new UPnPDiscovery(this, CloudletActivity.this, discoveryHandler);
-		this.connector = new CloudletConnector(this, CloudletActivity.this);
-		getApplicationContext().bindService(new Intent(this, AndroidUpnpServiceImpl.class), this.serviceDiscovery.serviceConnection, Context.BIND_AUTO_CREATE);	
+//		this.serviceDiscovery = new UPnPDiscovery(this, CloudletActivity.this, discoveryHandler);
+//		getApplicationContext().bindService(new Intent(this, AndroidUpnpServiceImpl.class), this.serviceDiscovery.serviceConnection, Context.BIND_AUTO_CREATE);	
 //		serviceDiscovery.showDialogSelectOption();
+		
+		this.connector = new CloudletConnector(this, CloudletActivity.this);
 
 		// Performance Button
 		findViewById(R.id.testSynthesis).setOnClickListener(clickListener);;
@@ -131,7 +132,7 @@ public class CloudletActivity extends Activity {
 	public void runStandAlone(String application) {
 		application = application.trim();
 		
-		if(application.equalsIgnoreCase("moped") || application.equalsIgnoreCase("moped_disk")){
+		if(application.toLowerCase().startsWith("moped")){
 			Intent intent = new Intent(CloudletActivity.this, CloudletCameraActivity.class);			
 			intent.putExtra("address", SYNTHESIS_SERVER_IP);
 			intent.putExtra("port", TEST_CLOUDLET_APP_MOPED_PORT);
@@ -224,9 +225,11 @@ public class CloudletActivity extends Activity {
 	}
 
 	@Override
-	public void onDestroy() {		
-		getApplicationContext().unbindService(this.serviceDiscovery.serviceConnection);
-		this.serviceDiscovery.close();
+	public void onDestroy() {
+		if(serviceDiscovery != null){
+			getApplicationContext().unbindService(this.serviceDiscovery.serviceConnection);
+			this.serviceDiscovery.close();
+		}
 		this.connector.close();
 		super.onDestroy();
 	}

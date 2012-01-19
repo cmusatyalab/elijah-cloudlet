@@ -115,7 +115,6 @@ public class CloudletCameraActivity extends Activity implements TextToSpeech.OnI
 		}
 		
 		
-		
 		// TextToSpeech.OnInitListener
 		mTTS = new TextToSpeech(this, this);
 	}
@@ -144,7 +143,7 @@ public class CloudletCameraActivity extends Activity implements TextToSpeech.OnI
 	private static final String FEEDBACK_PREFIX = "Found items are ";
 	private void TTSFeedback(String ttsString) {
 		// Show Application Runtime
-		String message = "Time for app run\n start: " + startApp + "\nend: " + endApp + "\ndiff: " + (endApp-startApp);		
+		String message = this.client.getTimeLog() + "\n[TOTAL]\t" + (endApp-startApp) + " (ms)\n";
 		new AlertDialog.Builder(CloudletCameraActivity.this).setTitle("Info")
 		.setMessage(message)
 		.setIcon(R.drawable.ic_launcher)
@@ -227,16 +226,11 @@ public class CloudletCameraActivity extends Activity implements TextToSpeech.OnI
 
 		// For consistent test, we are using presaved file
 		startApp = System.currentTimeMillis();
-		if(client != null){
+		if(client != null && testImageData != null && testImageData.length != 0){
 			client.uploadImage(testImageData);			
+		}else{
+			client.uploadImage(data);
 		}
-
-		/*
-		// upload image
-		if(client !=null){
-//			client.uploadImage(data);
-		}
-		*/
 	}
 	
 	Camera.AutoFocusCallback cb = new Camera.AutoFocusCallback() {

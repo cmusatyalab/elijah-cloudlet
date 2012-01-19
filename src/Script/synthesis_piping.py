@@ -75,7 +75,7 @@ def get_download_url(machine_name):
     return url_disk, url_mem, base_disk, base_mem
 
 
-def network_worker(data, queue, chunk_size, data_size=sys.maxint):
+def network_worker(data, queue, time_queue, chunk_size, data_size=sys.maxint):
     start_time= datetime.now()
     total_read_size = 0
     counter = 0
@@ -92,19 +92,19 @@ def network_worker(data, queue, chunk_size, data_size=sys.maxint):
     queue.put(END_OF_FILE)
     end_time = datetime.now()
     time_delta= end_time-start_time
+    time_queue.put({'start_time':start_time, 'end_time':end_time})
     try:
-        print "[Download] time : (%s)-(%s)=(%s) (%d loop, %d bytes, %lf Mbps)" % (start_time.strftime('%X'), end_time.strftime('%X'), str(end_time-start_time), counter, total_read_size, total_read_size*8.0/time_delta.seconds/1024/1024)
+        print "[Transfer] : (%s)-(%s)=(%s) (%d loop, %d bytes, %lf Mbps)" % (start_time.strftime('%X'), end_time.strftime('%X'), str(end_time-start_time), counter, total_read_size, total_read_size*8.0/time_delta.seconds/1024/1024)
     except ZeroDivisionError:
-        print "[Download] time : (%s)-(%s)=(%s) (%d, %d)" % (start_time.strftime('%X'), end_time.strftime('%X'), str(end_time-start_time), counter, total_read_size)
+        print "[Transfer] : (%s)-(%s)=(%s) (%d, %d)" % (start_time.strftime('%X'), end_time.strftime('%X'), str(end_time-start_time), counter, total_read_size)
 
 
-def decomp_worker(in_queue, out_queue):
+def decomp_worker(in_queue, out_queue, time_queue):
     start_time = datetime.now()
     data_size = 0
     counter = 0
     obj = pylzma.decompressobj()
     while True:
-        counter = counter + 1
         chunk = in_queue.get()
         if chunk == END_OF_FILE:
             break
@@ -114,13 +114,15 @@ def decomp_worker(in_queue, out_queue):
 
         in_queue.task_done()
         out_queue.put(decomp_chunk)
+        counter = counter + 1
 
     out_queue.put(END_OF_FILE)
     end_time = datetime.now()
-    print "[Decomp] time : (%s)-(%s)=(%s) (%d, %d)" % (start_time.strftime('%X'), end_time.strftime('%X'), str(end_time-start_time), counter, data_size)
+    time_queue.put({'start_time':start_time, 'end_time':end_time})
+    print "[Decomp] : (%s)-(%s)=(%s) (%d loop, %d bytes)" % (start_time.strftime('%X'), end_time.strftime('%X'), str(end_time-start_time), counter, data_size)
 
 
-def delta_worker(in_queue, base_filename, out_filename):
+def delta_worker(in_queue, time_queue, base_filename, out_filename):
     start_time = datetime.now()
     data_size = 0
     counter = 0
@@ -140,7 +142,6 @@ def delta_worker(in_queue, base_filename, out_filename):
     out_pipe = open(out_pipename, "w")
 
     while True:
-        counter = counter + 1
         chunk = in_queue.get()
         if chunk == END_OF_FILE:
             break;
@@ -150,14 +151,16 @@ def delta_worker(in_queue, base_filename, out_filename):
 
         out_pipe.write(chunk)
         in_queue.task_done()
+        counter = counter + 1
 
     out_pipe.close()
     ret = xdelta_process.wait()
     os.unlink(out_pipename)
     end_time = datetime.now()
+    time_queue.put({'start_time':start_time, 'end_time':end_time})
 
     if ret == 0:
-        print "[delta] time : (%s)-(%s)=(%s) (%d, %d)" % (start_time.strftime('%X'), end_time.strftime('%X'), str(end_time-start_time), counter, data_size)
+        print "[Delta] : (%s)-(%s)=(%s) (%d loop, %d bytes)" % (start_time.strftime('%X'), end_time.strftime('%X'), str(end_time-start_time), counter, data_size)
         return True
     else:
         print "Error, xdelta process has not successed"
@@ -170,6 +173,10 @@ def piping_synthesis(vm_name):
     recover_file = []
     delta_processes = []
     tmp_dir = tempfile.mkdtemp()
+    time_transfer = Queue()
+    time_decomp = Queue()
+    time_delta = Queue()
+
     for (overlay_url, base_name) in ((disk_url, base_disk), (mem_url, base_mem)):
         download_queue = JoinableQueue()
         decomp_queue = JoinableQueue()
@@ -179,9 +186,9 @@ def piping_synthesis(vm_name):
         recover_file.append(out_filename)
         
         url = urllib2.urlopen(overlay_url)
-        download_process = Process(target=network_worker, args=(url, download_queue, CHUNK_SIZE))
-        decomp_process = Process(target=decomp_worker, args=(download_queue, decomp_queue))
-        delta_process = Process(target=delta_worker, args=(decomp_queue, base_name, out_filename))
+        download_process = Process(target=network_worker, args=(url, download_queue, time_transfer, CHUNK_SIZE))
+        decomp_process = Process(target=decomp_worker, args=(download_queue, decomp_queue, time_decomp))
+        delta_process = Process(target=delta_worker, args=(decomp_queue, time_delta, base_name, out_filename))
         delta_processes.append(delta_process)
         
         download_process.start()
@@ -237,12 +244,13 @@ def parse_configfile(filename):
         return None, "JSON Does not have 'VM' Key"
 
     VM_list = json_data['VM']
+    print "-------------------------------"
     print "* Configuration List"
     for vm_info in VM_list:
         if vm_info['type'].lower() == 'basevm':
             BaseVM_list.append(vm_info)
-            print "%s : (%s, %s)" % (vm_info['name'], vm_info['diskimg_path'], vm_info['memorysnapshot_path'])
-    print ""
+            print "%s : (Disk %d MB, Mem %d MB)" % (vm_info['name'], os.path.getsize(vm_info['diskimg_path'])/1024/1024, os.path.getsize(vm_info['memorysnapshot_path'])/1024/1024)
+    print "-------------------------------"
 
     return json_data, None
 
@@ -291,6 +299,8 @@ class SynthesisTCPHandler(SocketServer.StreamRequestHandler):
             self.ret_fail(message)
             return
 
+        print "[INFO] New client request %s VM (%d MB, %d MB)" % (vm_name, disk_size/1024/1024, mem_size/1024/1024)
+
         # check base VM
         base_disk_path = None
         base_mem_path = None
@@ -304,10 +314,14 @@ class SynthesisTCPHandler(SocketServer.StreamRequestHandler):
             print message
 
         # read overlay files
-        prev_time = datetime.now()
         tmp_dir = tempfile.mkdtemp()
         recover_file = []
         delta_processes = []
+        time_transfer = Queue()
+        time_decomp = Queue()
+        time_delta = Queue()
+
+        start_time = datetime.now()
         for overlay_name, file_size, base in (('disk', disk_size, base_disk_path), ('memory', mem_size, base_mem_path)):
             download_queue = JoinableQueue()
             decomp_queue = JoinableQueue()
@@ -316,9 +330,9 @@ class SynthesisTCPHandler(SocketServer.StreamRequestHandler):
             out_filename = os.path.join(tmp_dir, overlay_name + ".recover")
             recover_file.append(out_filename)
             
-            download_process = Process(target=network_worker, args=(self.rfile, download_queue, CHUNK_SIZE, file_size))
-            decomp_process = Process(target=decomp_worker, args=(download_queue, decomp_queue))
-            delta_process = Process(target=delta_worker, args=(decomp_queue, base, out_filename))
+            download_process = Process(target=network_worker, args=(self.rfile, download_queue, time_transfer, CHUNK_SIZE, file_size))
+            decomp_process = Process(target=decomp_worker, args=(download_queue, decomp_queue, time_decomp))
+            delta_process = Process(target=delta_worker, args=(decomp_queue, time_delta, base, out_filename))
             download_process.start()
             decomp_process.start()
             delta_process.start()
@@ -333,8 +347,29 @@ class SynthesisTCPHandler(SocketServer.StreamRequestHandler):
         telnet_port = 9999
         vnc_port = 2
         exe_time = run_snapshot(recover_file[0], recover_file[1], telnet_port, vnc_port, wait_vnc_end=False)
-        print "[Time] VM Resume : " + exe_time
-        print "\n[Time] Total Time except VM Resume : " + str(datetime.now()-prev_time)
+
+        # Print out Time Measurement
+        disk_transfer_time = time_transfer.get()
+        mem_transfer_time = time_transfer.get()
+        disk_decomp_time = time_decomp.get()
+        mem_decomp_time = time_decomp.get()
+        disk_delta_time = time_delta.get()
+        mem_delta_time = time_delta.get()
+        disk_transfer_start_time = disk_transfer_time['start_time']
+        disk_transfer_end_time = disk_transfer_time['end_time']
+        disk_decomp_end_time = disk_decomp_time['end_time']
+        disk_delta_end_time = disk_delta_time['end_time']
+        mem_transfer_start_time = mem_transfer_time['start_time']
+        mem_transfer_end_time = mem_transfer_time['end_time']
+        mem_decomp_end_time = mem_decomp_time['end_time']
+        mem_delta_end_time = mem_delta_time['end_time']
+
+        print '\n'
+        print "[Time] Transfer Time      : " + str((disk_transfer_end_time-disk_transfer_start_time) + (mem_transfer_end_time-mem_transfer_start_time))
+        print "[Time] Decomp (Overlapped): " + str((disk_decomp_end_time-disk_transfer_end_time) + (mem_decomp_end_time-mem_transfer_end_time))
+        print "[Time] Delta (Overlapped) : " + str((disk_delta_end_time-disk_decomp_end_time) + (mem_delta_end_time-mem_decomp_end_time))
+        print "[Time] VM Resume          : " + str(exe_time)
+        print "[Time] Total Time         : " + str(datetime.now()-start_time)
         self.ret_success()
 
 
@@ -364,7 +399,7 @@ def main(argv=None):
 
         LOCAL_IPADDRESS = get_local_ipaddress()
         server_address = (LOCAL_IPADDRESS, SERVER_PORT_NUMBER)
-        print "Open TCP Server (%s)" % (str(server_address))
+        print "Open TCP Server (%s)\n" % (str(server_address))
         server = SocketServer.TCPServer(server_address, SynthesisTCPHandler)
         server.allow_reuse_address = True
         server.socket.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)

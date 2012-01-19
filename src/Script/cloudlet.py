@@ -245,7 +245,7 @@ def run_snapshot(disk_image, memory_image, telnet_port, vnc_port, wait_vnc_end):
         command_str += " -m " + str(VM_MEMORY) + " -enable-kvm -net nic -net user -serial none -parallel none -usb -usbdevice tablet -redir tcp:2222::22"
     command_str += " -incoming \"exec:cat " + memory_image + "\""
     print '[INFO] Run snapshot..'
-    print command_str
+    # print command_str
     subprocess.Popen(command_str, shell=True)
     start_time = datetime.now()
     
