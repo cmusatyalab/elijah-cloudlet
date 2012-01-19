@@ -75,7 +75,6 @@ public class NetworkClient extends Thread {
 			
 			try {
 				int totalSize = mData.length;
-				Log.d("krha", "sending image");
 
 				//time stamp
 				dataSendStart = System.currentTimeMillis();

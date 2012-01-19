@@ -226,10 +226,14 @@ public class CloudletCameraActivity extends Activity implements TextToSpeech.OnI
 
 		// For consistent test, we are using presaved file
 		startApp = System.currentTimeMillis();
-		if(client != null && testImageData != null && testImageData.length != 0){
-			client.uploadImage(testImageData);			
+		if(testImageData != null && testImageData.length != 0){
+			if(client != null){
+				client.uploadImage(testImageData);			
+			}
 		}else{
-			client.uploadImage(data);
+			if(client != null){
+				client.uploadImage(data);
+			}
 		}
 	}
 	
