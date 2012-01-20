@@ -334,7 +334,7 @@ def set_balloon_size(telnet_port, target_mem_size):
     tn.read_until("(qemu)", 20)
     # print "returned : " + str(datetime.now())
 
-    for i in xrange(200):
+    for i in xrange(300):
         try:
             print "waiting for balloon memory size to %s" % (target_mem_size)
             tn.write('info balloon\n')
