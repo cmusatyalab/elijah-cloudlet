@@ -96,8 +96,9 @@ def create_overlay(base_image, base_mem):
     # generate overlay VM(disk + memory) from Base VM
     vm_name = os.path.basename(base_image)
     vm_path = os.path.dirname(base_mem)
-    overlay_disk = os.path.join(os.getcwd(), vm_name) + '_overlay.qcow2'
-    overlay_mem = os.path.join(os.getcwd(), vm_name) + '_overlay.mem'
+    info_tag = '.overlay.' + str(VCPU_NUMBER) + 'cpu.' + str(VM_MEMORY) + "mem." + str(BALLOON_MEM_SIZE) + "balloon"
+    overlay_disk = os.path.join(os.getcwd(), vm_name) + info_tag +  '.qcow2'
+    overlay_mem = os.path.join(os.getcwd(), vm_name) + info_tag + '.mem'
     tmp_disk = os.path.join(vm_path, vm_name) + '_tmp.qcow2'
     tmp_mem = os.path.join(vm_path, vm_name) + '_tmp.mem'
     command_str = 'cp ' + base_image + ' ' + tmp_disk
@@ -367,10 +368,9 @@ def create_base(imagefile):
         print >> sys.stderr, '[ERROR] %s is not exist' % imagefile
         return None
 
-    info_tag = '.base.' + str(VCPU_NUMBER) + 'cpu.' + str(VM_MEMORY) + "mem." + str(BALLOON_MEM_SIZE) + "ballloon"
     vm_name = os.path.basename(imagefile).split('.')[0]
     vm_path = os.path.dirname(imagefile)
-    base_image = os.path.join(vm_path, vm_name) + info_tag + '.qcow2'
+    base_image = os.path.join(vm_path, vm_name) + '.base.qcow2'
 
     # check existing file first
     if os.path.exists(base_image):
@@ -385,14 +385,8 @@ def create_base(imagefile):
     telnet_port = 12123; vnc_port = 3
     run_image(base_image, telnet_port, vnc_port)
 
-    base_mem = os.path.join(vm_path, vm_name) + info_tag + '.mem'
+    base_mem = os.path.join(vm_path, vm_name) + '.base.mem'
 
-    # shrink down memory size with ballooning
-    if VM_MEMORY != BALLOON_MEM_SIZE:
-        ret = run_ballooning(telnet_port, BALLOON_MEM_SIZE)
-        if not ret:
-            print >> sys.stderr, "[ERROR] Cannot shrink down memory to " + str(BALLOON_MEM_SIZE)
-            return None, None
     # stop and migrate
     run_migration(telnet_port, vnc_port, base_mem)
     if os.path.exists(base_mem) == False:
