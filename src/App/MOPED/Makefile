@@ -2,7 +2,7 @@ LIBMOPEDDIR := ./moped
 
 OBJS =	    
 
-TARGET = moped_server
+TARGET = ./bin/moped_server
 
 
 # Compiler flags 
