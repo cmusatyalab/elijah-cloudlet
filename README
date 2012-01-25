@@ -22,6 +22,7 @@ Prototype for Cloudlet
 		Only used at emulated_client.py for Multipart HTTP POST
 		$ sudo easy_install poster
 
+
 3) Android-client
 	all java lib depedency is on Android-client/lib folder, so do not need additional install
 
