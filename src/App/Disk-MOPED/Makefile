@@ -20,6 +20,7 @@ LIBS = -lpthread -lgomp -lGLEW -lglut -lIL -lcv -lhighgui -lcvaux -lpthread
 all : $(TARGET) 
 
 $(TARGET):	$(OBJS)
+	mkdir ./bin/
 #	$(CXX) $(CXXFLAGS) -o $(TARGET) $(INCLUDES) -Wl, -Xlinker --start-group $(OBJS) -Xlinker --end-group $(LIBMOPEDDIR)/lib/libmoped.a $(LIBS) 
 	$(CXX) $(CXXFLAGS) $(INCLUDES) -Wl,--start-group $(DLIBS)  $(OBJS)  $(LIBMOPEDDIR)/lib/libmoped.a moped_server.cpp -o $(TARGET) $(LIBS)
 

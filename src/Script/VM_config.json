@@ -5,28 +5,12 @@
    "Memory-Size":"4",
    "VM":[
       {
-         "name":"ubuntuLTS_Ballooned_256",
-         "type":"baseVM",
-         "OS":"Linux",
-         "OS-version":"Ubuntu_10.04 LTS",
-         "diskimg_path":"/home/krha/Cloudlet/image/Ubuntu10_Base/ubuntu.base.1cpu.2048mem.256ballloon.qcow2",
-         "memorysnapshot_path":"/home/krha/Cloudlet/image/Ubuntu10_Base/ubuntu.base.1cpu.2048mem.256ballloon.mem"
-      },
-      {
-         "name":"ubuntuLTS_Ballooned_128",
-         "type":"baseVM",
-         "OS":"Linux",
-         "OS-version":"Ubuntu_10.04 LTS",
-         "diskimg_path":"/home/krha/Cloudlet/image/Ubuntu10_Base/ubuntu.base.1cpu.2048mem.128ballloon.qcow2",
-         "memorysnapshot_path":"/home/krha/Cloudlet/image/Ubuntu10_Base/ubuntu.base.1cpu.2048mem.128ballloon.mem"
-      },
-      {
          "name":"ubuntuLTS",
          "type":"baseVM",
          "OS":"Linux",
          "OS-version":"Ubuntu_10.04 LTS",
-         "diskimg_path":"/home/krha/Cloudlet/image/Ubuntu10_Base/ubuntu.base.qcow2",
-         "memorysnapshot_path":"/home/krha/Cloudlet/image/Ubuntu10_Base/ubuntu.base.mem"
+         "diskimg_path":"/home/krha/Cloudlet/image/Ubuntu10.04_Base/ubuntu.base.qcow2",
+         "memorysnapshot_path":"/home/krha/Cloudlet/image/Ubuntu10.04_Base/ubuntu.base.mem"
       },
       {
          "name":"windowXP",
