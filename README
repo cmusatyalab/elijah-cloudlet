@@ -33,7 +33,3 @@ Prototype for Cloudlet
 		apache-mime4j-core, httpmime-4.1.1 - will be erased after ISR test
 	
 
-# GIT Basic Command
-$ git add README
-$ git commit -m 'first commit'
-$ git push origin master
