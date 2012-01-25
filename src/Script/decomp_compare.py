@@ -12,7 +12,7 @@ def comp_lzma(inputname, outputname):
     prev_time = datetime.now()
     in_file = open(inputname, 'rb')
     ret_file = open(outputname, 'wb')
-    c_fp = pylzma.compressfile(in_file, eos=1, algorithm=2)
+    c_fp = pylzma.compressfile(in_file, eos=1, algorithm=2, dictionary=28)
     while True:
         chunk = c_fp.read(8192)
         if not chunk: break

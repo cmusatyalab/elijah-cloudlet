@@ -2,44 +2,44 @@ This is BibTeX, Version 0.99c (TeX Live 2009/Debian)
 The top-level auxiliary file: synthesis2012.aux
 The style file: acm.bst
 Database file #1: synthesis2012.bib
-You've used 4 entries,
+You've used 5 entries,
             2253 wiz_defined-function locations,
-            555 strings with 4563 characters,
-and the built_in function-call counts, 1173 in all, are:
-= -- 94
-> -- 68
+            560 strings with 4709 characters,
+and the built_in function-call counts, 1383 in all, are:
+= -- 113
+> -- 75
 < -- 0
-+ -- 28
-- -- 24
-* -- 91
-:= -- 201
-add.period$ -- 12
-call.type$ -- 4
-change.case$ -- 24
++ -- 31
+- -- 26
+* -- 98
+:= -- 235
+add.period$ -- 15
+call.type$ -- 5
+change.case$ -- 28
 chr.to.int$ -- 0
-cite$ -- 4
-duplicate$ -- 49
-empty$ -- 101
-format.name$ -- 24
-if$ -- 235
+cite$ -- 5
+duplicate$ -- 57
+empty$ -- 124
+format.name$ -- 26
+if$ -- 281
 int.to.chr$ -- 0
-int.to.str$ -- 4
+int.to.str$ -- 5
 missing$ -- 3
-newline$ -- 23
-num.names$ -- 8
-pop$ -- 37
+newline$ -- 28
+num.names$ -- 10
+pop$ -- 45
 preamble$ -- 1
-purify$ -- 20
+purify$ -- 23
 quote$ -- 0
-skip$ -- 23
+skip$ -- 31
 stack$ -- 0
-substring$ -- 20
-swap$ -- 8
+substring$ -- 25
+swap$ -- 10
 text.length$ -- 0
 text.prefix$ -- 0
 top$ -- 0
-type$ -- 16
+type$ -- 20
 warning$ -- 0
-while$ -- 8
-width$ -- 5
-write$ -- 38
+while$ -- 10
+width$ -- 6
+write$ -- 47

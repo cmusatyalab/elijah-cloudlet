@@ -19,8 +19,21 @@ Research questions
 \item{Does the Base VM have to be the status where ballooning is 
 applied to get ballooning effect on overlay VM?}
 \end{smitemize}
+Memory Ballooning is the technique to control the physicall memory size of the
+virtual machine. In many cases in enterprise level, memory is the most valuable 
+resource in maintaining multiple VMs~\cite{} and administrator can control
+VMs' allocated memory in a dynmaic way using Ballooining technique.
+Usually a small balloon module is loaded into guest OS as a device driver
+or kernel service, and communicate with host OS to inflate or deflate control
+physical memory with the VM. It is supported by almost hypervisor including
+VMWareESX, Xen and KVM, and we're goin to investigate ballooning to reduce
+overlay size. Overlay VM is composed of disk image and memory snapshot as
+we mentioned before and these are generated from the delta calculation between
+base VM and user's custom VM. So, we can intuitively expect that overlay
+size memory snapshot will be recude as the base VM and custom VM is decreased.
 
-
-
+\paragraph{Overlay Size:}~Linux C++ application based
+on the CMU MOPED object recognition libraries~\cite{MOPED2011}. 
+It returns the identities of recognized objects in an input image.
 
 

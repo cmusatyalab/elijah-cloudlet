@@ -183,8 +183,8 @@ def recover_snapshot(base_img, base_mem, comp_img, comp_mem):
     merge_file(base_mem, overlay_mem, recover_mem)
     print '[Time] Recover(xdelta) image - ', str(datetime.now()-prev_time)
 
-    os.remove(overlay_img)
-    os.remove(overlay_mem)
+    #os.remove(overlay_img)
+    #os.remove(overlay_mem)
     return recover_img, recover_mem
 
 

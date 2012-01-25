@@ -17,6 +17,11 @@
 \newblock In {\em {Proceedings of EuroSys 2011}\/} (Salzburg, Switzerland,
   April 2011).
 
+\bibitem{MOPED2011}
+{\sc MOPED}.
+\newblock {MOPED: Object Recognition and Pose Estimation for Manipulation}.
+\newblock \url{http://personalrobotics.ri.cmu.edu/projects/moped.php}.
+
 \bibitem{Satya2001}
 {\sc Satyanarayanan, M.}
 \newblock {Pervasive Computing: Vision and Challenges}.
