@@ -5,6 +5,7 @@ Prototype for Cloudlet
 	glib-2.0
 	libjson0-dev (JSON manipulation library)
 
+
 2) Python Script
 	xdelta
 		binary diff
