@@ -14,7 +14,7 @@ import pylzma
 
 VM_MEMORY = 2048
 VCPU_NUMBER = 1
-BALLOON_MEM_SIZE = 256
+BALLOON_MEM_SIZE = 2048
 VNC_VIEWER = "/home/krha/Cloudlet/src/Script/vnc_viewer.py"
 PORT_FORWARDING = "-redir tcp:9876::9876 -redir tcp:2222::22 -redir tcp:19092::9092 -redir tcp:6789::6789"
 
@@ -246,7 +246,7 @@ def run_snapshot(disk_image, memory_image, telnet_port, vnc_port, wait_vnc_end):
         command_str += " -m " + str(VM_MEMORY) + " -enable-kvm -net nic -net user -serial none -parallel none -usb -usbdevice tablet -redir tcp:2222::22"
     command_str += " -incoming \"exec:cat " + memory_image + "\""
     print '[INFO] Run snapshot..'
-    # print command_str
+    print command_str
     subprocess.Popen(command_str, shell=True)
     start_time = datetime.now()
     

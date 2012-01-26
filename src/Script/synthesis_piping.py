@@ -299,7 +299,7 @@ class SynthesisTCPHandler(SocketServer.StreamRequestHandler):
             self.ret_fail(message)
             return
 
-        print "[INFO] New client request %s VM (%d MB, %d MB)" % (vm_name, disk_size/1024/1024, mem_size/1024/1024)
+        print "[INFO] New client request %s VM (will transfer %d MB, %d MB)" % (vm_name, disk_size/1024/1024, mem_size/1024/1024)
 
         # check base VM
         base_disk_path = None
