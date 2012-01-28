@@ -15,7 +15,7 @@ import pylzma
 VM_MEMORY = 2048
 VCPU_NUMBER = 1
 BALLOON_MEM_SIZE = 2048
-KVM = '/home/krha/Downloads/kvm-qemu/x86_64-softmmu/qemu-system-x86_64'
+KVM = '../kvm-qemu/x86_64-softmmu/qemu-system-x86_64'
 VNC_VIEWER = "/home/krha/Cloudlet/src/Script/vnc_viewer.py"
 PORT_FORWARDING = "-redir tcp:9876::9876 -redir tcp:2222::22 -redir tcp:19092::9092 -redir tcp:6789::6789"
 
@@ -398,7 +398,10 @@ def create_base(imagefile):
 
 def run_image(disk_image, telnet_port, vnc_port):
     global KVM
-    #command_str = "kvm -hda "
+    if os.path.exists(KVM):
+        command_str = "%s -hda " % KVM
+    else:
+        command_str = "kvm -hda "
     command_str = "%s -hda " % KVM
     command_str += disk_image
     if telnet_port != 0 and vnc_port != -1:
