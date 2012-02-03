@@ -1,4 +1,4 @@
-./image/*
-./\*.a
-./paper/
+image/
+\*.a
+paper/
 src/kvm-qemu/ 
