@@ -17,8 +17,8 @@
          "type":"baseVM",
          "OS":"Window",
          "OS-version":"WindowXP",
-         "diskimg_path":"/home/krha/Cloudlet/image/WindowXP_Base/winxp-with-jre7_base.qcow2",
-         "memorysnapshot_path":"/home/krha/Cloudlet/image/WindowXP_Base/winxp-with-jre7_base.mem"
+         "diskimg_path":"/home/krha/Cloudlet/image/WindowXPPro_Base/winxp-with-jre.base.qcow2",
+         "memorysnapshot_path":"/home/krha/Cloudlet/image/WindowXPPro_Base/winxp-with-jre.base.mem"
       }
    ]
 }

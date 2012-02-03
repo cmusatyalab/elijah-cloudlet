@@ -1,4 +1,5 @@
 #!/usr/bin/env python
+
 import xdelta3
 import os
 import commands
