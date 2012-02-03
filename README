@@ -1,31 +1,23 @@
-Prototype for Cloudlet
+the Cloudlet, please visit our website at <http://elijah.cs.cmu.edu/>.
 
-# Source dependency
-
-1) Python Script
-	xdelta
-		binary diff
+REQUIREMENTS
+------------
+For Python Script
+	xdelta:	binary diff
 		$ sudo apt-get install python-xdelta3
-	pylmza
-		compression
+	pylmza: compression
 		$ sudo apt-get install python-setuptools python-dev build-essential
 		$ sudo easy_install pylzma
-	flask
-		flask is python web server and cloudlet_cloud.py and isr_run.py has dependency on it
+	flask: python web server library for cloudlet_cloud.py and isr_run.py
 		$ sudo easy_install flask
-	gtkvncview
+	gtkvncview: vnc viewer
 		$ sudo apt-get install gtkvncviewer
-	poster
-		Only used at emulated_client.py for Multipart HTTP POST
+	poster: Multipart HTTP POST only for emulated_client.py for 
 		$ sudo easy_install poster
 
-2) Android-client
-	all java lib depedency is on Android-client/lib folder, so do not need additional install
-
-	UPnP Discovery
-	cling-core-1.0.5, teleal-command-1.0.13
-
-	HTTP Client, 
-		apache-mime4j-core, httpmime-4.1.1 - will be erased after ISR test
+For Android-client
+	* all java lib depedency is self contained at Android-client/lib folder, so do not need additional install
+	UPnP Discovery: cling-core-1.0.5, teleal-command-1.0.13
+	HTTP Client: apache-mime4j-core, httpmime-4.1.1 (only for ISR Test)
 	
 
