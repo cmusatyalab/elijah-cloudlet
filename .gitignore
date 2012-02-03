@@ -1,4 +1,7 @@
 image/
 \*.a
+\*.lzma
+\*.qcow2
+\*.mem
 paper/
 src/kvm-qemu/ 
