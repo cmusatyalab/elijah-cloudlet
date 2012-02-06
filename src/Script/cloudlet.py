@@ -29,9 +29,8 @@ import pylzma
 
 VM_MEMORY = 2048
 VCPU_NUMBER = 1
-BALLOON_MEM_SIZE = 2048
+BALLOON_MEM_SIZE = VM_MEMORY
 KVM = '../kvm-qemu/x86_64-softmmu/qemu-system-x86_64'
-VNC_VIEWER = "/home/krha/Cloudlet/src/Script/vnc_viewer.py"
 PORT_FORWARDING = "-redir tcp:9876::9876 -redir tcp:2222::22 -redir tcp:19092::9092 -redir tcp:6789::6789"
 
 
@@ -387,6 +386,7 @@ def create_base(imagefile):
     vm_name = os.path.basename(imagefile).split('.')[0]
     vm_path = os.path.dirname(imagefile)
     base_image = os.path.join(vm_path, vm_name) + '.base.qcow2'
+    print "krha, path info %s, %s, %s" % (vm_name, vm_path, imagefile)
 
     # check existing file first
     if os.path.exists(base_image):
@@ -417,7 +417,6 @@ def run_image(disk_image, telnet_port, vnc_port):
         command_str = "%s -hda " % KVM
     else:
         command_str = "kvm -hda "
-    command_str = "%s -hda " % KVM
     command_str += disk_image
     if telnet_port != 0 and vnc_port != -1:
         command_str += " -m " + str(VM_MEMORY) + " -monitor telnet:localhost:" + str(telnet_port) + ",server,nowait -enable-kvm -net nic -net user -serial none -parallel none -usb -usbdevice tablet -redir tcp:9876::9876"
@@ -465,15 +464,16 @@ def main(argv):
             print_usage(os.path.basename(argv[0]))
             print 'invalid argument'
             return;
-        base_image, base_mem = create_base(args[0])
+        input_image_path = os.path.abspath(args[0])
+        base_image, base_mem = create_base(input_image_path)
         print '[INFO] Base (%s, %s) is created from %s' % (base_image, base_mem, args[0])
     elif o in ("-o", "--overlay"):
         if len(args) != 2:
             print_usage(os.path.basename(argv[0]))
             print 'invalid argument'
             return;
-        base_image = args[0]
-        base_mem = args[1]
+        base_image = os.path.abspath(args[0])
+        base_mem = os.path.abspath(args[1])
         # create overlay
         overlay_disk, overlay_mem = create_overlay(base_image, base_mem)
         print '[INFO] Overlay (%s, %s) is created from %s' % (overlay_disk, overlay_mem, os.path.basename(base_image))
@@ -482,7 +482,8 @@ def main(argv):
             print_usage(os.path.basename(argv[0]))
             print 'invalid argument'
             return;
-        base_img = args[0]; base_mem = args[1]; comp_img = args[2]; comp_mem = args[3]
+        base_img = os.path.abspath(args[0]); base_mem = os.path.abspath(args[1])
+        comp_img = os.path.abspath(args[2]); comp_mem = os.path.abspath(args[3])
         telnet_port = int(args[4]); vnc_port = int(args[5])
         # recover image from overlay
         recover_img, recover_mem = recover_snapshot(base_img, base_mem, comp_img, comp_mem)
