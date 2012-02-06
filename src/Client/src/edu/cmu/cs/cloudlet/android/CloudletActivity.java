@@ -42,9 +42,8 @@ import android.view.View;
 import android.widget.Button;
 
 public class CloudletActivity extends Activity {
-//	public static final String SYNTHESIS_SERVER_IP = "128.2.212.178";		// Cloudlet IP Address
-	public static final String SYNTHESIS_SERVER_IP = "server.krha.kr";		// Cloudlet IP Address
-	public static final int SYNTHESIS_PORT = 8021;			// Cloudlet port for VM Synthesis test 
+	public static final String SYNTHESIS_SERVER_IP = "dagama.isr.cs.cmu.edu";	// Cloudlet IP Address
+	public static final int SYNTHESIS_PORT = 8021;								// Cloudlet port for VM Synthesis test 
 
 	public static final String[] applications = {"MOPED", "MOPED_Disk", "FACE", "Speech", "NULL"};
 	public static final int TEST_CLOUDLET_APP_MOPED_PORT = 19092;
