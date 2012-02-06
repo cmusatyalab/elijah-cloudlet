@@ -9,16 +9,16 @@
          "type":"baseVM",
          "OS":"Linux",
          "OS-version":"Ubuntu_10.04 LTS",
-         "diskimg_path":"/home/krha/Cloudlet/image/Ubuntu10.04_Base/ubuntu.base.qcow2",
-         "memorysnapshot_path":"/home/krha/Cloudlet/image/Ubuntu10.04_Base/ubuntu.base.mem"
+         "diskimg_path":"../../image/Ubuntu10.04_Base/ubuntu.base.qcow2",
+         "memorysnapshot_path":"../../image/Ubuntu10.04_Base/ubuntu.base.mem"
       },
       {
          "name":"windowXP",
          "type":"baseVM",
          "OS":"Window",
          "OS-version":"WindowXP",
-         "diskimg_path":"/home/krha/Cloudlet/image/WindowXPPro_Base/winxp-with-jre.base.qcow2",
-         "memorysnapshot_path":"/home/krha/Cloudlet/image/WindowXPPro_Base/winxp-with-jre.base.mem"
+         "diskimg_path":"../../image/WindowXPPro_Base/winxp-with-jre.base.qcow2",
+         "memorysnapshot_path":"../../image/WindowXPPro_Base/winxp-with-jre.base.mem"
       }
    ]
 }

@@ -257,13 +257,24 @@ def parse_configfile(filename):
     if not json_data.has_key('VM'):
         return None, "JSON Does not have 'VM' Key"
 
+
     VM_list = json_data['VM']
     print "-------------------------------"
-    print "* Configuration List"
+    print "* VM Configuration Infomation"
     for vm_info in VM_list:
+        # check file location
+        vm_info['diskimg_path'] = os.path.abspath(vm_info['diskimg_path'])
+        vm_info['memorysnapshot_path'] = os.path.abspath(vm_info['memorysnapshot_path'])
+        if not os.path.exists(vm_info['diskimg_path']):
+            print "Error, disk image (%s) is not exist" % (vm_info['diskimg_path'])
+            sys.exit(2)
+        if not os.path.exists(vm_info['memorysnapshot_path']):
+            print "Error, memory snapshot (%s) is not exist" % (vm_info['memorysnapshot_path'])
+            sys.exit(2)
+
         if vm_info['type'].lower() == 'basevm':
             BaseVM_list.append(vm_info)
-            print "%s : (Disk %d MB, Mem %d MB)" % (vm_info['name'], os.path.getsize(vm_info['diskimg_path'])/1024/1024, os.path.getsize(vm_info['memorysnapshot_path'])/1024/1024)
+            print "%s - (Base Disk %d MB, Base Mem %d MB)" % (vm_info['name'], os.path.getsize(vm_info['diskimg_path'])/1024/1024, os.path.getsize(vm_info['memorysnapshot_path'])/1024/1024)
     print "-------------------------------"
 
     return json_data, None
@@ -402,8 +413,6 @@ def main(argv=None):
 
     if settings.chunk_size:
         CHUNK_SIZE = int(settings.chunk_size)*1024
-        print "CHUNK SIZE : " + str(CHUNK_SIZE)
-
 
     if mode == operation_mode[0]: # run mode
         config_file, error_msg = parse_configfile(settings.config_filename)
