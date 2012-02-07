@@ -28,8 +28,9 @@ import socket
 import pylzma
 
 VM_MEMORY = 2048
-VCPU_NUMBER = 1
 BALLOON_MEM_SIZE = VM_MEMORY
+VCPU_NUMBER = 1
+
 KVM = '../kvm-qemu/x86_64-softmmu/qemu-system-x86_64'
 PORT_FORWARDING = "-redir tcp:9876::9876 -redir tcp:2222::22 -redir tcp:19092::9092 -redir tcp:6789::6789"
 
@@ -52,6 +53,7 @@ def diff_files(source_file, target_file, output_file):
     else:
         return None
 
+
 def merge_file(source_file, overlay_file, output_file):
     command_patch = ['xdelta3', '-df', '-s', source_file, overlay_file, output_file]
     #print command_patch
@@ -61,6 +63,7 @@ def merge_file(source_file, overlay_file, output_file):
         return output_file
     else:
         return None
+
 
 def compare_same(filename1, filename2):
     print '[INFO] checking validity of generated file'
@@ -72,7 +75,8 @@ def compare_same(filename1, filename2):
         print '[INFO] SUCCESS to recover'
         return True
 
-# compression
+
+# lzma compression
 def comp_lzma(inputname, outputname):
     prev_time = datetime.now()
 
@@ -89,7 +93,8 @@ def comp_lzma(inputname, outputname):
     time_diff = str(datetime.now()-prev_time)
     return outputname, str(time_diff)
 
-#decompression
+
+# lzma decompression
 def decomp_lzma(inputname, outputname):
     prev_time = datetime.now()
     comp_file = open(inputname, 'rb')
@@ -107,11 +112,13 @@ def decomp_lzma(inputname, outputname):
     time_diff = str(datetime.now()-prev_time)
     return outputname, str(time_diff)
 
+
+# create overlay VM using base VM
 def create_overlay(base_image, base_mem):
     # generate overlay VM(disk + memory) from Base VM
     vm_name = os.path.basename(base_image)
     vm_path = os.path.dirname(base_mem)
-    info_tag = '.overlay.' + str(VCPU_NUMBER) + 'cpu.' + str(VM_MEMORY) + "mem." + str(BALLOON_MEM_SIZE) + "balloon"
+    info_tag = '.overlay.' + str(VCPU_NUMBER) + 'cpu.' + str(VM_MEMORY) + "mem"
     overlay_disk = os.path.join(os.getcwd(), vm_name) + info_tag +  '.qcow2'
     overlay_mem = os.path.join(os.getcwd(), vm_name) + info_tag + '.mem'
     tmp_disk = os.path.join(vm_path, vm_name) + '_tmp.qcow2'
@@ -170,6 +177,7 @@ def create_overlay(base_image, base_mem):
     comp_disk, time1 = comp_lzma(overlay_disk, comp_disk)
     comp_mem, time2 = comp_lzma(overlay_mem, comp_mem)
 
+    # remove temporary files
     os.remove(tmp_mem)
     os.remove(tmp_disk)
     os.remove(overlay_disk)
@@ -177,6 +185,8 @@ def create_overlay(base_image, base_mem):
 
     return comp_disk, comp_mem
 
+
+# generate launch VM from compressed overlay VM
 def recover_snapshot(base_img, base_mem, comp_img, comp_mem):
     # decompress
     overlay_img = comp_img + '.decomp'
@@ -198,11 +208,12 @@ def recover_snapshot(base_img, base_mem, comp_img, comp_mem):
     merge_file(base_mem, overlay_mem, recover_mem)
     print '[Time] Recover(xdelta) image - ', str(datetime.now()-prev_time)
 
-    #os.remove(overlay_img)
-    #os.remove(overlay_mem)
+    os.remove(overlay_img)
+    os.remove(overlay_mem)
     return recover_img, recover_mem
 
 
+# wait until qemu telnet connection is established
 def telnet_connection_waiting(telnet_port):
     # waiting for valid connection
     is_connected = False
@@ -221,8 +232,6 @@ def telnet_connection_waiting(telnet_port):
             pass
         tn.close()
 
-    #print "Socket connection time : ", str(datetime.now()-start_time)
-    start_time = datetime.now()
     if is_connected:
         for i in xrange(200):
             try:
@@ -240,7 +249,8 @@ def telnet_connection_waiting(telnet_port):
                 #print "Connection timeout error"
                 pass
             tn.close()
-    print "No connection to KVM" 
+
+    print "Error, No connection to KVM" 
     return False
 
 
@@ -261,7 +271,7 @@ def run_snapshot(disk_image, memory_image, telnet_port, vnc_port, wait_vnc_end):
         command_str += " -m " + str(VM_MEMORY) + " -enable-kvm -net nic -net user -serial none -parallel none -usb -usbdevice tablet -redir tcp:2222::22"
     command_str += " -incoming \"exec:cat " + memory_image + "\""
     print '[INFO] Run snapshot..'
-    print command_str
+    # print command_str
     subprocess.Popen(command_str, shell=True)
     start_time = datetime.now()
     
@@ -289,29 +299,37 @@ def run_snapshot(disk_image, memory_image, telnet_port, vnc_port, wait_vnc_end):
     else:
         return 0
 
-    '''
-    vnc = VncViewer(vnc_file, fullscreen=False)
-    vnc.main()
-    print "VM Resume End : ", vnc.launch_time()
-    print "[Time] KVM Resume Time : ", str(vnc.launch_time() - start_time)
-    '''
 
-
+# execute file migration command using telnet qemu command
 def run_migration(telnet_port, vnc_port, mig_path):
     # save Memory State
     migration_cmd = "migrate \"exec:dd bs=1M 2> /dev/null | dd bs=1M of=" + mig_path +" 2> /dev/null\"\n"
-    print 'debug ', migration_cmd
 
     tn = telnetlib.Telnet('localhost', telnet_port)
+    tn.read_until("(qemu)", 10)
+
+    # Stop running VM
     tn.write("stop\n")
-    ret = tn.read_until("(qemu)", 10)
-    # print 'waiting telnet ', ret
-    tn.write(migration_cmd)
-    while (1):
+    for i in xrange(20):
+        try:
+            ret = tn.read_until("(qemu)", 10)
+            if ret.find("(qemu)") != -1:
+                break;
+        except socket.timeout:
+            pass
         time.sleep(1)
-        tn_read = tn.read_some()
-        if tn_read.find("(qemu)"):
-            break;
+
+    # Do migration to the disk file
+    tn.write(migration_cmd)
+    for i in xrange(20):
+        try:
+            ret = tn.read_until("(qemu)", 10)
+            if ret.find("(qemu)") != -1:
+                break;
+        except socket.timeout:
+            pass
+        time.sleep(1)
+
     tn.write("quit\n")
     tn.close()
 
@@ -410,6 +428,7 @@ def create_base(imagefile):
         return None, None
 
     return base_image, base_mem
+
 
 def run_image(disk_image, telnet_port, vnc_port):
     global KVM
