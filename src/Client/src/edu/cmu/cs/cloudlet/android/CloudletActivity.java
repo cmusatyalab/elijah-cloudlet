@@ -14,14 +14,10 @@
 //
 package edu.cmu.cs.cloudlet.android;
 
-
 import java.util.ArrayList;
-
 import org.teleal.cling.android.AndroidUpnpServiceImpl;
 
 import edu.cmu.cs.cloudlet.android.application.CloudletCameraActivity;
-import edu.cmu.cs.cloudlet.android.application.face.ui.FaceRecClientCameraPreview;
-import edu.cmu.cs.cloudlet.android.application.speech.ClientActivity;
 import edu.cmu.cs.cloudlet.android.data.VMInfo;
 import edu.cmu.cs.cloudlet.android.network.CloudletConnector;
 import edu.cmu.cs.cloudlet.android.upnp.DeviceDisplay;
@@ -149,16 +145,6 @@ public class CloudletActivity extends Activity {
 			Intent intent = new Intent(CloudletActivity.this, CloudletCameraActivity.class);			
 			intent.putExtra("address", SYNTHESIS_SERVER_IP);
 			intent.putExtra("port", TEST_CLOUDLET_APP_MOPED_PORT);
-			startActivityForResult(intent, 0);			
-		}else if(application.equalsIgnoreCase("face")){
-			Intent intent = new Intent(CloudletActivity.this, FaceRecClientCameraPreview.class);
-			intent.putExtra("address", SYNTHESIS_SERVER_IP);
-			intent.putExtra("port", TEST_CLOUDLET_APP_FACE_PORT);
-			startActivityForResult(intent, 0);			
-		}else if(application.equalsIgnoreCase("speech")){
-			Intent intent = new Intent(CloudletActivity.this, ClientActivity.class);
-			intent.putExtra("address", SYNTHESIS_SERVER_IP);
-			intent.putExtra("port", TEST_CLOUDLET_APP_SPEECH_PORT);
 			startActivityForResult(intent, 0);			
 		}else if(application.equalsIgnoreCase("null")){
 			showAlert("Info", "NUll has no UI");

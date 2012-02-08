@@ -26,10 +26,8 @@ import org.json.JSONObject;
 import edu.cmu.cs.cloudlet.android.CloudletActivity;
 import edu.cmu.cs.cloudlet.android.R;
 import edu.cmu.cs.cloudlet.android.application.CloudletCameraActivity;
-import edu.cmu.cs.cloudlet.android.application.face.ui.FaceRecClientCameraPreview;
 import edu.cmu.cs.cloudlet.android.data.Measure;
 import edu.cmu.cs.cloudlet.android.data.VMInfo;
-import edu.cmu.cs.cloudlet.android.util.CloudletEnv;
 import edu.cmu.cs.cloudlet.android.util.KLog;
 
 import android.app.Activity;
