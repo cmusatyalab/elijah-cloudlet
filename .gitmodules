@@ -1,0 +1,3 @@
+[submodule "src/App/MOPED/libmoped"]
+	path = src/App/MOPED/libmoped
+	url = git://github.com/elijah-cloudlets/MOPED-svn-external.git
