@@ -54,8 +54,8 @@ RUN SUMMARY
 		- As a run result, Base Disk(*.base.qcow2) and Base Memory Snapshot(*.base.mem)
 		  will be generated at the input Disk image directory
 
-		$ ./src/Script/cloudlet.py -b [KVM Image]
-		ex) ./src/Script/cloudlet.py -b ./image/Ubuntu10.04/ubuntu.qcow2
+		$ ./src/server/cloudlet.py -b [KVM Image]
+		ex) ./src/server/cloudlet.py -b ./image/Ubuntu10.04/ubuntu.qcow2
 
 
 	1-2. Create Overlay VM
@@ -63,8 +63,8 @@ RUN SUMMARY
 		- Run result: overlay Disk(*.qcow2.lzma) and memory snapshot(*.mem.lzma), and this
 		  will be saved to mobile at next step.
 
-		$ ./src/Script/cloudlet.py -o [Base Disk] [Base Memeory]
-		ex) ./src/Script/cloudlet.py -o ./image/Ubuntu10.04/ubuntu.base.qcow2 ./image/Ubuntu10.04/ubuntu.base.mem
+		$ ./src/server/cloudlet.py -o [Base Disk] [Base Memeory]
+		ex) ./src/server/cloudlet.py -o ./image/Ubuntu10.04/ubuntu.base.qcow2 ./image/Ubuntu10.04/ubuntu.base.mem
 
 
 	1-3. Copy Overlay VM to Android SD Card
@@ -103,7 +103,7 @@ RUN SUMMARY
 		  'diskimg_path': path to base VM disk image
 		  'memorysnapshot_path': path to base VM memory snapshot
 
-		- Sample JSON configuration file (See detail at ./src/Script/config/VM_config.json)
+		- Sample JSON configuration file (See detail at ./src/server/config/VM_config.json)
 		{
 			"VM":[
 			{
@@ -130,7 +130,7 @@ RUN SUMMARY
 		- Cloudlet Server is simple TCP server that handles client request.
 		- It requres configuration file
 
-		$ cd ./src/Script/
+		$ cd ./src/server/
 		$ ./synthesis.py run -c ./config/VM_config.json
 		-------------------------------
 		* VM Configuration Infomation
