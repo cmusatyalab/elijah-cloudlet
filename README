@@ -2,7 +2,7 @@ The Cloudlet Prototype, please visit our website at <http://elijah.cs.cmu.edu/>.
 
 
 REQUIREMENTS
-------------
+------------------------------
 - KVM >= qemu-kvm-0.12.3 
 - Python >= 2.6.5
 - ssh
@@ -25,7 +25,7 @@ For Android-client
 
 
 INSTALL 
-------------
+------------------------------
 1. KVM (https://help.ubuntu.com/community/KVM/Installation)
 	$ sudo apt-get install qemu-kvm libvirt-bin ubuntu-vm-builder bridge-utils
 	
@@ -38,14 +38,14 @@ INSTALL
 
 
 TESTED ENVIRONMENT
-------------
+------------------------------
 Ubuntu Lucid(10.04)-desktop-x86_64
 Ubuntu Oneiric(11.10)-desktop-x86_64
 
 
 
 RUN SUMMARY
-------------
+------------------------------
 1. Preparation
 	1-1. Create Base VM
 		- Cloudlet assumes pre-installed Base VM at Server-side.
