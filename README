@@ -12,30 +12,32 @@ REQUIREMENTS
 - gtkvncviewer
 
 For Python Script
-	xdelta3		: binary diff
-	pylmza		: compression
-	gvncviewer	: vnc viewer
-	poster		: Multipart HTTP POST only for emulated_client.py for 
-	
+  xdelta3    : binary diff
+  pylmza    : compression
+  gvncviewer  : vnc viewer
+  poster    : Multipart HTTP POST only for emulated_client.py 
+  
 For Android-client
-	UPnP Discovery	: cling-core-1.0.5, teleal-command-1.0.13
-	HTTP Client		: apache-mime4j-core, httpmime-4.1.1 (only for ISR Test)
+  UPnP Discovery : cling-core-1.0.5, teleal-command-1.0.13
+  HTTP Client  : apache-mime4j-core, httpmime-4.1.1 (only for ISR Test)
 
-	* All java lib depedency is self contained at Android-client/lib folder,
-	  so do not need additional install
+  * All java lib depedency is self contained at Android-client/lib folder,
+    so do not need additional install
 
 
 
 INSTALL 
 ------------------------------
 1. KVM (https://help.ubuntu.com/community/KVM/Installation)
-	$ sudo apt-get install qemu-kvm libvirt-bin ubuntu-vm-builder bridge-utils
-	
+  $ sudo apt-get install qemu-kvm libvirt-bin ubuntu-vm-builder \
+            bridge-utils
+  
 2. Libraries
-	$ sudo apt-get install python-setuptools python-dev build-essential xdelta3 python-xdelta3 gtkvncviewer gvncviewer
-	$ sudo easy_install pylzma
-	$ sudo easy_install flask
-	$ sudo easy_install poster
+  $ sudo apt-get install python-setuptools python-dev build-essential \
+        xdelta3 python-xdelta3 gtkvncviewer gvncviewer
+  $ sudo easy_install pylzma
+  $ sudo easy_install flask
+  $ sudo easy_install poster
 
 
 
@@ -49,103 +51,114 @@ Ubuntu Oneiric(11.10)-desktop-x86_64
 RUN SUMMARY
 ------------------------------
 1. Prerequisite
-	1-1. Create Base VM
-		- Cloudlet assumes pre-installed Base VM at Server-side.
-		- You can generate Base VM (Disk + Memory) from regular KVM-QEMU disk image
-		  (KVM-QMEU disk image must contain pre-installed OS).
-		- As a run result, Base Disk(*.base.qcow2) and Base Memory Snapshot(*.base.mem)
-		  will be generated where inputed disk image exists.
+  1-1. Create Base VM
+    - Cloudlet assumes pre-installed Base VM at Server-side.
+    - You can generate Base VM (Disk + Memory) from regular KVM-QEMU
+      disk image (KVM-QMEU disk image must contain pre-installed OS).
+    - As a run result, Base Disk(*.base.qcow2) and Base Memory Snapshot
+      (*.base.mem) will be generated where inputed disk image exists.
 
-		$ ./src/server/cloudlet.py -b [KVM Image]
-		ex) ./src/server/cloudlet.py -b ./image/Ubuntu10.04/ubuntu.qcow2
-
-
-	1-2. Create Overlay VM
-		- You need to generate you own overlay VM based on previous Base VM.
-		- Run result: overlay Disk(*.qcow2.lzma) and memory snapshot(*.mem.lzma).
-
-		$ ./src/server/cloudlet.py -o [Base Disk] [Base Memeory]
-		ex) ./src/server/cloudlet.py -o ./image/Ubuntu10.04/ubuntu.base.qcow2 ./image/Ubuntu10.04/ubuntu.base.mem
+    $ ./src/server/cloudlet.py -b [KVM Image]
+    ex) ./src/server/cloudlet.py -b ./image/Ubuntu10.04/ubuntu.qcow2
 
 
-	1-3. Copy Overlay VM to Android SD Card
-		- Android client will generate working directory under SD card(/sdcard/Cloudlet/).
-		- You must copy overlay image files(disk and memory snapshot) generated at previous step
-		  to working direcotry following the below directory structure.
+  1-2. Create Overlay VM
+    - You need to generate you own overlay VM based on previous Base VM.
+    - Run result: overlay Disk(*.qcow2.lzma) 
+      and memory snapshot(*.mem.lzma).
 
-		$ /sdcard/Cloudlet/overlay/[BaseVM name]/[Overlay name]
-		  where [BaseVM name] is Base VM Name, which client will request to Cloudlet,
-		  and [Overlay_name] is your custom VM name, which client will use it within applicatioin to distinguish
-		  different VMs.
+    $ ./src/server/cloudlet.py -o [Base Disk] [Base Memeory]
+    ex) ./src/server/cloudlet.py -o ./image/Ubuntu10.04/ubuntu.base.qcow2 \
+          ./image/Ubuntu10.04/ubuntu.base.mem
 
-		ex) Sample directory structure
-		    /sdcard/Cloudlet/overlay - UbuntuLTS - mysql
-		                             |           |
-		                             |           - apach
-		                             |           |
-		                             |           - object_recogn
-		                             |
-		                             - WindowXP - IIS
-		                             		    |
-		                             		    - face_recogn
 
-		ex) $ ls /mnt/sdcard/UbuntuLTS/myCustomVM/
-		     mycustomvm.qcow2.lzma
-		     mycustomvm.mem.lzma
+  1-3. Copy Overlay VM to Android SD Card
+    - Android client will generate working directory under SD card
+      (/sdcard/Cloudlet/).
+    - You must copy overlay image files(disk and memory snapshot) 
+      generated at previous step to working direcotry following
+      the below directory structure.
 
-		- You can copy overlay to Android device using 'adb push' command
+    $ /sdcard/Cloudlet/overlay/[BaseVM name]/[Overlay name]
+      where [BaseVM name] is Base VM Name, which client will request
+      to Cloudlet,and [Overlay_name] is your custom VM name, which
+      client will use it within applicatioin to distinguish different
+      VMs.
+
+    ex) Sample directory structure
+        /sdcard/Cloudlet/overlay - UbuntuLTS - mysql
+                                 |           |
+                                 |           - apach
+                                 |           |
+                                 |           - object_recogn
+                                 |
+                                 - WindowXP - IIS
+                                         |
+                                         - face_recogn
+
+    ex) $ ls /mnt/sdcard/UbuntuLTS/myCustomVM/
+         mycustomvm.qcow2.lzma
+         mycustomvm.mem.lzma
+
+    - You can copy overlay to Android device using 'adb push' command
 
 
 
 2. Run Cloudlet
-	2-1. Create(or modify existing) configuration file
-		- Cloudlet Server requires configuration file that has information about Base VMs.
-		- It is simple json format that contains path information.
-		- You should (at least)include
-		  'name': unique VM name that represent unique VM. This has to be same with [BaseVM name] at 1-3.
-		  'diskimg_path': path to base VM disk image
-		  'memorysnapshot_path': path to base VM memory snapshot
+  2-1. Create(or modify existing) configuration file
+    - Cloudlet Server requires configuration file that has information 
+      about Base VMs.
+    - It is simple json format that contains path information.
+    - You should (at least)include
+      'name': unique VM name that represent unique VM. This has to be
+      same with [BaseVM name] at 1-3.
+      'diskimg_path': path to base VM disk image
+      'memorysnapshot_path': path to base VM memory snapshot
 
-		- Sample JSON configuration file (See detail at ./src/server/config/VM_config.json)
-		{
-			"VM":[
-			{
-				"name":"ubuntuLTS",
-				"type":"baseVM",
-				"OS":"Linux",
-				"OS-version":"Ubuntu_10.04 LTS",
-				"diskimg_path":"/etc/Cloudlet/image/Ubuntu10.04_Base/ubuntu.base.qcow2",
-				"memorysnapshot_path":"/etc/Cloudlet/image/Ubuntu10.04_Base/ubuntu.base.mem"
-			},
-			{
-				"name":"windowXP",
-				"type":"baseVM",
-				"OS":"Window",
-				"OS-version":"WindowXP",
-				"diskimg_path":"/etc/Cloudlet/image/WindowXPPro_Base/winxp-with-jre.base.qcow2",
-				"memorysnapshot_path":"/etc/Cloudlet/image/WindowXPPro_Base/winxp-with-jre.base.mem"
-			}
-			]
-		}
-
-
-	2-2. Run Cloudlet Server
-		- Cloudlet Server is simple TCP server that handles client request.
-
-		$ cd ./src/server/
-		$ ./synthesis.py run -c ./config/VM_config.json
-		-------------------------------
-		* VM Configuration Infomation
-		ubuntuLTS - (Base Disk 7 MB, Base Mem 430 MB)
-		windowXP - (Base Disk 40 MB, Base Mem 326 MB)
-		-------------------------------
-		Open TCP Server (('128.2.212.207', 8021))
-		...
+    - Sample JSON configuration file 
+      (See detail at ./src/server/config/VM_config.json)
+    {
+      "VM":[
+      {
+        "name":"ubuntuLTS",
+        "type":"baseVM",
+        "OS":"Linux",
+        "OS-version":"Ubuntu_10.04 LTS",
+        "diskimg_path":"/etc/Cloudlet/image/Ubuntu10.04_Base/ubuntu.base.qcow2",
+        "memorysnapshot_path":"/etc/Cloudlet/image/Ubuntu10.04_Base/ubuntu.base.mem"
+      },
+      {
+        "name":"windowXP",
+        "type":"baseVM",
+        "OS":"Window",
+        "OS-version":"WindowXP",
+        "diskimg_path":"/etc/Cloudlet/image/WindowXPPro_Base/winxp-with-jre.base.qcow2",
+        "memorysnapshot_path":"/etc/Cloudlet/image/WindowXPPro_Base/winxp-with-jre.base.mem"
+      }
+      ]
+    }
 
 
-	2-3. Run Cloudlet Client
-		- UPnp is disabled in current version, so that you need to specify Server IP at source code.
-		- You can fix it with SYNTHESIS_SERVER_IP variable at CloudletActivity.java file.
-		- Then, launch Cloudlet Application and click "Start VM Synthesis" Button.
+  2-2. Run Cloudlet Server
+    - Cloudlet Server is simple TCP server that handles client request.
+
+    $ cd ./src/server/
+    $ ./synthesis.py run -c ./config/VM_config.json
+    -------------------------------
+    * VM Configuration Infomation
+    ubuntuLTS - (Base Disk 7 MB, Base Mem 430 MB)
+    windowXP - (Base Disk 40 MB, Base Mem 326 MB)
+    -------------------------------
+    Open TCP Server (('128.2.212.207', 8021))
+    ...
+
+
+  2-3. Run Cloudlet Client
+    - UPnp is disabled in current version, so that you need to specify 
+      Server IP at source code.
+    - You can fix it with SYNTHESIS_SERVER_IP variable 
+      at CloudletActivity.java file.
+    - Then, launch Cloudlet Application and click 
+      "Start VM Synthesis" Button.
 
 
