@@ -404,7 +404,6 @@ def create_base(imagefile):
     vm_name = os.path.basename(imagefile).split('.')[0]
     vm_path = os.path.dirname(imagefile)
     base_image = os.path.join(vm_path, vm_name) + '.base.qcow2'
-    print "krha, path info %s, %s, %s" % (vm_name, vm_path, imagefile)
 
     # check existing file first
     if os.path.exists(base_image):

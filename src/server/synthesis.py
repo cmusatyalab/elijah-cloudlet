@@ -27,7 +27,6 @@ import json
 import tempfile
 from cloudlet import run_snapshot
 import struct
-import atexit
 
 # PIPLINING
 CHUNK_SIZE = 1024*16

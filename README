@@ -1,4 +1,5 @@
-The Cloudlet Prototype, please visit our website at <http://elijah.cs.cmu.edu/>.
+Elijah Project(Cloudlets) Prototype Version 0.1.0
+Please visit our website at <http://elijah.cs.cmu.edu/>.
 
 
 REQUIREMENTS
@@ -46,36 +47,37 @@ Ubuntu Oneiric(11.10)-desktop-x86_64
 
 RUN SUMMARY
 ------------------------------
-1. Preparation
+1. Prerequisite
 	1-1. Create Base VM
 		- Cloudlet assumes pre-installed Base VM at Server-side.
 		- You can generate Base VM (Disk + Memory) from regular KVM-QEMU disk image
 		  (KVM-QMEU disk image must contain pre-installed OS).
 		- As a run result, Base Disk(*.base.qcow2) and Base Memory Snapshot(*.base.mem)
-		  will be generated at the input Disk image directory
+		  will be generated where inputed disk image exists.
 
 		$ ./src/server/cloudlet.py -b [KVM Image]
 		ex) ./src/server/cloudlet.py -b ./image/Ubuntu10.04/ubuntu.qcow2
 
 
 	1-2. Create Overlay VM
-		- You need to generate you own overlay VM from the previously generated Base VM.
-		- Run result: overlay Disk(*.qcow2.lzma) and memory snapshot(*.mem.lzma), and this
-		  will be saved to mobile at next step.
+		- You need to generate you own overlay VM based on previous Base VM.
+		- Run result: overlay Disk(*.qcow2.lzma) and memory snapshot(*.mem.lzma).
 
 		$ ./src/server/cloudlet.py -o [Base Disk] [Base Memeory]
 		ex) ./src/server/cloudlet.py -o ./image/Ubuntu10.04/ubuntu.base.qcow2 ./image/Ubuntu10.04/ubuntu.base.mem
 
 
 	1-3. Copy Overlay VM to Android SD Card
-		- Android Application will generate its working directory at SD card(/sdcard/Cloudlet/)
-		- You should put overlay image on to that working direcotry following the below directory structure.
+		- Android client will generate working directory under SD card(/sdcard/Cloudlet/).
+		- You must copy overlay image files(disk and memory snapshot) generated at previous step
+		  to working direcotry following the below directory structure.
 
 		$ /sdcard/Cloudlet/overlay/[BaseVM name]/[Overlay name]
 		  where [BaseVM name] is Base VM Name, which client will request to Cloudlet,
-		  and [Overlay_name] is your base VM, which client will use to distinguish different applications
+		  and [Overlay_name] is your custom VM name, which client will use it within applicatioin to distinguish
+		  different VMs.
 
-		ex) sample directory structure
+		ex) Sample directory structure
 		    /sdcard/Cloudlet/overlay - UbuntuLTS - mysql
 		                             |           |
 		                             |           - apach
@@ -95,10 +97,10 @@ RUN SUMMARY
 
 
 2. Run Cloudlet
-	2-1. Create(Modify) Configuration file
-		- Cloudlet Server requires configuration file that has Base VM information.
-		- It is simple json format file that contains path information to Base VM.
-		- You should modify (at least)
+	2-1. Create(or modify existing) configuration file
+		- Cloudlet Server requires configuration file that has information about Base VMs.
+		- It is simple json format that contains path information.
+		- You should (at least)include
 		  'name': unique VM name that represent unique VM. This has to be same with [BaseVM name] at 1-3.
 		  'diskimg_path': path to base VM disk image
 		  'memorysnapshot_path': path to base VM memory snapshot
@@ -128,7 +130,6 @@ RUN SUMMARY
 
 	2-2. Run Cloudlet Server
 		- Cloudlet Server is simple TCP server that handles client request.
-		- It requres configuration file
 
 		$ cd ./src/server/
 		$ ./synthesis.py run -c ./config/VM_config.json
@@ -138,11 +139,12 @@ RUN SUMMARY
 		windowXP - (Base Disk 40 MB, Base Mem 326 MB)
 		-------------------------------
 		Open TCP Server (('128.2.212.207', 8021))
+		...
 
 
 	2-3. Run Cloudlet Client
-		- UPnp is disabled in current implementation, so that you need to specify Server IP at source code.
-		- You can fix it with SYNTHESIS_SERVER_IP static variable at CloudletActivity.java file.
+		- UPnp is disabled in current version, so that you need to specify Server IP at source code.
+		- You can fix it with SYNTHESIS_SERVER_IP variable at CloudletActivity.java file.
 		- Then, launch Cloudlet Application and click "Start VM Synthesis" Button.
 
 
