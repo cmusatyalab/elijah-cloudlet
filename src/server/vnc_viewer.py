@@ -1,5 +1,6 @@
 #!/usr/bin/python
 #
+# Elijah: Cloudlet Infrastructure for Mobile Computing
 # viewer - VNC viewer for the OpenISR (R) system
 #
 # Copyright (C) 2009 Carnegie Mellon University

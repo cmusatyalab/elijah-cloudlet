@@ -1,4 +1,5 @@
 //
+// Elijah: Cloudlet Infrastructure for Mobile Computing
 // Copyright (C) 2011-2012 Carnegie Mellon University
 //
 // This program is free software; you can redistribute it and/or modify it
