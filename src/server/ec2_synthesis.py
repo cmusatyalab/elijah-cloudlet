@@ -60,29 +60,6 @@ def piping_synthesis(overlay_url, base_path):
     return recover_file
 
 
-def process_command_line(argv):
-    help_message = "\nEC2 synthesis is designed for rapid launching of customizing instance at Amazon EC2"
-
-    parser = OptionParser(usage="usage: %prog -o [Overlay Download URL] -b [Base VM Path] -m [Instance Mount Path]" + help_message,
-            version="EC2 Synthesys v0.1.1")
-    parser.add_option(
-            '-o', '--overlay', action='store', type='string', dest='overlay_download_url',
-            help='Set overlay disk download URL.')
-    parser.add_option(
-            '-b', '--base', action='store', type='string', dest='base_path',
-            help='Set Base disk path.')
-    parser.add_option(
-            '-m', '--mount', action='store', type='string', dest='output_mount',
-            help='Set output Mount point. This Mount point is EC2 inital disk.')
-    settings, args = parser.parse_args(argv)
-    if not len(args) == 0:
-        parser.error('program takes no command-line arguments; "%s" ignored.' % (args,))
-    if settings.overlay_download_url == None or settings.base_path == None or settings.output_mount == None:
-        parser.error('Read usage')
-
-    return settings, args
-
-
 def mount_launchVM(launch_disk_path):
     mount_dir = tempfile.mkdtemp()
     raw_vm = launch_disk_path + ".raw"
@@ -158,6 +135,37 @@ def clean_up(raw_vm, launch_vm):
     print "[INFO] clean up files : %s, %s" % (os.path.abspath(raw_vm), os.path.abspath(launch_vm))
     os.remove(raw_vm)
     os.remove(launch_vm)
+
+
+def process_command_line(argv):
+    help_message = "\nEC2 synthesis is designed for rapid launching of customizing instance at Amazon EC2"
+
+    parser = OptionParser(usage="usage: %prog -o [Overlay Download URL] -b [Base VM Path] -m [Instance Mount Path]" + help_message,
+            version="EC2 Synthesys v0.1.1")
+    parser.add_option(
+            '-o', '--overlay', action='store', type='string', dest='overlay_download_url',
+            help='Set overlay disk download URL.')
+    parser.add_option(
+            '-b', '--base', action='store', type='string', dest='base_path',
+            help='Set Base disk path.')
+    parser.add_option(
+            '-m', '--mount', action='store', type='string', dest='output_mount',
+            help='Set output Mount point. This Mount point is EC2 inital disk.')
+    settings, args = parser.parse_args(argv)
+    if not len(args) == 0:
+        parser.error('program takes no command-line arguments; "%s" ignored.' % (args,))
+    if settings.overlay_download_url == None or settings.base_path == None or settings.output_mount == None:
+        parser.error('Read usage')
+
+    if not os.path.exists(settings.base_path):
+        print >> sys.stderr, "Base VM does not exist at %s", settings.base_path
+
+    if not os.path.exists(settings.output_mount):
+        print >> sys.stderr, "Mount directory does not exist at %s", settings.output_mount
+
+    return settings, args
+
+
 
 def main(argv=None):
     settings, args = process_command_line(sys.argv[1:])
