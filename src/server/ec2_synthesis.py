@@ -159,9 +159,11 @@ def process_command_line(argv):
 
     if not os.path.exists(settings.base_path):
         print >> sys.stderr, "Base VM does not exist at %s", settings.base_path
+        sys.exit(2)
 
     if not os.path.exists(settings.output_mount):
         print >> sys.stderr, "Mount directory does not exist at %s", settings.output_mount
+        sys.exit(2)
 
     return settings, args
 
