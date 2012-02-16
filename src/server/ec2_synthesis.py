@@ -82,6 +82,7 @@ def process_command_line(argv):
 
     return settings, args
 
+
 def mount_launchVM(launch_disk_path):
     mount_dir = tempfile.mkdtemp()
     raw_vm = launch_disk_path + ".raw"
@@ -107,7 +108,6 @@ def mount_launchVM(launch_disk_path):
     output = proc.stdout.readline()
     output = output[output.find("loop"):]
     mapper_dev = output.split(" ")[0].strip()
-    print "mapper dev : %s, %s" % (output, mapper_dev)
     cmd_mount = "sudo mount /dev/mapper/%s %s" % (mapper_dev, mount_dir)
     proc = subprocess.Popen(cmd_mount, shell=True, stdin=sys.stdin, stdout=sys.stdout)
     proc.wait()
@@ -118,12 +118,13 @@ def mount_launchVM(launch_disk_path):
 
     print "[TIME] QCOW2 Converting time : %s" % (str(convert_time))
     print "[TIME] RAW Mouting time : %s" % (str(mount_time))
-    return mount_dir
+    return mount_dir, raw_vm
 
 
 def rsync_overlayVM(vm_dir, instance_dir):
+    instance_dir = os.path.join(instance_dir, ".")
     # TODO: check mount list and automatically umount residues
-    subprocess.Popen("sudo umount %s/run" % (instance_dir) , shell=True, stdin=sys.stdin, stdout=sys.stdout).wait()
+    subprocess.Popen("sudo umount %s" % (os.path.join(instance_dir, "run")) , shell=True, stdin=sys.stdin, stdout=sys.stdout).wait()
 
     # erase instance dir
     if os.path.exists(instance_dir):
@@ -135,19 +136,27 @@ def rsync_overlayVM(vm_dir, instance_dir):
         print >> sys.strerr, "Instance directory does not exists, " + str(instance_dir)
         sys.exit(1)
     
-    cmd_erase = "sudo rm -rf %s/*", instance_dir
+    cmd_erase = "sudo rm -rf %s" % os.path.join(instance_dir, "*")
+    print "[INFO] erase instacnce dir: %s" % (cmd_erase)
     subprocess.Popen(cmd_erase, shell=True, stdin=sys.stdin, stdout=sys.stdout).wait()
 
     # rsync
-    cmd_rsync = "sudo rsync -avHx %s/ %s/" % (vm_dir, instance_dir)
+    print "[INFO] rsync from % to %" % (vm_dir, instance_dir)
+    cmd_rsync = "sudo rsync -aHx %s/ %s/" % (vm_dir, instance_dir)
     subprocess.Popen(cmd_rsync, shell=True, stdin=sys.stdin, stdout=sys.stdout).wait()
     subprocess.Popen("sudo sync", shell=True, stdin=sys.stdin, stdout=sys.stdout).wait()
 
     # umount
     print "[INFO] umount instance dir, %s" % (instance_dir)
-    subprocess.Popen("sudo umount %s/" % (instance_dir), shell=True, stdin=sys.stdin, stdout=sys.stdout).wait()
+    subprocess.Popen("sudo umount %s" % (instance_dir), shell=True, stdin=sys.stdin, stdout=sys.stdout).wait()
+    print "[INFO] umount VM dir, %s" % (vm_dir)
+    subprocess.Popen("sudo umount %s" % (vm_dir), shell=True, stdin=sys.stdin, stdout=sys.stdout).wait()
     subprocess.Popen("sudo sync", shell=True, stdin=sys.stdin, stdout=sys.stdout).wait()
 
+def clean_up(raw_vm, launch_vm):
+    print "[INFO] clean up files : %s, %s" % (os.path.abspath(raw_vm), os.path.abspath(launch_vm))
+    os.remove(raw_vm)
+    os.remove(launch_vm)
 
 def main(argv=None):
     settings, args = process_command_line(sys.argv[1:])
@@ -156,10 +165,13 @@ def main(argv=None):
     qcow_launch_image = piping_synthesis(settings.overlay_download_url, settings.base_path)
 
     # Mount VM File system
-    launchVM_dir =  mount_launchVM(qcow_launch_image)
+    launchVM_dir, VM_path =  mount_launchVM(qcow_launch_image)
 
     # rsync VM to origianl disk
     rsync_overlayVM(launchVM_dir, settings.output_mount)
+
+    # clean up
+    clean_up(VM_path, qcow_launch_image)
 
     return 0
 
