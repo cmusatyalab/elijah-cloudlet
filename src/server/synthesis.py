@@ -18,7 +18,6 @@ import os
 import sys
 import SocketServer
 import socket
-import urllib2
 from optparse import OptionParser
 from datetime import datetime
 from multiprocessing import Process, Queue, Pipe, JoinableQueue
@@ -39,55 +38,6 @@ application_names = ("moped", "face", "speech", "null")
 LOCAL_IPADDRESS = 'localhost'
 SERVER_PORT_NUMBER = 8021
 BaseVM_list = []
-
-# Overlya URL
-WEB_SERVER_URL = 'http://dagama.isr.cs.cmu.edu/cloudlet'
-MOPED_DISK = WEB_SERVER_URL + '/overlay/moped/overlay1/moped.qcow2.lzma'
-MOPED_MEM = WEB_SERVER_URL + '/overlay/moped/overlay1/moped.mem.lzma'
-FACE_DISK = WEB_SERVER_URL + '/overlay/face/overlay1/face.qcow2.lzma'
-FACE_MEM = WEB_SERVER_URL + '/overlay/face/overlay1/face.mem.lzma'
-SPEECH_DISK = WEB_SERVER_URL + '/overlay/speech/overlay1/speech.qcow2.lzma'
-SPEECH_MEM = WEB_SERVER_URL + '/overlay/speech/overlay1/speech.mem.lzma'
-NULL_DISK = WEB_SERVER_URL + '/overlay/null/overlay1/null.qcow2.lzma'
-NULL_MEM = WEB_SERVER_URL + '/overlay/null/overlay1/null.mem.lzma'
-# BASE VM PATH
-MOPED_BASE_DISK = '/home/krha/Cloudlet/image/Ubuntu10_Base/ubuntu_base.qcow2'
-MOPED_BASE_MEM = '/home/krha/Cloudlet/image/Ubuntu10_Base/ubuntu_base.mem'
-NULL_BASE_DISK = MOPED_BASE_DISK
-NULL_BASE_MEM = MOPED_BASE_MEM
-FACE_BASE_DISK = '/home/krha/Cloudlet/image/WindowXP_Base/winxp-with-jre7_base.qcow2'
-FACE_BASE_MEM = '/home/krha/Cloudlet/image/WindowXP_Base/winxp-with-jre7_base.mem'
-SPEECH_BASE_DISK = FACE_BASE_DISK
-SPEECH_BASE_MEM = FACE_BASE_MEM
-
-def get_download_url(machine_name):
-    url_disk = ''
-    url_mem = ''
-    base_disk = ''
-    base_mem = ''
-    if machine_name.lower() == "moped":
-        url_disk = MOPED_DISK
-        url_mem = MOPED_MEM
-        base_disk = MOPED_BASE_DISK
-        base_mem = MOPED_BASE_MEM
-    elif machine_name.lower() == "face":
-        url_disk = FACE_DISK
-        url_mem = FACE_MEM
-        base_disk = FACE_BASE_DISK
-        base_mem = FACE_BASE_MEM
-    elif machine_name.lower() == "null":
-        url_disk = NULL_DISK
-        url_mem = NULL_MEM
-        base_disk = NULL_BASE_DISK
-        base_mem = NULL_BASE_MEM
-    elif machine_name.lower() == "speech":
-        url_disk = SPEECH_DISK
-        url_mem = SPEECH_MEM
-        base_disk = SPEECH_BASE_DISK
-        base_mem = SPEECH_BASE_MEM
-
-    return url_disk, url_mem, base_disk, base_mem
-
 
 def network_worker(data, queue, time_queue, chunk_size, data_size=sys.maxint):
     start_time= datetime.now()
@@ -179,44 +129,6 @@ def delta_worker(in_queue, time_queue, base_filename, out_filename):
     else:
         print "Error, xdelta process has not successed"
         return False
-
-
-def piping_synthesis(vm_name):
-    disk_url, mem_url, base_disk, base_mem = get_download_url(vm_name)
-    prev = datetime.now()
-    recover_file = []
-    delta_processes = []
-    tmp_dir = tempfile.mkdtemp()
-    time_transfer = Queue()
-    time_decomp = Queue()
-    time_delta = Queue()
-
-    for (overlay_url, base_name) in ((disk_url, base_disk), (mem_url, base_mem)):
-        download_queue = JoinableQueue()
-        decomp_queue = JoinableQueue()
-        (download_pipe_in, download_pipe_out) = Pipe()
-        (decomp_pipe_in, decomp_pipe_out) = Pipe()
-        out_filename = os.path.join(tmp_dir, overlay_url.split("/")[-1] + ".recover")
-        recover_file.append(out_filename)
-        
-        url = urllib2.urlopen(overlay_url)
-        download_process = Process(target=network_worker, args=(url, download_queue, time_transfer, CHUNK_SIZE))
-        decomp_process = Process(target=decomp_worker, args=(download_queue, decomp_queue, time_decomp))
-        delta_process = Process(target=delta_worker, args=(decomp_queue, time_delta, base_name, out_filename))
-        delta_processes.append(delta_process)
-        
-        download_process.start()
-        decomp_process.start()
-        delta_process.start()
-
-    for delta_p in delta_processes:
-        delta_p.join()
-
-    telnet_port = 9999
-    vnc_port = 2
-    exe_time = run_snapshot(recover_file[0], recover_file[1], telnet_port, vnc_port, wait_vnc_end=False)
-    print "[Time] VM Resume : " + exe_time
-    print "\n[Time] Total Time except VM Resume : " + str(datetime.now()-prev)
 
 
 def process_command_line(argv):
