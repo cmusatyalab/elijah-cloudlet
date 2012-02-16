@@ -24,6 +24,9 @@ For Android-client
   * All java lib depedency is self contained at Android-client/lib folder,
     so do not need additional install
 
+For EC2 Synthesisi(Install at ec2 side)
+  qemu-img: converting to raw disk
+  kpartx: mounting raw image
 
 
 INSTALL 
