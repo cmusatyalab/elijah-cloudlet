@@ -179,10 +179,10 @@ def create_overlay(base_image, base_mem):
     comp_mem, time2 = comp_lzma(overlay_mem, comp_mem)
 
     # remove temporary files
-    os.remove(tmp_mem)
-    os.remove(tmp_disk)
-    os.remove(overlay_disk)
-    os.remove(overlay_mem)
+    #os.remove(tmp_mem)
+    #os.remove(tmp_disk)
+    #os.remove(overlay_disk)
+    #os.remove(overlay_mem)
 
     return comp_disk, comp_mem
 
@@ -404,7 +404,7 @@ def create_base(imagefile):
 
     vm_name = os.path.basename(imagefile).split('.')[0]
     vm_path = os.path.dirname(imagefile)
-    base_image = os.path.join(vm_path, vm_name) + '.base.qcow2'
+    base_image = os.path.join(vm_path, vm_name) + '.base.img'
 
     # check existing file first
     if os.path.exists(base_image):
@@ -413,7 +413,8 @@ def create_base(imagefile):
         if str(ret).lower() != 'y':
             sys.exit(1)
 
-    command_str = 'qemu-img create -f qcow2 -b ' + imagefile + ' ' + base_image
+    #command_str = 'qemu-img create -f qcow2 -b ' + imagefile + ' ' + base_image
+    command_str = 'cp ' + imagefile + ' ' + base_image
     ret = commands.getoutput(command_str)
     print '[INFO] run Base Image to generate memory snapshot'
     telnet_port = 12123; vnc_port = 3
