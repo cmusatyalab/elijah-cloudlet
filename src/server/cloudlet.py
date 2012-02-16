@@ -179,10 +179,10 @@ def create_overlay(base_image, base_mem):
     comp_mem, time2 = comp_lzma(overlay_mem, comp_mem)
 
     # remove temporary files
-    #os.remove(tmp_mem)
-    #os.remove(tmp_disk)
-    #os.remove(overlay_disk)
-    #os.remove(overlay_mem)
+    os.remove(tmp_mem)
+    os.remove(tmp_disk)
+    os.remove(overlay_disk)
+    os.remove(overlay_mem)
 
     return comp_disk, comp_mem
 
@@ -271,6 +271,12 @@ def run_snapshot(disk_image, memory_image, telnet_port, vnc_port, wait_vnc_end):
     else:
         command_str += " -m " + str(VM_MEMORY) + " -enable-kvm -net nic -net user -serial none -parallel none -usb -usbdevice tablet -redir tcp:2222::22"
     command_str += " -incoming \"exec:cat " + memory_image + "\""
+
+    # parameter for AMI Image
+    ovftransporter = os.path.join(os.path.dirname(disk_image), "ami.iso")
+    if os.path.exists(ovftransporter):
+        command_str += " -cdrom " + str(os.path.abspath(ovftransporter))
+
     print '[INFO] Run snapshot..'
     # print command_str
     subprocess.Popen(command_str, shell=True)
@@ -445,6 +451,12 @@ def run_image(disk_image, telnet_port, vnc_port):
         command_str += " -balloon virtio"
     else:
         command_str += " -m " + str(VM_MEMORY) + " -enable-kvm -net nic -net user -serial none -parallel none -usb -usbdevice tablet -redir tcp:2222::22"
+
+    # parameter for AMI Image
+    ovftransporter = os.path.join(os.path.dirname(disk_image), "ami.iso")
+    if os.path.exists(ovftransporter):
+        command_str += " -cdrom " + str(os.path.abspath(ovftransporter))
+
     print '[DEBUG] command : ' + command_str
     subprocess.Popen(command_str, shell=True)
 

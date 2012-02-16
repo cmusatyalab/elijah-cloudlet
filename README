@@ -40,10 +40,7 @@ INSTALL
 2. Libraries
   $ sudo apt-get install python-setuptools python-dev build-essential \
         xdelta3 python-xdelta3 gtkvncviewer gvncviewer
-  $ sudo easy_install pylzma
-  $ sudo easy_install flask
-  $ sudo easy_install poster
-
+  $ sudo easy_install pylzma flask poster
 
 
 TESTED ENVIRONMENT
