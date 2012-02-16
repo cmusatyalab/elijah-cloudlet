@@ -5,3 +5,4 @@ image/
 \*.mem
 paper/
 src/kvm-qemu/ 
+src/ec2/image/
