@@ -93,7 +93,8 @@ def mount_launchVM(launch_disk_path):
     proc = subprocess.Popen(cmd_convert, shell=True, stdin=sys.stdin, stdout=sys.stdout)
     proc.wait()
     if proc.returncode != 0 or os.path.exists(raw_vm) == False:
-        print >> sys.strerr, "Error, Failed to QEMU-IMG Converting"
+        print >> sys.stderr, "Error, Failed to QEMU-IMG Converting"
+        print >> sys.stderr, "CMD: %s" % (cmd_convert)
         sys.exit(2)
     convert_time = datetime.now()-start_time
 
