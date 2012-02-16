@@ -19,77 +19,148 @@
 #
 
 import os
+import urllib2
+from multiprocessing import Process, Queue, Pipe, JoinableQueue
 from optparse import OptionParser
 from datetime import datetime
 import subprocess
 import sys
 import tempfile
+from synthesis import network_worker, decomp_worker, delta_worker
 
+CHUNK_SIZE = 1024*16
 
-def copy_vmimage(mount_path, output_path):
-    # Re-create directory
-    if os.path.exists(output_path):
-        os.removedirs(output_path)
-    os.mkdir(output_path)
+def piping_synthesis(overlay_url, base_path):
+    prev = datetime.now()
+    delta_processes = []
+    tmp_dir = tempfile.mkdtemp()
+    time_transfer = Queue()
+    time_decomp = Queue()
+    time_delta = Queue()
 
-    # Copy
-    cmd_rsync = "rsync -aHx %s/* %s" % (mount_path, output_path)
-    subprocess.Popen(cmd_rsync, shell=True, stdin=sys.stdin, stdout=sys.stdout).wait()
+    download_queue = JoinableQueue()
+    decomp_queue = JoinableQueue()
+    (download_pipe_in, download_pipe_out) = Pipe()
+    (decomp_pipe_in, decomp_pipe_out) = Pipe()
+    recover_file = os.path.join(tmp_dir, overlay_url.split("/")[-1] + ".recover")
+    
+    # synthesis
+    url = urllib2.urlopen(overlay_url)
+    download_process = Process(target=network_worker, args=(url, download_queue, time_transfer, CHUNK_SIZE))
+    decomp_process = Process(target=decomp_worker, args=(download_queue, decomp_queue, time_decomp))
+    delta_process = Process(target=delta_worker, args=(decomp_queue, time_delta, base_path, recover_file))
+    delta_processes.append(delta_process)
+    download_process.start()
+    decomp_process.start()
+    delta_process.start()
 
-    # Unmount
-    cmd_umount = "fusermount -u %s" % os.path.abspath(mount_path)
-    print "umount %s" % cmd_umount
-    subprocess.Popen(cmd_umount, shell=True, stdin=sys.stdin, stdout=sys.stdout).wait()
-
-def exec_kernel_reboot(new_rootfs):
-    pass
-
-def mount_vmimage(image_path, mount_path):
-    if not os.path.exists(mount_path):
-        os.mkdir(mount_path)
-    cmd_mount = "guestmount --ro --format=qcow2 -a %s -i %s" % (os.path.abspath(image_path), os.path.abspath(mount_path))
-    print cmd_mount
-    subprocess.Popen(cmd_mount, shell=True, stdin=sys.stdin, stdout=sys.stdout).wait()
-
-    # check boot directory
-    boot_path = os.path.join(mount_path, 'boot')
-    if not os.path.exists(boot_path):
-        print >> sys.stderr, "Cannot find boot path or mount failed : %s" % (boot_path)
-        sys.exit(2)
-    return mount_path
+    # wait until end
+    delta_process.join()
+    print "\n[Time] Total Time for synthesis(including download) : " + str(datetime.now()-prev)
+    return recover_file
 
 
 def process_command_line(argv):
-    help_message = "\nEC2 synthesis is designed for synthesis approach for EC2 Cloud\n" + \
-            "Application Basic. purpose of this script is preparing kexec() by making\n" + \
-            "customized VM at block device."
+    help_message = "\nEC2 synthesis is designed for rapid launching of customizing instance at Amazon EC2"
 
-    parser = OptionParser(usage="usage: %prog -i [Disk Image] -o [Output Path]\n" + help_message,
-            version="EC2 Synthesys 0.1")
+    parser = OptionParser(usage="usage: %prog -o [Overlay Download URL] -b [Base VM Path] -m [Instance Mount Path]" + help_message,
+            version="EC2 Synthesys v0.1.1")
     parser.add_option(
-            '-i', '--input', action='store', type='string', dest='image_path',
-            help='Set input Disk Image Path.')
+            '-o', '--overlay', action='store', type='string', dest='overlay_download_url',
+            help='Set overlay disk download URL.')
     parser.add_option(
-            '-o', '--output', action='store', type='string', dest='output_path',
-            help='Set output file system path.\nMust be different from current Root file system')
+            '-b', '--base', action='store', type='string', dest='base_path',
+            help='Set Base disk path.')
+    parser.add_option(
+            '-m', '--mount', action='store', type='string', dest='output_mount',
+            help='Set output Mount point. This Mount point is EC2 inital disk.')
     settings, args = parser.parse_args(argv)
     if not len(args) == 0:
         parser.error('program takes no command-line arguments; "%s" ignored.' % (args,))
-    if settings.output_path == None or settings.image_path == None:
-        parser.error('program requires INPUT and OUTPUT')
+    if settings.overlay_download_url == None or settings.base_path == None or settings.output_mount == None:
+        parser.error('Read usage')
 
     return settings, args
+
+def mount_launchVM(launch_disk_path):
+    mount_dir = tempfile.mkdtemp()
+    raw_vm = launch_disk_path + ".raw"
+
+    # qemu-img convert
+    start_time = datetime.now()
+    cmd_convert = "qemu-img convert -f qcow2 %s -O raw %s" % (launch_disk_path, raw_vm)
+    proc = subprocess.Popen(cmd_convert, shell=True, stdin=sys.stdin, stdout=sys.stdout)
+    proc.wait()
+    if proc.returncode != 0 or os.path.exists(raw_vm) == False:
+        print >> sys.strerr, "Error, Failed to QEMU-IMG Converting"
+        sys.exit(2)
+    convert_time = datetime.now()-start_time
+
+    # mount
+    start_time = datetime.now()
+    cmd_mapping = "sudo kpartx -av %s" % (raw_vm)
+    proc = subprocess.Popen(cmd_mapping, shell=True, stdin=sys.stdin, stdout=subprocess.PIPE)
+    proc.wait()
+    if proc.returncode != 0:
+        print >> sys.stderr, "Error, Failed to kpartx"
+        sys.exit(2)
+    output = proc.stdout.readline()
+    output = output[output.find("loop"):]
+    mapper_dev = output.split(" ")[0].strip()
+    print "mapper dev : %s, %s" % (output, mapper_dev)
+    cmd_mount = "sudo mount /dev/mapper/%s %s" % (mapper_dev, mount_dir)
+    proc = subprocess.Popen(cmd_mount, shell=True, stdin=sys.stdin, stdout=sys.stdout)
+    proc.wait()
+    if proc.returncode != 0:
+        print >> sys.stderr, "Error, Failed to mount, ret code : " + str(proc.returncode)
+        sys.exit(2)
+    mount_time = datetime.now()-start_time
+
+    print "[TIME] QCOW2 Converting time : %s" % (str(convert_time))
+    print "[TIME] RAW Mouting time : %s" % (str(mount_time))
+    return mount_dir
+
+
+def rsync_overlayVM(vm_dir, instance_dir):
+    # TODO: check mount list and automatically umount residues
+    subprocess.Popen("sudo umount %s/run" % (instance_dir) , shell=True, stdin=sys.stdin, stdout=sys.stdout).wait()
+
+    # erase instance dir
+    if os.path.exists(instance_dir):
+        message = "Are you sure to delete all files at %s?(y/N) " % (instance_dir)
+        ret = raw_input(message)
+        if str(ret) != 'y':
+            sys.exit(1)
+    else:
+        print >> sys.strerr, "Instance directory does not exists, " + str(instance_dir)
+        sys.exit(1)
+    
+    cmd_erase = "sudo rm -rf %s/*", instance_dir
+    subprocess.Popen(cmd_erase, shell=True, stdin=sys.stdin, stdout=sys.stdout).wait()
+
+    # rsync
+    cmd_rsync = "sudo rsync -avHx %s/ %s/" % (vm_dir, instance_dir)
+    subprocess.Popen(cmd_rsync, shell=True, stdin=sys.stdin, stdout=sys.stdout).wait()
+    subprocess.Popen("sudo sync", shell=True, stdin=sys.stdin, stdout=sys.stdout).wait()
+
+    # umount
+    print "[INFO] umount instance dir, %s" % (instance_dir)
+    subprocess.Popen("sudo umount %s/" % (instance_dir), shell=True, stdin=sys.stdin, stdout=sys.stdout).wait()
+    subprocess.Popen("sudo sync", shell=True, stdin=sys.stdin, stdout=sys.stdout).wait()
 
 
 def main(argv=None):
     settings, args = process_command_line(sys.argv[1:])
-    temp_dir = tempfile.mkdtemp()
-    mount_path = mount_vmimage(settings.image_path, temp_dir)
-    if not mount_path:
-        print >> sys.stderr, "Cannot mount %s to temp directory %s" % (settings.image_path, temp_dir)
-        sys.exit(2)
-    copy_vmimage(mount_path, settings.output_path)
-    exec_kernel_reboot(settings.output_path)
+
+    # Synthesis overlay
+    qcow_launch_image = piping_synthesis(settings.overlay_download_url, settings.base_path)
+
+    # Mount VM File system
+    launchVM_dir =  mount_launchVM(qcow_launch_image)
+
+    # rsync VM to origianl disk
+    rsync_overlayVM(launchVM_dir, settings.output_mount)
+
     return 0
 
 
