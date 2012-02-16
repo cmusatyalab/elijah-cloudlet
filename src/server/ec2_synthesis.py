@@ -45,6 +45,7 @@ def piping_synthesis(overlay_url, base_path):
     recover_file = os.path.join(tmp_dir, overlay_url.split("/")[-1] + ".recover")
     
     # synthesis
+    print "[INFO] Start Downloading at %s" % (overlay_url)
     url = urllib2.urlopen(overlay_url)
     download_process = Process(target=network_worker, args=(url, download_queue, time_transfer, CHUNK_SIZE))
     decomp_process = Process(target=decomp_worker, args=(download_queue, decomp_queue, time_decomp))
@@ -94,8 +95,8 @@ def mount_launchVM(launch_disk_path):
         sys.exit(2)
     mount_time = datetime.now()-start_time
 
-    print "[TIME] QCOW2 Converting time : %s" % (str(convert_time))
-    print "[TIME] RAW Mouting time : %s" % (str(mount_time))
+    print "[TIME] QCOW2 to Raw converting time : %s" % (str(convert_time))
+    print "[TIME] Raw Mouting time : %s" % (str(mount_time))
     return mount_dir, raw_vm
 
 
@@ -115,14 +116,17 @@ def rsync_overlayVM(vm_dir, instance_dir):
         sys.exit(1)
     
     cmd_erase = "sudo rm -rf %s" % os.path.join(instance_dir, "*")
-    print "[INFO] erase instacnce dir: %s" % (cmd_erase)
+    print "[INFO] Erase instance dir: %s" % (cmd_erase)
     subprocess.Popen(cmd_erase, shell=True, stdin=sys.stdin, stdout=sys.stdout).wait()
 
     # rsync
     print "[INFO] rsync from %s to %s" % (vm_dir, instance_dir)
+    start_time = datetime.now()
     cmd_rsync = "sudo rsync -aHx %s/ %s/" % (vm_dir, instance_dir)
     subprocess.Popen(cmd_rsync, shell=True, stdin=sys.stdin, stdout=sys.stdout).wait()
     subprocess.Popen("sudo sync", shell=True, stdin=sys.stdin, stdout=sys.stdout).wait()
+    rsync_time = datetime.now()-start_time
+    print "[TIME] rsync time : %s" % (str(rsync_time))
 
     # umount
     print "[INFO] umount instance dir, %s" % (instance_dir)
