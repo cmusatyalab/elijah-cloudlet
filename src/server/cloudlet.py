@@ -34,6 +34,7 @@ BALLOON_MEM_SIZE = VM_MEMORY
 VCPU_NUMBER = 1
 
 KVM = '../kvm-qemu/x86_64-softmmu/qemu-system-x86_64'
+OVF_TRANSPORTER = "../../image/Ubuntu_AMI/ovftransport.iso"
 PORT_FORWARDING = "-redir tcp:9876::9876 -redir tcp:2222::22 -redir tcp:19092::9092 -redir tcp:6789::6789"
 
 
@@ -134,7 +135,10 @@ def create_overlay(base_image, base_mem):
     # Run VM
     argument = []
     if base_mem == None:
-        run_image(tmp_disk, telnet_port, vnc_port, wait_vnc_end=True)
+        if not os.path.exists(OVF_TRANSPORTER):
+            print >> sys.stderr, "Error, you must have OVF transport at %s" % (ovf_transporter)
+            sys.exit(2)
+        run_image(tmp_disk, telnet_port, vnc_port, wait_vnc_end=True, cdrom=OVF_TRANSPORTER)
         # terminal VM
         terminate_vm(telnet_port)
         argument.append((base_image, tmp_disk, overlay_disk))
@@ -444,7 +448,7 @@ def create_base(imagefile):
     return base_image, base_mem
 
 
-def run_image(disk_image, telnet_port, vnc_port, wait_vnc_end=True):
+def run_image(disk_image, telnet_port, vnc_port, wait_vnc_end=True, cdrom=None):
     global KVM
     if os.path.exists(KVM):
         command_str = "%s -hda " % KVM
@@ -460,9 +464,8 @@ def run_image(disk_image, telnet_port, vnc_port, wait_vnc_end=True):
         command_str += " -m " + str(VM_MEMORY) + " -enable-kvm -net nic -net user -serial none -parallel none -usb -usbdevice tablet -redir tcp:2222::22"
 
     # parameter for AMI Image
-    ovftransporter = os.path.join(os.path.dirname(disk_image), "ami.iso")
-    if os.path.exists(ovftransporter):
-        command_str += " -cdrom " + str(os.path.abspath(ovftransporter))
+    if cdrom != None:
+        command_str += " -cdrom " + str(os.path.abspath(cdrom))
 
     print '[DEBUG] command : ' + command_str
     subprocess.Popen(command_str, shell=True)
@@ -525,6 +528,11 @@ def main(argv):
     elif o in ("-r", "--run"):
         if len(args) == 4:
             # running VM from booting, EC2 case
+            # check OVF cdrom. It is required to run AMI
+            if not os.path.exists(OVF_TRANSPORTER):
+                print >> sys.stderr, "Error, you must have OVF transport at %s" % (ovf_transporter)
+                sys.exit(2)
+                
             base_img = os.path.abspath(args[0]); 
             comp_img = os.path.abspath(args[1]); 
             telnet_port = int(args[2]); vnc_port = int(args[3])
@@ -533,7 +541,7 @@ def main(argv):
             ret_files = recover_snapshot(base_img, None, comp_img, None)
 
             # run snapshot non-blocking mode
-            run_image(ret_files[0], telnet_port, vnc_port, wait_vnc_end=False)
+            run_image(ret_files[0], telnet_port, vnc_port, wait_vnc_end=False, cdrom=OVF_TRANSPORTER)
             print '[INFO] Launch overlay Disk image'
             return;
         if len(args) == 6:
