@@ -135,14 +135,17 @@ def create_overlay(base_image, base_mem):
     # Run VM
     argument = []
     if base_mem == None:
+        # create overlay only for disk image
         if not os.path.exists(OVF_TRANSPORTER):
-            print >> sys.stderr, "Error, you must have OVF transport at %s" % (ovf_transporter)
+            print >> sys.stderr, "Error, you must have OVF transport at %s\n(or change path at cloudlet.py file" % (ovf_transporter)
             sys.exit(2)
+
         run_image(tmp_disk, telnet_port, vnc_port, wait_vnc_end=True, cdrom=OVF_TRANSPORTER)
         # terminal VM
         terminate_vm(telnet_port)
         argument.append((base_image, tmp_disk, overlay_disk))
     else:
+        # create overlay only for disk and memory
         run_snapshot(tmp_disk, base_mem, telnet_port, vnc_port, wait_vnc_end=True)
         # stop and migrate to disk
         print "[INFO] migrating memory snapshot to disk"
@@ -314,6 +317,8 @@ def terminate_vm(telnet_port):
     tn.read_until("(qemu)", 10)
 
     # Stop running VM
+    tn.write("stop\n")
+    tn.read_until("(qemu)", 10)
     tn.write("quit\n")
     time.sleep(1)
 
