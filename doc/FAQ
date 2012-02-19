@@ -1,0 +1,45 @@
+Elijah: Cloudlet Infrastructure for Mobile Computing
+Copyright (C) 2011-2012 Carnegie Mellon University
+
+This is a developing project and some features might not be stable yet.
+Please visit our website at <http://elijah.cs.cmu.edu/>.
+
+This document presents FAQs.
+
+1. Telnet socket connection error at cloudlet.py script
+
+	$ ./cloudlet.py -b ./ROCKSTAR.qcow2
+	[INFO] run Base Image to generate memory snapshot
+	[DEBUG] command : kvm -hda /home/eash/Desktop/elijah-cloudlets-Cloudlets-71519e3/src/server/ROCKSTAR.base.qcow2 -m 2048 -monitor telnet:localhost:12123,server,nowait -enable-kvm -net nic -net user -serial none -parallel none -usb -usbdevice tablet -redir tcp:9876::9876 -vnc :3 -smp 1 -balloon virtio
+	qemu: at most 2047 MB RAM can be simulated
+	Failed to connect to server
+	Traceback (most recent call last):
+	File "./cloudlet.py", line 530, in <module>
+	main(sys.argv)
+	File "./cloudlet.py", line 487, in main
+	base_image, base_mem = create_base(input_image_path)
+	File "./cloudlet.py", line 425, in create_base
+	run_migration(telnet_port, vnc_port, base_mem)
+	File "./cloudlet.py", line 309, in run_migration
+	tn = telnetlib.Telnet('localhost', telnet_port)
+	File "/usr/lib/python2.7/telnetlib.py", line 209, in __init__
+	self.open(host, port, timeout)
+	File "/usr/lib/python2.7/telnetlib.py", line 225, in open
+	self.sock = socket.create_connection((host, port), timeout)
+	File "/usr/lib/python2.7/socket.py", line 571, in create_connection
+	raise err
+	socket.error: [Errno 111] Connection refused
+	eash@eash-Lenovo-G550:~/Desktop/elijah-cloudlets-Cloudlets-71519e3/src/server$
+
+	ANS:
+
+	First of all, it assumes use of KVM. So please delete virtualbox and run it with kvm.
+	(Virtualbox and KVM cannot be installed and run at the time. They're conflict each other/)
+	Reason of this error is, it failed to connect to qemu(kvm) command line interface 
+	when it tries to generate memory snapshot. That means, kvm does not properly launched your VM. 
+	So, I would guess that you have not see any of running VM when you run this command. 
+	The script supposes to run your VM when you execute "./cloudlet.py -b ~" and will 
+	automatically connect VM though VNC GUI. Then, it will generate  base VM(disk image and memory) 
+	when you close your VNC GUI.
+	So my recommendation is to use KVM and check you can see VNC GUI when you execute this command. 
+
