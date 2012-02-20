@@ -109,7 +109,7 @@ def rsync_overlayVM(vm_dir, instance_dir):
 
     # possible mount residue at origianl block
     new_mount_dir = os.path.join(instance_dir, "mnt")
-    print "[INFO] Restart Init processs : " + new_mount_dir
+    print "[INFO] Remove possible mountings at : " + new_mount_dir
     subprocess.Popen("sudo umount %s" % (new_mount_dir), shell=True, stdin=sys.stdin, stdout=sys.stdout).wait()
 
     # erase instance dir
