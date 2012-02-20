@@ -102,8 +102,10 @@ def mount_launchVM(launch_disk_path):
 
 def rsync_overlayVM(vm_dir, instance_dir):
     instance_dir = os.path.join(instance_dir, ".")
-    # TODO: check mount list and automatically umount residues
-    subprocess.Popen("sudo umount %s" % (os.path.join(instance_dir, "run")) , shell=True, stdin=sys.stdin, stdout=sys.stdout).wait()
+
+    # restart init process because it might inidicate original init process
+    print "[INFO] Restart Init processs"
+    subprocess.Popen("sudo telinit u", shell=True, stdin=sys.stdin, stdout=sys.stdout).wait()
 
     # erase instance dir
     if os.path.exists(instance_dir):
