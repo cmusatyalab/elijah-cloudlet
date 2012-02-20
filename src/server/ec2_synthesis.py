@@ -107,6 +107,11 @@ def rsync_overlayVM(vm_dir, instance_dir):
     print "[INFO] Restart Init processs"
     subprocess.Popen("sudo telinit u", shell=True, stdin=sys.stdin, stdout=sys.stdout).wait()
 
+    # possible mount residue at origianl block
+    new_mount_dir = os.path.join(instance_dir, "mnt")
+    print "[INFO] Restart Init processs : " + new_mount_dir
+    subprocess.Popen("sudo umount %s" % (new_mount_dir), shell=True, stdin=sys.stdin, stdout=sys.stdout).wait()
+
     # erase instance dir
     if os.path.exists(instance_dir):
         message = "Are you sure to delete all files at %s?(y/N) " % (instance_dir)
