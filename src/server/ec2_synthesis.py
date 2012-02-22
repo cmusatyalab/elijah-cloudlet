@@ -176,6 +176,10 @@ def process_command_line(argv):
         print >> sys.stderr, "Mount directory does not exist at %s", settings.output_mount
         sys.exit(2)
 
+    if not os.path.ismount(settings.output_mount):
+        print >> sys.stderr, "It is not valid mount point at %s", settings.output_mount
+        sys.exit(2)
+
     return settings, args
 
 
