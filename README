@@ -18,6 +18,8 @@ For Python Script
   pylmza    : compression
   gvncviewer  : vnc viewer
   poster    : Multipart HTTP POST only for emulated_client.py 
+  boto		: Amazon AWS API(only for ec2_launcher.py)
+  paramiko	: SSH Client(only for ec2_launcher.py)
   
 For Android-client
   UPnP Discovery : cling-core-1.0.5, teleal-command-1.0.13
@@ -40,7 +42,7 @@ INSTALL
 2. Libraries
   $ sudo apt-get install python-setuptools python-dev build-essential \
         xdelta3 python-xdelta3 gtkvncviewer gvncviewer
-  $ sudo easy_install pylzma flask poster
+  $ sudo easy_install pylzma flask poster boto paramiko
 
 
 TESTED ENVIRONMENT
