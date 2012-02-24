@@ -37,7 +37,7 @@ INSTALL
 ------------------------------
 1. KVM (https://help.ubuntu.com/community/KVM/Installation)
   $ sudo apt-get install qemu-kvm libvirt-bin ubuntu-vm-builder \
-            bridge-utils
+            bridge-utils kvm-pxe
   
 2. Libraries
   $ sudo apt-get install python-setuptools python-dev build-essential \

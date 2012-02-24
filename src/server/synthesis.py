@@ -186,7 +186,7 @@ def piping_synthesis(vm_name):
     prev = datetime.now()
     recover_file = []
     delta_processes = []
-    tmp_dir = tempfile.mkdtemp()
+    tmp_dir = './'
     time_transfer = Queue()
     time_decomp = Queue()
     time_delta = Queue()

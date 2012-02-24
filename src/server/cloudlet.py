@@ -33,7 +33,7 @@ VM_MEMORY = 2048
 BALLOON_MEM_SIZE = VM_MEMORY
 VCPU_NUMBER = 1
 
-KVM = '../kvm-qemu/x86_64-softmmu/qemu-system-x86_64'
+#KVM = '../kvm-qemu/x86_64-softmmu/qemu-system-x86_64'
 OVF_TRANSPORTER = "../../image/Ubuntu_AMI/ovftransport.iso"
 PORT_FORWARDING = "-redir tcp:9876::9876 -redir tcp:2222::22 -redir tcp:19092::9092 -redir tcp:6789::6789"
 
@@ -126,7 +126,8 @@ def create_overlay(base_image, base_mem):
     overlay_mem = os.path.join(os.getcwd(), vm_name) + info_tag + '.mem'
     tmp_disk = os.path.join(vm_path, vm_name) + '_tmp.qcow2'
     tmp_mem = os.path.join(vm_path, vm_name) + '_tmp.mem'
-    command_str = 'cp ' + base_image + ' ' + tmp_disk
+    command_str = 'qemu-img create -f qcow2 -b ' + base_image + ' ' + tmp_disk
+    #command_str = 'cp ' + base_image + ' ' + tmp_disk
     ret = commands.getoutput(command_str)
 
     print '[INFO] run Base Image to generate memory snapshot'
@@ -283,7 +284,7 @@ def run_snapshot(disk_image, memory_image, telnet_port, vnc_port, wait_vnc_end):
         command_str += " -cdrom " + str(os.path.abspath(ovftransporter))
 
     print '[INFO] Run snapshot..'
-    # print command_str
+    print command_str
     subprocess.Popen(command_str, shell=True)
     start_time = datetime.now()
     
@@ -454,11 +455,7 @@ def create_base(imagefile):
 
 
 def run_image(disk_image, telnet_port, vnc_port, wait_vnc_end=True, cdrom=None):
-    global KVM
-    if os.path.exists(KVM):
-        command_str = "%s -hda " % KVM
-    else:
-        command_str = "kvm -hda "
+    command_str = "kvm -hda "
     command_str += disk_image
     if telnet_port != 0 and vnc_port != -1:
         command_str += " -m " + str(VM_MEMORY) + " -monitor telnet:localhost:" + str(telnet_port) + ",server,nowait -enable-kvm -net nic -net user -serial none -parallel none -usb -usbdevice tablet -redir tcp:9876::9876"
