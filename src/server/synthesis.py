@@ -51,12 +51,12 @@ SPEECH_MEM = WEB_SERVER_URL + '/overlay/speech/overlay1/speech.mem.lzma'
 NULL_DISK = WEB_SERVER_URL + '/overlay/null/overlay1/null.qcow2.lzma'
 NULL_MEM = WEB_SERVER_URL + '/overlay/null/overlay1/null.mem.lzma'
 # BASE VM PATH
-MOPED_BASE_DISK = '/home/krha/Cloudlet/image/Ubuntu10_Base/ubuntu_base.qcow2'
-MOPED_BASE_MEM = '/home/krha/Cloudlet/image/Ubuntu10_Base/ubuntu_base.mem'
+MOPED_BASE_DISK = '/home/krha/cloudlet/image/ubuntu-10.04-x86_64-desktop/ubuntu.base.img'
+MOPED_BASE_MEM = '/home/krha/cloudlet/image/ubuntu-10.04-x86_64-desktop/ubuntu.base.mem'
 NULL_BASE_DISK = MOPED_BASE_DISK
 NULL_BASE_MEM = MOPED_BASE_MEM
-FACE_BASE_DISK = '/home/krha/Cloudlet/image/WindowXP_Base/winxp-with-jre7_base.qcow2'
-FACE_BASE_MEM = '/home/krha/Cloudlet/image/WindowXP_Base/winxp-with-jre7_base.mem'
+FACE_BASE_DISK = '/home/krha/cloudlet/image/WindowXP_Base/winxp-with-jre7_base.qcow2'
+FACE_BASE_MEM = '/home/krha/cloudlet/image/WindowXP_Base/winxp-with-jre7_base.mem'
 SPEECH_BASE_DISK = FACE_BASE_DISK
 SPEECH_BASE_MEM = FACE_BASE_MEM
 
@@ -155,13 +155,15 @@ def delta_worker(in_queue, time_queue, base_filename, out_filename):
     xdelta_process = subprocess.Popen(command_str, shell=True)
     out_pipe = open(out_pipename, "w")
 
+    # TODO: If chunk size is too big, XDELTA checksum error occur
+    # TODO: It is probably related to the maximum queue buffer size
     while True:
         chunk = in_queue.get()
         if chunk == END_OF_FILE:
             break;
 
         data_size = data_size + len(chunk)
-        #print "in delta : %d, %d, %d" %(counter, len(chunk), data_size)
+        #print "in delta : %d, %d, %d %s" %(counter, len(chunk), data_size, out_filename)
 
         out_pipe.write(chunk)
         in_queue.task_done()
@@ -190,6 +192,8 @@ def piping_synthesis(vm_name):
     time_transfer = Queue()
     time_decomp = Queue()
     time_delta = Queue()
+
+    print "[INFO] Chunk size : %d" % (CHUNK_SIZE)
 
     for (overlay_url, base_name) in ((disk_url, base_disk), (mem_url, base_mem)):
         download_queue = JoinableQueue()
@@ -230,9 +234,6 @@ def process_command_line(argv):
     parser.add_option(
             '-n', '--name', type='choice', choices=application_names, action='store', dest='vmname',
             help="[test mode] Set VM name among %s" % (str(application_names)))
-    parser.add_option(
-            '-s', '--chunk', action='store', dest='chunk_size', default=16,
-            help="Set chunk size(K) for process")
     settings, args = parser.parse_args(argv)
     if len(args) == 0 or args[0] not in operation_mode:
         parser.error('program takes no command-line arguments; "%s" ignored.' % (args,))
@@ -347,6 +348,7 @@ class SynthesisTCPHandler(SocketServer.StreamRequestHandler):
         time_delta = Queue()
 
         start_time = datetime.now()
+        print "[INFO] Chunk size : %d" % (CHUNK_SIZE)
         for overlay_name, file_size, base in (('disk', disk_size, base_disk_path), ('memory', mem_size, base_mem_path)):
             download_queue = JoinableQueue()
             decomp_queue = JoinableQueue()
@@ -408,11 +410,7 @@ def get_local_ipaddress():
 
 def main(argv=None):
     global LOCAL_IPADDRESS
-    global CHUNK_SIZE
     mode, settings, args = process_command_line(sys.argv[1:])
-
-    if settings.chunk_size:
-        CHUNK_SIZE = int(settings.chunk_size)*1024
 
     if mode == operation_mode[0]: # run mode
         config_file, error_msg = parse_configfile(settings.config_filename)

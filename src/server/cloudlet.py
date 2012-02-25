@@ -58,10 +58,14 @@ def diff_files(source_file, target_file, output_file):
 
 
 def merge_file(source_file, overlay_file, output_file):
-    command_patch = ['xdelta3', '-df', '-s', source_file, overlay_file, output_file]
+    #command_patch = ['xdelta3', '-df', '-s', source_file, overlay_file, output_file]
+    # ret = xdelta3.xd3_main_cmdline(command_patch)
+    command_patch = "xdelta3 -df -s %s %s %s" % (source_file, overlay_file, output_file)
+    proc = subprocess.Popen(command_patch, shell=True)
+    proc.wait()
+
     #print command_patch
-    ret = xdelta3.xd3_main_cmdline(command_patch)
-    if ret == 0:
+    if proc.returncode == 0:
         #print "output : %s (%d)" % (output_file, os.path.getsize(output_file))
         return output_file
     else:

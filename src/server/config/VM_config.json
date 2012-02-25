@@ -9,8 +9,8 @@
          "type":"baseVM",
          "OS":"Linux",
          "OS-version":"Ubuntu_10.04 LTS",
-         "diskimg_path":"../../image/Ubuntu10.04_Base/ubuntu.base.qcow2",
-         "memorysnapshot_path":"../../image/Ubuntu10.04_Base/ubuntu.base.mem"
+         "diskimg_path":"../../image/ubuntu-10.04-x86_64-desktop/ubuntu.base.img",
+         "memorysnapshot_path":"../../image/ubuntu-10.04-x86_64-desktop/ubuntu.base.mem"
       },
       {
          "name":"windowXP",
