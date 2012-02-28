@@ -34,7 +34,7 @@ BALLOON_MEM_SIZE = VM_MEMORY
 VCPU_NUMBER = 1
 
 #KVM = '../kvm-qemu/x86_64-softmmu/qemu-system-x86_64'
-OVF_TRANSPORTER = "../../image/Ubuntu_AMI/ovftransport.iso"
+OVF_TRANSPORTER = "../../image/ubuntu-11.10-x86_64-server/ovftransport.iso"
 PORT_FORWARDING = "-redir tcp:9876::9876 -redir tcp:2222::22 -redir tcp:19092::9092 -redir tcp:6789::6789"
 
 
