@@ -113,6 +113,7 @@ def rsync_overlayVM(vm_dir, instance_dir):
     subprocess.Popen("sudo umount %s" % (new_mount_dir), shell=True, stdin=sys.stdin, stdout=sys.stdout).wait()
 
     # erase instance dir
+    '''
     if os.path.exists(instance_dir):
         message = "Are you sure to delete all files at %s?(y/N) " % (instance_dir)
         ret = raw_input(message)
@@ -121,6 +122,7 @@ def rsync_overlayVM(vm_dir, instance_dir):
     else:
         print >> sys.strerr, "Instance directory does not exists, " + str(instance_dir)
         sys.exit(1)
+    '''
     
     cmd_erase = "sudo rm -rf %s" % os.path.join(instance_dir, "*")
     print "[INFO] Erase instance dir: %s" % (cmd_erase)
