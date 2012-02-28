@@ -131,7 +131,7 @@ def rsync_overlayVM(vm_dir, instance_dir):
     # rsync
     print "[INFO] rsync from %s to %s" % (vm_dir, instance_dir)
     start_time = datetime.now()
-    cmd_rsync = "sudo rsync -aHx %s/ %s/" % (vm_dir, instance_dir)
+    cmd_rsync = "sudo rsync -aHx --delete %s/ %s/" % (vm_dir, instance_dir)
     subprocess.Popen(cmd_rsync, shell=True, stdin=sys.stdin, stdout=sys.stdout).wait()
     subprocess.Popen("sudo sync", shell=True, stdin=sys.stdin, stdout=sys.stdout).wait()
     rsync_time = datetime.now()-start_time
