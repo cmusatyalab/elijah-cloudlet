@@ -134,11 +134,11 @@ def rsync_overlayVM(vm_dir, instance_dir):
     else:
         print >> sys.strerr, "Instance directory does not exists, " + str(instance_dir)
         sys.exit(1)
-    '''
     
     cmd_erase = "sudo rm -rf %s" % os.path.join(instance_dir, "*")
     print "[INFO] Erase instance dir: %s" % (cmd_erase)
     subprocess.Popen(cmd_erase, shell=True, stdin=sys.stdin, stdout=sys.stdout).wait()
+    '''
 
     # rsync
     print "[INFO] rsync from %s to %s" % (vm_dir, instance_dir)
