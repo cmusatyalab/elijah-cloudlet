@@ -61,9 +61,21 @@ def piping_synthesis(overlay_url, base_path):
     return recover_file
 
 
-def mount_launchVM(launch_disk_path):
+def mount_launchVM(launch_disk_path, base_vm_path):
     mount_dir = tempfile.mkdtemp()
     raw_vm = launch_disk_path + ".raw"
+
+    # rebase overlay img
+    start_time = datetime.now()
+    cmd_rebase = "qemu-img rebase -f qcow2 -b %s -F qcow2 %s" % (base_vm_path, launch_disk_path)
+    proc = subprocess.Popen(cmd_rebase, shell=True, stdin=sys.stdin, stdout=sys.stdout)
+    proc.wait()
+    if proc.returncode != 0:
+        print >> sys.stderr, "Error, Failed to QEMU-IMG Rebasing"
+        print >> sys.stderr, "CMD: %s" % (cmd_convert)
+        sys.exit(2)
+    convert_time = datetime.now()-start_time
+
 
     # qemu-img convert
     start_time = datetime.now()
@@ -193,7 +205,7 @@ def main(argv=None):
     qcow_launch_image = piping_synthesis(settings.overlay_download_url, settings.base_path)
 
     # Mount VM File system
-    launchVM_dir, VM_path =  mount_launchVM(qcow_launch_image)
+    launchVM_dir, VM_path =  mount_launchVM(qcow_launch_image, settings.base_path)
 
     # rsync VM to origianl disk
     rsync_overlayVM(launchVM_dir, settings.output_mount)
