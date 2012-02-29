@@ -72,7 +72,7 @@ def mount_launchVM(launch_disk_path, base_vm_path):
     proc.wait()
     if proc.returncode != 0:
         print >> sys.stderr, "Error, Failed to QEMU-IMG Rebasing"
-        print >> sys.stderr, "CMD: %s" % (cmd_convert)
+        print >> sys.stderr, "CMD: %s" % (cmd_rebase)
         sys.exit(2)
     convert_time = datetime.now()-start_time
 
