@@ -67,7 +67,7 @@ def mount_launchVM(launch_disk_path, base_vm_path):
 
     # rebase overlay img
     start_time = datetime.now()
-    cmd_rebase = "qemu-img rebase -f qcow2 -b %s -F qcow2 %s" % (base_vm_path, launch_disk_path)
+    cmd_rebase = "qemu-img rebase -f qcow2 -u -b %s -F qcow2 %s" % (base_vm_path, launch_disk_path)
     proc = subprocess.Popen(cmd_rebase, shell=True, stdin=sys.stdin, stdout=sys.stdout)
     proc.wait()
     if proc.returncode != 0:
