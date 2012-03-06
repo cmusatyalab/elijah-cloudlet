@@ -130,8 +130,8 @@ def create_overlay(base_image, base_mem):
     overlay_mem = os.path.join(os.getcwd(), vm_name) + info_tag + '.mem'
     tmp_disk = os.path.join(vm_path, vm_name) + '_tmp.qcow2'
     tmp_mem = os.path.join(vm_path, vm_name) + '_tmp.mem'
-    command_str = 'qemu-img create -f qcow2 -b ' + base_image + ' ' + tmp_disk
     #command_str = 'cp ' + base_image + ' ' + tmp_disk
+    command_str = 'qemu-img create -f qcow2 -b ' + base_image + ' ' + tmp_disk
     ret = commands.getoutput(command_str)
 
     print '[INFO] run Base Image to generate memory snapshot'
