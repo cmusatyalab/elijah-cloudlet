@@ -462,7 +462,7 @@ def run_image(disk_image, telnet_port, vnc_port, wait_vnc_end=True, cdrom=None):
     command_str = "kvm -hda "
     command_str += disk_image
     if telnet_port != 0 and vnc_port != -1:
-        command_str += " -m " + str(VM_MEMORY) + " -monitor telnet:localhost:" + str(telnet_port) + ",server,nowait -enable-kvm -net nic -net user -serial none -parallel none -usb -usbdevice tablet -redir tcp:9876::9876"
+        command_str += " -m " + str(VM_MEMORY) + " -monitor telnet:localhost:" + str(telnet_port) + ",server,nowait -enable-kvm -net nic -net user -serial none -parallel none -usb -usbdevice tablet -redir tcp:9876::9876 -redir tcp:2222::22"
         command_str += " -vnc :" + str(vnc_port)
         command_str += " -smp " + str(VCPU_NUMBER)
         command_str += " -balloon virtio"

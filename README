@@ -41,7 +41,7 @@ INSTALL
   
 2. Libraries
   $ sudo apt-get install python-setuptools python-dev build-essential \
-        xdelta3 python-xdelta3 gtkvncviewer gvncviewer
+        xdelta3 python-xdelta3 gtkvncviewer gvncviewer p7zip-full 
   $ sudo easy_install pylzma flask poster boto paramiko
 
 
