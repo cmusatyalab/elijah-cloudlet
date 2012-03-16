@@ -265,7 +265,7 @@ def telnet_connection_waiting(telnet_port):
     return False
 
 
-def run_snapshot(disk_image, memory_image, telnet_port, vnc_port, wait_vnc_end):
+def run_snapshot(disk_image, memory_image, telnet_port, vnc_port, wait_vnc_end, terminal_mode=False):
     vm_path = os.path.dirname(memory_image)
     vnc_file = os.path.join(vm_path, 'kvm.vnc')
 
@@ -306,6 +306,9 @@ def run_snapshot(disk_image, memory_image, telnet_port, vnc_port, wait_vnc_end):
     end_time = datetime.now()
 
     if ret:
+        if terminal_mode:
+            return str(end_time-start_time)
+
         # Run VNC
         # vnc_process = subprocess.Popen(VNC_VIEWER + " " + vnc_file, shell=True, stdin=subprocess.PIPE, stdout=subprocess.PIPE)
         vnc_process = subprocess.Popen("gvncviewer localhost:" + str(vnc_port), shell=True, stdin=None, stdout=None, stderr=None)
@@ -458,7 +461,7 @@ def create_base(imagefile):
     return base_image, base_mem
 
 
-def run_image(disk_image, telnet_port, vnc_port, wait_vnc_end=True, cdrom=None):
+def run_image(disk_image, telnet_port, vnc_port, wait_vnc_end=True, cdrom=None, terminal_mode=False):
     command_str = "kvm -hda "
     command_str += disk_image
     if telnet_port != 0 and vnc_port != -1:
@@ -475,9 +478,12 @@ def run_image(disk_image, telnet_port, vnc_port, wait_vnc_end=True, cdrom=None):
 
     print '[DEBUG] command : ' + command_str
     subprocess.Popen(command_str, shell=True)
+    time.sleep(3)
+
+    if terminal_mode:
+        return
 
     # Run VNC and wait until user finishes working
-    time.sleep(3)
     vnc_process = subprocess.Popen("gvncviewer localhost:" + str(vnc_port), shell=True)
     if wait_vnc_end:
         vnc_process.wait()

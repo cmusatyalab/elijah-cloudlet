@@ -20,6 +20,7 @@ from optparse import OptionParser
 import sys
 import subprocess
 import shutil
+import select
 from datetime import datetime
 import paramiko
 import socket
@@ -27,22 +28,15 @@ import time
 import telnetlib
 
 
-def wait_until_finish(stdout, stderr, log=True, max_time=20):
-    global LOG_FILE
-    for x in xrange(max_time):
-        ret1 = stdout.readline()
-        ret2 = stderr.readline()
-        if log:
-            sys.stdout.write(ret1)
-            sys.stdout.write(ret2)
-            sys.stdout.flush()
-
-        if len(ret1) == 0:
-            break
-        time.sleep(0.01)
+def wait_until_finish(channel):
+    while not channel.exit_status_ready():
+        rl, wl, xl = select.select([channel],[],[],0.0)
+        if len(rl) > 0:
+            print channel.recv(1024)
+        time.sleep(0.1)
 
 
-def install_program(ssh_port):
+def install_program_eclipse(ssh_port):
     ssh = paramiko.SSHClient()
     ssh.set_missing_host_key_policy(paramiko.AutoAddPolicy())
 
@@ -50,22 +44,62 @@ def install_program(ssh_port):
     counter = 0
     while counter < 30:
         try:
-            ssh.connect(hostname='localhost', port=ssh_port, username='krha-cloudlet', password='cloudlet')
+            ssh.connect(hostname='localhost', port=ssh_port, username='root', password='cloudlet')
             break
-        except socket.error:
+        except (socket.error, paramiko.SSHException):
             counter += 1
             print "[INFO] Connecting to %s(waiting..%d)" % ('localhost', counter)
             time.sleep(1)
 
+
     #download install script
+    channel = ssh.get_transport().open_session()
+    cmd_download = "wget http://dagama.isr.cs.cmu.edu/download/android.tgz"
+    #cmd_download = "apt-get install --force-yes -y gimp"
+    print "[install] download android sdk file"
+    channel.exec_command(cmd_download)
+    wait_until_finish(channel)
+
+    cmd_install = "sync"
+    channel = ssh.get_transport().open_session()
+    print "[install] sync to file system"
+    channel.exec_command(cmd_install)
+    wait_until_finish(channel)
+    ssh.close()
+
+
+def install_program_MOPED(ssh_port):
+    ssh = paramiko.SSHClient()
+    ssh.set_missing_host_key_policy(paramiko.AutoAddPolicy())
+
+    # Waiting for boot-up at most 30s
+    counter = 0
+    while counter < 30:
+        try:
+            ssh.connect(hostname='localhost', port=ssh_port, username='root', password='cloudlet')
+            break
+        except (socket.error, paramiko.SSHException):
+            counter += 1
+            print "[INFO] Connecting to %s(waiting..%d)" % ('localhost', counter)
+            time.sleep(1)
+
+
+    #download install script
+    channel = ssh.get_transport().open_session()
     cmd_download = "wget http://dagama.isr.cs.cmu.edu/download/MOPED_install_10.04"
-    stdin, stdout, stderr = ssh.exec_command(cmd_download)
-    wait_until_finish(stdout, stderr)
+    channel.exec_command(cmd_download)
+    wait_until_finish(channel)
 
     #install MOPED
-    cmd_install = "sudo source MOPED_install_10.04"
-    stdin, stdout, stderr = ssh.exec_command(cmd_install)
-    wait_until_finish(stdout, stderr)
+    channel = ssh.get_transport().open_session()
+    cmd_install = "source MOPED_install_10.04"
+    channel.exec_command(cmd_install)
+    wait_until_finish(channel)
+
+    cmd_install = "sync"
+    channel = ssh.get_transport().open_session()
+    channel.exec_command(cmd_install)
+    wait_until_finish(channel)
     ssh.close()
 
 
@@ -98,6 +132,13 @@ def create_overlay(telnet_port, base, tmp, overlay):
     # compression
     comp= overlay + '.lzma'
     comp, time1 = cloudlet.comp_lzma(overlay, comp)
+
+    # Terminate VM
+    tn = telnetlib.Telnet('localhost', telnet_port)
+    tn.read_until("(qemu)", 10)
+    tn.write("quit\n")
+    time.sleep(3)
+
     return comp, time1
 
 
@@ -109,11 +150,11 @@ def print_result(exec_time, raw_image, copied_image, overlay_image, comp_image):
 def raw_and_copy(raw_image, raw_mem):
     copied_image = os.path.abspath(raw_image) + ".copied"
     overlay_image = os.path.abspath(copied_image) + ".overlay"
-    #shutil.copyfile(raw_image, copied_image)
+    shutil.copyfile(raw_image, copied_image)
 
     telnet_port = 9999
-    cloudlet.run_snapshot(copied_image, raw_mem, telnet_port, 1, wait_vnc_end=True)
-    install_program(2222)
+    cloudlet.run_image(copied_image, telnet_port, 1, wait_vnc_end=False, cdrom=None, terminal_mode=True)
+    install_program_eclipse(2222)
     comp_image, exec_time = create_overlay(telnet_port, raw_image, copied_image, overlay_image)
     print_result(exec_time, raw_image, copied_image, overlay_image, comp_image)
 
@@ -121,19 +162,38 @@ def raw_and_copy(raw_image, raw_mem):
 def raw_and_qcow(raw_image, raw_mem):
     cow_image = os.path.abspath(raw_image) + ".qcow2"
     overlay_image = os.path.abspath(cow_image) + ".overlay"
-    convert_to_qcow(raw_image, cow_image)
+    create_qcow(raw_image, cow_image)
 
     telnet_port = 9999
-    cloudlet.run_snapshot(cow_image, raw_mem, telnet_port, 1, wait_vnc_end=True)
-    install_program(2222)
+    cloudlet.run_image(cow_image, telnet_port, 1, wait_vnc_end=False, cdrom=None, terminal_mode=True)
+    install_program_eclipse(2222)
     comp_image, exec_time = create_overlay(telnet_port, raw_image, cow_image, overlay_image)
     print_result(exec_time, raw_image, cow_image, overlay_image, comp_image)
 
-def qcow_and_copy(qcow_image):
-    pass
 
-def qcow_and_qcow(qcow_image):
-    pass
+def qcow_and_copy(qcow_base, raw_mem):
+    copied_image = os.path.abspath(qcow_base) + ".copied"
+    overlay_image = os.path.abspath(copied_image) + ".overlay"
+    shutil.copyfile(qcow_base, copied_image)
+
+    telnet_port = 9999
+    cloudlet.run_image(copied_image, telnet_port, 1, wait_vnc_end=False, cdrom=None, terminal_mode=True)
+    install_program_eclipse(2222)
+    comp_image, exec_time = create_overlay(telnet_port, qcow_base, copied_image, overlay_image)
+    print_result(exec_time, qcow_base, copied_image, overlay_image, comp_image)
+
+
+def qcow_and_qcow(qcow_base, raw_mem):
+    cow_image = os.path.abspath(qcow_base) + ".qcow2"
+    overlay_image = os.path.abspath(cow_image) + ".overlay"
+    create_qcow(qcow_base, cow_image)
+
+    telnet_port = 9999
+    cloudlet.run_image(cow_image, telnet_port, 1, wait_vnc_end=False, cdrom=None, terminal_mode=True)
+    install_program_eclipse(2222)
+    comp_image, exec_time = create_overlay(telnet_port, qcow_base, cow_image, overlay_image)
+    print_result(exec_time, qcow_base, cow_image, overlay_image, comp_image)
+
 
 def convert_to_qcow(raw_image, cow_image):
     cmd = "qemu-img convert -f raw %s -O qcow2 %s" % (raw_image, cow_image)
@@ -145,6 +205,16 @@ def convert_to_qcow(raw_image, cow_image):
 
     return cow_image
 
+
+def create_qcow(raw_image, cow_image):
+    cmd = 'qemu-img create -f qcow2 -b ' + raw_image + ' ' + cow_image
+    proc = subprocess.Popen(cmd, shell=True)
+    proc.wait()
+    if proc.returncode != 0:
+        print >> sys.stderr, "Error, Failed to make qcow2 image"
+        sys.exit(2)
+
+    return cow_image
 
 def process_command_line(argv):
     global operation_mode
@@ -161,28 +231,25 @@ def process_command_line(argv):
 
     if not os.path.exists(settings.raw_image):
         parser.error('Cannot file input raw image : %s' + settings.raw_image)
-    if not os.path.exists(settings.memory_snapshot):
-        parser.error('Cannot file input memory snapshot : %s' + settings.memory_snapshot)
 
     return settings, args
 
 
 def main(argv=None):
     settings, args = process_command_line(sys.argv[1:])
-    raw_and_copy(settings.raw_image, settings.memory_snapshot)
-    raw_and_qcow(settings.raw_image, settings.memory_snapshot)
-    '''
-    qcow_image = convert_to_qcow(settings.raw_image)
-    qcow_and_copy(qcow_image, settings.memory_snapshot)
-    qcow_and_qcow(qcow_image, settings.memory_snapshot)
-    '''
+    cow_image = settings.raw_image[0:settings.raw_image.rindex(".")] + ".qcow2"
+    convert_to_qcow(settings.raw_image, cow_image)
+
+    raw_and_copy(settings.raw_image, None)
+    raw_and_qcow(settings.raw_image, None)
+    qcow_and_copy(cow_image, None)
+    qcow_and_qcow(cow_image, None)
 
 
 if __name__ == "__main__":
     CLOUDLET_DIR = '/home/krha/cloudlet/src/server/'
     import_dir = os.path.abspath(CLOUDLET_DIR)
     if import_dir not in sys.path:
-        print "import cloudlet path(%s)" % import_dir
         sys.path.insert(0, import_dir)
         import cloudlet
 
