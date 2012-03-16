@@ -12,8 +12,9 @@ PROTOCOL - Simplified
 For research purpose, here we currently use simplfied version
 excluding discovery, resource negociation, and Base VM discovery process.
 
-Simplified protocol is composed of single message and overlay binary transfer,
-and following server response
+Simplified protocol is composed of single message of overlay binary transfer
+information, and following server response. And it uses JSON formatted string
+to avoid platform and language dependency.
 
 1. Client request VM launch
   -Transfered data 
@@ -50,8 +51,4 @@ and following server response
   	    "return": "SUCCESS"
   	    "LaunchVM-IP": "128.2.121.242"
   	  }
-
-  	  
-
-
 
