@@ -1,18 +1,3 @@
-//
-// Elijah: Cloudlet Infrastructure for Mobile Computing
-// Copyright (C) 2011-2012 Carnegie Mellon University
-//
-// This program is free software; you can redistribute it and/or modify it
-// under the terms of version 2 of the GNU General Public License as published
-// by the Free Software Foundation.  A copy of the GNU General Public License
-// should have been distributed along with this program in the file
-// LICENSE.GPL.
-
-// This program is distributed in the hope that it will be useful, but
-// WITHOUT ANY WARRANTY; without even the implied warranty of MERCHANTABILITY
-// or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU General Public License
-// for more details.
-//
 package edu.cmu.cs.cloudlet.android.network;
 
 import java.io.BufferedInputStream;
@@ -41,6 +26,7 @@ import android.os.Message;
 
 public class NetworkClientSender extends Thread {
 	private boolean isThreadRun = true;
+	private static boolean IS_MOCK = true;
 	private Context mContext;
 	private Handler mHandler;
 
@@ -118,24 +104,37 @@ public class NetworkClientSender extends Thread {
 				continue;
 			}
 			
-			NetworkMsg networkCommand = commandQueue.remove(0);
-			this.sendCommand(networkCommand);
+			NetworkMsg command = commandQueue.remove(0);
+			this.sendCommand(command);
 			
-			switch(networkCommand.getCommandType()){
+			// Performance(Time) Measure
+			switch(command.commandNumber){
+			case NetworkMsg.COMMAND_REQ_VMLIST:
+				Measure.put(Measure.NET_REQ_VMLIST);
+				break;
 			case NetworkMsg.COMMAND_REQ_TRANSFER_START:
-				// Send overlay binary
-				VMInfo overlayVMInfo = networkCommand.getOverlayInfo();
-				if(overlayVMInfo != null){
-					File image = new File(overlayVMInfo.getInfo(VMInfo.JSON_KEY_DISKIMAGE_PATH));
-					File mem = new File(overlayVMInfo.getInfo(VMInfo.JSON_KEY_MEMORYSNAPSHOT_PATH));
+				Measure.put(Measure.NET_REQ_OVERLAY_TRASFER);
+				break;				
+			}
+			
+			// Send Overlay VM after we request VM Transfer Start
+			if(command.commandNumber == NetworkMsg.COMMAND_REQ_TRANSFER_START){
+				// send data
+				VMInfo overlayVM = null;
+				ArrayList<VMInfo> vmList = command.getVMList();
+				for(int i = 0; i < vmList.size(); i++){
+					if(vmList.get(i).getInfo(VMInfo.JSON_KEY_TYPE).equalsIgnoreCase("overlay") == true){
+						overlayVM = vmList.get(i);
+					} 
+				}
+				if(overlayVM != null){
+					File image = new File(overlayVM.getInfo(VMInfo.JSON_KEY_DISKIMAGE_PATH));
+					File mem = new File(overlayVM.getInfo(VMInfo.JSON_KEY_MEMORYSNAPSHOT_PATH));
 					Measure.setOverlaySize(image.length(), mem.length());
 					Measure.put(Measure.OVERLAY_TRANSFER_START);
 					this.sendOverlayImage(image, mem);
 					Measure.put(Measure.OVERLAY_TRANSFER_END);
 				}
-				
-				Measure.put(Measure.NET_REQ_OVERLAY_TRASFER);
-				break;				
 			}
 		}
 	}
@@ -144,8 +143,8 @@ public class NetworkClientSender extends Thread {
 		try {
 			byte[] byteMsg = msg.toNetworkByte();
 			networkWriter.write(byteMsg);
-			networkWriter.flush(); 		// flush everytime for accurate time measure
-//			KLog.println("Send Message " + msg);
+			networkWriter.flush(); // flush for accurate time measure
+			KLog.println("Send Message " + msg);			
 		} catch (IOException e) {
 			e.printStackTrace();
 		}
@@ -161,7 +160,7 @@ public class NetworkClientSender extends Thread {
 				networkWriter.write(imageSendingBuffer, 0, sendByte);
 				totalByte += sendByte;
 				String statusMsg = "Sending Disk.. " + (int)(100.0*totalByte/image.length()) + "%, (" + totalByte + "/" + image.length() + ")";
-//				KLog.println(statusMsg);
+				KLog.println(statusMsg);
 				this.notifyTransferStatus("Step 2. Sending overlay VM ..\n" + statusMsg);
 			}
 			bi.close();
@@ -173,7 +172,7 @@ public class NetworkClientSender extends Thread {
 				networkWriter.write(imageSendingBuffer, 0, sendByte);
 				totalByte += sendByte;
 				String statusMsg = "Sending Memory.. " + (int)(100.0*totalByte/mem.length()) + "%, (" + totalByte + "/" + mem.length() + ")";
-//				KLog.println(statusMsg);
+				KLog.println(statusMsg);
 				this.notifyTransferStatus("Step 2. Sending overlay VM ..\n" + statusMsg);
 			}
 			bi.close();

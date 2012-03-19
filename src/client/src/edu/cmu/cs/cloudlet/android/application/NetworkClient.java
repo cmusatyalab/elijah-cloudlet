@@ -1,18 +1,3 @@
-//
-// Elijah: Cloudlet Infrastructure for Mobile Computing
-// Copyright (C) 2011-2012 Carnegie Mellon University
-//
-// This program is free software; you can redistribute it and/or modify it
-// under the terms of version 2 of the GNU General Public License as published
-// by the Free Software Foundation.  A copy of the GNU General Public License
-// should have been distributed along with this program in the file
-// LICENSE.GPL.
-
-// This program is distributed in the hope that it will be useful, but
-// WITHOUT ANY WARRANTY; without even the implied warranty of MERCHANTABILITY
-// or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU General Public License
-// for more details.
-//
 package edu.cmu.cs.cloudlet.android.application;
 
 import java.io.BufferedInputStream;
@@ -61,8 +46,6 @@ public class NetworkClient extends Thread {
 	protected long dataSendEnd;
 	protected long dataReceiveStart;
 	protected long dataReceiveEnd;
-	protected String sendingLog = "N/A";
-	protected String receivingLog = "N/A";
 	
 	public NetworkClient(Context context, Handler handler) {
 		mContext = context;
@@ -90,6 +73,7 @@ public class NetworkClient extends Thread {
 			
 			try {
 				int totalSize = mData.length;
+				Log.d("krha", "sending image");
 
 				//time stamp
 				dataSendStart = System.currentTimeMillis();
@@ -110,8 +94,7 @@ public class NetworkClient extends Thread {
 
 				//time stamp
 				dataReceiveStart = dataSendEnd = System.currentTimeMillis();
-				this.sendingLog  = "[Image Sending]\t" + (dataSendEnd-dataSendStart) + " (ms)";
-				Log.d("krha_app", this.sendingLog);
+				Log.d("krha_app", "[DATA_SEND]\t" + dataSendEnd + " - " + dataSendStart + " = " + (dataSendEnd-dataSendStart));
 				
 				String ret_string = "None";
 				if(networkReader != null){
@@ -132,8 +115,7 @@ public class NetworkClient extends Thread {
 
 				// time stamp
 				dataReceiveEnd = System.currentTimeMillis();
-				this.receivingLog = "[Result Waiting]\t" + (dataReceiveEnd-dataReceiveStart) + " (ms)"; 
-				Log.d("krha_app", this.receivingLog);
+				Log.d("krha_app", "[DATA_RECEIVE]\t" + dataReceiveEnd + " - " + dataReceiveStart + " = " + (dataReceiveEnd-dataReceiveStart));
 				
 				// callback
 				Message msg = Message.obtain();
@@ -152,10 +134,6 @@ public class NetworkClient extends Thread {
 
 	public void uploadImage(byte[] data) {
 		mData = data;
-	}
-	
-	public String getTimeLog(){
-		return this.sendingLog + "\n" + this.receivingLog;
 	}
 
 	public void close() {

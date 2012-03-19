@@ -15,13 +15,16 @@ public final class R {
     }
     public static final class id {
         public static final int camera_preview=0x7f060000;
-        public static final int container=0x7f060007;
+        public static final int container=0x7f06000a;
         public static final int dialog_list_item_title=0x7f060002;
-        public static final int presstospeak_button=0x7f060006;
-        public static final int runApplication=0x7f060004;
-        public static final int scrollView=0x7f060005;
+        public static final int presstospeak_button=0x7f060009;
+        public static final int runApplication=0x7f060007;
+        public static final int scrollView=0x7f060008;
         public static final int sendButton=0x7f060001;
+        public static final int testISRCloud=0x7f060005;
+        public static final int testISRMobile=0x7f060006;
         public static final int testSynthesis=0x7f060003;
+        public static final int testSynthesisFromCloud=0x7f060004;
     }
     public static final class layout {
         public static final int camera=0x7f030000;

@@ -1,23 +1,7 @@
-//
-// Elijah: Cloudlet Infrastructure for Mobile Computing
-// Copyright (C) 2011-2012 Carnegie Mellon University
-//
-// This program is free software; you can redistribute it and/or modify it
-// under the terms of version 2 of the GNU General Public License as published
-// by the Free Software Foundation.  A copy of the GNU General Public License
-// should have been distributed along with this program in the file
-// LICENSE.GPL.
-
-// This program is distributed in the hope that it will be useful, but
-// WITHOUT ANY WARRANTY; without even the implied warranty of MERCHANTABILITY
-// or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU General Public License
-// for more details.
-//
 package edu.cmu.cs.cloudlet.android.network;
 
 import java.io.UnsupportedEncodingException;
 import java.nio.ByteBuffer;
-import java.nio.ByteOrder;
 import java.util.ArrayList;
 
 import org.json.JSONArray;
@@ -29,70 +13,149 @@ import edu.cmu.cs.cloudlet.android.util.CloudletEnv;
 import edu.cmu.cs.cloudlet.android.util.KLog;
 
 public class NetworkMsg {
+	public final static int COMMAND_REQ_VMLIST					= 0x0011;
+	public final static int COMMAND_ACK_VMLIST					= 0x0012;
 	public final static int COMMAND_REQ_TRANSFER_START			= 0x0021;
 	public final static int COMMAND_ACK_TRANSFER_START			= 0x0022;
+	public final static int COMMAND_REQ_VM_LAUNCH				= 0x0031;
+	public final static int COMMAND_ACK_VM_LAUNCH				= 0x0032;
+	public final static int COMMAND_REQ_VM_STOP					= 0x0041;
+	public final static int COMMAND_ACK_VM_STOP					= 0x0042;
 	
-	private static final String JSON_PROTOCOL_VERSION = "protocol-version";
-	private static final String JSON_COMMAND_TYPE = "command";
+	private static final String PROTOCOL_VERSION = "0.1";
 	
-	protected JSONObject jsonHeader = null;
-	private VMInfo selecteOverlayInfo;
+	protected int commandNumber = -1;
+	protected int payloadLength = -1;
+	protected byte[] payload = null;
+	protected JSONObject jsonPayload = null;
+	private ArrayList<VMInfo> vmList = new ArrayList<VMInfo>();
 	
-	public NetworkMsg(JSONObject jsonHeader) {
-		this.jsonHeader = jsonHeader;
+	
+	public NetworkMsg(int command) {
+		this.commandNumber = command;
 	}
+	
+	public NetworkMsg(int command, int payloadLength, byte[] payload){
+		this.commandNumber = command;
+		this.payloadLength = payloadLength;
+		this.payload = payload;
+		String jsonString;
+		try {
+			jsonString = new String(payload, "UTF-8");
+			this.jsonPayload = new JSONObject(jsonString);
+		} catch (UnsupportedEncodingException e) {
+			KLog.printErr(e.toString());
+		} catch (JSONException e) {
+			KLog.printErr(e.toString());
+		}
+	}
+	
 	/*
 	 * Getter and Setter
 	 */
-	public JSONObject getJsonPayload() {
-		return jsonHeader;
+	public int getCommandNumber() {
+		return commandNumber;
 	}
+	public void setCommandNumber(int commandNumber) {
+		this.commandNumber = commandNumber;
+	}
+	public JSONObject getJsonPayload() {
+		return jsonPayload;
+	}
+	public void setJsonPayload(JSONObject jsonPayload) {
+		this.jsonPayload = jsonPayload;
+	}	
 	
 	/*
 	 * Generating Sending Message
 	 */
-	public static NetworkMsg MSG_SelectedVM(VMInfo selecteOverlayInfo) {
-		ArrayList<VMInfo> baseVMList = new ArrayList<VMInfo>();
-		baseVMList.add(selecteOverlayInfo);
+	public static NetworkMsg MSG_OverlayList() {
+		NetworkMsg msg = new NetworkMsg(COMMAND_REQ_VMLIST);
+		ArrayList<VMInfo> overlays = CloudletEnv.instance().getOverlayDirectoryInfo();
+		JSONObject json = NetworkMsg.generateJSON(overlays);
 		
-		// JSON Creation
-		JSONObject json = NetworkMsg.generateJSON(baseVMList);
+		// additional values
 		try {
-			json.put(JSON_PROTOCOL_VERSION, NetworkMsg.JSON_PROTOCOL_VERSION);
-			json.put(JSON_COMMAND_TYPE, COMMAND_REQ_TRANSFER_START);
+			json.put("Protocol-version", NetworkMsg.PROTOCOL_VERSION);
 			json.put("Request_synthesis_core", "4");
+		} catch (JSONException e) {
+			e.printStackTrace();
+		}		
+		saveJSON(msg, json);		
+		return msg;
+	}
+
+	public static NetworkMsg MSG_SelectedVM(VMInfo baseVM, VMInfo overlayVM) {
+		NetworkMsg msg = new NetworkMsg(COMMAND_REQ_TRANSFER_START);
+		ArrayList<VMInfo> overlay = new ArrayList<VMInfo>();
+		overlay.add(baseVM);
+		overlay.add(overlayVM);
+		JSONObject json = NetworkMsg.generateJSON(overlay);
+		
+		// additional values
+		try {
+			json.put("Protocol-version", NetworkMsg.PROTOCOL_VERSION);
 		} catch (JSONException e) {
 			e.printStackTrace();
 		}
 
-		NetworkMsg msg = new NetworkMsg(json);
-		msg.setOverlayInfo(selecteOverlayInfo);
+		saveJSON(msg, json);
+		msg.saveVMList(overlay);
 		return msg;
 	}
 
-	private void setOverlayInfo(VMInfo selecteOverlayInfo) {
-		this.selecteOverlayInfo = selecteOverlayInfo;
+	public static NetworkMsg MSG_LaunchVM(VMInfo vm, int cpuNumber, int memSize) {
+		NetworkMsg msg = new NetworkMsg(COMMAND_REQ_TRANSFER_START);
+		ArrayList<VMInfo> overlay = new ArrayList<VMInfo>();
+		overlay.add(vm);
+		JSONObject json = NetworkMsg.generateJSON(overlay);
 		
+		// additional values
+		try {
+			json.put("Protocol-version", NetworkMsg.PROTOCOL_VERSION);
+			if(cpuNumber > 0)
+				json.put("memory_size", memSize + "");
+			if(memSize > 0)
+				json.put("vcpu_number", cpuNumber + "");			
+		} catch (JSONException e) {
+			e.printStackTrace();
+		}
+
+		saveJSON(msg, json);
+		return msg;
 	}
-	
-	public VMInfo getOverlayInfo() {
-		return this.selecteOverlayInfo;
+
+	public static NetworkMsg MSG_StopVM(VMInfo vm) {
+		NetworkMsg msg = new NetworkMsg(COMMAND_REQ_TRANSFER_START);
+		ArrayList<VMInfo> overlay = new ArrayList<VMInfo>();
+		overlay.add(vm);
+		JSONObject json = NetworkMsg.generateJSON(overlay);
+		
+		// additional values
+		try {
+			json.put("Protocol-version", NetworkMsg.PROTOCOL_VERSION);			
+		} catch (JSONException e) {
+			e.printStackTrace();
+		}
+
+		saveJSON(msg, json);		
+		return msg;
 	}
 	
 	/*
 	 * JSON Utility
 	 */
-	public String jsonToString(int indentSize){
-		if(this.jsonHeader != null){
+	public void printJSON(){
+		if(this.jsonPayload != null){
 			String jsonString = null;
 			try {
-				jsonString = this.jsonHeader.toString(indentSize);
+				jsonString = this.jsonPayload.toString(2);
 			} catch (JSONException e) {
 				KLog.printErr(e.toString());
 			}
-			return jsonString;
+			KLog.println(jsonString);
 		}else{
-			return null;
+			KLog.printErr("json is null");			
 		}
 	}
 	
@@ -113,32 +176,31 @@ public class NetworkMsg {
 
 		return rootObject;
 	}
+
+	private static void saveJSON(NetworkMsg msg, JSONObject json) {
+		msg.jsonPayload = json;
+		byte[] data = json.toString().getBytes();
+		msg.payload = data;
+		msg.payloadLength = data.length;
+	}
+
+	private void saveVMList(ArrayList<VMInfo> overlay) {
+		this.vmList = overlay;
+	}
+
+	public ArrayList<VMInfo> getVMList() {
+		return this.vmList;
+	}
 	
 	public String toString(){
-		return jsonToString(4);
+		return this.commandNumber + " " + this.payloadLength + " " + this.jsonPayload;
 	}
 	
 	public byte[] toNetworkByte(){
-		String jsonString = jsonToString(0);
-		byte[] jsonBytes = jsonString.getBytes();
-		if(jsonString != null){
-			ByteBuffer byteBuffer = ByteBuffer.allocate(4 + jsonBytes.length);
-			byteBuffer.order(ByteOrder.BIG_ENDIAN);
-			byteBuffer.putInt(jsonBytes.length);
-			byteBuffer.put(jsonBytes);
-			return byteBuffer.array();
-		}
-		return null;
-	}
-	
-	public int getCommandType() {
-		int command = -1;
-		try {
-			command = this.jsonHeader.getInt(JSON_COMMAND_TYPE);
-		} catch (JSONException e) {
-			e.printStackTrace();
-		}
-		KLog.println("Recived Command : " + command);
-		return command;
+		ByteBuffer byteBuffer = ByteBuffer.allocate(4 + 4 + this.payload.length);
+		byteBuffer.putInt(this.commandNumber);
+		byteBuffer.putInt(this.payloadLength);
+		byteBuffer.put(this.payload);
+		return byteBuffer.array();
 	}
 }
