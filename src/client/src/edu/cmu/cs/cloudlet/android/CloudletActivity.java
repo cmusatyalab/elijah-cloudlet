@@ -147,6 +147,16 @@ public class CloudletActivity extends Activity {
 			intent.putExtra("address", SYNTHESIS_SERVER_IP);
 			intent.putExtra("port", TEST_CLOUDLET_APP_MOPED_PORT);
 			startActivityForResult(intent, 0);			
+		}else if(application.equalsIgnoreCase("face")){
+			Intent intent = new Intent(CloudletActivity.this, Cloudlet.class);			
+			intent.putExtra("address", SYNTHESIS_SERVER_IP);
+			intent.putExtra("port", TEST_CLOUDLET_APP_MOPED_PORT);
+			startActivityForResult(intent, 0);
+		}else if(application.equalsIgnoreCase("speech")){
+			Intent intent = new Intent(CloudletActivity.this, CloudletCameraActivity.class);			
+			intent.putExtra("address", SYNTHESIS_SERVER_IP);
+			intent.putExtra("port", TEST_CLOUDLET_APP_MOPED_PORT);
+			startActivityForResult(intent, 0);
 		}else if(application.equalsIgnoreCase("null")){
 			showAlert("Info", "NUll has no UI");
 		}else{
@@ -197,7 +207,7 @@ public class CloudletActivity extends Activity {
 		.setMessage(message)
 		.setIcon(R.drawable.ic_launcher)
 		.setNegativeButton("Confirm", null)
-		.show();		
+		.show();
 	}
 
 
