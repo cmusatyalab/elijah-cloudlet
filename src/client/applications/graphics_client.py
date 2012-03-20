@@ -26,6 +26,13 @@ import struct
 import math
 import random
 
+def recv_all(sock, size):
+    data = ''
+    while len(data) < size:
+        data += sock.recv(size - len(data))
+    return data
+
+
 def process_command_line(argv):
     global operation_mode
 
@@ -40,13 +47,10 @@ def process_command_line(argv):
     if not len(args) == 0:
         parser.error('program takes no command-line arguments; "%s" ignored.' % (args,))
     
-    if not os.path.isdir(settings.input_dir):
-        parser.error("input directory does no exists at :%s" % (settings.input_dir))
-    
     return settings, args
 
 
-def send_request(address, port, inputs):
+def send_request(address, port):
     # connection
     try:
         print "Connecting to (%s, %d).." % (address, port)
@@ -60,26 +64,34 @@ def send_request(address, port, inputs):
     # send requests
     current_duration = -1
     print "index\tstart\tend\tduration\tjitter"
-    for index in xrange(100):
+    start_time = time.time()
+    for index in xrange(1000):
         start_time_request = time.time()
 
         # send acc data
-        x_acc = random.uniform(-27, 27)
-        y_acc = random.uniform(-27, 27)
-        sent_size = sock.send(struct.pack("!f!f", x_acc, y_acc))
+        #x_acc = random.uniform(-27, 27)
+        #y_acc = random.uniform(-27, 27)
+        x_acc = 0.0
+        y_acc=9.0
+
+        sent_size = sock.send(struct.pack("!ff", x_acc, y_acc))
+        #print "Sent acc (%f, %f)" % (x_acc, y_acc)
         if not sent_size == 8:
             sys.strerr.write("Error, send wrong size of acc data: %d" + sent_size)
             sys.exit(1)
         
-        #recv
+        # recv
         data = sock.recv(4)
         ret_size = struct.unpack("!I", data)[0]
+        #print "Recv size : %d" % (ret_size)
         
         if not ret_size == 0:
-            ret_data = sock.recv(ret_size)
-            print "returned value : %d" % (len(ret_data))
+            ret_data = recv_all(sock, ret_size)
+            if not ret_size == len(ret_data):
+                sys.stderr.write("Error, returned value size : %d" % (len(ret_data)))
+                sys.exit(1)
         else:
-            sys.strerr.write("Error, return size must not be zero")
+            sys.stderr.write("Error, return size must not be zero")
             sys.exit(1)
 
         # print result
@@ -97,12 +109,12 @@ def send_request(address, port, inputs):
                     current_duration, \
                     math.fabs(current_duration-prev_duration))
 
+    print "Total time : %05.3f" % (time.time()-start_time)
+
 def main(argv=None):
     global LOCAL_IPADDRESS
     settings, args = process_command_line(sys.argv[1:])
-
-    files = [os.path.join(settings.input_dir, file) for file in os.listdir(settings.input_dir) if file[-3:] == "jpg" or file[-3:] == "JPG"]  
-    send_request(settings.server_address, settings.server_port, files)
+    send_request(settings.server_address, settings.server_port)
 
     return 0
 

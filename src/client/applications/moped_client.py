@@ -81,7 +81,7 @@ def send_request(address, port, inputs):
         # send
         sent_size = sock.send(struct.pack("!I", length))
         if not sent_size == 4:
-            sys.strerr.write("Error, send wrong size of int : %d" % sent_size)
+            sys.stderr.write("Error, send wrong size of int : %d" % sent_size)
             sys.exit(1)
         sent_size = sock.send(binary)
         if not sent_size == length:
