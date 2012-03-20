@@ -19,6 +19,8 @@ import java.util.ArrayList;
 import org.teleal.cling.android.AndroidUpnpServiceImpl;
 
 import edu.cmu.cs.cloudlet.android.application.CloudletCameraActivity;
+import edu.cmu.cs.cloudlet.android.application.face.ui.FaceRecClientCameraPreview;
+import edu.cmu.cs.cloudlet.android.application.speech.ClientActivity;
 import edu.cmu.cs.cloudlet.android.data.VMInfo;
 import edu.cmu.cs.cloudlet.android.network.CloudletConnector;
 import edu.cmu.cs.cloudlet.android.upnp.DeviceDisplay;
@@ -148,12 +150,12 @@ public class CloudletActivity extends Activity {
 			intent.putExtra("port", TEST_CLOUDLET_APP_MOPED_PORT);
 			startActivityForResult(intent, 0);			
 		}else if(application.equalsIgnoreCase("face")){
-			Intent intent = new Intent(CloudletActivity.this, Cloudlet.class);			
+			Intent intent = new Intent(CloudletActivity.this, FaceRecClientCameraPreview.class);			
 			intent.putExtra("address", SYNTHESIS_SERVER_IP);
 			intent.putExtra("port", TEST_CLOUDLET_APP_MOPED_PORT);
 			startActivityForResult(intent, 0);
 		}else if(application.equalsIgnoreCase("speech")){
-			Intent intent = new Intent(CloudletActivity.this, CloudletCameraActivity.class);			
+			Intent intent = new Intent(CloudletActivity.this, ClientActivity.class);			
 			intent.putExtra("address", SYNTHESIS_SERVER_IP);
 			intent.putExtra("port", TEST_CLOUDLET_APP_MOPED_PORT);
 			startActivityForResult(intent, 0);
