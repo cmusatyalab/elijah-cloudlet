@@ -31,8 +31,7 @@ import android.view.View;
 import android.widget.Button;
 
 public class CloudletActivity extends Activity {
-//	public static final String TEST_CLOUDLET_SERVER_IP = "192.168.2.3";			// Cloudlet IP Address
-	public static final String TEST_CLOUDLET_SERVER_IP = "server.krha.kr";			// Cloudlet IP Address
+	public static final String SYNTHESIS_SERVER_IP = "server.krha.kr";			// Cloudlet IP Address
 	public static final int TEST_CLOUDLET_SERVER_PORT_ISR = 9095;				// Cloudlet port for ISR related test
 	public static final int TEST_CLOUDLET_SERVER_PORT_SYNTHESIS = 9090;			// Cloudlet port for VM Synthesis test 
 
@@ -78,7 +77,7 @@ public class CloudletActivity extends Activity {
 			vmList.add(selectedVM);			
 		}
 
-		connector.startConnection(TEST_CLOUDLET_SERVER_IP, TEST_CLOUDLET_SERVER_PORT_SYNTHESIS);
+		connector.startConnection(SYNTHESIS_SERVER_IP, TEST_CLOUDLET_SERVER_PORT_SYNTHESIS);
 	}
 	
 	private void showDialogSelectOverlay(ArrayList<VMInfo> vmList) {
@@ -220,11 +219,10 @@ public class CloudletActivity extends Activity {
 		
 		if(application.equalsIgnoreCase("moped") || application.equalsIgnoreCase("moped_disk")){
 			Intent intent = new Intent(CloudletActivity.this, CloudletCameraActivity.class);			
-			intent.putExtra("address", TEST_CLOUDLET_SERVER_IP);
+			intent.putExtra("address", SYNTHESIS_SERVER_IP);
 			intent.putExtra("port", TEST_CLOUDLET_APP_MOPED_PORT);
 			startActivityForResult(intent, 0);			
 		}else if(application.equalsIgnoreCase("face")){
-<<<<<<< HEAD
 			Intent intent = new Intent(CloudletActivity.this, FaceRecClientCameraPreview.class);			
 			intent.putExtra("address", SYNTHESIS_SERVER_IP);
 			intent.putExtra("port", TEST_CLOUDLET_APP_MOPED_PORT);
@@ -234,17 +232,6 @@ public class CloudletActivity extends Activity {
 			intent.putExtra("address", SYNTHESIS_SERVER_IP);
 			intent.putExtra("port", TEST_CLOUDLET_APP_MOPED_PORT);
 			startActivityForResult(intent, 0);
-=======
-			Intent intent = new Intent(CloudletActivity.this, FaceRecClientCameraPreview.class);
-			intent.putExtra("address", TEST_CLOUDLET_SERVER_IP);
-			intent.putExtra("port", TEST_CLOUDLET_APP_FACE_PORT);
-			startActivityForResult(intent, 0);			
-		}else if(application.equalsIgnoreCase("speech")){
-			Intent intent = new Intent(CloudletActivity.this, ClientActivity.class);
-			intent.putExtra("address", TEST_CLOUDLET_SERVER_IP);
-			intent.putExtra("port", TEST_CLOUDLET_APP_SPEECH_PORT);
-			startActivityForResult(intent, 0);			
->>>>>>> 2e82e9fc7c629c3684e602a969c18213419d55ee
 		}else if(application.equalsIgnoreCase("null")){
 			showAlert("Info", "NUll has no UI");
 		}else{

@@ -49,7 +49,7 @@ public class HTTPCommandSender extends Thread {
 	}
 
 	public void initSetup(String url) {
-		httpURL = "http://" + CloudletActivity.TEST_CLOUDLET_SERVER_IP + ":" + CloudletActivity.TEST_CLOUDLET_SERVER_PORT_ISR + "/" + url;
+		httpURL = "http://" + CloudletActivity.SYNTHESIS_SERVER_IP + ":" + CloudletActivity.TEST_CLOUDLET_SERVER_PORT_ISR + "/" + url;
 		mDialog = ProgressDialog.show(context, "Info", "Connecting to " + httpURL + "\nwaiting for " + applicationName + " to run at " + command, true);		
 		mDialog.show();
 	}
