@@ -1,18 +1,3 @@
-//
-// Elijah: Cloudlet Infrastructure for Mobile Computing
-// Copyright (C) 2011-2012 Carnegie Mellon University
-//
-// This program is free software; you can redistribute it and/or modify it
-// under the terms of version 2 of the GNU General Public License as published
-// by the Free Software Foundation.  A copy of the GNU General Public License
-// should have been distributed along with this program in the file
-// LICENSE.GPL.
-
-// This program is distributed in the hope that it will be useful, but
-// WITHOUT ANY WARRANTY; without even the implied warranty of MERCHANTABILITY
-// or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU General Public License
-// for more details.
-//
 package edu.cmu.cs.cloudlet.android.application;
 
 import java.io.File;
@@ -130,6 +115,7 @@ public class CloudletCameraActivity extends Activity implements TextToSpeech.OnI
 		}
 		
 		
+		
 		// TextToSpeech.OnInitListener
 		mTTS = new TextToSpeech(this, this);
 	}
@@ -158,7 +144,7 @@ public class CloudletCameraActivity extends Activity implements TextToSpeech.OnI
 	private static final String FEEDBACK_PREFIX = "Found items are ";
 	private void TTSFeedback(String ttsString) {
 		// Show Application Runtime
-		String message = this.client.getTimeLog() + "\n[TOTAL]\t" + (endApp-startApp) + " (ms)\n";
+		String message = "Time for app run\n start: " + startApp + "\nend: " + endApp + "\ndiff: " + (endApp-startApp);		
 		new AlertDialog.Builder(CloudletCameraActivity.this).setTitle("Info")
 		.setMessage(message)
 		.setIcon(R.drawable.ic_launcher)
@@ -241,15 +227,16 @@ public class CloudletCameraActivity extends Activity implements TextToSpeech.OnI
 
 		// For consistent test, we are using presaved file
 		startApp = System.currentTimeMillis();
-		if(testImageData != null && testImageData.length != 0){
-			if(client != null){
-				client.uploadImage(testImageData);			
-			}
-		}else{
-			if(client != null){
-				client.uploadImage(data);
-			}
+		if(client != null){
+			client.uploadImage(testImageData);			
 		}
+
+		/*
+		// upload image
+		if(client !=null){
+//			client.uploadImage(data);
+		}
+		*/
 	}
 	
 	Camera.AutoFocusCallback cb = new Camera.AutoFocusCallback() {

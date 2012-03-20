@@ -1,18 +1,3 @@
-//
-// Elijah: Cloudlet Infrastructure for Mobile Computing
-// Copyright (C) 2011-2012 Carnegie Mellon University
-//
-// This program is free software; you can redistribute it and/or modify it
-// under the terms of version 2 of the GNU General Public License as published
-// by the Free Software Foundation.  A copy of the GNU General Public License
-// should have been distributed along with this program in the file
-// LICENSE.GPL.
-
-// This program is distributed in the hope that it will be useful, but
-// WITHOUT ANY WARRANTY; without even the implied warranty of MERCHANTABILITY
-// or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU General Public License
-// for more details.
-//
 package edu.cmu.cs.cloudlet.android.data;
 
 import java.io.File;
@@ -32,14 +17,13 @@ public class VMInfo {
 	protected TreeMap<String, String> data = new TreeMap<String, String>();
 	protected File rootDirectory = null;
 	
-	public static final String JSON_KEY_BASE_NAME 				= "base_name";
-	public static final String JSON_KEY_NAME 					= "overlay_name";
+	public static final String JSON_KEY_NAME 					= "name";
 	public static final String JSON_KEY_TYPE 					= "type";
 	public static final String JSON_KEY_UUID 					= "uuid";
 	public static final String JSON_KEY_DISKIMAGE_PATH 			= "diskimg_path";
 	public static final String JSON_KEY_DISKIMAGE_SIZE 			= "diskimg_size";
-	public static final String JSON_KEY_MEMORYSNAPSHOT_PATH 	= "memory_snapshot_path";
-	public static final String JSON_KEY_MEMORYSNAPSHOT_SIZE 	= "memory_snapshot_size";
+	public static final String JSON_KEY_MEMORYSNAPSHOT_PATH 	= "memorysnapshot_path";
+	public static final String JSON_KEY_MEMORYSNAPSHOT_SIZE 	= "memorysnapshot_size";
 	public static final String JSON_KEY_VERSION					= "version";
 
 	public static final String JSON_KEY_ERROR					= "Error";
@@ -53,12 +37,14 @@ public class VMInfo {
 	public static final String JSON_VALUE_VM_TYPE_BASE			= "baseVM";
 	public static final String JSON_VALUE_VM_TYPE_OVERLAY		= "overlay";
 
+//	protected String uuid;
+//	protected String version;
 	
-	public VMInfo(File overlayDirectory, String baseName, String vmName){
+	
+	public VMInfo(File overlayDirectory, String vmName){
 		rootDirectory = overlayDirectory;
 		File[] files = rootDirectory.listFiles();
 		
-		this.data.put(JSON_KEY_BASE_NAME, baseName);
 		this.data.put(JSON_KEY_NAME, vmName);
 		this.data.put(JSON_KEY_TYPE, "overlay");
 		for(int i = 0; i < files.length; i++){

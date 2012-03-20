@@ -1,29 +1,7 @@
-//
-// Elijah: Cloudlet Infrastructure for Mobile Computing
-// Copyright (C) 2011-2012 Carnegie Mellon University
-//
-// This program is free software; you can redistribute it and/or modify it
-// under the terms of version 2 of the GNU General Public License as published
-// by the Free Software Foundation.  A copy of the GNU General Public License
-// should have been distributed along with this program in the file
-// LICENSE.GPL.
-
-// This program is distributed in the hope that it will be useful, but
-// WITHOUT ANY WARRANTY; without even the implied warranty of MERCHANTABILITY
-// or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU General Public License
-// for more details.
-//
 package edu.cmu.cs.cloudlet.android.network;
 
 import java.io.DataInputStream;
 import java.io.IOException;
-import java.nio.ByteBuffer;
-import java.nio.ByteOrder;
-
-import org.apache.http.util.ByteArrayBuffer;
-import org.json.JSONException;
-import org.json.JSONObject;
-
 import edu.cmu.cs.cloudlet.android.util.KLog;
 
 import android.os.Bundle;
@@ -43,7 +21,7 @@ public class NetworkClientReceiver extends Thread {
 	@Override
 	public void run() {
 		while(isThreadRun == true){
-			ByteArrayBuffer msg;
+			NetworkMsg msg;
 			try {
 				msg = this.receiveMsg(networkReader);
 			} catch (IOException e) {
@@ -61,7 +39,7 @@ public class NetworkClientReceiver extends Thread {
 		}
 	}
 	
-	private void notifyStatus(int command, String string, ByteArrayBuffer recvMsg) {
+	private void notifyStatus(int command, String string, NetworkMsg recvMsg) {
 		Message msg = Message.obtain();
 		msg.what = command;
 		msg.obj = recvMsg;
@@ -71,16 +49,15 @@ public class NetworkClientReceiver extends Thread {
 		this.mHandler.sendMessage(msg);
 	}
 
-	private ByteArrayBuffer receiveMsg(DataInputStream reader) throws IOException {
-		int jsonLength = reader.readInt();
-		KLog.println("Received JSON Header size : " + jsonLength);
-		byte[] jsonByte = new byte[jsonLength];
-		reader.read(jsonByte, 0, jsonByte.length);
-		
-		ByteArrayBuffer jsonByteArray = new ByteArrayBuffer(jsonLength);
-		jsonByteArray.append(jsonByte, 0, jsonByte.length);
+	private NetworkMsg receiveMsg(DataInputStream reader) throws IOException {
+		NetworkMsg receiveMsg = null;
+		int msgNumber = reader.readInt();
+		int payloadLength = reader.readInt();
+		byte[] jsonByte = new byte[payloadLength];
+		reader.read(jsonByte, 0, jsonByte.length);			
+		receiveMsg = new NetworkMsg(msgNumber, payloadLength, jsonByte);
 	
-		return jsonByteArray;
+		return receiveMsg;
 	}
 
 	/*

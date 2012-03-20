@@ -1,45 +1,22 @@
-//
-// Elijah: Cloudlet Infrastructure for Mobile Computing
-// Copyright (C) 2011-2012 Carnegie Mellon University
-//
-// This program is free software; you can redistribute it and/or modify it
-// under the terms of version 2 of the GNU General Public License as published
-// by the Free Software Foundation.  A copy of the GNU General Public License
-// should have been distributed along with this program in the file
-// LICENSE.GPL.
-
-// This program is distributed in the hope that it will be useful, but
-// WITHOUT ANY WARRANTY; without even the implied warranty of MERCHANTABILITY
-// or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU General Public License
-// for more details.
-//
 package edu.cmu.cs.cloudlet.android.network;
 
 import java.io.File;
-import java.io.FileInputStream;
-import java.io.FileNotFoundException;
 import java.io.IOException;
-import java.io.InputStream;
 
 import org.apache.http.HttpResponse;
 import org.apache.http.client.ClientProtocolException;
 import org.apache.http.client.HttpClient;
 import org.apache.http.client.methods.HttpPost;
-import org.apache.http.entity.mime.HttpMultipartMode;
 import org.apache.http.entity.mime.MultipartEntity;
-import org.apache.http.entity.mime.content.FileBody;
-import org.apache.http.entity.mime.content.InputStreamBody;
+import org.apache.http.entity.mime.content.ByteArrayBody;
 import org.apache.http.entity.mime.content.StringBody;
 import org.apache.http.impl.client.BasicResponseHandler;
 import org.apache.http.impl.client.DefaultHttpClient;
-import org.json.JSONArray;
 import org.json.JSONException;
 import org.json.JSONObject;
 
 import edu.cmu.cs.cloudlet.android.CloudletActivity;
 import edu.cmu.cs.cloudlet.android.R;
-import edu.cmu.cs.cloudlet.android.application.CloudletCameraActivity;
-import edu.cmu.cs.cloudlet.android.data.VMInfo;
 import edu.cmu.cs.cloudlet.android.upnp.DeviceDisplay;
 import edu.cmu.cs.cloudlet.android.upnp.UPnPDiscovery;
 import edu.cmu.cs.cloudlet.android.util.KLog;
@@ -54,7 +31,7 @@ import android.widget.Toast;
 
 public class HTTPCommandSender extends Thread {
 	protected static final int SUCCESS = 0;
-	protected static final int FAIL = 1;
+	protected static final int FAIL = 0;
 	
 	protected ProgressDialog mDialog;
 	protected String httpURL = "";
@@ -62,26 +39,26 @@ public class HTTPCommandSender extends Thread {
 	private CloudletActivity activity = null;
 	protected Context context;
 	private String command = null;
-	private VMInfo overlayVM = null;
+	private String applicationName = null;
 
-	public HTTPCommandSender(CloudletActivity activity, Context context, String command, VMInfo overlayVM) {
+	public HTTPCommandSender(CloudletActivity activity, Context context, String command, String application) {
 		this.activity = activity;
 		this.context = context;
 		this.command = command;
-		this.overlayVM = overlayVM;
+		this.applicationName = application;
 	}
 
 	public void initSetup(String url) {
-		httpURL = "http://" + CloudletActivity.SYNTHESIS_SERVER_IP + ":" + CloudletActivity.SYNTHESIS_PORT + "/" + url;
-		mDialog = ProgressDialog.show(context, "Info", "Connecting to " + httpURL + "\nwaiting for " + overlayVM.getInfo(VMInfo.JSON_KEY_NAME) + " to run at " + command, true);		
+		httpURL = "http://" + CloudletActivity.TEST_CLOUDLET_SERVER_IP + ":" + CloudletActivity.TEST_CLOUDLET_SERVER_PORT_ISR + "/" + url;
+		mDialog = ProgressDialog.show(context, "Info", "Connecting to " + httpURL + "\nwaiting for " + applicationName + " to run at " + command, true);		
 		mDialog.show();
 	}
 	
 	Handler networkHandler = new Handler() {
 		public void handleMessage(Message msg) {			
 			if (msg.what == HTTPCommandSender.SUCCESS) {
-				String applicationName = ((VMInfo)msg.obj).getInfo(VMInfo.JSON_KEY_NAME);
-				activity.runStandAlone(applicationName);
+				String applicationName = (String)msg.obj;
+				activity.runApplication(applicationName);
 			}else if(msg.what == HTTPCommandSender.FAIL){
 				String ret = (String)msg.obj;
 				activity.showAlert("Error", "Failed to connect to " + httpURL + "\n" + ret);
@@ -90,13 +67,14 @@ public class HTTPCommandSender extends Thread {
 	};
 
 	public void run() {
-		String ret = httpPostCommand(httpURL, this.command, this.overlayVM);
-		if(ret != null && ret.equalsIgnoreCase("SUCCESS")){
-			KLog.println("HTTP Return : " + ret);
-			Message message = Message.obtain();
-			message.what = HTTPCommandSender.SUCCESS;
-			message.obj = this.overlayVM;
-			networkHandler.sendMessage(message);
+		String ret = httpCommand(httpURL, this.command, this.applicationName);
+		if(ret.indexOf("SUCCESS") != -1){
+			if(ret != null && ret.equalsIgnoreCase("SUCCESS")){
+				Message message = Message.obtain();
+				message.what = HTTPCommandSender.SUCCESS;
+				message.obj = this.applicationName;
+				networkHandler.sendMessage(message);
+			}			
 		}else{
 			Message message = Message.obtain();
 			message.what = HTTPCommandSender.FAIL;
@@ -110,44 +88,27 @@ public class HTTPCommandSender extends Thread {
 		}
 	}
 
-	private String httpPostCommand(String httpURL, String runType, VMInfo overlayInfo) {
+	private String httpCommand(String httpURL, String runType, String applicationName) {
 		// Create a new HttpClient and Post Header		
 		HttpClient httpclient = new DefaultHttpClient();
 		HttpPost httppost = new HttpPost(httpURL);
 
 		try {
-			// Set JSON Command
-			JSONObject json = getJSONCommand(overlayInfo);
-
-			File overlayDisk = new File(overlayInfo.getInfo(VMInfo.JSON_KEY_DISKIMAGE_PATH));
-			File overlayMem = new File(overlayInfo.getInfo(VMInfo.JSON_KEY_MEMORYSNAPSHOT_PATH));
-			KLog.println("connecting to " + httpURL);
-//			MultipartEntity entity = new MultipartEntity();
-			MultipartEntity entity = new MultipartEntity(HttpMultipartMode.BROWSER_COMPATIBLE);
-			
-			
-			File tempFile = new File(CloudletCameraActivity.TEST_IMAGE_PATH);
-			byte[] data = new byte[(int) tempFile.length()];
-			FileInputStream is;
+			// Set HTTP Parameter as JSON and Image Binary
+			JSONObject json = new JSONObject();
 			try {
-				is = new FileInputStream(tempFile);
-				is.read(data);
-			} catch (FileNotFoundException e) {
-				e.printStackTrace();
-			} catch (IOException e) {
-				e.printStackTrace();
-			}	
-			entity.addPart("disk_file", new InputStreamBody(new FileInputStream(overlayDisk), overlayDisk.getName()));
+				json.put("application", applicationName);
+				json.put("run-type", runType);
+			} catch (JSONException e) {
+				KLog.printErr(e.toString());
+			}
 
-//			entity.addPart("info", new StringBody(json.toString()));
-//			entity.addPart("disk_file", new FileBody(overlayDisk));
-//			entity.addPart("mem_file", new FileBody(overlayMem));			
-//			entity.addPart("disk_file", new InputStreamBody(new FileInputStream(overlayDisk), overlayDisk.getName()));
-//			entity.addPart("mem_file", new InputStreamBody(new FileInputStream(overlayMem), overlayMem.getName()));
-			httppost.setEntity(entity);
+			KLog.println("connecting to " + httpURL);			
+			MultipartEntity entity = new MultipartEntity();
+			entity.addPart("info", new StringBody(json.toString()));
+			httppost.setEntity(entity);			
 
 			// Execute HTTP Post Request
-			KLog.println("Execute Request " + httpURL);
 			HttpResponse response = httpclient.execute(httppost);
 			BasicResponseHandler myHandler = new BasicResponseHandler();
 			String endResult = myHandler.handleResponse(response);
@@ -163,41 +124,5 @@ public class HTTPCommandSender extends Thread {
 			KLog.printErr(e.toString());
 			return e.toString();			
 		}
-	}
-
-	private JSONObject getJSONCommand(VMInfo overlayInfo) {
-		JSONObject jsonRoot = new JSONObject();
-		JSONObject jsonVM = new JSONObject();
-		JSONArray jsonVMArray = new JSONArray();
-		
-		try {
-			jsonVM.put("type", "baseVM");
-			jsonVM.put("name", overlayInfo.getInfo(VMInfo.JSON_KEY_BASE_NAME));
-			jsonVMArray.put(jsonVM);
-			
-			jsonRoot.put("CPU-core", "2");
-			jsonRoot.put("Memory-Size", "4GB");
-			jsonRoot.put("VM", jsonVMArray);			
-		} catch (JSONException e) {
-			KLog.printErr(e.toString());
-		}
-		
-		return jsonRoot;
-	}
-}
-
-class InputStreamKnownSizeBody extends InputStreamBody {
-	private int lenght;
-
-	public InputStreamKnownSizeBody(
-			final InputStream in, final int lenght,
-			final String mimeType, final String filename) {
-		super(in, mimeType, filename);
-		this.lenght = lenght;
-	}
-
-	@Override
-	public long getContentLength() {
-		return this.lenght;
 	}
 }
