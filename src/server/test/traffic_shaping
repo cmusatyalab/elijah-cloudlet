@@ -21,8 +21,7 @@ DNLD=10mbit
 UPLD=10mbit
 
 # Destination Host
-# IP=128.2.212.207
-IP=128.2.208.117
+IP=128.2.212.178
  
 # Filter options for limiting the intended interface.
 U32="$TC filter add dev $IF protocol ip parent 1:0 prio 1 u32"
