@@ -18,13 +18,9 @@ import os
 import sys
 import socket
 from optparse import OptionParser
-import subprocess
-import json
-import tempfile
 import time
 import struct
 import math
-import random
 
 def recv_all(sock, size):
     data = ''
@@ -38,6 +34,9 @@ def process_command_line(argv):
 
     parser = OptionParser(usage="usage: %prog [option]", version="MOPED Desktop Client")
     parser.add_option(
+            '-i', '--input', action='store', type='string', dest='input_file',
+            help='Set Input image directory')
+    parser.add_option(
             '-s', '--server', action='store', type='string', dest='server_address', default="localhost",
             help='Set Input image directory')
     parser.add_option(
@@ -50,7 +49,7 @@ def process_command_line(argv):
     return settings, args
 
 
-def send_request(address, port):
+def send_request(address, port, input_data):
     # connection
     try:
         print "Connecting to (%s, %d).." % (address, port)
@@ -65,14 +64,22 @@ def send_request(address, port):
     current_duration = -1
     print "index\tstart\tend\tduration\tjitter"
     start_time = time.time()
-    for index in xrange(1000):
+
+    if input_data:
+        loop_length = len(input_data)
+    else:
+        loop_length = 1000
+
+    for index in xrange(loop_length):
         start_time_request = time.time()
 
         # send acc data
-        #x_acc = random.uniform(-27, 27)
-        #y_acc = random.uniform(-27, 27)
-        x_acc = 0.0
-        y_acc=9.0
+        if input_data:
+            x_acc = float(input_data[index].split("  ")[1])
+            y_acc = float(input_data[index].split("  ")[2])
+        else:
+            x_acc = -9.0 
+            y_acc = -1.0
 
         sent_size = sock.send(struct.pack("!ff", x_acc, y_acc))
         #print "Sent acc (%f, %f)" % (x_acc, y_acc)
@@ -114,7 +121,11 @@ def send_request(address, port):
 def main(argv=None):
     global LOCAL_IPADDRESS
     settings, args = process_command_line(sys.argv[1:])
-    send_request(settings.server_address, settings.server_port)
+    input_accs = None
+    if settings.input_file and os.path.exists(settings.input_file):
+        input_accs = open(settings.input_file, "r").read().split("\n")
+
+    send_request(settings.server_address, settings.server_port, input_accs)
 
     return 0
 
