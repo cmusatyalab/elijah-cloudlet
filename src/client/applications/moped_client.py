@@ -50,9 +50,11 @@ def process_command_line(argv):
     if not len(args) == 0:
         parser.error('program takes no command-line arguments; "%s" ignored.' % (args,))
     
+    if not settings.input_dir:
+        parser.error("input directory does no exists at :%s" % (settings.input_dir))
     if not os.path.isdir(settings.input_dir):
         parser.error("input directory does no exists at :%s" % (settings.input_dir))
-    
+
     return settings, args
 
 
