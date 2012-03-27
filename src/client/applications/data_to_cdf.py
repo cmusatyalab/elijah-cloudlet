@@ -42,11 +42,18 @@ def convert_to_CDF(input_file):
     input_lines = open(input_file, "r").read().split("\n")
     rtt_list = []
     jitter_sum = 0.0
+    start_time = 0.0
+    end_time = 0.0
     for index, oneline in enumerate(input_lines):
         if len(oneline.split("\t")) != 5:
             print "Error at input line at %d, %s" % (index, oneline)
             continue
         try:
+            if start_time == 0.0:
+                start_time = float(oneline.split("\t")[1]) * 1000
+            if end_time == 0.0:
+                end_time = float(oneline.split("\t")[2]) * 1000
+
             rtt_list.append(float(oneline.split("\t")[3]) * 1000)
             jitter_sum += (float(oneline.split("\t")[4])*1000)
         except ValueError:
@@ -57,12 +64,13 @@ def convert_to_CDF(input_file):
     total_rtt_number = len(rtt_sorted)
     cdf = []
     print "="*50
-    print "min\t25%\t50%\t75%\tmax\tjitter"
-    print "%7.4f\t%7.4f\t%7.4f\t%7.4f\t%7.4f\t%7.4f" % (rtt_sorted[0], rtt_sorted[int(total_rtt_number*0.25)], \
+    print "min\t25%\t50%\t75%\tmax\tjitter\trun_time"
+    print "%7.3f\t%7.3f\t%7.3f\t%7.3f\t%7.3f\t%7.3f\t%7.3f" % (rtt_sorted[0], rtt_sorted[int(total_rtt_number*0.25)], \
             rtt_sorted[int(total_rtt_number*0.5)], \
             rtt_sorted[int(total_rtt_number*0.75)], \
             rtt_sorted[-1], \
-            jitter_sum/total_rtt_number)
+            jitter_sum/total_rtt_number, \
+            (end_time-start_time))
     print "="*50
     for index, value in enumerate(rtt_sorted):
         data = (value, 1.0 * (index+1)/total_rtt_number)
