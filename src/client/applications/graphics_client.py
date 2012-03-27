@@ -54,7 +54,7 @@ def send_request(address, port, input_data):
     try:
         print "Connecting to (%s, %d).." % (address, port)
         sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-        sock.setsockopt(socket.IPPROTO_TCP, socket.TCP_NODELAY, 1)
+        #sock.setsockopt(socket.IPPROTO_TCP, socket.TCP_NODELAY, 1)
         sock.setblocking(True)
         sock.connect((address, port))
     except socket.error, msg:
