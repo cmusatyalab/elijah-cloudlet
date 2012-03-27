@@ -107,16 +107,16 @@ def send_request(address, port, input_data):
         current_duration = end_time_request-start_time_request
 
         if prev_duration == -1: # fisrt response
-            print "%d\t%05.3f\t%05.3f\t%05.3f\t0" % (index, start_time_request,\
+            print "%d\t%05.5f\t%05.5f\t%05.5f\t0" % (index, start_time_request,\
                     end_time_request, \
                     end_time_request-start_time_request)
         else:
-            print "%d\t%05.3f\t%05.3f\t%05.3f\t%05.3f" % (index, round(start_time_request, 3), \
+            print "%d\t%05.5f\t%05.5f\t%05.5f\t%05.5f" % (index, round(start_time_request, 3), \
                     end_time_request, \
                     current_duration, \
                     math.fabs(current_duration-prev_duration))
 
-    print "Total time : %05.3f" % (time.time()-start_time)
+    print "Total time : %05.5f" % (time.time()-start_time)
 
 def main(argv=None):
     global LOCAL_IPADDRESS
