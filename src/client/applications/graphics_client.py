@@ -76,7 +76,7 @@ def send_request(address, port, input_data):
 
         # send acc data
         if input_data:
-            if len(input_data[index].split("  ")) != 2:
+            if len(input_data[index].split("  ")) != 3:
                 print "Error input : %s" % input_data[index]
                 continue
             x_acc = float(input_data[index].split("  ")[1])
