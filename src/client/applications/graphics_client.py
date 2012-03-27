@@ -54,6 +54,7 @@ def send_request(address, port, input_data):
     try:
         print "Connecting to (%s, %d).." % (address, port)
         sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        sock.setsockopt(socket.IPPROTO_TCP, socket.TCP_NODELAY, 1)
         sock.setblocking(True)
         sock.connect((address, port))
     except socket.error, msg:
@@ -71,13 +72,13 @@ def send_request(address, port, input_data):
         loop_length = 1000
 
     for index in xrange(loop_length):
-        if len(input_data[index].split("  ")) != 2:
-            print "Error input : %s" % input_data[index]
-        
         start_time_request = time.time()
 
         # send acc data
         if input_data:
+            if len(input_data[index].split("  ")) != 2:
+                print "Error input : %s" % input_data[index]
+                continue
             x_acc = float(input_data[index].split("  ")[1])
             y_acc = float(input_data[index].split("  ")[2])
         else:
