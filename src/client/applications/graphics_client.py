@@ -71,6 +71,9 @@ def send_request(address, port, input_data):
         loop_length = 1000
 
     for index in xrange(loop_length):
+        if len(input_data[index].split("  ")) != 2:
+            print "Error input : %s" % input_data[index]
+        
         start_time_request = time.time()
 
         # send acc data
