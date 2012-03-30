@@ -63,7 +63,7 @@ def send_request(address, port, input_data):
 
     # send requests
     current_duration = -1
-    print "index\tstart\tend\tduration\tjitter"
+    print "index\tstart\tend\tduration\tjitter\tout"
     start_time = time.time()
 
     if input_data:
@@ -111,14 +111,17 @@ def send_request(address, port, input_data):
         current_duration = end_time_request-start_time_request
 
         if prev_duration == -1: # fisrt response
-            print "%d\t%05.5f\t%05.5f\t%05.5f\t0" % (index, start_time_request,\
+            print "%d\t%05.5f\t%05.5f\t%05.5f\t0\t%05.2f" % (index, start_time_request,\
                     end_time_request, \
-                    end_time_request-start_time_request)
+                    end_time_request-start_time_request,\
+                    len(ret_data))
+                    
         else:
-            print "%d\t%05.5f\t%05.5f\t%05.5f\t%05.5f" % (index, round(start_time_request, 3), \
+            print "%d\t%05.5f\t%05.5f\t%05.5f\t%05.5f\t%05.2f" % (index, round(start_time_request, 3), \
                     end_time_request, \
                     current_duration, \
-                    math.fabs(current_duration-prev_duration))
+                    math.fabs(current_duration-prev_duration), \
+                    len(ret_data))
 
     print "Total time : %05.5f" % (time.time()-start_time)
 
