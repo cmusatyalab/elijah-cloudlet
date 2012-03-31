@@ -45,17 +45,17 @@ def convert_to_CDF(input_file):
     start_time = 0.0
     end_time = 0.0
     for index, oneline in enumerate(input_lines):
-        if len(oneline.split("\t")) != 5:
+        if len(oneline.split("\t")) != 6:
             print "Error at input line at %d, %s" % (index, oneline)
             continue
         try:
-            if start_time == 0.0:
-                start_time = float(oneline.split("\t")[1]) * 1000
-            if end_time == 0.0:
-                end_time = float(oneline.split("\t")[2]) * 1000
 
             rtt_list.append(float(oneline.split("\t")[3]) * 1000)
             jitter_sum += (float(oneline.split("\t")[4])*1000)
+
+            if start_time == 0.0:
+                start_time = float(oneline.split("\t")[1]) * 1000
+            end_time = float(oneline.split("\t")[2]) * 1000
         except ValueError:
             print "Error at input line at %d, %s" % (index, oneline)
             continue
