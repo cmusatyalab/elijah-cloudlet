@@ -38,7 +38,7 @@ def process_command_line(argv):
     
     return settings, args
 
-def convert_to_CDF(input_file):
+def convert_to_CDF(input_file, output_file):
     input_lines = open(input_file, "r").read().split("\n")
     rtt_list = []
     jitter_sum = 0.0
@@ -74,7 +74,7 @@ def convert_to_CDF(input_file):
     print "="*50
     for index, value in enumerate(rtt_sorted):
         data = (value, 1.0 * (index+1)/total_rtt_number)
-        print "%d\t%7.4f\t%7.4f" % ((index+1), data[0], data[1])
+        print "%7.4f\t%7.4f" % (data[0], data[1])
         cdf.append(data)
 
 
