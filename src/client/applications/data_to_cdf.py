@@ -40,13 +40,14 @@ def process_command_line(argv):
 
 def convert_to_CDF(input_file, output_file):
     input_lines = open(input_file, "r").read().split("\n")
+    output_file = open(output_file, "w")
     rtt_list = []
     jitter_sum = 0.0
     start_time = 0.0
     end_time = 0.0
     for index, oneline in enumerate(input_lines):
         if len(oneline.split("\t")) != 6:
-            print "Error at input line at %d, %s" % (index, oneline)
+            sys.stderr.write("Error at input line at %d, %s\n" % (index, oneline))
             continue
         try:
 
@@ -57,25 +58,24 @@ def convert_to_CDF(input_file, output_file):
                 start_time = float(oneline.split("\t")[1]) * 1000
             end_time = float(oneline.split("\t")[2]) * 1000
         except ValueError:
-            print "Error at input line at %d, %s" % (index, oneline)
+            sys.stderr.write("Error at input line at %d, %s\n" % (index, oneline))
             continue
 
     rtt_sorted = sorted(rtt_list)
     total_rtt_number = len(rtt_sorted)
     cdf = []
-    print "="*50
-    print "min\t25%\t50%\t75%\tmax\tjitter\trun_time"
-    print "%014.2f\t%014.2f\t%014.2f\t%014.2f\t%014.2f\t%014.2f\t%014.2f" % (rtt_sorted[0], rtt_sorted[int(total_rtt_number*0.25)], \
+    summary = "%014.2f\t%014.2f\t%014.2f\t%014.2f\t%014.2f\t%014.2f\t%014.2f" % (rtt_sorted[0], rtt_sorted[int(total_rtt_number*0.25)], \
             rtt_sorted[int(total_rtt_number*0.5)], \
             rtt_sorted[int(total_rtt_number*0.75)], \
             rtt_sorted[-1], \
             jitter_sum/total_rtt_number, \
             (end_time-start_time))
-    print "="*50
     for index, value in enumerate(rtt_sorted):
         data = (value, 1.0 * (index+1)/total_rtt_number)
-        print "%7f\t%4.4f" % (data[0], data[1])
+        cdf_string = "%f\t%f\n" % (data[0], data[1])
+        output_file.write(cdf_string)
         cdf.append(data)
+    return summary, cdf
 
 
 def main(argv=None):
@@ -83,6 +83,36 @@ def main(argv=None):
     settings, args = process_command_line(sys.argv[1:])
     if settings.input_file and os.path.exists(settings.input_file):
         convert_to_CDF(settings.input_file, settings.input_file + ".cdf")
+    elif settings.input_dir and len(os.listdir(settings.input_dir)) > 0 :
+        summary_list = []
+        cdf_all_list = []
+        file_list = []
+        for each_file in os.listdir(settings.input_dir):
+            if each_file[-4:] == ".cdf":
+                continue
+            file_list.append(each_file)
+
+        for each_file in file_list:
+            input_file = os.path.join(settings.input_dir, each_file)
+            summary_str, cdf_list = convert_to_CDF(input_file, input_file + ".cdf")
+            summary_list.append(summary_str)
+            cdf_all_list.append(cdf_list)
+
+        # print out all data
+        print "="*50
+        print "\tmin\t25%\t50%\t75%\tmax\tjitter\trun_time"
+        for index, summary in enumerate(summary_list):
+            print "%s\t%s" % (file_list[index], summary)
+        print "\n"*2
+
+        for each_file in file_list:
+            sys.stdout.write("%s\t\t" % os.path.splitext(os.path.basename(each_file))[0])
+        sys.stdout.write("\n")
+
+        for index in xrange(len(cdf_all_list[0])):
+            for cdf_list in cdf_all_list:
+                sys.stdout.write("%f\t%f\t" % (cdf_list[index][0], cdf_list[index][1]))
+            sys.stdout.write("\n")
 
     return 0
 
