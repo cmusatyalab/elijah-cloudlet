@@ -73,7 +73,7 @@ def send_request(address, port, inputs):
     current_duration = -1
     print "image\tstart\tend\tduration\tjitter"
     for each_input in inputs:
-        start_time_request = time.time()
+        start_time_request = time.time() * 1000.0
         binary = open(each_input, 'r').read();
         length = os.path.getsize(each_input)
         if len(binary) != length:
@@ -100,16 +100,16 @@ def send_request(address, port, inputs):
 
 
         # print result
-        end_time_request = time.time()
+        end_time_request = time.time() * 1000.0
         prev_duration = current_duration
         current_duration = end_time_request-start_time_request
 
         if prev_duration == -1: # fisrt response
-            print "%s\t%05.3f\t%05.3f\t%05.3f\t0" % (each_input, start_time_request,\
+            print "%s\t%014.2f\t%014.2f\t%014.2f\t0" % (each_input, start_time_request,\
                     end_time_request, \
                     end_time_request-start_time_request)
         else:
-            print "%s\t%05.3f\t%05.3f\t%05.3f\t%05.3f" % (each_input, round(start_time_request, 3), \
+            print "%s\t%014.2f\t%014.2f\t%014.2f\t%014.2f" % (each_input, round(start_time_request, 3), \
                     end_time_request, \
                     current_duration, \
                     math.fabs(current_duration-prev_duration))

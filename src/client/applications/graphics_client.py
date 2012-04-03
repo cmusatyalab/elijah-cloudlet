@@ -72,7 +72,7 @@ def send_request(address, port, input_data):
         loop_length = 1000
 
     for index in xrange(loop_length):
-        start_time_request = time.time()
+        start_time_request = time.time() * 1000.0
 
         # send acc data
         if input_data:
@@ -106,24 +106,24 @@ def send_request(address, port, input_data):
             sys.exit(1)
 
         # print result
-        end_time_request = time.time()
+        end_time_request = time.time() * 1000.0
         prev_duration = current_duration
         current_duration = end_time_request-start_time_request
 
         if prev_duration == -1: # fisrt response
-            print "%d\t%05.5f\t%05.5f\t%05.5f\t0\t%05.2f" % (index, start_time_request,\
+            print "%d\t%014.2f\t%014.2f\t%014.2f\t0\t%014.2f" % (index, start_time_request,\
                     end_time_request, \
                     end_time_request-start_time_request,\
                     len(ret_data))
                     
         else:
-            print "%d\t%05.5f\t%05.5f\t%05.5f\t%05.5f\t%05.2f" % (index, round(start_time_request, 3), \
+            print "%d\t%014.2f\t%014.2f\t%014.2f\t%014.2f\t%014.2f" % (index, round(start_time_request, 3), \
                     end_time_request, \
                     current_duration, \
                     math.fabs(current_duration-prev_duration), \
                     len(ret_data))
 
-    print "Total time : %05.5f" % (time.time()-start_time)
+    print "Total time : %014.2f" % (time.time()-start_time)
 
 def main(argv=None):
     global LOCAL_IPADDRESS

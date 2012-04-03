@@ -65,7 +65,7 @@ def convert_to_CDF(input_file, output_file):
     cdf = []
     print "="*50
     print "min\t25%\t50%\t75%\tmax\tjitter\trun_time"
-    print "%7.3f\t%7.3f\t%7.3f\t%7.3f\t%7.3f\t%7.3f\t%7.3f" % (rtt_sorted[0], rtt_sorted[int(total_rtt_number*0.25)], \
+    print "%014.2f\t%014.2f\t%014.2f\t%014.2f\t%014.2f\t%014.2f\t%014.2f" % (rtt_sorted[0], rtt_sorted[int(total_rtt_number*0.25)], \
             rtt_sorted[int(total_rtt_number*0.5)], \
             rtt_sorted[int(total_rtt_number*0.75)], \
             rtt_sorted[-1], \
@@ -74,7 +74,7 @@ def convert_to_CDF(input_file, output_file):
     print "="*50
     for index, value in enumerate(rtt_sorted):
         data = (value, 1.0 * (index+1)/total_rtt_number)
-        print "%7.4f\t%7.4f" % (data[0], data[1])
+        print "%7f\t%4.4f" % (data[0], data[1])
         cdf.append(data)
 
 
@@ -82,7 +82,7 @@ def main(argv=None):
     global LOCAL_IPADDRESS
     settings, args = process_command_line(sys.argv[1:])
     if settings.input_file and os.path.exists(settings.input_file):
-        convert_to_CDF(settings.input_file)
+        convert_to_CDF(settings.input_file, settings.input_file + ".cdf")
 
     return 0
 
