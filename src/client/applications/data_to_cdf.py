@@ -47,7 +47,7 @@ def convert_to_CDF(input_file, output_file):
     start_time = 0.0
     end_time = 0.0
     for index, oneline in enumerate(input_lines):
-        if len(oneline.split("\t")) != 6:
+        if len(oneline.split("\t")) != 6 and len(oneline.split("\t")) != 5:
             sys.stderr.write("Error at input line at %d, %s\n" % (index, oneline))
             continue
         try:
