@@ -39,6 +39,7 @@ def process_command_line(argv):
     return settings, args
 
 def convert_to_CDF(input_file, output_file):
+    print "filename: " + input_file
     input_lines = open(input_file, "r").read().split("\n")
     output_file = open(output_file, "w")
     rtt_list = []
@@ -51,12 +52,14 @@ def convert_to_CDF(input_file, output_file):
             continue
         try:
 
-            rtt_list.append(float(oneline.split("\t")[3]) * 1000)
-            jitter_sum += (float(oneline.split("\t")[4])*1000)
+            rtt_list.append(float(oneline.split("\t")[3]))
+            if not index == 0:
+                # protect error case where initial jitter value is equals to latency
+                jitter_sum += (float(oneline.split("\t")[4]))
 
             if start_time == 0.0:
-                start_time = float(oneline.split("\t")[1]) * 1000
-            end_time = float(oneline.split("\t")[2]) * 1000
+                start_time = float(oneline.split("\t")[1])
+            end_time = float(oneline.split("\t")[2])
         except ValueError:
             sys.stderr.write("Error at input line at %d, %s\n" % (index, oneline))
             continue
@@ -64,7 +67,7 @@ def convert_to_CDF(input_file, output_file):
     rtt_sorted = sorted(rtt_list)
     total_rtt_number = len(rtt_sorted)
     cdf = []
-    summary = "%014.2f\t%014.2f\t%014.2f\t%014.2f\t%014.2f\t%014.2f\t%014.2f" % (rtt_sorted[0], rtt_sorted[int(total_rtt_number*0.25)], \
+    summary = "%f\t%f\t%f\t%f\t%f\t%f\t%f" % (rtt_sorted[0], rtt_sorted[int(total_rtt_number*0.25)], \
             rtt_sorted[int(total_rtt_number*0.5)], \
             rtt_sorted[int(total_rtt_number*0.75)], \
             rtt_sorted[-1], \
