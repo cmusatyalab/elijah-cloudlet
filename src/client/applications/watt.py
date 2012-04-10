@@ -22,7 +22,7 @@ import paramiko
 from optparse import OptionParser
 from datetime import datetime
 
-WATTS_BIN = "~/cloudlet/src/measurement/power/wattsup/wattsup"
+WATTS_BIN = "~/cloudlet/src/measurement/power/wattsup"
 
 def wait_until_finish(stdout, stderr, log=True, max_time=20):
     global LOG_FILE
@@ -43,7 +43,6 @@ def run_application(server_ip, app_cmd, power_out_file):
     command = "%s /dev/ttyUSB0" % WATTS_BIN
     ssh_stdin, ssh_stdout, ssh_stderr = ssh.exec_command(command)
 
-
     # Start Client App
     proc = subprocess.Popen(app_cmd, shell=True, stdin=subprocess.PIPE, stdout=subprocess.PIPE)
     start_time = datetime.now()
@@ -54,6 +53,7 @@ def run_application(server_ip, app_cmd, power_out_file):
         if proc.returncode == None:
             ret = ssh_stdout.readline()
             power_log.write("%s\t%s" % (str(datetime.now()), ret))
+            print ret
             print "current power : %f" % float(ret.split(",")[0])
             power_sum = power_sum + float(ret.split(",")[0])
             power_counter = power_counter + 1
