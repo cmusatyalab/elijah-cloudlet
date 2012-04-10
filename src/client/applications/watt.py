@@ -35,6 +35,7 @@ def wait_until_finish(stdout, stderr, log=True, max_time=20):
 
 def run_application(server_ip, app_cmd, power_out_file):
     power_log = open(power_out_file, "w")
+    power_log_sum = open(power_out_file + ".sum", "w")
     # Start WattsUP through SSH
     ssh = paramiko.SSHClient()
     ssh.set_missing_host_key_policy(paramiko.AutoAddPolicy())
@@ -45,11 +46,17 @@ def run_application(server_ip, app_cmd, power_out_file):
 
     # Start Client App
     proc = subprocess.Popen(app_cmd, shell=True, stdin=subprocess.PIPE, stdout=subprocess.PIPE)
+    start_time = datetime.now()
+    power_sum = 0.0
+    power_counter = 0
     while True:
         proc.poll()
         if proc.returncode == None:
             ret = ssh_stdout.readline()
             power_log.write("%s\t%s" % (str(datetime.now()), ret))
+            print "current power : %f" % float(ret.split(",")[0])
+            power_sum = power_sum + float(ret.split(",")[0])
+            power_counter = power_counter + 1
             time.sleep(0.1)
             continue
         elif proc.returncode == 0:
@@ -63,6 +70,8 @@ def run_application(server_ip, app_cmd, power_out_file):
 
 
     # Stop WattsUP through SSH
+    end_time = datetime.now()
+    power_log_sum.write("%s\t%f\t(%f/%d)" % (str(end_time-start_time), power_sum/power_counter, power_sum, power_counter))
     ssh.close()
     power_log.close()
     return 0
