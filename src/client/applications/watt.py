@@ -53,7 +53,6 @@ def run_application(server_ip, app_cmd, power_out_file):
         if proc.returncode == None:
             ret = ssh_stdout.readline()
             power_log.write("%s\t%s" % (str(datetime.now()), ret))
-            print ret
             print "current power : %f" % float(ret.split(",")[0])
             power_sum = power_sum + float(ret.split(",")[0])
             power_counter = power_counter + 1
