@@ -104,7 +104,7 @@ def main(argv=None):
     settings, args = process_command_line(sys.argv[1:])
     client_list = [("server.krha.kr", 19093, "g_cloudlet"), ("23.21.103.194", 9093, "g_east")]
     for client in client_list:
-        client_cmd = "./graphics_client.py -s %s -p %d > %s" % (client[0], client[1], client[2])
+        client_cmd = "./graphics_client.py -i acc_input_50sec -s %s -p %d > %s" % (client[0], client[1], client[2])
         print "RUNNING : %s" % (client_cmd)
         ret = run_application(settings.server_ip, client_cmd, client[2]+".power")
         if not ret == 0:
