@@ -53,8 +53,12 @@ def run_application(server_ip, app_cmd, power_out_file):
         if proc.returncode == None:
             ret = ssh_stdout.readline()
             power_log.write("%s\t%s" % (str(datetime.now()), ret))
-            print "current power : %f" % float(ret.split(",")[0])
-            power_sum = power_sum + float(ret.split(",")[0])
+            power_value = float(ret.split(",")[0])
+            if power_value < 10.0 or power_value > 30.0:
+                print "Error at Power Measurement with %f" % (power_value)
+                sys.exit(1)
+            print "current power : %f" % power_value
+            power_sum = power_sum + power_value
             power_counter = power_counter + 1
             time.sleep(0.1)
             continue
