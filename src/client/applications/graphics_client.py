@@ -63,15 +63,15 @@ def recv_data(sock):
     print "index\tstart\tend\tduration\tjitter\tout"
     try:
         while True:
-            #data = sock.recv(4)
-            #client_id = struct.unpack("!I", data)[0]
+            data = sock.recv(4)
+            client_id = struct.unpack("!I", data)[0]
             data = sock.recv(4)
             server_token_id = struct.unpack("!I", data)[0]
             data = sock.recv(4)
             ret_size = struct.unpack("!I", data)[0]
             #print "Client ID : %d, Recv size : %d" % (server_token_id, ret_size)
             token_id = server_token_id
-            #receiver_time_stamps.append((client_id, time.time()))
+            receiver_time_stamps.append((client_id, time.time()))
             
             if not ret_size == 0:
                 ret_data = recv_all(sock, ret_size)
@@ -135,9 +135,8 @@ def send_request(sock, input_data):
                     x_acc = -9.0 
                     y_acc = -1.0
 
-                #sender_time_stamps.append((index, time.time()))
-                #sent_size = sock.send(struct.pack("!iiff", index, token_id, x_acc, y_acc))
-                sent_size = sock.send(struct.pack("!iff", token_id, x_acc, y_acc))
+                sender_time_stamps.append((index, time.time()))
+                sent_size = sock.send(struct.pack("!iiff", index, token_id, x_acc, y_acc))
                 last_sent_time = time.time()
                 index += 1
                 print "[%03d/%d] Sent ACK(%d), acc (%f, %f)" % (index, loop_length, token_id, x_acc, y_acc)
