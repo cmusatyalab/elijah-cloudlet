@@ -22,12 +22,13 @@ import time
 import struct
 from select import select
 from threading import Thread
+import math
 
 token_id = 0
 total_recv_number = 0;
 
-sender_time_stamps = []
-receiver_time_stamps = []
+sender_time_stamps = {}
+receiver_time_stamps = {}
 
 def recv_all(sock, size):
     data = ''
@@ -71,7 +72,9 @@ def recv_data(sock):
             ret_size = struct.unpack("!I", data)[0]
             #print "Client ID : %d, Recv size : %d" % (server_token_id, ret_size)
             token_id = server_token_id
-            receiver_time_stamps.append((client_id, time.time()))
+            if not receiver_time_stamps.get(client_id):
+                #print "Add client id to time_stamp list %d" % (client_id)
+                receiver_time_stamps[client_id] = time.time()*1000
             
             if not ret_size == 0:
                 ret_data = recv_all(sock, ret_size)
@@ -82,25 +85,6 @@ def recv_data(sock):
             else:
                 sys.stderr.write("Error, return size must not be zero")
                 sys.exit(1)
-
-            # print result
-            '''
-            end_time_request = time.time() * 1000.0
-            prev_duration = current_duration
-            current_duration = end_time_request-start_time_request
-            if prev_duration == -1: # fisrt response
-                print "%d\t%014.2f\t%014.2f\t%014.2f\t0\t%014.2f" % (index, start_time_request,\
-                        end_time_request, \
-                        end_time_request-start_time_request,\
-                        len(ret_data))
-                        
-            else:
-                print "%d\t%014.2f\t%014.2f\t%014.2f\t%014.2f\t%014.2f" % (index, round(start_time_request, 3), \
-                        end_time_request, \
-                        current_duration, \
-                        math.fabs(current_duration-prev_duration), \
-                        len(ret_data))
-            '''
 
     except socket.error:
         print "Socket Closed and Closing Recv Thread"
@@ -135,8 +119,8 @@ def send_request(sock, input_data):
                     x_acc = -9.0 
                     y_acc = -1.0
 
-                sender_time_stamps.append((index, time.time()))
-                sent_size = sock.send(struct.pack("!iiff", index, token_id, x_acc, y_acc))
+                sender_time_stamps[index] = time.time()*1000
+                sock.send(struct.pack("!iiff", index, token_id, x_acc, y_acc))
                 last_sent_time = time.time()
                 index += 1
                 print "[%03d/%d] Sent ACK(%d), acc (%f, %f)" % (index, loop_length, token_id, x_acc, y_acc)
@@ -165,10 +149,54 @@ def connect(address, port, input_data):
 
     print "Waiting for end of acc data transmit"
     sender.join()
-    duration = time.time() - start_client_time
 
+    # print result
+    prev_duration = -1
+    current_duration = -1
+    missed_sending_id = 0
+    for (client_id, start_time) in sender_time_stamps.items():
+        end_time = receiver_time_stamps.get(client_id)
+        if not end_time:
+            #sys.stderr.write("Cannot find corresponding end time at %d" % (client_id))
+            missed_sending_id += 1
+            continue
+
+        prev_duration = current_duration
+        current_duration = end_time-start_time
+        if prev_duration == -1: # fisrt response
+            print "%d\t%014.2f\t%014.2f\t%014.2f\t0\t%s" % (client_id, start_time,\
+                    end_time, \
+                    end_time-start_time,\
+                    "true")
+        else:
+            print "%d\t%014.2f\t%014.2f\t%014.2f\t%014.2f\t%s" % (client_id, round(start_time, 3), \
+                    end_time, \
+                    current_duration, \
+                    math.fabs(current_duration-prev_duration), \
+                    "true")
+  
+    duration = time.time() - start_client_time
+    print "Number of merged client request: %d" % (missed_sending_id)
     print "Total Time: %s, Average FPS: %5.2f" % \
             (str(duration), total_recv_number/duration)
+
+    '''
+    end_time_request = time.time() * 1000.0
+    prev_duration = current_duration
+    current_duration = end_time_request-start_time_request
+    if prev_duration == -1: # fisrt response
+        print "%d\t%014.2f\t%014.2f\t%014.2f\t0\t%014.2f" % (index, start_time_request,\
+                end_time_request, \
+                end_time_request-start_time_request,\
+                len(ret_data))
+                
+    else:
+        print "%d\t%014.2f\t%014.2f\t%014.2f\t%014.2f\t%014.2f" % (index, round(start_time_request, 3), \
+                end_time_request, \
+                current_duration, \
+                math.fabs(current_duration-prev_duration), \
+                len(ret_data))
+    '''
 
 def main(argv=None):
     global LOCAL_IPADDRESS
