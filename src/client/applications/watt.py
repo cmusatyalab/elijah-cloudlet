@@ -33,9 +33,16 @@ def wait_until_finish(stdout, stderr, log=True, max_time=20):
             break
         time.sleep(0.01)
 
-def run_application(server_ip, app_cmd, power_out_file):
+def run_application(server_ip, server_cmd, client_cmd, power_out_file):
     power_log = open(power_out_file, "w")
     power_log_sum = open(power_out_file + ".sum", "w")
+
+    # Start Server Application through SSH
+    ssh_server = paramiko.SSHClient()
+    ssh_server.set_missing_host_key_policy(paramiko.AutoAddPolicy())
+    ssh_server.connect(server_ip, username='ubuntu')
+    ssh_stdin, ssh_stdout, ssh_stderr = ssh_server.exec_command(server_cmd)
+
     # Start WattsUP through SSH
     ssh = paramiko.SSHClient()
     ssh.set_missing_host_key_policy(paramiko.AutoAddPolicy())
@@ -74,7 +81,9 @@ def run_application(server_ip, app_cmd, power_out_file):
 
     # Stop WattsUP through SSH
     end_time = datetime.now()
-    power_log_sum.write("%s\t%f\t(%f/%d)" % (str(end_time-start_time), power_sum/power_counter, power_sum, power_counter))
+    power_log_sum.write("%s\t%f\t(%f/%d)" % \
+            (str(end_time-start_time), power_sum/power_counter, power_sum, power_counter))
+    ssh_server.close()
     ssh.close()
     power_log.close()
     return 0
@@ -105,8 +114,9 @@ def main(argv=None):
     client_list = [("server.krha.kr", 19093, "g_cloudlet"), ("23.21.103.194", 9093, "g_east")]
     for client in client_list:
         client_cmd = "./graphics_client.py -i acc_input_50sec -s %s -p %d > %s" % (client[0], client[1], client[2])
+        server_cmd = "./cloudlet/src/app/graphics/bin/linux/x86_64/release/cloudlet_test -j 4"
         print "RUNNING : %s" % (client_cmd)
-        ret = run_application(settings.server_ip, client_cmd, client[2]+".power")
+        ret = run_application(settings.server_ip, server_cmd, client_cmd, client[2]+".power")
         if not ret == 0:
             print "Error at running %s" % (client_cmd)
             sys.exit(1)
