@@ -124,7 +124,7 @@ def send_request(sock, input_data):
                 break;
 
             # send acc data
-            if (time.time() - last_sent_time) > 0.015:
+            if (time.time() - last_sent_time) > 0.020:
                 if input_data:
                     if len(input_data[index].split("  ")) != 3:
                         print "Error input : %s" % input_data[index]

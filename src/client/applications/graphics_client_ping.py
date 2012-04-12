@@ -85,13 +85,15 @@ def send_request(address, port, input_data):
             x_acc = -9.0 
             y_acc = -1.0
 
-        sent_size = sock.send(struct.pack("!ff", x_acc, y_acc))
+        sent_size = sock.send(struct.pack("!fff", x_acc, x_acc, y_acc))
         #print "Sent acc (%f, %f)" % (x_acc, y_acc)
-        if not sent_size == 8:
+        if not sent_size == 12:
             sys.strerr.write("Error, send wrong size of acc data: %d" + sent_size)
             sys.exit(1)
         
         # recv
+        data = sock.recv(4)
+        ret_size = struct.unpack("!I", data)[0]
         data = sock.recv(4)
         ret_size = struct.unpack("!I", data)[0]
         #print "Recv size : %d" % (ret_size)
