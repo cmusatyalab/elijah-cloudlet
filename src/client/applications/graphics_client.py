@@ -63,13 +63,13 @@ def recv_data(sock):
     print "index\tstart\tend\tduration\tjitter\tout"
     try:
         while True:
-            data = sock.recv(4)
-            client_id = struct.unpack("!I", data)[0]
+            #data = sock.recv(4)
+            #client_id = struct.unpack("!I", data)[0]
             data = sock.recv(4)
             server_token_id = struct.unpack("!I", data)[0]
             data = sock.recv(4)
             ret_size = struct.unpack("!I", data)[0]
-            #print "Client ID : %d, Recv size : %d" % (client_id, ret_size)
+            #print "Client ID : %d, Recv size : %d" % (server_token_id, ret_size)
             token_id = server_token_id
             #receiver_time_stamps.append((client_id, time.time()))
             
@@ -124,7 +124,7 @@ def send_request(sock, input_data):
                 break;
 
             # send acc data
-            if (time.time() - last_sent_time) > 0.02:
+            if (time.time() - last_sent_time) > 0.015:
                 if input_data:
                     if len(input_data[index].split("  ")) != 3:
                         print "Error input : %s" % input_data[index]
@@ -136,13 +136,11 @@ def send_request(sock, input_data):
                     y_acc = -1.0
 
                 #sender_time_stamps.append((index, time.time()))
-                sent_size = sock.send(struct.pack("!iiff", index, token_id, x_acc, y_acc))
+                #sent_size = sock.send(struct.pack("!iiff", index, token_id, x_acc, y_acc))
+                sent_size = sock.send(struct.pack("!iff", token_id, x_acc, y_acc))
                 last_sent_time = time.time()
                 index += 1
                 print "[%03d/%d] Sent ACK(%d), acc (%f, %f)" % (index, loop_length, token_id, x_acc, y_acc)
-                if not sent_size == 16:
-                    sys.stderr.write("Error, send wrong size of acc data: %d" + sent_size)
-                    sys.exit(1)
 
     sock.close()
 
@@ -170,8 +168,8 @@ def connect(address, port, input_data):
     sender.join()
     duration = time.time() - start_client_time
 
-    print "Total Time: %s, Average FPS: %5.2f, Sent ACC #: %d" % \
-            (str(duration), total_recv_number/duration, len(input_data))
+    print "Total Time: %s, Average FPS: %5.2f" % \
+            (str(duration), total_recv_number/duration)
 
 def main(argv=None):
     global LOCAL_IPADDRESS
