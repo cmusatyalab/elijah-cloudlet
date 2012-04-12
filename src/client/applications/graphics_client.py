@@ -25,10 +25,10 @@ from threading import Thread
 import math
 
 token_id = 0
-total_recv_number = 0;
-
+overlapped_acc_ack = 0
 sender_time_stamps = {}
-receiver_time_stamps = {}
+receiver_time_stamps = {}   # recored corresponding receive time for a sent acc
+receiver_time_list = []    # All time stamp whenever it received new frame data
 
 def recv_all(sock, size):
     data = ''
@@ -57,9 +57,12 @@ def process_command_line(argv):
     return settings, args
 
 
-def recv_data(sock):
+def recv_data(sock, last_client_id):
     global token_id
-    global total_recv_number
+    global receiver_time_stamps
+    global receiver_time_list
+    global overlapped_acc_ack
+
     # recv
     print "index\tstart\tend\tduration\tjitter\tout"
     try:
@@ -72,13 +75,16 @@ def recv_data(sock):
             ret_size = struct.unpack("!I", data)[0]
             #print "Client ID : %d, Recv size : %d" % (server_token_id, ret_size)
             token_id = server_token_id
-            if not receiver_time_stamps.get(client_id):
-                #print "Add client id to time_stamp list %d" % (client_id)
-                receiver_time_stamps[client_id] = time.time()*1000
             
             if not ret_size == 0:
                 ret_data = recv_all(sock, ret_size)
-                total_recv_number = total_recv_number + 1
+                recv_time = time.time() * 1000
+                if not receiver_time_stamps.get(client_id):
+                    #print "Add client id to time_stamp list %d" % (client_id)
+                    receiver_time_stamps[client_id] = recv_time
+                else:
+                    overlapped_acc_ack += 1
+                receiver_time_list.append(recv_time)
                 if not ret_size == len(ret_data):
                     sys.stderr.write("Error, returned value size : %d" % (len(ret_data)))
                     sys.exit(1)
@@ -86,8 +92,12 @@ def recv_data(sock):
                 sys.stderr.write("Error, return size must not be zero")
                 sys.exit(1)
 
+            if client_id == last_client_id:
+                break
+
     except socket.error:
         print "Socket Closed and Closing Recv Thread"
+
 
 
 def send_request(sock, input_data):
@@ -109,22 +119,17 @@ def send_request(sock, input_data):
 
             # send acc data
             if (time.time() - last_sent_time) > 0.020:
-                if input_data:
-                    if len(input_data[index].split("  ")) != 3:
-                        print "Error input : %s" % input_data[index]
-                        continue
-                    x_acc = float(input_data[index].split("  ")[1])
-                    y_acc = float(input_data[index].split("  ")[2])
-                else:
-                    x_acc = -9.0 
-                    y_acc = -1.0
+                if len(input_data[index].split("  ")) != 3:
+                    print "Error input : %s" % input_data[index]
+                    continue
+                x_acc = float(input_data[index].split("  ")[1])
+                y_acc = float(input_data[index].split("  ")[2])
 
                 sender_time_stamps[index] = time.time()*1000
                 sock.send(struct.pack("!iiff", index, token_id, x_acc, y_acc))
                 last_sent_time = time.time()
                 index += 1
                 print "[%03d/%d] Sent ACK(%d), acc (%f, %f)" % (index, loop_length, token_id, x_acc, y_acc)
-
     sock.close()
 
 
@@ -141,7 +146,7 @@ def connect(address, port, input_data):
         sys.exit(1)
 
     sender = Thread(target=send_request, args=(sock,input_data))
-    recv = Thread(target=recv_data, args=(sock,))
+    recv = Thread(target=recv_data, args=(sock,len(input_data)))
 
     start_client_time = time.time()
     sender.start()
@@ -149,12 +154,14 @@ def connect(address, port, input_data):
 
     print "Waiting for end of acc data transmit"
     sender.join()
+    recv.join()
 
     # print result
     prev_duration = -1
     current_duration = -1
     missed_sending_id = 0
-    for (client_id, start_time) in sender_time_stamps.items():
+    index = 0
+    for client_id, start_time in sender_time_stamps.items():
         end_time = receiver_time_stamps.get(client_id)
         if not end_time:
             #sys.stderr.write("Cannot find corresponding end time at %d" % (client_id))
@@ -172,31 +179,24 @@ def connect(address, port, input_data):
             print "%d\t%014.2f\t%014.2f\t%014.2f\t%014.2f\t%s" % (client_id, round(start_time, 3), \
                     end_time, \
                     current_duration, \
-                    math.fabs(current_duration-prev_duration), \
+                    receiver_time_list[index]-receiver_time_list[index-1], \
                     "true")
-  
-    duration = time.time() - start_client_time
-    print "Number of merged client request: %d" % (missed_sending_id)
-    print "Total Time: %s, Average FPS: %5.2f" % \
-            (str(duration), total_recv_number/duration)
+        index += 1
 
-    '''
-    end_time_request = time.time() * 1000.0
-    prev_duration = current_duration
-    current_duration = end_time_request-start_time_request
-    if prev_duration == -1: # fisrt response
-        print "%d\t%014.2f\t%014.2f\t%014.2f\t0\t%014.2f" % (index, start_time_request,\
-                end_time_request, \
-                end_time_request-start_time_request,\
-                len(ret_data))
-                
-    else:
-        print "%d\t%014.2f\t%014.2f\t%014.2f\t%014.2f\t%014.2f" % (index, round(start_time_request, 3), \
-                end_time_request, \
-                current_duration, \
-                math.fabs(current_duration-prev_duration), \
-                len(ret_data))
-    '''
+    # Expect more jitter value if server sent duplicated acc index
+    for left_index in xrange(index+1, len(receiver_time_list)):
+        print "%d\t%014.2f\t%014.2f\t%014.2f\t%014.2f\t%s" % (left_index, 0, \
+                0, \
+                0, \
+                receiver_time_list[left_index]-receiver_time_list[left_index-1], \
+                "true")
+
+    duration = time.time() - start_client_time
+    print "Number of missed acc ID (Server only sent lasted acc ID): %d" % (missed_sending_id)
+    print "Number of response with duplicated acc id: %d" % (overlapped_acc_ack)
+    print "Total Time: %s, Total Recv Frame#: %d, Average FPS: %5.2f" % \
+            (str(duration), len(receiver_time_list), len(receiver_time_list)/duration)
+
 
 def main(argv=None):
     global LOCAL_IPADDRESS
@@ -204,6 +204,10 @@ def main(argv=None):
     input_accs = None
     if settings.input_file and os.path.exists(settings.input_file):
         input_accs = open(settings.input_file, "r").read().split("\n")
+    else:
+        input_accs = []
+        for i in xrange(1000):
+            input_accs.append("time  -9.0  -1.0")
 
     connect(settings.server_address, settings.server_port, input_accs)
 
