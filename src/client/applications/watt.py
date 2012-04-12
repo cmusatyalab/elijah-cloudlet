@@ -33,25 +33,25 @@ def wait_until_finish(stdout, stderr, log=True, max_time=20):
             break
         time.sleep(0.01)
 
-def run_application(server_ip, server_cmd, client_cmd, power_out_file):
+def run_application(cloud_ip, cloud_port, server_cmd, watts_ip, client_cmd, power_out_file):
     power_log = open(power_out_file, "w")
     power_log_sum = open(power_out_file + ".sum", "w")
 
     # Start Server Application through SSH
     ssh_server = paramiko.SSHClient()
     ssh_server.set_missing_host_key_policy(paramiko.AutoAddPolicy())
-    ssh_server.connect(server_ip, username='ubuntu')
+    ssh_server.connect(cloud_ip, username='ubuntu')
     ssh_stdin, ssh_stdout, ssh_stderr = ssh_server.exec_command(server_cmd)
 
     # Start WattsUP through SSH
     ssh = paramiko.SSHClient()
     ssh.set_missing_host_key_policy(paramiko.AutoAddPolicy())
-    ssh.connect(server_ip, username='krha')
+    ssh.connect(watts_ip, username='krha')
     command = "%s /dev/ttyUSB0" % WATTS_BIN
     ssh_stdin, ssh_stdout, ssh_stderr = ssh.exec_command(command)
 
     # Start Client App
-    proc = subprocess.Popen(app_cmd, shell=True, stdin=subprocess.PIPE, stdout=subprocess.PIPE)
+    proc = subprocess.Popen(client_cmd, shell=True, stdin=subprocess.PIPE, stdout=subprocess.PIPE)
     start_time = datetime.now()
     power_sum = 0.0
     power_counter = 0
@@ -73,7 +73,7 @@ def run_application(server_ip, server_cmd, client_cmd, power_out_file):
             print "Client Finished"
             break;
         else:
-            print "Client End with Error : %s" % (app_cmd)
+            print "Client End with Error : %s" % (client_cmd)
             ssh.close()
             power_log.close()
             return 1
@@ -95,7 +95,7 @@ def process_command_line(argv):
             '-c', '--cleint', action='store', type='string', dest='client_name',
             help='Client Type Between moped and graphics')
     parser.add_option(
-            '-s', '--server', action='store', type='string', dest='server_ip',
+            '-s', '--server', action='store', type='string', dest='watts_server',
             help='Server IP that has connected to WattsUp Gear')
     settings, args = parser.parse_args(argv)
 
@@ -103,7 +103,7 @@ def process_command_line(argv):
         parser.error('program takes no command-line arguments; "%s" ignored.' % (args,))
     if not settings.client_name:
         parser.error("we need client type")
-    if not settings.server_ip:
+    if not settings.watts_server:
         parser.error("we need server IP")
 
     return settings, args
@@ -111,12 +111,12 @@ def process_command_line(argv):
 
 def main(argv=None):
     settings, args = process_command_line(sys.argv[1:])
-    client_list = [("server.krha.kr", 19093, "g_cloudlet"), ("23.21.103.194", 9093, "g_east")]
-    for client in client_list:
-        client_cmd = "./graphics_client.py -i acc_input_50sec -s %s -p %d > %s" % (client[0], client[1], client[2])
+    cloud_list = [("server.krha.kr", 19093, "g_cloudlet"), ("23.21.103.194", 9093, "g_east")]
+    for cloud in cloud_list:
+        client_cmd = "./graphics_client.py -i acc_input_50sec -s %s -p %d > %s" % (cloud[0], cloud[1], cloud[2])
         server_cmd = "./cloudlet/src/app/graphics/bin/linux/x86_64/release/cloudlet_test -j 4"
         print "RUNNING : %s" % (client_cmd)
-        ret = run_application(settings.server_ip, server_cmd, client_cmd, client[2]+".power")
+        ret = run_application(cloud[0], cloud[1], server_cmd, settings.watts_server, client_cmd, cloud[2]+".power")
         if not ret == 0:
             print "Error at running %s" % (client_cmd)
             sys.exit(1)
