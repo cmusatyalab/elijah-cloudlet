@@ -114,7 +114,11 @@ def process_command_line(argv):
 
 def main(argv=None):
     settings, args = process_command_line(sys.argv[1:])
-    cloud_list = [("server.krha.kr", 19093, "g_cloudlet", 2221), ("23.21.103.194", 9093, "g_east", 22)]
+    cloud_list = [("server.krha.kr", 19093, "g_cloudlet", 2221), \
+            ("23.21.103.194", 9093, "g_east", 22), \
+            ("184.169.142.70", 9093, "g_west", 22), \
+            ("176.34.100.63", 9093, "g_eu", 22), \
+            ("46.137.209.173", 9093, "g_asia", 22)]
     for cloud in cloud_list:
         client_cmd = "./graphics_client.py -i acc_input_50sec -s %s -p %d > %s" % (cloud[0], cloud[1], cloud[2])
         server_cmd = "./cloudlet/src/app/graphics/bin/linux/x86_64/release/cloudlet_test -j 4"
