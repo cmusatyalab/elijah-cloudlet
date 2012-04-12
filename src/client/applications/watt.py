@@ -38,10 +38,13 @@ def run_application(cloud_ip, cloud_port, server_cmd, watts_ip, client_cmd, powe
     power_log_sum = open(power_out_file + ".sum", "w")
 
     # Start Server Application through SSH
+    '''
     ssh_server = paramiko.SSHClient()
     ssh_server.set_missing_host_key_policy(paramiko.AutoAddPolicy())
-    ssh_server.connect(cloud_ip, username='ubuntu')
+    print "connection info %s:%d" % (cloud_ip, cloud_port)
+    ssh_server.connect(cloud_ip, port=cloud_port, username='ubuntu')
     ssh_stdin, ssh_stdout, ssh_stderr = ssh_server.exec_command(server_cmd)
+    '''
 
     # Start WattsUP through SSH
     ssh = paramiko.SSHClient()
@@ -83,7 +86,7 @@ def run_application(cloud_ip, cloud_port, server_cmd, watts_ip, client_cmd, powe
     end_time = datetime.now()
     power_log_sum.write("%s\t%f\t(%f/%d)" % \
             (str(end_time-start_time), power_sum/power_counter, power_sum, power_counter))
-    ssh_server.close()
+    #ssh_server.close()
     ssh.close()
     power_log.close()
     return 0
@@ -111,12 +114,12 @@ def process_command_line(argv):
 
 def main(argv=None):
     settings, args = process_command_line(sys.argv[1:])
-    cloud_list = [("server.krha.kr", 19093, "g_cloudlet"), ("23.21.103.194", 9093, "g_east")]
+    cloud_list = [("server.krha.kr", 19093, "g_cloudlet", 2221), ("23.21.103.194", 9093, "g_east", 22)]
     for cloud in cloud_list:
         client_cmd = "./graphics_client.py -i acc_input_50sec -s %s -p %d > %s" % (cloud[0], cloud[1], cloud[2])
         server_cmd = "./cloudlet/src/app/graphics/bin/linux/x86_64/release/cloudlet_test -j 4"
         print "RUNNING : %s" % (client_cmd)
-        ret = run_application(cloud[0], cloud[1], server_cmd, settings.watts_server, client_cmd, cloud[2]+".power")
+        ret = run_application(cloud[0], cloud[3], server_cmd, settings.watts_server, client_cmd, cloud[2]+".power")
         if not ret == 0:
             print "Error at running %s" % (client_cmd)
             sys.exit(1)
