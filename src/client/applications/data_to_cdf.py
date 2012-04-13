@@ -122,9 +122,18 @@ def main(argv=None):
             sys.stdout.write("%s\t\t" % os.path.splitext(os.path.basename(each_file))[0])
         sys.stdout.write("\n")
 
-        for index in xrange(len(cdf_all_list[0])):
+        # Get longest CDF
+        max_length = 0
+        for cdf_ret in cdf_all_list:
+            if len(cdf_ret) > max_length:
+                max_length = len(cdf_ret)
+            
+        for index in xrange(max_length):
             for cdf_list in cdf_all_list:
-                sys.stdout.write("%f\t%f\t" % (cdf_list[index][0], cdf_list[index][1]))
+                if len(cdf_list) > index:
+                    sys.stdout.write("%f\t%f\t" % (cdf_list[index][0], cdf_list[index][1]))
+                else:
+                    sys.stdout.write("\t\t")
             sys.stdout.write("\n")
 
     return 0

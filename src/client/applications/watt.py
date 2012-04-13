@@ -111,9 +111,14 @@ def process_command_line(argv):
 
     return settings, args
 
+def turn_off_core():
+    server_cmd = "/home/krha/cloudlet/src/app/graphics/bin/linux/x86_64/release/cloudlet_test -j 4"
+    proc = subprocess.Popen(server_cmd)
+    time.sleep(5)
 
 def main(argv=None):
     settings, args = process_command_line(sys.argv[1:])
+    '''
     cloud_list = [("server.krha.kr", 19093, "g_cloudlet", 2221), \
             ("23.21.103.194", 9093, "g_east", 22), \
             ("184.169.142.70", 9093, "g_west", 22), \
@@ -127,8 +132,21 @@ def main(argv=None):
         if not ret == 0:
             print "Error at running %s" % (client_cmd)
             sys.exit(1)
-        time.sleep(5)
+        time.sleep(30)
 
+    # LOCAL test
+    '''
+    server_cmd = "/home/krha/cloudlet/src/app/graphics/bin/linux/x86_64/release/cloudlet_test -j 4"
+    proc = subprocess.Popen(server_cmd)
+    time.sleep(5)
+
+    cloud = ("localhost", 9093, "g_local", 22)
+    client_cmd = "./graphics_client.py -i acc_input_50sec -s %s -p %d > %s" % (cloud[0], cloud[1], cloud[2])
+    print "RUNNING : %s" % (client_cmd)
+    ret = run_application(cloud[0], cloud[3], server_cmd, settings.watts_server, client_cmd, cloud[2]+".power")
+    if not ret == 0:
+        print "Error at running %s" % (client_cmd)
+        sys.exit(1)
 
 if __name__ == "__main__":
     status = main()
