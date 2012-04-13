@@ -95,10 +95,10 @@ def process_command_line(argv):
     parser = OptionParser(usage="usage: %prog -c [Client Type] -s [WattsUp connected Server IP]",
             version="Power measurement")
     parser.add_option(
-            '-c', '--cleint', action='store', type='string', dest='client_name',
+            '-c', '--cleint', action='store', type='string', dest='client_name', default="graphics",
             help='Client Type Between moped and graphics')
     parser.add_option(
-            '-s', '--server', action='store', type='string', dest='watts_server',
+            '-s', '--server', action='store', type='string', dest='watts_server', default="desk.krha.kr",
             help='Server IP that has connected to WattsUp Gear')
     settings, args = parser.parse_args(argv)
 
@@ -111,14 +111,23 @@ def process_command_line(argv):
 
     return settings, args
 
-def turn_off_core():
-    server_cmd = "/home/krha/cloudlet/src/app/graphics/bin/linux/x86_64/release/cloudlet_test -j 4"
-    proc = subprocess.Popen(server_cmd)
-    time.sleep(5)
+def turn_cores(core_on):
+    return
+
+
+    for index in xrange(1,4):
+        print "cpu " + str(index)
+        if core_on:
+            open("/sys/devices/system/cpu/cpu%d/online" % (index), "w").write("1\n")
+        else:
+            open("/sys/devices/system/cpu/cpu%d/online" % (index), "w").write("0\n")
+        time.sleep(1)
+    time.sleep(10)
 
 def main(argv=None):
     settings, args = process_command_line(sys.argv[1:])
-    '''
+    turn_cores(False)
+
     cloud_list = [("server.krha.kr", 19093, "g_cloudlet", 2221), \
             ("23.21.103.194", 9093, "g_east", 22), \
             ("184.169.142.70", 9093, "g_west", 22), \
@@ -135,15 +144,16 @@ def main(argv=None):
         time.sleep(30)
 
     # LOCAL test
-    '''
+    turn_cores(True)
     server_cmd = "/home/krha/cloudlet/src/app/graphics/bin/linux/x86_64/release/cloudlet_test -j 4"
-    proc = subprocess.Popen(server_cmd)
+    proc = subprocess.Popen(server_cmd, shell=True, stdin=subprocess.PIPE, stdout=subprocess.PIPE)
     time.sleep(5)
 
     cloud = ("localhost", 9093, "g_local", 22)
     client_cmd = "./graphics_client.py -i acc_input_50sec -s %s -p %d > %s" % (cloud[0], cloud[1], cloud[2])
     print "RUNNING : %s" % (client_cmd)
     ret = run_application(cloud[0], cloud[3], server_cmd, settings.watts_server, client_cmd, cloud[2]+".power")
+    proc.kill()
     if not ret == 0:
         print "Error at running %s" % (client_cmd)
         sys.exit(1)
