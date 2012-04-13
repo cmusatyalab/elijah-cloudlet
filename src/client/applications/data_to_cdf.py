@@ -48,7 +48,13 @@ def convert_to_CDF(input_file, output_file):
     end_time = 0.0
     for index, oneline in enumerate(input_lines):
         if len(oneline.split("\t")) != 6 and len(oneline.split("\t")) != 5:
-            sys.stderr.write("Error at input line at %d, %s\n" % (index, oneline))
+            #sys.stderr.write("Error at input line at %d, %s\n" % (index, oneline))
+            continue
+        try:
+            if float(oneline.split("\t")[2]) == 0:
+                sys.stderr.write("Error at input line at %d, %s\n" % (index, oneline))
+                continue
+        except ValueError:
             continue
         try:
 
@@ -91,7 +97,11 @@ def main(argv=None):
         cdf_all_list = []
         file_list = []
         for each_file in os.listdir(settings.input_dir):
-            if each_file[-4:] == ".cdf":
+            print "File : %s" % each_file
+            if os.path.isdir(os.path.join(settings.input_dir, each_file)):
+                print "This is directory : %s" % each_file
+                continue
+            if each_file.find(".") != -1:
                 continue
             file_list.append(each_file)
 
