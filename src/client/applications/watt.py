@@ -62,11 +62,13 @@ def run_application(cloud_ip, cloud_port, server_cmd, watts_ip, client_cmd, powe
         proc.poll()
         if proc.returncode == None:
             ret = ssh_stdout.readline()
-            power_log.write("%s\t%s" % (str(datetime.now()), ret))
             power_value = float(ret.split(",")[0])
-            if power_value < 10.0 or power_value > 30.0:
+            if power_value == 0.0:
+                continue
+            if power_value < 1.0 or power_value > 30.0:
                 print "Error at Power Measurement with %f" % (power_value)
                 sys.exit(1)
+            power_log.write("%s\t%s" % (str(datetime.now()), ret))
             print "current power : %f" % power_value
             power_sum = power_sum + power_value
             power_counter = power_counter + 1
