@@ -116,7 +116,6 @@ def process_command_line(argv):
 def turn_cores(core_on):
     return
 
-
     for index in xrange(1,4):
         print "cpu " + str(index)
         if core_on:
@@ -128,7 +127,6 @@ def turn_cores(core_on):
 
 def main(argv=None):
     settings, args = process_command_line(sys.argv[1:])
-    turn_cores(False)
 
     cloud_list = [("server.krha.kr", 19093, "g_cloudlet", 2221), \
             ("23.21.103.194", 9093, "g_east", 22), \
@@ -146,10 +144,9 @@ def main(argv=None):
         time.sleep(30)
 
     # LOCAL test
-    turn_cores(True)
     server_cmd = "/home/krha/cloudlet/src/app/graphics/bin/linux/x86_64/release/cloudlet_test -j 4"
     proc = subprocess.Popen(server_cmd, shell=True, stdin=subprocess.PIPE, stdout=subprocess.PIPE)
-    time.sleep(5)
+    time.sleep(10)
 
     cloud = ("localhost", 9093, "g_local", 22)
     client_cmd = "./graphics_client.py -i acc_input_50sec -s %s -p %d > %s" % (cloud[0], cloud[1], cloud[2])

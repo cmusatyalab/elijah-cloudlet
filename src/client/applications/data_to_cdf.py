@@ -39,7 +39,6 @@ def process_command_line(argv):
     return settings, args
 
 def convert_to_CDF(input_file, output_file):
-    print "filename: " + input_file
     input_lines = open(input_file, "r").read().split("\n")
     output_file = open(output_file, "w")
     rtt_list = []
@@ -57,7 +56,6 @@ def convert_to_CDF(input_file, output_file):
         except ValueError:
             continue
         try:
-
             rtt_list.append(float(oneline.split("\t")[3]))
             if not index == 0:
                 # protect error case where initial jitter value is equals to latency
