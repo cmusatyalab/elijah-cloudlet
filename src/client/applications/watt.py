@@ -144,15 +144,11 @@ def main(argv=None):
         time.sleep(30)
 
     # LOCAL test
-    server_cmd = "/home/krha/cloudlet/src/app/graphics/bin/linux/x86_64/release/cloudlet_test -j 4"
-    proc = subprocess.Popen(server_cmd, shell=True, stdin=subprocess.PIPE, stdout=subprocess.PIPE)
-    time.sleep(10)
-
+    raw_input("Prepare local server and Enter. ")
     cloud = ("localhost", 9093, "g_local", 22)
     client_cmd = "./graphics_client.py -i acc_input_50sec -s %s -p %d > %s" % (cloud[0], cloud[1], cloud[2])
     print "RUNNING : %s" % (client_cmd)
     ret = run_application(cloud[0], cloud[3], server_cmd, settings.watts_server, client_cmd, cloud[2]+".power")
-    proc.kill()
     if not ret == 0:
         print "Error at running %s" % (client_cmd)
         sys.exit(1)
