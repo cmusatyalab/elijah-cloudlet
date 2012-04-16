@@ -148,7 +148,7 @@ def main(argv=None):
     cloud = ("localhost", 9093, "g_local", 22)
     client_cmd = "./graphics_client.py -i acc_input_50sec -s %s -p %d > %s" % (cloud[0], cloud[1], cloud[2])
     print "RUNNING : %s" % (client_cmd)
-    ret = run_application(cloud[0], cloud[3], server_cmd, settings.watts_server, client_cmd, cloud[2]+".power")
+    ret = run_application(cloud[0], cloud[3], '', settings.watts_server, client_cmd, cloud[2]+".power")
     if not ret == 0:
         print "Error at running %s" % (client_cmd)
         sys.exit(1)
