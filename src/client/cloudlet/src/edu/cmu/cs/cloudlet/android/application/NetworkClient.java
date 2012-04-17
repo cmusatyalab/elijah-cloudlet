@@ -36,7 +36,7 @@ public class NetworkClient extends Thread {
 	private DataInputStream networkReader = null;
 	private DataOutputStream networkWriter = null;
 
-	private byte[] mData;
+	private CloudletCameraActivity mActivity;
 	private Context mContext;
 	private Handler mHandler;
 	private Looper mLoop;
@@ -46,8 +46,10 @@ public class NetworkClient extends Thread {
 	protected long dataSendEnd;
 	protected long dataReceiveStart;
 	protected long dataReceiveEnd;
+	private ArrayList<File> mFileList;
 	
-	public NetworkClient(Context context, Handler handler) {
+	public NetworkClient(CloudletCameraActivity activity, Context context, Handler handler) {
+		mActivity = activity;
 		mContext = context;
 		mHandler = handler;
 	}
@@ -62,7 +64,7 @@ public class NetworkClient extends Thread {
 	public void run() {
 
 		while(true){
-			if(mData == null){
+			if(mFileList == null || mFileList.size() == 0){
 				try {
 					Thread.sleep(100);
 				} catch (InterruptedException e) {
@@ -70,70 +72,65 @@ public class NetworkClient extends Thread {
 				}
 				continue;
 			}
-			
-			try {
-				int totalSize = mData.length;
-				Log.d("krha", "sending image");
 
-				//time stamp
-				dataSendStart = System.currentTimeMillis();
-				
-				// upload image
-				if(networkWriter != null){
-					networkWriter.writeInt(totalSize);
-					networkWriter.write(mData);
-					networkWriter.flush(); // flush for accurate time measure					
-				}else{
-					try {
-						Thread.sleep(100);
-					} catch (InterruptedException e) {
-						// TODO Auto-generated catch block
-						e.printStackTrace();
-					}
+			long processStartTime = System.currentTimeMillis();			
+			while(mFileList.size() > 0){
+				File testFile = mFileList.remove(0);
+				byte[] testImageData = new byte[(int) testFile.length()];
+				try {
+					FileInputStream fs = new FileInputStream(testFile);
+					fs.read(testImageData , 0, testImageData.length);
+				} catch (FileNotFoundException e) {
+					e.printStackTrace();
+				} catch (IOException e) {
+					e.printStackTrace();
 				}
-
-				//time stamp
-				dataReceiveStart = dataSendEnd = System.currentTimeMillis();
-				Log.d("krha_app", "[DATA_SEND]\t" + dataSendEnd + " - " + dataSendStart + " = " + (dataSendEnd-dataSendStart));
 				
-				String ret_string = "None";
-				if(networkReader != null){
-					// receive results
+				try {
+					int totalSize = testImageData.length;
+
+					//time stamp
+					dataSendStart = System.currentTimeMillis();					
+					// upload image
+					networkWriter.writeInt(totalSize);
+					networkWriter.write(testImageData);
+					networkWriter.flush(); // flush for accurate time measure
+					
 					int ret_size = networkReader.readInt();
 					Log.d("krha", "ret data size : " + ret_size);
 					byte[] ret_byte = new byte[ret_size];
 					networkReader.read(ret_byte);
-					ret_string = new String(ret_byte, "UTF-8");					
-				}else{
-					try {
-						Thread.sleep(1000);
-					} catch (InterruptedException e) {
-						// TODO Auto-generated catch block
-						e.printStackTrace();
-					}
-				}
+					String ret = new String(ret_byte, "UTF-8");
 
-				// time stamp
-				dataReceiveEnd = System.currentTimeMillis();
-				Log.d("krha_app", "[DATA_RECEIVE]\t" + dataReceiveEnd + " - " + dataReceiveStart + " = " + (dataReceiveEnd-dataReceiveStart));
-				
-				// callback
-				Message msg = Message.obtain();
-				msg.what = NetworkClient.FEEDBACK_RECEIVED;
-				Bundle data = new Bundle();
-				data.putString("objects", ret_string);
-				msg.setData(data);
-				mHandler.sendMessage(msg);
-				
-				//delete current data
-				mData = null;
-			} catch (IOException e) {
+					// time stamp
+					dataReceiveEnd = System.currentTimeMillis();
+					String message = testFile.getName() + "\t" + dataSendStart + "\t" + dataReceiveEnd + "\t" + (dataReceiveEnd-dataSendStart) + "\t" + ret;
+					Log.d("krha_app", message);
+
+					// callback
+					Message msg = Message.obtain();
+					msg.what = NetworkClient.FEEDBACK_RECEIVED;
+					Bundle data = new Bundle();
+					data.putString("message", message);
+					msg.setData(data);
+					mHandler.sendMessage(msg);			
+					
+				} catch (IOException e) {
+				}
 			}
+
+			// callback
+			Message msg = Message.obtain();
+			msg.what = NetworkClient.FEEDBACK_RECEIVED;
+			Bundle data = new Bundle();
+			data.putString("message", "Finish");
+			msg.setData(data);
+			mHandler.sendMessage(msg);
 		}
 	}
-
-	public void uploadImage(byte[] data) {
-		mData = data;
+	
+	public void uploadImageList(ArrayList<File> imageList) {
+		mFileList = imageList;
 	}
 
 	public void close() {

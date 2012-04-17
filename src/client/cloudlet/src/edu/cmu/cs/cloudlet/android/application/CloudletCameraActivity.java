@@ -9,12 +9,16 @@ import java.io.IOException;
 import java.io.PrintWriter;
 import java.net.InetSocketAddress;
 import java.net.Socket;
+import java.util.ArrayList;
 import java.util.Locale;
+import java.util.Timer;
+import java.util.TimerTask;
 
 import edu.cmu.cs.cloudlet.android.CloudletActivity;
 import edu.cmu.cs.cloudlet.android.R;
 import edu.cmu.cs.cloudlet.android.R.id;
 import edu.cmu.cs.cloudlet.android.R.layout;
+import edu.cmu.cs.cloudlet.android.application.face.ui.FaceRecClientCameraPreview;
 
 import android.app.Activity;
 import android.app.AlertDialog;
@@ -33,11 +37,13 @@ import android.view.KeyEvent;
 import android.view.View;
 import android.view.Window;
 import android.widget.Button;
+import android.widget.ScrollView;
+import android.widget.TextView;
 
 public class CloudletCameraActivity extends Activity implements TextToSpeech.OnInitListener {
 	public static final String TAG = "krha_app";
-	public static final String TEST_IMAGE_PATH  = "/mnt/sdcard/Cloudlet/MOPED/test_image.jpg";
-	protected byte[] testImageData;
+	public static final String TEST_IMAGE_PATH = "/mnt/sdcard/Cloudlet/MOPED/";
+	protected ArrayList<File> testImageList;
 	
 	protected static String server_ipaddress;
 	protected static int server_port;
@@ -57,6 +63,8 @@ public class CloudletCameraActivity extends Activity implements TextToSpeech.OnI
 	// time stamp for test
 	protected long startApp;
 	protected long endApp;
+	private TextView textView;
+	private ScrollView scrollView;
 
 	static protected final String OUTLOG_FILENAME = "/mnt/sdcard/cloulet_exp_result.txt";
 	static protected PrintWriter outlogWriter;		
@@ -79,6 +87,7 @@ public class CloudletCameraActivity extends Activity implements TextToSpeech.OnI
 		server_ipaddress = extras.getString("address");
 		server_port = extras.getInt("port");
 		
+
 		// buttons
 		mSendButton = (Button) findViewById(R.id.sendButton);
 		mSendButton.setOnClickListener(new View.OnClickListener() {
@@ -92,33 +101,51 @@ public class CloudletCameraActivity extends Activity implements TextToSpeech.OnI
 		});
 		
 
-		// For test Purpose, Erase it later
-		{
-			File testFile = new File(TEST_IMAGE_PATH);
-			if(testFile.exists() == false){
-				new AlertDialog.Builder(CloudletCameraActivity.this).setTitle("Error")
-				.setMessage("No test image at " + TEST_IMAGE_PATH)
-				.setIcon(R.drawable.ic_launcher)
-				.setNegativeButton("Confirm", null)
-				.show();
-			}
-			
-			testImageData = new byte[(int) testFile.length()];
-			try {
-				FileInputStream fs = new FileInputStream(testFile);
-				fs.read(testImageData , 0, testImageData.length);
-			} catch (FileNotFoundException e) {
-				e.printStackTrace();
-			} catch (IOException e) {
-				e.printStackTrace();
-			}
-		}
-		
-		
-		
 		// TextToSpeech.OnInitListener
 		mTTS = new TextToSpeech(this, this);
+		
+		
+		// For OSDI Test, just start sending data
+		File testFile = new File(TEST_IMAGE_PATH);
+		if(testFile.exists() == false){
+			new AlertDialog.Builder(CloudletCameraActivity.this).setTitle("Error")
+			.setMessage("No test image at " + TEST_IMAGE_PATH)
+			.setIcon(R.drawable.ic_launcher)
+			.setNegativeButton("Confirm", null)
+			.show();
+		}		
+		testImageList = new ArrayList();
+		for(File testfile : new File(TEST_IMAGE_PATH).listFiles()){
+			testImageList.add(testfile);
+		}
+		TimerTask autoStart = new TimerTask(){
+			@Override
+			public void run() {	
+				startApp = System.currentTimeMillis();
+				if(client == null){
+					client = new NetworkClient(CloudletCameraActivity.this, CloudletCameraActivity.this, networkHandler);
+					try {				
+						client.initConnection(server_ipaddress, server_port);
+						client.start();
+					} catch (IOException e) {
+						Log.e("krha_app", e.toString());
+						Utilities.showError(CloudletCameraActivity.this, "Error", "Cannot connect to Server " + server_ipaddress + ":" + server_port);
+						client = null;
+						mDialog.dismiss();
+					}
+				}
+				client.uploadImageList(testImageList);
+//				mDialog = ProgressDialog.show(CloudletCameraActivity.this, "", "Processing...", true);
+			} 
+		};
+
+		this.textView = (TextView) this.findViewById(R.id.cameraLogView);
+	    this.scrollView = (ScrollView) this.findViewById(R.id.cameraLogScroll);
+	    
+		Timer startTiemr = new Timer();
+		startTiemr.schedule(autoStart, 10);
 	}
+	
 
 	/*
 	 * Network Event Handler
@@ -127,16 +154,37 @@ public class CloudletCameraActivity extends Activity implements TextToSpeech.OnI
 		public void handleMessage(Message msg) {
 			if (msg.what == NetworkClient.FEEDBACK_RECEIVED) {
 				// Dissmiss Dialog
-				mDialog.dismiss();
-				endApp = System.currentTimeMillis();
+				if(mDialog != null && mDialog.isShowing())
+					mDialog.dismiss();
+
+				Bundle data = msg.getData();
+				String message = data.getString("message");
+				updateLog(message + "\n");
 				
-				// Run TTS				
+				// Run TTS
+				/*
 				Bundle data = msg.getData();
 				String ttsString = data.getString("objects");
 				TTSFeedback(ttsString);
+				*/
 			}
 		}
 	};
+	
+	
+	/*
+	 * Upload Log 
+	 */
+	public void updateLog(String msg){
+		this.textView.append(msg);
+		this.scrollView.post(new Runnable()
+	    {
+	        public void run()
+	        {
+	            scrollView.fullScroll(View.FOCUS_DOWN);
+	        }
+	    });
+	}
 
 	/*
 	 * TTS
@@ -212,7 +260,7 @@ public class CloudletCameraActivity extends Activity implements TextToSpeech.OnI
 		// check network connection
 		mDialog = ProgressDialog.show(CloudletCameraActivity.this, "", "Processing...", true);		
 		if(client == null){
-			client = new NetworkClient(CloudletCameraActivity.this, networkHandler);
+			client = new NetworkClient(this, CloudletCameraActivity.this, networkHandler);
 			try {				
 				client.initConnection(server_ipaddress, server_port);
 				client.start();
@@ -224,12 +272,6 @@ public class CloudletCameraActivity extends Activity implements TextToSpeech.OnI
 			}
 		}
 
-
-		// For consistent test, we are using presaved file
-		startApp = System.currentTimeMillis();
-		if(client != null){
-			client.uploadImage(testImageData);			
-		}
 
 		/*
 		// upload image
