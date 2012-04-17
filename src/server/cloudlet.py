@@ -35,7 +35,8 @@ VCPU_NUMBER = 1
 
 #KVM = '../kvm-qemu/x86_64-softmmu/qemu-system-x86_64'
 OVF_TRANSPORTER = "../../image/ubuntu-11.10-x86_64-server/ovftransport.iso"
-PORT_FORWARDING = "-redir tcp:9876::9876 -redir tcp:2222::22 -redir tcp:19092::9092 -redir tcp:6789::6789"
+PORT_FORWARDING = "-redir tcp:9876::9876 -redir tcp:2222::22 -redir tcp:19092::9092 \
+        -redir tcp:6789::6789 tcp:10191::10191"
 
 
 def diff_files(source_file, target_file, output_file):

@@ -38,7 +38,7 @@ public class CloudletActivity extends Activity {
 	public static final String[] applications = {"MOPED", "FACE", "Speech", "NULL"};
 	public static final int TEST_CLOUDLET_APP_MOPED_PORT = 9092; //19092
 	public static final int TEST_CLOUDLET_APP_FACE_PORT = 9876;
-	private static final int TEST_CLOUDLET_APP_SPEECH_PORT = 6789;
+	private static final int TEST_CLOUDLET_APP_SPEECH_PORT = 10191;
 	
 	protected Button startConnectionButton;
 	protected CloudletConnector connector;
