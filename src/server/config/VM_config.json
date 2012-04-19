@@ -1,24 +1,21 @@
 {
-   "python-script":"/home/krha/Cloudlet/src/Script/cloudet.py",
-   "CPU-Clock":"2.13",
-   "CPU-Core":"2",
-   "Memory-Size":"4",
+   "python-script":"/home/krha/cloudlet/src/server/cloudlet.py",
    "VM":[
       {
-         "name":"ubuntuLTS",
+         "name":"ubuntu11.10",
          "type":"baseVM",
          "OS":"Linux",
-         "OS-version":"Ubuntu_10.04 LTS",
-         "diskimg_path":"../../image/ubuntu-10.04-x86_64-desktop/ubuntu.base.img",
-         "memorysnapshot_path":"../../image/ubuntu-10.04-x86_64-desktop/ubuntu.base.mem"
+         "OS-version":"Ubuntu11.10-server-amd64",
+         "diskimg_path":"/home/krha/cloudlet/image/ubuntu-11.10-x86_64-server/ubuntu-11.base.img",
+         "memorysnapshot_path":"/home/krha/cloudlet/image/ubuntu-11.10-x86_64-server/ubuntu-11.base.mem"
       },
       {
-         "name":"windowXP",
+         "name":"window7",
          "type":"baseVM",
          "OS":"Window",
-         "OS-version":"WindowXP",
-         "diskimg_path":"../../image/WindowXPPro_Base/winxp-with-jre.base.qcow2",
-         "memorysnapshot_path":"../../image/WindowXPPro_Base/winxp-with-jre.base.mem"
+         "OS-version":"Window7-enterprise-x86",
+         "diskimg_path":"/home/krha/cloudlet/image/window7-enterprise-x86/",
+         "memorysnapshot_path":"/home/krha/cloudlet/image/window7-enterprise-x86/"
       }
    ]
 }

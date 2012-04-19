@@ -36,7 +36,7 @@ public class ClientActivity extends Activity implements OnClickListener {
 	public static final String PRESS_TO_STOP = "Press To Stop";
 
 	public static final String AUDIO_FILE_PATH = Environment.getExternalStorageDirectory().toString()
-			+ "/Cloudlet/SPEECH/myrecordings/audio.wav";
+			+ "/Cloudlet/SPEECH/myrecordings/";
 
 	public static final String LOG_FILE_DIRECTORY = Environment.getExternalStorageDirectory().toString()
 			+ "/Cloudlet/SPEECH/log";
@@ -204,86 +204,88 @@ public class ClientActivity extends Activity implements OnClickListener {
 					}
 				});
 
-				outToServer = new DataOutputStream(connection.getOutputStream());
-				File file = new File(AUDIO_FILE_PATH);
-				outToServer.writeLong(file.length());
-				fileInputStream = new FileInputStream(file);
+				for(File file : new File(AUDIO_FILE_PATH).listFiles()){
 
-				// progressDialog.setMessage("Sending audio file to server...");
+					outToServer = new DataOutputStream(connection.getOutputStream());
+					file = new File(AUDIO_FILE_PATH);
+					outToServer.writeLong(file.length());
+					fileInputStream = new FileInputStream(file);
 
-				// send audio file
-				int readData;
-				byte[] buffer = new byte[1024];
+					// progressDialog.setMessage("Sending audio file to server...");
 
-				runOnUiThread(new Runnable() {
-					@Override
-					public void run() {
-						print("Sending file...");
-						scrollview.fullScroll(ScrollView.FOCUS_DOWN);
+					// send audio file
+					int readData;
+					byte[] buffer = new byte[1024];
+
+					runOnUiThread(new Runnable() {
+						@Override
+						public void run() {
+							print("Sending file...");
+							scrollview.fullScroll(ScrollView.FOCUS_DOWN);
+						}
+					});
+
+					// krha, Start Sending Audio File
+					startTime = System.currentTimeMillis();
+					while ((readData = fileInputStream.read(buffer)) != -1) {
+						outToServer.write(buffer, 0, readData);
 					}
-				});
 
-				// krha, Start Sending Audio File
-				startTime = System.currentTimeMillis();
-				while ((readData = fileInputStream.read(buffer)) != -1) {
-					outToServer.write(buffer, 0, readData);
+					runOnUiThread(new Runnable() {
+						@Override
+						public void run() {
+							print("File sent successfully...");
+							scrollview.fullScroll(ScrollView.FOCUS_DOWN);
+						}
+					});
+
+					BufferedReader inFromServer = new BufferedReader(new InputStreamReader(connection.getInputStream()));
+
+					boolean done = false;
+
+					runOnUiThread(new Runnable() {
+						@Override
+						public void run() {
+							print("About to read from server...");
+							scrollview.fullScroll(ScrollView.FOCUS_DOWN);
+							print("-------------------------------------");
+							scrollview.fullScroll(ScrollView.FOCUS_DOWN);
+						}
+					});
+
+					while (!done) {
+						final String line = inFromServer.readLine();
+						if (line.equals("kill")) {
+							done = true;
+						} else {
+							runOnUiThread(new Runnable() {
+								@Override
+								public void run() {
+									print(line);
+									scrollview.fullScroll(ScrollView.FOCUS_DOWN);
+								}
+							});
+						}
+					}
+					
+					// krha, Result Received
+					endTime = System.currentTimeMillis();
+
+					runOnUiThread(new Runnable() {
+						@Override
+						public void run() {
+							print("-------------------------------------");
+							scrollview.fullScroll(ScrollView.FOCUS_DOWN);
+							print("Finished...");
+							scrollview.fullScroll(ScrollView.FOCUS_DOWN);
+							print("Time for First Run Response : " + (endTime - startTime));
+						}
+					});
+					fileInputStream.close();
+					inFromServer.close();
+					outToServer.flush();
+					outToServer.close();	
 				}
-
-				runOnUiThread(new Runnable() {
-					@Override
-					public void run() {
-						print("File sent successfully...");
-						scrollview.fullScroll(ScrollView.FOCUS_DOWN);
-					}
-				});
-
-				BufferedReader inFromServer = new BufferedReader(new InputStreamReader(connection.getInputStream()));
-
-				boolean done = false;
-
-				runOnUiThread(new Runnable() {
-					@Override
-					public void run() {
-						print("About to read from server...");
-						scrollview.fullScroll(ScrollView.FOCUS_DOWN);
-						print("-------------------------------------");
-						scrollview.fullScroll(ScrollView.FOCUS_DOWN);
-					}
-				});
-
-				while (!done) {
-					final String line = inFromServer.readLine();
-					if (line.equals("kill")) {
-						done = true;
-					} else {
-						runOnUiThread(new Runnable() {
-							@Override
-							public void run() {
-								print(line);
-								scrollview.fullScroll(ScrollView.FOCUS_DOWN);
-							}
-						});
-					}
-				}
-				
-				// krha, Result Received
-				endTime = System.currentTimeMillis();
-
-				runOnUiThread(new Runnable() {
-					@Override
-					public void run() {
-						print("-------------------------------------");
-						scrollview.fullScroll(ScrollView.FOCUS_DOWN);
-						print("Finished...");
-						scrollview.fullScroll(ScrollView.FOCUS_DOWN);
-						print("Time for First Run Response : " + (endTime - startTime));
-					}
-				});
-
-				fileInputStream.close();
-				outToServer.flush();
-				outToServer.close();
-				inFromServer.close();
 				connection.close();
 
 			} catch (UnknownHostException e) {
