@@ -27,6 +27,7 @@ import edu.cmu.cs.cloudlet.android.application.speech.ClientActivity;
 import edu.cmu.cs.cloudlet.android.data.VMInfo;
 import edu.cmu.cs.cloudlet.android.network.CloudletConnector;
 import edu.cmu.cs.cloudlet.android.network.HTTPCommandSender;
+import edu.cmu.cs.cloudlet.android.network.HTTPTriggerClient;
 import edu.cmu.cs.cloudlet.android.upnp.DeviceDisplay;
 import edu.cmu.cs.cloudlet.android.upnp.UPnPDiscovery;
 import edu.cmu.cs.cloudlet.android.util.CloudletEnv;
@@ -50,15 +51,11 @@ public class CloudletActivity extends Activity {
 	public static final String SYNTHESIS_SERVER_IP = "cage.coda.cs.cmu.edu"; // Cloudlet
 																		// IP
 																		// Address
-	public static final int TEST_CLOUDLET_SERVER_PORT_ISR = 9095; // Cloudlet
-																	// port for
-																	// ISR
-																	// related
-																	// test
-	public static final int SYNTHESIS_PORT = 8021; // Cloudlet port for VM
-													// Synthesis test
+	public static final int SYNTHESIS_PORT = 8021;					// Cloudlet port for VM Synthesis
+	public static final int ISR_TRIGGER_PORT = 9091;
+	
 
-	public static final String[] applications = { "MOPED", "FACE", "Speech", "NULL" };
+	public static final String[] applications = { "MOPED", "GRAPHICS", "FACE", "Speech", "NULL" };
 	public static final int TEST_CLOUDLET_APP_MOPED_PORT = 9092; // 19092
 	public static final int TEST_CLOUDLET_APP_GRAPHICS_PORT = 9093;
 	public static final int TEST_CLOUDLET_APP_FACE_PORT = 9876;
@@ -199,13 +196,9 @@ public class CloudletActivity extends Activity {
 	}
 
 	protected void runHTTPConnection(String command, String application, String url) {
-		Log.e("krha", "Need FIX");
-		Log.e("krha", "Need FIX");
-		/*
-		 * HTTPCommandSender commandSender = new HTTPCommandSender(this,
-		 * CloudletActivity.this, command, application);
-		 * commandSender.initSetup(url); commandSender.start();
-		 */
+		HTTPTriggerClient commandSender = new HTTPTriggerClient(this, CloudletActivity.this, command, application);
+		commandSender.initSetup(url); 
+		commandSender.start();
 	}
 
 	/*
