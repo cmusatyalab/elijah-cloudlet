@@ -143,7 +143,7 @@ public class CloudletCameraActivity extends Activity implements TextToSpeech.OnI
 	    this.scrollView = (ScrollView) this.findViewById(R.id.cameraLogScroll);
 	    
 		Timer startTiemr = new Timer();
-		startTiemr.schedule(autoStart, 10);
+		startTiemr.schedule(autoStart, 1000);
 	}
 	
 
