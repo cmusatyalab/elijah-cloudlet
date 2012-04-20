@@ -31,7 +31,7 @@ public class CloudletEnv {
 	
 	protected File SD_ROOT = Environment.getExternalStorageDirectory();
 	
-	private String env_root 			= "Cloudlet";
+	private String env_root 			= "external_sd/Cloudlet";
 	private String overlay_dir 			= "overlay";
 	private String speech_subdir1		= "SPEECH" + File.separator + "log";
 	private String speech_subdir2		= "SPEECH" + File.separator + "myrecordings";

@@ -15,6 +15,7 @@
 package edu.cmu.cs.cloudlet.android.network;
 
 import java.io.DataInputStream;
+import java.io.EOFException;
 import java.io.IOException;
 import java.nio.ByteBuffer;
 import java.nio.ByteOrder;
@@ -45,6 +46,8 @@ public class NetworkClientReceiver extends Thread {
 			ByteArrayBuffer msg;
 			try {
 				msg = this.receiveMsg(networkReader);
+			} catch (EOFException e){
+				break;								
 			} catch (IOException e) {
 				KLog.printErr(e.toString());
 				this.notifyStatus(CloudletConnector.NETWORK_ERROR, e.toString(), null);
@@ -70,8 +73,11 @@ public class NetworkClientReceiver extends Thread {
 		this.mHandler.sendMessage(msg);
 	}
 
-	private ByteArrayBuffer receiveMsg(DataInputStream reader) throws IOException {
+	private ByteArrayBuffer receiveMsg(DataInputStream reader) throws EOFException, IOException {
 		int jsonLength = reader.readInt();
+		if(jsonLength == -1){
+			return null;
+		}
 		KLog.println("Received JSON Header size : " + jsonLength);
 		byte[] jsonByte = new byte[jsonLength];
 		reader.read(jsonByte, 0, jsonByte.length);
