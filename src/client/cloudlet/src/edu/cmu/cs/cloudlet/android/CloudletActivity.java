@@ -162,8 +162,7 @@ public class CloudletActivity extends Activity {
 	 */
 	private void showDialogSelectISRApplication(final String[] applications, final String command) {
 		// Don't like to use String for passing command type.
-		// But, I more hate to use public CONSTANT for such as temperal test
-		// case.
+		// But, I more hate to use public CONSTANT for such as temperal test case
 		if (command.equalsIgnoreCase("cloud") == false && command.equalsIgnoreCase("mobile") == false) {
 			showAlert("Error", "command is not cloud or mobile : " + command);
 			return;
