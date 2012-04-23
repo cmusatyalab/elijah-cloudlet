@@ -71,9 +71,12 @@ def convert_to_CDF(input_file, output_file):
     rtt_sorted = sorted(rtt_list)
     total_rtt_number = len(rtt_sorted)
     cdf = []
-    summary = "%f\t%f\t%f\t%f\t%f\t%f\t%f" % (rtt_sorted[0], rtt_sorted[int(total_rtt_number*0.25)], \
+    summary = "%f\t%f\t%f\t%f\t%f\t%f\t%f\t%f\t%f" % (rtt_sorted[0],
+            rtt_sorted[int(total_rtt_number*0.01)], \
+            rtt_sorted[int(total_rtt_number*0.25)], \
             rtt_sorted[int(total_rtt_number*0.5)], \
             rtt_sorted[int(total_rtt_number*0.75)], \
+            rtt_sorted[int(total_rtt_number*0.99)], \
             rtt_sorted[-1], \
             jitter_sum/total_rtt_number, \
             (end_time-start_time))
@@ -111,7 +114,7 @@ def main(argv=None):
 
         # print out all data
         print "="*50
-        print "\tmin\t25%\t50%\t75%\tmax\tjitter\trun_time"
+        print "\tmin\t1%\t25%\t50%\t75%\t99%\tmax\tjitter\trun_time"
         for index, summary in enumerate(summary_list):
             print "%s\t%s" % (file_list[index], summary)
         print "\n"*2
