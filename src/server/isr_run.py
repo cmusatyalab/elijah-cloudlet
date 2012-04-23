@@ -19,7 +19,7 @@ from cloudlet import telnet_connection_waiting
 
 # global constant and variable
 WEB_SERVER_PORT_NUMBER = 9091
-ISR_ORIGIN_SRC_PATH = '/home/krha/cloudlet/src/ISR/src'
+ISR_ORIGIN_SRC_PATH = '/home/krha/cloudlet/src/ISR/src-pipe'
 ISR_ANDROID_SRC_PATH = '/home/krha/cloudlet/src/ISR/src-mock'
 ISR_ANDROID_PARCEL_PATH = '/home/krha/cloudlet/src/ISR/parcel'
 VNC_PATH = '/home/krha/.isr/'
