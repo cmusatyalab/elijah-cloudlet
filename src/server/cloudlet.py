@@ -151,12 +151,13 @@ def create_overlay(base_image, base_mem):
         argument.append((base_image, tmp_disk, overlay_disk))
     else:
         # create overlay only for disk and memory
-        time, command = run_snapshot(tmp_disk, base_mem, telnet_port, vnc_port, wait_vnc_end=True)
-        message = "INFO\n----------\nBase Disk: %s\nBase Memory: %s\nOverlay Disk: %s\nOverlay Memory: %s\n\n" % \
+        run_snapshot(tmp_disk, base_mem, telnet_port, vnc_port, wait_vnc_end=True)
+        message = "----------\nBase Disk: %s\nBase Memory: %s\nOverlay Disk: %s\nOverlay Memory: %s\n\n" % \
                 (base_image, base_mem, tmp_disk, tmp_mem)
-        message += "You can review your VM by\ngvncviewer localhost:%d\nOR\n%s\n" % \
-                (vnc_port, command)
+        message += "You can review your VM by\ngvncviewer localhost:%d\n----------\n" % \
+                (vnc_port)
         raw_input("%s\nEnter if you're ready to create overlay\n" % message)
+
         # stop and migrate to disk
         print "[INFO] migrating memory snapshot to disk"
         run_migration(telnet_port, vnc_port, tmp_mem)
@@ -299,8 +300,8 @@ def run_snapshot(disk_image, memory_image, telnet_port, vnc_port, wait_vnc_end, 
     
     # waiting for TCP socket open
     for i in xrange(200):
-        command_str = "netstat -an | grep 127.0.0.1:" + str(telnet_port)
-        proc = subprocess.Popen(command_str, shell=True, stdin=subprocess.PIPE, stdout=subprocess.PIPE)
+        command_net = "netstat -an | grep 127.0.0.1:" + str(telnet_port)
+        proc = subprocess.Popen(command_net, shell=True, stdin=subprocess.PIPE, stdout=subprocess.PIPE)
         output = proc.stdout.readline()
         if output.find("LISTEN") != -1:
             break;
@@ -320,7 +321,7 @@ def run_snapshot(disk_image, memory_image, telnet_port, vnc_port, wait_vnc_end, 
         if wait_vnc_end:
             ret = vnc_process.wait()
 
-        return str(end_time-start_time), command_str
+        return str(end_time-start_time)
     else:
         return 0
 

@@ -219,7 +219,7 @@ def piping_synthesis(vm_name):
     telnet_port = 9999
     vnc_port = 2
     exe_time = run_snapshot(recover_file[0], recover_file[1], telnet_port, vnc_port, wait_vnc_end=False)
-    print "[Time] VM Resume : " + exe_time
+    print "[Time] VM Resume : %s" + exe_time
     print "\n[Time] Total Time except VM Resume : " + str(datetime.now()-prev)
 
 

@@ -18,6 +18,7 @@ import os
 import sys
 import socket
 from optparse import OptionParser
+from datetime import datetime
 import time
 import struct
 import math
@@ -37,6 +38,7 @@ cloudlet_server_ip = "server.krha.kr"
 cloudlet_server_port = 8021
 isr_server_ip = "server.krha.kr"
 isr_server_port = 9091
+is_stop_thread = False
 
 APP_DIR = "/home/krha/cloudlet/src/client/applications"
 face_data = "/home/krha/Dropbox/OSDI/data/faces/input"
@@ -159,9 +161,9 @@ def get_overlay_info(app_name):
         overlay_mem_size = os.path.getsize(overlay_mem_path)
     elif app_name == application_names[1]:  # face
         base_name = 'window7'
-        overlay_disk_path = "%s/%s/face/window7-enterprise-i386.4cpu.4096mem.qcow2.lzma" % (OVERLAY_DIR, base_name)
+        overlay_disk_path = "%s/%s/face/window7-enterprise-i386.overlay.4cpu.4096mem.qcow2.lzma" % (OVERLAY_DIR, base_name)
         overlay_disk_size = os.path.getsize(overlay_disk_path)
-        overlay_mem_path = "%s/%s/face/window7-enterprise-i386.4cpu.4096mem.mem.lzma" % (OVERLAY_DIR, base_name)
+        overlay_mem_path = "%s/%s/face/window7-enterprise-i386.overlay.4cpu.4096mem.mem.lzma" % (OVERLAY_DIR, base_name)
         overlay_mem_size = os.path.getsize(overlay_mem_path)
     elif app_name == application_names[2]:  # physics
         base_name = 'ubuntu11.10'
@@ -171,9 +173,9 @@ def get_overlay_info(app_name):
         overlay_mem_size = os.path.getsize(overlay_mem_path)
     elif app_name == application_names[3]:  # speech
         base_name = 'window7'
-        overlay_disk_path = "%s/%s/speech/window7-enterprise-i386.4cpu.4096mem.qcow2.lzma" % (OVERLAY_DIR, base_name)
+        overlay_disk_path = "%s/%s/speech/window7-enterprise-i386.overlay.4cpu.4096mem.qcow2.lzma" % (OVERLAY_DIR, base_name)
         overlay_disk_size = os.path.getsize(overlay_disk_path)
-        overlay_mem_path = "%s/%s/speech/window7-enterprise-i386.4cpu.4096mem.mem.lzma" % (OVERLAY_DIR, base_name)
+        overlay_mem_path = "%s/%s/speech/window7-enterprise-i386.overlay.4cpu.4096mem.mem.lzma" % (OVERLAY_DIR, base_name)
         overlay_mem_size = os.path.getsize(overlay_mem_path)
     elif app_name == application_names[4]:  # null
         base_name = 'ubuntu11.10'
@@ -234,7 +236,7 @@ def synthesis(address, port, app_name):
         sys.exit(1)
     return 0
 
-def energy_measurement(address, port):
+def energy_measurement(address, port, power_out_file):
     # Start WattsUP through SSH
     ssh = paramiko.SSHClient()
     ssh.set_missing_host_key_policy(paramiko.AutoAddPolicy())
@@ -242,14 +244,48 @@ def energy_measurement(address, port):
     command = "%s /dev/ttyUSB0" % WATTS_BIN
     ssh_stdin, ssh_stdout, ssh_stderr = ssh.exec_command(command)
 
+    start_time = datetime.now()
+    power_sum = 0.0
+    power_counter = 0
+    power_log = open(power_out_file, "w")
+    power_log_sum = open(power_out_file + ".sum", "w")
+    while is_stop_thread == False:
+        ret = ssh_stdout.readline()
+        if not ret:
+            continue
+        power_value = float(ret.split(",")[0])
+        if power_value == 0.0:
+            continue
+        if power_value < 1.0 or power_value > 30.0:
+            print "Error at Power Measurement with %f" % (power_value)
+            sys.exit(1)
+        power_log.write("%s\t%s" % (str(datetime.now()), ret))
+        #print "current power : %f" % power_value
+        power_sum = power_sum + power_value
+        power_counter = power_counter + 1
+        time.sleep(0.1)
+
+    # Stop WattsUP through SSH
+    end_time = datetime.now()
+    power_log_sum.write("%s\t%f\t(%f/%d)" % \
+            (str(end_time-start_time), power_sum/power_counter, power_sum, power_counter))
+    ssh.close()
+    power_log.close()
+    power_log_sum.close()
+    return 0
+
+
 def main(argv=None):
     global command_type
     global cloudlet_server_ip
     global cloudlet_server_port
+    global is_stop_thread
+    is_stop_thread = False
 
     settings, args = process_command_line(sys.argv[1:])
-    #energy_thread = Thread(target=energy_measurement, args=("dagama.isr.cs.cmu.edu", 22))
-    #energy_thread.start()
+    energy_thread = Thread(target=energy_measurement, args=("dagama.isr.cs.cmu.edu", 22, "%s.%s" % (settings.command, settings.app)))
+    energy_thread.start()
+    time.sleep(2)
     if settings.command == command_type[0]:     #synthesis from cloud
         url = "http://%s:%d/cloudlet" % (cloudlet_server_ip, isr_server_port)
         synthesis_from_cloud(url, settings.app)
@@ -262,11 +298,15 @@ def main(argv=None):
         url = "http://%s:%d/isr" % (cloudlet_server_ip, isr_server_port)
         isr_launch(url, "mobile", settings.app)
 
-    # run application after 1 seconds
-    time.sleep(1)
+    # run application after 3 seconds
+    time.sleep(3)
     run_application(settings.app)
-    return 0
 
+    # wait power meter logging
+    is_stop_thread = True
+    print "Waiting for stop power measurement"
+    energy_thread.join()
+    return 0
 
 if __name__ == "__main__":
     status = main()
