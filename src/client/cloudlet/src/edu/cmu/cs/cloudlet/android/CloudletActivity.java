@@ -21,9 +21,11 @@ import java.util.ArrayList;
 import org.teleal.cling.android.AndroidUpnpServiceImpl;
 
 import edu.cmu.cs.cloudlet.android.application.CloudletCameraActivity;
+import edu.cmu.cs.cloudlet.android.application.face.batch.FaceAndroidBatchClientActivity;
 import edu.cmu.cs.cloudlet.android.application.face.ui.FaceRecClientCameraPreview;
 import edu.cmu.cs.cloudlet.android.application.graphics.GraphicsClientActivity;
 import edu.cmu.cs.cloudlet.android.application.speech.ClientActivity;
+import edu.cmu.cs.cloudlet.android.application.speech.SpeechAndroidBatchClientActivity;
 import edu.cmu.cs.cloudlet.android.data.VMInfo;
 import edu.cmu.cs.cloudlet.android.network.CloudletConnector;
 import edu.cmu.cs.cloudlet.android.network.HTTPCommandSender;
@@ -244,12 +246,12 @@ public class CloudletActivity extends Activity {
 			intent.putExtra("port", TEST_CLOUDLET_APP_GRAPHICS_PORT);
 			startActivityForResult(intent, 0);
 		} else if (application.equalsIgnoreCase("face")) {
-			Intent intent = new Intent(CloudletActivity.this, FaceRecClientCameraPreview.class);
+			Intent intent = new Intent(CloudletActivity.this, FaceAndroidBatchClientActivity.class);
 			intent.putExtra("address", SYNTHESIS_SERVER_IP);
 			intent.putExtra("port", TEST_CLOUDLET_APP_FACE_PORT);
 			startActivityForResult(intent, 0);
 		} else if (application.equalsIgnoreCase("speech")) {
-			Intent intent = new Intent(CloudletActivity.this, ClientActivity.class);
+			Intent intent = new Intent(CloudletActivity.this, SpeechAndroidBatchClientActivity.class);
 			intent.putExtra("address", SYNTHESIS_SERVER_IP);
 			intent.putExtra("port", TEST_CLOUDLET_APP_SPEECH_PORT);
 			startActivityForResult(intent, 0);

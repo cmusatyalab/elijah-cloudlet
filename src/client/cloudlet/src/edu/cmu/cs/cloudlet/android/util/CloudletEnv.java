@@ -28,13 +28,19 @@ public class CloudletEnv {
 	public static final int SOCKET_MOCK_INPUT = 3;
 	public static final int SOCKET_MOCK_OUTPUT = 4;
 	public static final int ROOT_DIR = 5;
+	public static final int SPEECH_LOG_DIR = 6;
+	public static final int SPEECH_INPUT_DIR = 7; 
+	public static final int FACE_LOG_DIR = 8; 
+	public static final int FACE_INPUT_DIR = 9; 
 	
 	protected File SD_ROOT = Environment.getExternalStorageDirectory();
 	
-	private String env_root 			= "external_sd/Cloudlet";
+	private String env_root 			= "Cloudlet";
 	private String overlay_dir 			= "overlay";
-	private String speech_subdir1		= "SPEECH" + File.separator + "log";
-	private String speech_subdir2		= "SPEECH" + File.separator + "myrecordings";
+	private String speech_log_dir		= "SPEECH" + File.separator + "log";
+	private String speech_input_dir		= "SPEECH" + File.separator + "myrecordings";
+	private String face_log_dir		= "FACE" + File.separator + "log";
+	private String face_input_dir		= "FACE" + File.separator + "faceinput";
     private String installation_file	= ".installed";
     private String preference_file		= ".preference";
     private String socket_mock_file 	= "cloudlet-";    
@@ -66,8 +72,9 @@ public class CloudletEnv {
 			}			
 		}
 
-		File speech_dir1 = new File(env_dir.getAbsolutePath() + File.separator + speech_subdir1);
-		File speech_dir2 = new File(env_dir.getAbsolutePath() + File.separator + speech_subdir2);
+
+		File speech_dir1 = new File(env_dir.getAbsolutePath() + File.separator + speech_log_dir);
+		File speech_dir2 = new File(env_dir.getAbsolutePath() + File.separator + speech_input_dir);
 		// create speech sub directory1
 		if(speech_dir1.exists() == false){
 			if(speech_dir1.mkdirs() == false){
@@ -80,6 +87,21 @@ public class CloudletEnv {
 			}
 		}
 
+		
+		//create face sub dirs
+		File face_dir1 = new File(env_dir.getAbsolutePath() + File.separator + face_log_dir);
+		File face_dir2 = new File(env_dir.getAbsolutePath() + File.separator + face_input_dir);
+		if(face_dir1.exists() == false){
+			if(face_dir1.mkdirs() == false){
+				Log.e("krha", "Cannot create Folder" + face_dir1.getAbsolutePath());
+			}
+		}
+		if(face_dir2.exists() == false){
+			if(face_dir2.mkdirs() == false){
+				Log.e("krha", "Cannot create Folder" + face_dir2.getAbsolutePath());
+			}
+		}
+
 	}
 	
 	public File getFilePath(int id){
@@ -87,14 +109,31 @@ public class CloudletEnv {
 		switch(id){
 		case CloudletEnv.ROOT_DIR:
 			path = "";
+			break;
 		case CloudletEnv.INSTALLATION:
 			path = this.installation_file;
+			break;
 		case CloudletEnv.PREFERENCE:
 			path = this.preference_file;
+			break;
 		case CloudletEnv.SOCKET_MOCK_INPUT:
 			path = this.socket_mock_file;
+			break;
 		case CloudletEnv.SOCKET_MOCK_OUTPUT:
 			path = this.socket_mock_file;
+			break;
+		case CloudletEnv.SPEECH_INPUT_DIR:
+			path = this.speech_input_dir;
+			break;
+		case CloudletEnv.SPEECH_LOG_DIR:
+			path = this.speech_log_dir;
+			break;
+		case CloudletEnv.FACE_INPUT_DIR:
+			path = this.face_input_dir;
+			break;
+		case CloudletEnv.FACE_LOG_DIR:
+			path = this.face_log_dir;
+			break;
 		}
 		
 		return new File(SD_ROOT + File.separator + env_root + File.separator + path);
