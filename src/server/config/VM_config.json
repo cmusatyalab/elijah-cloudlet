@@ -6,16 +6,16 @@
          "type":"baseVM",
          "OS":"Linux",
          "OS-version":"Ubuntu11.10-server-amd64",
-         "diskimg_path":"/home/krha/cloudlet/image/ubuntu-11.10-x86_64-server/ubuntu-11.base.img",
-         "memorysnapshot_path":"/home/krha/cloudlet/image/ubuntu-11.10-x86_64-server/ubuntu-11.base.mem"
+         "diskimg_path":"/home/krha/cloudlet/image/ubuntu-11.10-x86_64-desk/ubuntu-11.base.img",
+         "memorysnapshot_path":"/home/krha/cloudlet/image/ubuntu-11.10-x86_64-desk/ubuntu-11.base.mem"
       },
       {
          "name":"window7",
          "type":"baseVM",
          "OS":"Window",
          "OS-version":"Window7-enterprise-x86",
-         "diskimg_path":"/home/krha/cloudlet/image/window7-enterprise-x86/",
-         "memorysnapshot_path":"/home/krha/cloudlet/image/window7-enterprise-x86/"
+         "diskimg_path":"/home/krha/cloudlet/image/window7-enterprise-x86/window7-enterprise-i386.base.img",
+         "memorysnapshot_path":"/home/krha/cloudlet/image/window7-enterprise-x86/window7-enterprise-i386.base.mem"
       }
    ]
 }
