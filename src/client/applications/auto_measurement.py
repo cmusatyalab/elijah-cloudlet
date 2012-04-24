@@ -97,6 +97,9 @@ def process_command_line(argv):
     parser = OptionParser(usage="usage: %prog -c [Client Type] -s [WattsUp connected Server IP]",
             version="Power measurement")
     parser.add_option(
+            '-i', '--input', action='store', type='string', dest='input',
+            help='Input path for application')
+    parser.add_option(
             '-a', '--app', action='store', type='string', dest='app', default="graphics",
             help='Client Type Between moped and graphics')
     parser.add_option(
@@ -126,14 +129,16 @@ def turn_cores(core_on):
     time.sleep(10)
 
 
-def batch_graphics_test(watts_server):
+def batch_graphics_test(watts_server, input_file):
+    if not input_file:
+        input_file = 'acc_input_10min'
     cloud_list = [("server.krha.kr", 19093, "g_cloudlet", 2221), \
             ("23.21.103.194", 9093, "g_east", 22), \
             ("184.169.142.70", 9093, "g_west", 22), \
             ("176.34.100.63", 9093, "g_eu", 22), \
             ("46.137.209.173", 9093, "g_asia", 22)]
     for cloud in cloud_list:
-        client_cmd = "./graphics_client.py -i acc_input_10min -s %s -p %d > %s" % (cloud[0], cloud[1], cloud[2])
+        client_cmd = "./graphics_client.py -i %s -s %s -p %d > %s" % (input_file, cloud[0], cloud[1], cloud[2])
         server_cmd = "./cloudlet/src/app/graphics/bin/linux/x86_64/release/cloudlet_test -j 4"
         print "RUNNING : %s" % (client_cmd)
         ret = run_application(cloud[0], cloud[3], server_cmd, watts_server, client_cmd, cloud[2]+".power")
@@ -143,10 +148,13 @@ def batch_graphics_test(watts_server):
         time.sleep(30)
 
 
-def graphics_local(watts_server):
+def graphics_local(watts_server, input_file):
+    if not input_file:
+        input_file = 'acc_input_10min'
+
     raw_input("Prepare local server and Enter. ")
     cloud = ("localhost", 9093, "g_local", 22)
-    client_cmd = "./graphics_client.py -i acc_input_10min -s %s -p %d > %s" % (cloud[0], cloud[1], cloud[2])
+    client_cmd = "./graphics_client.py -i %s -s %s -p %d > %s" % (input_file, cloud[0], cloud[1], cloud[2])
     print "RUNNING : %s" % (client_cmd)
     ret = run_application(cloud[0], cloud[3], '', watts_server, client_cmd, cloud[2]+".power")
     if not ret == 0:
@@ -154,14 +162,17 @@ def graphics_local(watts_server):
         sys.exit(1)
 
 
-def batch_object_test(watts_server):
+def batch_object_test(watts_server, input_dir):
+    if not input_dir:
+        input_dir = 'object_images/'
+
     cloud_list = [("server.krha.kr", 19092, "o_cloudlet", 2221), \
             ("23.21.103.194", 9092, "o_east", 22), \
             ("184.169.142.70", 9092, "o_west", 22), \
             ("176.34.100.63", 9092, "o_eu", 22), \
             ("46.137.209.173", 9092, "o_asia", 22)]
     for cloud in cloud_list:
-        client_cmd = "./moped_client.py -i object_images/ -s %s -p %d > %s" % (cloud[0], cloud[1], cloud[2])
+        client_cmd = "./moped_client.py -i %s -s %s -p %d > %s" % (input_dir, cloud[0], cloud[1], cloud[2])
         server_cmd = "./cloudlet/src/app/moped/moped_server -j 4 > run_log"
         print "RUNNING : %s" % (client_cmd)
         ret = run_application(cloud[0], cloud[3], server_cmd, watts_server, client_cmd, cloud[2]+".power")
@@ -171,10 +182,13 @@ def batch_object_test(watts_server):
         time.sleep(30)
 
 
-def object_local(watts_server):
+def object_local(watts_server, input_dir):
+    if not input_dir:
+        input_dir = 'object_images/'
+
     raw_input("Prepare local server and Enter. ")
     cloud = ("localhost", 9092, "g_local", 22)
-    client_cmd = "./moped_client.py -i object_images/ -s %s -p %d > %s" % (cloud[0], cloud[1], cloud[2])
+    client_cmd = "./moped_client.py -i %s -s %s -p %d > %s" % (input_dir, cloud[0], cloud[1], cloud[2])
     print "RUNNING : %s" % (client_cmd)
     ret = run_application(cloud[0], cloud[3], '', watts_server, client_cmd, cloud[2]+".power")
     if not ret == 0:
@@ -185,13 +199,13 @@ def object_local(watts_server):
 def main(argv=None):
     settings, args = process_command_line(sys.argv[1:])
     if settings.app == "graphics":
-        batch_graphics_test(settings.watts_server)
+        batch_graphics_test(settings.watts_server, settings.input)
     elif settings.app == "graphics_local":
-        graphics_local(settings.watts_server)
+        graphics_local(settings.watts_server, settings.input)
     elif settings.app == "object":
-        batch_object_test(settings.watts_server)
+        batch_object_test(settings.watts_server, settings.input)
     elif settings.app == "object_local":
-        object_local(settings.watts_server)
+        object_local(settings.watts_server, settings.input)
 
 
 if __name__ == "__main__":

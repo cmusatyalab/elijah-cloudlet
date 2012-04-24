@@ -151,7 +151,12 @@ def create_overlay(base_image, base_mem):
         argument.append((base_image, tmp_disk, overlay_disk))
     else:
         # create overlay only for disk and memory
-        run_snapshot(tmp_disk, base_mem, telnet_port, vnc_port, wait_vnc_end=True)
+        time, command = run_snapshot(tmp_disk, base_mem, telnet_port, vnc_port, wait_vnc_end=True)
+        message = "INFO\n----------\nBase Disk: %s\nBase Memory: %s\nOverlay Disk: %s\nOverlay Memory: %s\n\n" % \
+                (base_image, base_mem, tmp_disk, tmp_mem)
+        message += "You can review your VM by\ngvncviewer localhost:%d\nOR\n%s\n" % \
+                (vnc_port, command)
+        raw_input("%s\nEnter if you're ready to create overlay\n" % message)
         # stop and migrate to disk
         print "[INFO] migrating memory snapshot to disk"
         run_migration(telnet_port, vnc_port, tmp_mem)
@@ -315,7 +320,7 @@ def run_snapshot(disk_image, memory_image, telnet_port, vnc_port, wait_vnc_end, 
         if wait_vnc_end:
             ret = vnc_process.wait()
 
-        return str(end_time-start_time)
+        return str(end_time-start_time), command_str
     else:
         return 0
 

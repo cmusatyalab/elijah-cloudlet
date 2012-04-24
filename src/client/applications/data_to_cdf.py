@@ -18,6 +18,8 @@ import os
 import sys
 from optparse import OptionParser
 
+sort_key = ['local', 'cloudlet', 'east', 'west', 'eu', 'asia']
+
 
 def process_command_line(argv):
     global operation_mode
@@ -90,21 +92,31 @@ def convert_to_CDF(input_file, output_file):
 
 def main(argv=None):
     global LOCAL_IPADDRESS
+    global sort_key
+
     settings, args = process_command_line(sys.argv[1:])
     if settings.input_file and os.path.exists(settings.input_file):
         convert_to_CDF(settings.input_file, settings.input_file + ".cdf")
     elif settings.input_dir and len(os.listdir(settings.input_dir)) > 0 :
         summary_list = []
         cdf_all_list = []
-        file_list = []
+        input_file_list = []
         for each_file in os.listdir(settings.input_dir):
-            print "File : %s" % each_file
             if os.path.isdir(os.path.join(settings.input_dir, each_file)):
-                print "This is directory : %s" % each_file
                 continue
             if each_file.find(".") != -1:
                 continue
-            file_list.append(each_file)
+            input_file_list.append(each_file)
+
+        # sort by keyword
+        file_list = []
+        counter = 0
+        for key_word in sort_key:
+            for each_file in input_file_list:
+                if each_file.find(key_word) != -1:
+                    counter += 1
+                    file_list.append(each_file)
+                    print "File : %s" % each_file
 
         for each_file in file_list:
             input_file = os.path.join(settings.input_dir, each_file)
