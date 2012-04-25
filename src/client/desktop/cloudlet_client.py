@@ -39,14 +39,15 @@ cloudlet_server_port = 8021
 isr_server_ip = "server.krha.kr"
 isr_server_port = 9091
 is_stop_thread = False
+last_average_power = 0.0
 
 APP_DIR = "/home/krha/cloudlet/src/client/applications"
-face_data = "/home/krha/Dropbox/OSDI/data/faces/input"
-speech_data = "/home/krha/Dropbox/OSDI/data/speech/selected"
-MOPED_client = "%s/moped_client.py -i %s/object_images/ -s %s -p 9092" % (APP_DIR, APP_DIR, cloudlet_server_ip)
-GRAPHICS_client = "%s/graphics_client.py -i %s/acc_input_50sec -s %s -p 9093" % (APP_DIR, APP_DIR, cloudlet_server_ip)
-FACE_client = "java -jar %s/FACE/FacerecDesktopControlClient.jar %s 9876 %s" % (APP_DIR, cloudlet_server_ip, face_data)
-SPEECH_client = "java -jar %s/SPEECH/SpeechrecDesktopControlClient.jar %s 10191 %s" % (APP_DIR, cloudlet_server_ip, speech_data)
+face_data = "/home/krha/cloudlet/src/client/desktop/face_input"
+speech_data = "/home/krha/cloudlet/src/client/desktop/speech_input/"
+MOPED_client = "%s/moped_client.py -i %s/object_images/ -s %s -p 9092 > ./ret/o_cloudlet" % (APP_DIR, APP_DIR, cloudlet_server_ip)
+GRAPHICS_client = "%s/graphics_client.py -i %s/acc_input_50sec -s %s -p 9093 > ./ret/g_cloudlet" % (APP_DIR, APP_DIR, cloudlet_server_ip)
+FACE_client = "java -jar %s/FACE/FacerecDesktopControlClient.jar %s 9876 %s > ./ret/f_cloudlet" % (APP_DIR, cloudlet_server_ip, face_data)
+SPEECH_client = "java -jar %s/SPEECH/SpeechrecDesktopControlClient.jar %s 10191 %s > ./ret/s_cloudlet" % (APP_DIR, cloudlet_server_ip, speech_data)
 
 def recv_all(sock, size):
     data = ''
@@ -237,7 +238,11 @@ def synthesis(address, port, app_name):
         sys.exit(1)
     return 0
 
+
 def energy_measurement(address, port, power_out_file):
+    global is_stop_thread
+    global last_average_power
+
     # Start WattsUP through SSH
     ssh = paramiko.SSHClient()
     ssh.set_missing_host_key_policy(paramiko.AutoAddPolicy())
@@ -268,11 +273,14 @@ def energy_measurement(address, port, power_out_file):
 
     # Stop WattsUP through SSH
     end_time = datetime.now()
-    power_log_sum.write("%s\t%f\t(%f/%d)" % \
-            (str(end_time-start_time), power_sum/power_counter, power_sum, power_counter))
+    message = "%s\t%f\t(%f/%d)" % (str(end_time-start_time), power_sum/power_counter, power_sum, power_counter)
+    power_log_sum.write(message)
     ssh.close()
     power_log.close()
     power_log_sum.close()
+    last_average_power = power_sum/power_counter
+    print "Average Power for %s: %s" % (power_out_file, message)
+
     return 0
 
 
@@ -281,12 +289,15 @@ def main(argv=None):
     global cloudlet_server_ip
     global cloudlet_server_port
     global is_stop_thread
+    global last_average_power
     is_stop_thread = False
 
     settings, args = process_command_line(sys.argv[1:])
-    energy_thread = Thread(target=energy_measurement, args=("dagama.isr.cs.cmu.edu", 22, "%s.%s" % (settings.command, settings.app)))
+    energy_thread = Thread(target=energy_measurement, args=("dagama.isr.cs.cmu.edu", 22, "%s.%s.VM" % (settings.command, settings.app)))
     energy_thread.start()
     time.sleep(2)
+
+    vm_start_time = time.time()
     if settings.command == command_type[0]:     #synthesis from cloud
         url = "http://%s:%d/cloudlet" % (cloudlet_server_ip, isr_server_port)
         synthesis_from_cloud(url, settings.app)
@@ -298,16 +309,35 @@ def main(argv=None):
     elif settings.command == command_type[3]:   #ISR from mobile
         url = "http://%s:%d/isr" % (cloudlet_server_ip, isr_server_port)
         isr_launch(url, "mobile", settings.app)
+    vm_end_time = time.time()
 
-    # run application after 3 seconds
-    time.sleep(3)
+    is_stop_thread = True
+    print "Finish VM Delivery and Wait for cool down 10 seconds for Application power measurement"
+    energy_thread.join()
+    vm_power = last_average_power
+    time.sleep(10)
+
+    # run application
+    is_stop_thread = False
+    energy_thread = Thread(target=energy_measurement, args=("dagama.isr.cs.cmu.edu", 22, "%s.%s.APP" % (settings.command, settings.app)))
+    energy_thread.start()
+    app_start_time = time.time()
     run_application(settings.app)
+    app_end_time = time.time()
 
     # wait power meter logging
     is_stop_thread = True
     print "Waiting for stop power measurement"
     energy_thread.join()
+    app_power = last_average_power
+
+    # Print out measurement
+    vm_time = vm_end_time-vm_start_time
+    app_time = app_end_time-app_start_time
+    print "VM_time\tVM_power\tVM_J\tApp_time\App_power\tApp_J"
+    print "%f\t%f\t%f\t%f\t%f\t%f" % (vm_time, vm_power, (vm_power*vm_time), app_time, app_power, (app_power*app_time))
     return 0
+
 
 if __name__ == "__main__":
     status = main()
