@@ -65,28 +65,41 @@ def get_download_url(machine_name):
     url_mem = ''
     base_disk = ''
     base_mem = ''
+    os_type = ''
     if machine_name.lower() == "moped":
         url_disk = MOPED_DISK
         url_mem = MOPED_MEM
         base_disk = MOPED_BASE_DISK
         base_mem = MOPED_BASE_MEM
+        base_mem = SPEECH_BASE_MEM
+        os_type = 'linux'
     elif machine_name.lower() == "face":
         url_disk = FACE_DISK
         url_mem = FACE_MEM
         base_disk = FACE_BASE_DISK
         base_mem = FACE_BASE_MEM
+        os_type = 'window'
     elif machine_name.lower() == "null":
         url_disk = NULL_DISK
         url_mem = NULL_MEM
         base_disk = NULL_BASE_DISK
         base_mem = NULL_BASE_MEM
+        base_mem = SPEECH_BASE_MEM
+        os_type = 'linux'
     elif machine_name.lower() == "speech":
         url_disk = SPEECH_DISK
         url_mem = SPEECH_MEM
         base_disk = SPEECH_BASE_DISK
         base_mem = SPEECH_BASE_MEM
+        os_type = 'window'
+    elif machine_name.lower() == "graphics":
+        url_disk = SPEECH_DISK
+        url_mem = SPEECH_MEM
+        base_disk = SPEECH_BASE_DISK
+        base_mem = SPEECH_BASE_MEM
+        os_type = 'linux'
 
-    return url_disk, url_mem, base_disk, base_mem
+    return url_disk, url_mem, base_disk, base_mem, os_type
 
 
 def network_worker(data, queue, time_queue, chunk_size, data_size=sys.maxint):
@@ -184,7 +197,7 @@ def delta_worker(in_queue, time_queue, base_filename, out_filename):
 
 
 def piping_synthesis(vm_name):
-    disk_url, mem_url, base_disk, base_mem = get_download_url(vm_name)
+    disk_url, mem_url, base_disk, base_mem, os_type = get_download_url(vm_name)
     prev = datetime.now()
     recover_file = []
     delta_processes = []
@@ -302,7 +315,7 @@ class SynthesisTCPHandler(SocketServer.StreamRequestHandler):
         self.wfile.write(json_ret)
 
     def handle(self):
-        # self.request is the YCP socket connected to the clinet
+        # self.request is the TCP socket connected to the clinet
         data = self.request.recv(4)
         json_size = struct.unpack("!I", data)[0]
 
@@ -347,6 +360,14 @@ class SynthesisTCPHandler(SocketServer.StreamRequestHandler):
         time_decomp = Queue()
         time_delta = Queue()
 
+        # check OS type
+        # TODO: FIX this
+        os_type = ''
+        if base_disk_path.find('ubuntu') != -1:
+            os_type = 'linux'
+        else:
+            os_type = 'window'
+
         start_time = datetime.now()
         print "[INFO] Chunk size : %d" % (CHUNK_SIZE)
         for overlay_name, file_size, base in (('disk', disk_size, base_disk_path), ('memory', mem_size, base_mem_path)):
@@ -373,7 +394,7 @@ class SynthesisTCPHandler(SocketServer.StreamRequestHandler):
 
         telnet_port = 9999
         vnc_port = 2
-        exe_time = run_snapshot(recover_file[0], recover_file[1], telnet_port, vnc_port, wait_vnc_end=False)
+        exe_time = run_snapshot(recover_file[0], recover_file[1], telnet_port, vnc_port, wait_vnc_end=False, os_type=os_type)
 
         # Print out Time Measurement
         disk_transfer_time = time_transfer.get()

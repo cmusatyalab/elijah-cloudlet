@@ -121,7 +121,7 @@ def decomp_lzma(inputname, outputname):
 
 
 # create overlay VM using base VM
-def create_overlay(base_image, base_mem):
+def create_overlay(base_image, base_mem, os_type):
     # generate overlay VM(disk + memory) from Base VM
     vm_name = os.path.basename(base_image).split('.')[0]
     vm_path = os.path.dirname(base_image)
@@ -142,16 +142,16 @@ def create_overlay(base_image, base_mem):
     if base_mem == None:
         # create overlay only for disk image
         if not os.path.exists(OVF_TRANSPORTER):
-            print >> sys.stderr, "Error, you must have OVF transport at %s\n(or change path at cloudlet.py file" % (ovf_transporter)
+            print >> sys.stderr, "Error, you must have OVF transport at %s\n(or change path at cloudlet.py file" % (OVF_TRANSPORTER)
             sys.exit(2)
 
-        run_image(tmp_disk, telnet_port, vnc_port, wait_vnc_end=True, cdrom=OVF_TRANSPORTER)
+        run_image(tmp_disk, telnet_port, vnc_port, wait_vnc_end=True, cdrom=OVF_TRANSPORTER, os_type=os_type)
         # terminal VM
         terminate_vm(telnet_port)
         argument.append((base_image, tmp_disk, overlay_disk))
     else:
         # create overlay only for disk and memory
-        run_snapshot(tmp_disk, base_mem, telnet_port, vnc_port, wait_vnc_end=True)
+        run_snapshot(tmp_disk, base_mem, telnet_port, vnc_port, wait_vnc_end=True, os_type=os_type)
         message = "----------\nBase Disk: %s\nBase Memory: %s\nOverlay Disk: %s\nOverlay Memory: %s\n\n" % \
                 (base_image, base_mem, tmp_disk, tmp_mem)
         message += "You can review your VM by\ngvncviewer localhost:%d\n----------\n" % \
@@ -271,22 +271,29 @@ def telnet_connection_waiting(telnet_port):
     return False
 
 
-def run_snapshot(disk_image, memory_image, telnet_port, vnc_port, wait_vnc_end, terminal_mode=False):
+def run_snapshot(disk_image, memory_image, telnet_port, vnc_port, wait_vnc_end, terminal_mode=False, os_type='window'):
     vm_path = os.path.dirname(memory_image)
     vnc_file = os.path.join(vm_path, 'kvm.vnc')
-
+    
     # run kvm
     command_str = "kvm -hda "
     command_str += disk_image
+
+    # virtio
+    if os_type == 'linux':
+        command_str += " -net nic,model=virtio"
+    else:
+        command_str += " -net nic"
+
     if telnet_port != 0 and vnc_port != -1:
-        command_str += " -m " + str(VM_MEMORY) + " -monitor telnet:localhost:" + str(telnet_port) + ",server,nowait -enable-kvm -net nic -net user -serial none -parallel none -usb -usbdevice tablet " + PORT_FORWARDING
+        command_str += " -m " + str(VM_MEMORY) + " -monitor telnet:localhost:" + str(telnet_port) + ",server,nowait -enable-kvm -net user -serial none -parallel none -usb -usbdevice tablet " + PORT_FORWARDING
         command_str += " -vnc :" + str(vnc_port)
-        #command_str += " -vnc unix:" + vnc_file
         command_str += " -smp " + str(VCPU_NUMBER)
         command_str += " -balloon virtio"
     else:
-        command_str += " -m " + str(VM_MEMORY) + " -enable-kvm -net nic -net user -serial none -parallel none -usb -usbdevice tablet -redir tcp:2222::22"
+        command_str += " -m " + str(VM_MEMORY) + " -enable-kvm -net user -serial none -parallel none -usb -usbdevice tablet -redir tcp:2222::22"
     command_str += " -incoming \"exec:cat " + memory_image + "\""
+
 
     # parameter for AMI Image
     ovftransporter = os.path.join(os.path.dirname(disk_image), "ami.iso")
@@ -433,7 +440,7 @@ def stop_vm(telnet_port):
     tn.close()
 
 
-def create_base(imagefile):
+def create_base(imagefile, os_type):
     if os.path.exists(imagefile) == False:
         print >> sys.stderr, '[ERROR] %s is not exist' % imagefile
         return None
@@ -454,8 +461,8 @@ def create_base(imagefile):
     ret = commands.getoutput(command_str)
     print '[INFO] run Base Image to generate memory snapshot'
     telnet_port = 12123; vnc_port = 3
-    run_image(base_image, telnet_port, vnc_port)
 
+    run_image(base_image, telnet_port, vnc_port, os_type)
     base_mem = os.path.join(vm_path, vm_name) + '.base.mem'
 
     # stop and migrate
@@ -467,16 +474,23 @@ def create_base(imagefile):
     return base_image, base_mem
 
 
-def run_image(disk_image, telnet_port, vnc_port, wait_vnc_end=True, cdrom=None, terminal_mode=False):
+def run_image(disk_image, telnet_port, vnc_port, wait_vnc_end=True, cdrom=None, terminal_mode=False, os_type='window'):
     command_str = "kvm -hda "
     command_str += disk_image
+
+    # Virtio Support
+    if os_type.lower() == 'linux': 
+        command_str += " -net nic,model=virtio"
+    else:
+        command_str += " -net nic"
+
     if telnet_port != 0 and vnc_port != -1:
-        command_str += " -m " + str(VM_MEMORY) + " -monitor telnet:localhost:" + str(telnet_port) + ",server,nowait -enable-kvm -net nic -net user -serial none -parallel none -usb -usbdevice tablet -redir tcp:9876::9876 -redir tcp:2222::22"
+        command_str += " -m " + str(VM_MEMORY) + " -monitor telnet:localhost:" + str(telnet_port) + ",server,nowait -enable-kvm -net user -serial none -parallel none -usb -usbdevice tablet -redir tcp:9876::9876 -redir tcp:2222::22"
         command_str += " -vnc :" + str(vnc_port)
         command_str += " -smp " + str(VCPU_NUMBER)
         command_str += " -balloon virtio"
     else:
-        command_str += " -m " + str(VM_MEMORY) + " -enable-kvm -net nic -net user -serial none -parallel none -usb -usbdevice tablet -redir tcp:2222::22"
+        command_str += " -m " + str(VM_MEMORY) + " -enable-kvm -net user -serial none -parallel none -usb -usbdevice tablet -redir tcp:2222::22"
 
     # parameter for AMI Image
     if cdrom != None:
@@ -498,9 +512,9 @@ def run_image(disk_image, telnet_port, vnc_port, wait_vnc_end=True, cdrom=None, 
 def print_usage(program_name):
     print 'usage: %s [option] [arg1[,arg2[, ...]]]..  ' % program_name
     print ' -h, --help  print help'
-    print ' -b, --base [disk image]' + '\tcreate Base VM (image and memory)'
-    print ' -o, --overlay [base image [,base mem]]' + '\n\tcreate overlay from base image. Overlay for EC2 will only generate disk image, so you do not need base memory'
-    print ' -r, --run [base image[,base memory]] [overlay image[,overlay memory]] [telnet_port] [vnc_port]' + '\n\trun overlay image. Ovelay for EC2 start from booting, so you do not need memory information'
+    print ' -b, --base [window|linux] [disk image]' + '\tcreate Base VM (image and memory)'
+    print ' -o, --overlay [window|linux] [base image [,base mem]]' + '\n\tcreate overlay from base image. Overlay for EC2 will only generate disk image, so you do not need base memory'
+    print ' -r, --run [window|linux] [base image[,base memory]] [overlay image[,overlay memory]] [telnet_port] [vnc_port]' + '\n\trun overlay image. Ovelay for EC2 start from booting, so you do not need memory information'
     print ' -s, --stop [command_port]' + '\tstop VM using qemu telnet monitor'
 
 
@@ -520,57 +534,59 @@ def main(argv):
     if o in ("-h", "--help"):
         print_usage(os.path.basename(argv[0]))
     elif o in ("-b", "--base"):
-        if len(args) != 1:
+        if len(args) != 2:
             print_usage(os.path.basename(argv[0]))
             print 'invalid argument'
             return;
-        input_image_path = os.path.abspath(args[0])
-        base_image, base_mem = create_base(input_image_path)
+        input_image_path = os.path.abspath(args[1])
+        base_image, base_mem = create_base(input_image_path, os_type=args[0])
         print '[INFO] Base (%s, %s) is created from %s' % (base_image, base_mem, args[0])
     elif o in ("-o", "--overlay"):
-        if len(args) == 1:
+        if len(args) == 2:
             # create overlay for EC2 (disk only)
-            base_image = os.path.abspath(args[0])
+            base_image = os.path.abspath(args[1])
             ret_files = create_overlay(base_image, None)
             print '[INFO] Overlay (%s) is created from %s' % (str(ret_files[0]), os.path.basename(base_image))
-        elif len(args) == 2:
+        elif len(args) == 3:
             # create overlay for mobile (disk and memory)
-            base_image = os.path.abspath(args[0])
-            base_mem = os.path.abspath(args[1])
-            ret_files = create_overlay(base_image, base_mem)
+            os_type = args[0]
+            base_image = os.path.abspath(args[1])
+            base_mem = os.path.abspath(args[2])
+            ret_files = create_overlay(base_image, base_mem, os_type)
             print '[INFO] Overlay (%s, %s) is created from %s' % (str(ret_files[0]), str(ret_files[1]), os.path.basename(base_image))
         else:
             print_usage(os.path.basename(argv[0]))
             print 'invalid argument'
             return;
     elif o in ("-r", "--run"):
-        if len(args) == 4:
+        if len(args) == 5:
             # running VM from booting, EC2 case
             # check OVF cdrom. It is required to run AMI
             if not os.path.exists(OVF_TRANSPORTER):
-                print >> sys.stderr, "Error, you must have OVF transport at %s" % (ovf_transporter)
+                print >> sys.stderr, "Error, you must have OVF transport at %s" % (OVF_TRANSPORTER)
                 sys.exit(2)
                 
-            base_img = os.path.abspath(args[0]); 
-            comp_img = os.path.abspath(args[1]); 
-            telnet_port = int(args[2]); vnc_port = int(args[3])
+            base_img = os.path.abspath(args[1]); 
+            comp_img = os.path.abspath(args[2]); 
+            telnet_port = int(args[3]); vnc_port = int(args[4])
 
             # recover image from overlay
             ret_files = recover_snapshot(base_img, None, comp_img, None)
 
             # run snapshot non-blocking mode
-            run_image(ret_files[0], telnet_port, vnc_port, wait_vnc_end=False, cdrom=OVF_TRANSPORTER)
+            run_image(ret_files[0], telnet_port, vnc_port, wait_vnc_end=False, cdrom=OVF_TRANSPORTER, os_type=args[0])
             print '[INFO] Launch overlay Disk image'
             return;
-        if len(args) == 6:
+        if len(args) == 7:
+            os_type = args[0]
             # running VM base on Memory Snapshot, cloudlet case
-            base_img = os.path.abspath(args[0]); base_mem = os.path.abspath(args[1])
-            comp_img = os.path.abspath(args[2]); comp_mem = os.path.abspath(args[3])
-            telnet_port = int(args[4]); vnc_port = int(args[5])
+            base_img = os.path.abspath(args[1]); base_mem = os.path.abspath(args[2])
+            comp_img = os.path.abspath(args[3]); comp_mem = os.path.abspath(args[4])
+            telnet_port = int(args[5]); vnc_port = int(args[6])
             # recover image from overlay
             recover_img, recover_mem = recover_snapshot(base_img, base_mem, comp_img, comp_mem)
             # run snapshot non-blocking mode
-            execution_time = run_snapshot(recover_img, recover_mem, telnet_port, vnc_port, wait_vnc_end=False)
+            execution_time = run_snapshot(recover_img, recover_mem, telnet_port, vnc_port, wait_vnc_end=False, os_type=os_type)
             print '[Time] Run Snapshot - ', execution_time
             return;
         else:

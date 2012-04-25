@@ -19,29 +19,29 @@ END_OF_FILE = "Overlay Transfer End Marker"
 # Global constant
 # VM Overlay List
 WEB_SERVER_URL = 'http://dagama.isr.cs.cmu.edu'
-MOPED_DISK = WEB_SERVER_URL + '/cloudlet/overlay/ubuntu11.10/moped/ubuntu-11.overlay.4cpu.4096mem.qcow2.lzma'
-MOPED_MEM = WEB_SERVER_URL + '/cloudlet/overlay/ubuntu11.10/moped/ubuntu-11.overlay.4cpu.4096mem.mem.lzma'
-GRAPHICS_DISK = WEB_SERVER_URL + '/cloudlet/overlay/ubuntu11.10/graphics/ubuntu-11.overlay.4cpu.4096mem.qcow2.lzma'
-GRAPHICS_MEM = WEB_SERVER_URL + '/cloudlet/overlay/ubuntu11.10/graphics/ubuntu-11.overlay.4cpu.4096mem.mem.lzma'
-NULL_DISK = WEB_SERVER_URL + '/cloudlet/overlay/ubuntu11.10/null/ubuntu-11.overlay.4cpu.4096mem.mem.lzma'
-NULL_MEM = WEB_SERVER_URL + '/cloudlet/overlay/ubuntu11.10/null/ubuntu-11.overlay.4cpu.4096mem.mem.lzma'
+MOPED_DISK = WEB_SERVER_URL + '/cloudlet/overlay/ubuntu11.10-server/moped/ubuntu-11.overlay.4cpu.4096mem.qcow2.lzma'
+MOPED_MEM = WEB_SERVER_URL + '/cloudlet/overlay/ubuntu11.10-server/moped/ubuntu-11.overlay.4cpu.4096mem.mem.lzma'
+GRAPHICS_DISK = WEB_SERVER_URL + '/cloudlet/overlay/ubuntu11.10-server/graphics/ubuntu-11.overlay.4cpu.4096mem.qcow2.lzma'
+GRAPHICS_MEM = WEB_SERVER_URL + '/cloudlet/overlay/ubuntu11.10-server/graphics/ubuntu-11.overlay.4cpu.4096mem.mem.lzma'
+NULL_DISK = WEB_SERVER_URL + '/cloudlet/overlay/ubuntu11.10-server/null/ubuntu-11.overlay.4cpu.4096mem.mem.lzma'
+NULL_MEM = WEB_SERVER_URL + '/cloudlet/overlay/ubuntu11.10-server/null/ubuntu-11.overlay.4cpu.4096mem.mem.lzma'
 FACE_DISK = WEB_SERVER_URL + '/cloudlet/overlay/window7/face/window7-enterprise-i386.overlay.4cpu.4096mem.qcow2.lzma'
 FACE_MEM = WEB_SERVER_URL + '/cloudlet/overlay/window7/face/window7-enterprise-i386.overlay.4cpu.4096mem.mem.lzma'
 SPEECH_DISK = WEB_SERVER_URL + '/cloudlet/overlay/window7/speech/window7-enterprise-i386.overlay.4cpu.4096mem.qcow2.lzma'
 SPEECH_MEM = WEB_SERVER_URL + '/cloudlet/overlay/window7/speech/window7-enterprise-i386.overlay.4cpu.4096mem.mem.lzma'
 # BASE VM PATH
-UBUNTU_BASE_DISK = '/home/krha/cloudlet/image/ubuntu-11.10-x86_64-desk/ubuntu-11.base.img'
-UBUNTU_BASE_MEM = '/home/krha/cloudlet/image/ubuntu-11.10-x86_64-desk/ubuntu-11.base.mem'
+UBUNTU_BASE_DISK = '/home/krha/cloudlet/image/ubuntu-11.10-x86_64-server/ubuntu-11.base.img'
+UBUNTU_BASE_MEM = '/home/krha/cloudlet/image/ubuntu-11.10-x86_64-server/ubuntu-11.base.mem'
 WINDOW_BASE_DISK = '/home/krha/cloudlet/image/window7-enterprise-x86/window7-enterprise-i386.base.img'
 WINDOW_BASE_MEM = '/home/krha/cloudlet/image/window7-enterprise-x86/window7-enterprise-i386.base.mem'
 
 application_names = ("moped", "graphics", "face", "speech", "null")
 VM_INFO = {\
-        'moped':(MOPED_DISK, MOPED_MEM, UBUNTU_BASE_DISK, UBUNTU_BASE_MEM), \
-        'graphics':(GRAPHICS_DISK, GRAPHICS_MEM, UBUNTU_BASE_DISK, UBUNTU_BASE_MEM), \
-        'null':(NULL_DISK, NULL_MEM, UBUNTU_BASE_DISK, UBUNTU_BASE_MEM), \
-        'face':(FACE_DISK, FACE_MEM, WINDOW_BASE_DISK, WINDOW_BASE_MEM), \
-        'speech':(SPEECH_DISK, SPEECH_MEM, WINDOW_BASE_DISK, WINDOW_BASE_MEM) \
+        'moped':(MOPED_DISK, MOPED_MEM, UBUNTU_BASE_DISK, UBUNTU_BASE_MEM, 'linux'), \
+        'graphics':(GRAPHICS_DISK, GRAPHICS_MEM, UBUNTU_BASE_DISK, UBUNTU_BASE_MEM, 'linux'), \
+        'null':(NULL_DISK, NULL_MEM, UBUNTU_BASE_DISK, UBUNTU_BASE_MEM, 'linux'), \
+        'face':(FACE_DISK, FACE_MEM, WINDOW_BASE_DISK, WINDOW_BASE_MEM, 'window'), \
+        'speech':(SPEECH_DISK, SPEECH_MEM, WINDOW_BASE_DISK, WINDOW_BASE_MEM, 'window') \
         }
 
 
@@ -80,6 +80,7 @@ def piping_synthesis(vm_name):
     mem_url = VM_INFO[vm_name.lower()][1]
     base_disk = VM_INFO[vm_name.lower()][2]
     base_mem = VM_INFO[vm_name.lower()][3]
+    os_type = VM_INFO[vm_name.lower()][4]
 
     prev = datetime.now()
     recover_file = []
@@ -114,7 +115,7 @@ def piping_synthesis(vm_name):
 
     telnet_port = 9999
     vnc_port = 2
-    exe_time = run_snapshot(recover_file[0], recover_file[1], telnet_port, vnc_port, wait_vnc_end=False)
+    exe_time = run_snapshot(recover_file[0], recover_file[1], telnet_port, vnc_port, wait_vnc_end=False, os_type=os_type)
     print "[Time] VM Resume : " + exe_time
     print "\n[Time] Total Time except VM Resume : " + str(datetime.now()-prev)
 

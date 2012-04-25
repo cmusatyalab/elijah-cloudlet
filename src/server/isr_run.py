@@ -274,7 +274,7 @@ def trick_parcel_address(parcel_dir, vm_name, server_address):
     for line in fr:
         key = line.split("=")[0].strip()
         if key == "RPATH":
-            lines.append("RPATH = http://" + server_address + ":8080\n")
+            lines.append("RPATH = http://" + server_address + ":80\n")
         elif key == "SERVER":
             lines.append("SERVER = " + server_address + "\n")
         else:
