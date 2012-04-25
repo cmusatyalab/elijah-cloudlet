@@ -44,7 +44,7 @@ APP_DIR = "/home/krha/cloudlet/src/client/applications"
 face_data = "/home/krha/Dropbox/OSDI/data/faces/input"
 speech_data = "/home/krha/Dropbox/OSDI/data/speech/selected"
 MOPED_client = "%s/moped_client.py -i %s/object_images/ -s %s -p 9092" % (APP_DIR, APP_DIR, cloudlet_server_ip)
-GRAPHICS_client = "%s/graphics_client.py -i %s/acc_input_10min -s %s -p 9093" % (APP_DIR, APP_DIR, cloudlet_server_ip)
+GRAPHICS_client = "%s/graphics_client.py -i %s/acc_input_50sec -s %s -p 9093" % (APP_DIR, APP_DIR, cloudlet_server_ip)
 FACE_client = "java -jar %s/FACE/FacerecDesktopControlClient.jar %s 9876 %s" % (APP_DIR, cloudlet_server_ip, face_data)
 SPEECH_client = "java -jar %s/SPEECH/SpeechrecDesktopControlClient.jar %s 10191 %s" % (APP_DIR, cloudlet_server_ip, speech_data)
 
@@ -142,6 +142,7 @@ def run_application(app_name):
             break;
         sys.stdout.write(output)
         sys.stdout.flush()
+        time.sleep(0.01)
     proc.wait()
     return proc.returncode
 
@@ -154,7 +155,7 @@ def get_overlay_info(app_name):
     overlay_mem_size = ''
 
     if app_name == application_names[0]:    # moped
-        base_name = 'ubuntu11.10'
+        base_name = 'ubuntu11.10-server'
         overlay_disk_path = "%s/%s/moped/ubuntu-11.overlay.4cpu.4096mem.qcow2.lzma" % (OVERLAY_DIR, base_name)
         overlay_disk_size = os.path.getsize(overlay_disk_path)
         overlay_mem_path = "%s/%s/moped/ubuntu-11.overlay.4cpu.4096mem.mem.lzma" % (OVERLAY_DIR, base_name)
@@ -166,7 +167,7 @@ def get_overlay_info(app_name):
         overlay_mem_path = "%s/%s/face/window7-enterprise-i386.overlay.4cpu.4096mem.mem.lzma" % (OVERLAY_DIR, base_name)
         overlay_mem_size = os.path.getsize(overlay_mem_path)
     elif app_name == application_names[2]:  # physics
-        base_name = 'ubuntu11.10'
+        base_name = 'ubuntu11.10-server'
         overlay_disk_path = "%s/%s/graphics/ubuntu-11.overlay.4cpu.4096mem.qcow2.lzma" % (OVERLAY_DIR, base_name)
         overlay_disk_size = os.path.getsize(overlay_disk_path)
         overlay_mem_path = "%s/%s/graphics/ubuntu-11.overlay.4cpu.4096mem.mem.lzma" % (OVERLAY_DIR, base_name)
@@ -178,7 +179,7 @@ def get_overlay_info(app_name):
         overlay_mem_path = "%s/%s/speech/window7-enterprise-i386.overlay.4cpu.4096mem.mem.lzma" % (OVERLAY_DIR, base_name)
         overlay_mem_size = os.path.getsize(overlay_mem_path)
     elif app_name == application_names[4]:  # null
-        base_name = 'ubuntu11.10'
+        base_name = 'ubuntu11.10-server'
         overlay_disk_path = "%s/%s/null/ubuntu-11.overlay.4cpu.4096mem.qcow2.lzma" % (OVERLAY_DIR, base_name)
         overlay_disk_size = os.path.getsize(overlay_disk_path)
         overlay_mem_path = "%s/%s/null/ubuntu-11.overlay.4cpu.4096mem.mem.lzma" % (OVERLAY_DIR, base_name)
