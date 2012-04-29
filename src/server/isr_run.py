@@ -139,27 +139,31 @@ def resume_vm(user_name, server_address, vm_name):
     time_kvm_start = datetime.now()
     time_kvm_end = datetime.now()
 
+    time_str = datetime.now().strftime("%s:%X")
+    log_filename = "%s-%s-%s" % (str(server_address), str(vm_name), str(time_str))
+    log_file = open(log_filename, "w")
+
     command_str = 'isr resume ' + vm_name + ' -s ' + server_address + ' -u ' + user_name + ' -F -D'
     print command_str
-    time_start = datetime.now()
     print "VM Resume Process start : " + str(time_start)
     proc = subprocess.Popen(command_str, shell=True, stdin=subprocess.PIPE, stdout=subprocess.PIPE)
+    time_start = datetime.now()
     while True:
-        time.sleep(0.1)
+        time.sleep(0.01)
         output = proc.stdout.readline()
         if len(output.strip()) != 0 and output.find("[krha]") == -1:
             sys.stdout.write(output)
 
         # time stamping using log from isr_client
         # Not reliable but fast for simple test
-        if output.strip().find("Fetching keyring") == 0:
+        if output.strip().find("Connecting to server") == 0:
             time_transfer_start = datetime.now()
-        elif output.strip().find("Decrypting and uncompressing") == 0:
+        elif output.strip().find("[Transfer]") == 0:
             time_transfer_end = datetime.now()
             time_decomp_mem_start = datetime.now()
-        elif output.strip().find("Updating hoard cache") == 0:
-            time_decomp_mem_end = datetime.now()
+        #elif output.strip().find("[Decomp]") == 0:
         elif output.strip().find("Launching KVM") == 0:
+            time_decomp_mem_end = datetime.now()
             time_kvm_start = datetime.now()
             break;
 
@@ -167,39 +171,41 @@ def resume_vm(user_name, server_address, vm_name):
     # predefined for test, it is opened at ISR/vmm/kvm
     # So, no multiple ISR Client at one machine
     telnet_port = 9998 
-    for i in xrange(200):
+    for i in xrange(2000):
         command_str = "netstat -an | grep 127.0.0.1:" + str(telnet_port)
         proc = subprocess.Popen(command_str, shell=True, stdin=subprocess.PIPE, stdout=subprocess.PIPE)
         output = proc.stdout.readline()
         if output.find("LISTEN") != -1:
             break;
-        time.sleep(0.1)
+        time.sleep(0.01)
 
     # Getting VM Status information through Telnet
     telnet_connection_waiting(telnet_port)
     time_kvm_end = datetime.now()
-
-    '''
-    # Waiting for kvm.vnc
-    # find UUID, which has vm_name
-    uuid = get_uuid(user_name, server_address, vm_name)
-    vnc_path = os.path.join(VNC_PATH, uuid, "cfg", "kvm.vnc")
-    for i in xrange(200):
-        if os.path.exists(vnc_path):
-            time_kvm_end = datetime.now()
-            print "VM Resume Process End : " + str(time_kvm_end)
-            break;
-        time.sleep(0.1)
-    '''
-
-    # if we wait for process to end, we cannot return to web client
-    # ret = proc.wait()
     time_end = datetime.now()
-    print "Return from Resume"
-    print "[Total Time] : ", str(time_end-time_start)
-    print '[Transfer Time(Memory)] : ', str(time_transfer_end-time_transfer_start)
-    print '[Decompression Time] : ', str(time_decomp_mem_end-time_decomp_mem_start)
-    print '[KVM Time] : ', str(time_kvm_end-time_kvm_start)
+
+    print time_start
+    print time_transfer_start
+    print time_transfer_end
+    print time_decomp_mem_start
+    print time_decomp_mem_end
+    print time_kvm_start
+    print time_kvm_end
+    print time_end
+
+    transfer_diff = time_transfer_end-time_transfer_start
+    decomp_diff = time_decomp_mem_end-time_decomp_mem_start
+    kvm_diff = time_kvm_end-time_kvm_start
+    total_diff = time_end-time_start
+    message = "Return from Resume\n"
+    message += "[Time] Transfer Time      : %04d.%06d\n" % (transfer_diff.seconds, transfer_diff.microseconds)
+    message += "[Time] Decomp (Overlapped): %04d.%06d\n" % (decomp_diff.seconds, decomp_diff.microseconds)
+    message += "[Time] VM Resume          : %04d.%06d\n" % (kvm_diff.seconds, kvm_diff.microseconds)
+    message += "[Time] Total Time         : %04d.%06d\n" % (total_diff.seconds, total_diff.microseconds)
+
+    print message
+    log_file.write(message)
+    log_file.close()
 
 
 # stop VM
@@ -234,9 +240,7 @@ def do_cloud_isr(user_name, vm_name, server_address):
         return False
 
     # step3. resume VM, wait until finish (close window)
-    start_time = datetime.now()
     resume_vm(user_name, server_address, vm_name)
-    end_time = datetime.now()
 
     return True
 

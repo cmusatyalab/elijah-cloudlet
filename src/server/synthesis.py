@@ -394,7 +394,7 @@ class SynthesisTCPHandler(SocketServer.StreamRequestHandler):
 
         telnet_port = 9999
         vnc_port = 2
-        exe_time = run_snapshot(recover_file[0], recover_file[1], telnet_port, vnc_port, wait_vnc_end=False, os_type=os_type)
+        exe_time = run_snapshot(recover_file[0], recover_file[1], telnet_port, vnc_port, wait_vnc_end=False, terminal_mode=True, os_type=os_type)
 
         # Print out Time Measurement
         disk_transfer_time = time_transfer.get()
@@ -404,20 +404,35 @@ class SynthesisTCPHandler(SocketServer.StreamRequestHandler):
         disk_delta_time = time_delta.get()
         mem_delta_time = time_delta.get()
         disk_transfer_start_time = disk_transfer_time['start_time']
-        #disk_transfer_end_time = disk_transfer_time['end_time']
-        #disk_decomp_end_time = disk_decomp_time['end_time']
-        #disk_delta_end_time = disk_delta_time['end_time']
-        #mem_transfer_start_time = mem_transfer_time['start_time']
+        disk_transfer_end_time = disk_transfer_time['end_time']
+        disk_decomp_end_time = disk_decomp_time['end_time']
+        disk_delta_end_time = disk_delta_time['end_time']
+        mem_transfer_start_time = mem_transfer_time['start_time']
         mem_transfer_end_time = mem_transfer_time['end_time']
         mem_decomp_end_time = mem_decomp_time['end_time']
         mem_delta_end_time = mem_delta_time['end_time']
 
+        print start_time
+        print disk_transfer_start_time
+        print disk_transfer_end_time
+        print disk_decomp_end_time
+        print disk_delta_end_time
+        print mem_transfer_start_time
+        print mem_transfer_end_time
+        print mem_decomp_end_time
+        print mem_delta_end_time
+        print datetime.now()
+
+        transfer_diff = mem_transfer_end_time-disk_transfer_start_time
+        decomp_diff = mem_decomp_end_time-mem_transfer_end_time
+        delta_diff = mem_delta_end_time-mem_decomp_end_time
+        total_diff = datetime.now()-start_time
         print '\n'
-        print "[Time] Transfer Time      : " + str(mem_transfer_end_time-disk_transfer_start_time).split(":")[-1]
-        print "[Time] Decomp (Overlapped): " + str((mem_decomp_end_time-mem_transfer_end_time)).split(":")[-1]
-        print "[Time] Delta (Overlapped) : " + str((mem_delta_end_time-mem_decomp_end_time)).split(":")[-1]
+        print "[Time] Transfer Time      : %04d.%06d" % (transfer_diff.seconds, transfer_diff.microseconds)
+        print "[Time] Decomp (Overlapped): %04d.%06d" % (decomp_diff.seconds, decomp_diff.microseconds)
+        print "[Time] Delta (Overlapped) : %04d.%06d" % (delta_diff.seconds, delta_diff.microseconds)
         print "[Time] VM Resume          : " + str(exe_time).split(":")[-1]
-        print "[Time] Total Time         : " + str(datetime.now()-start_time)
+        print "[Time] Total Time         : %04d.%06d" % (total_diff.seconds, total_diff.microseconds)
         self.ret_success()
 
 
