@@ -44,10 +44,55 @@ last_average_power = 0.0
 APP_DIR = "/home/krha/cloudlet/src/client/applications"
 face_data = "/home/krha/cloudlet/src/client/desktop/face_input"
 speech_data = "/home/krha/cloudlet/src/client/desktop/speech_input/"
-MOPED_client = "%s/moped_client.py -i %s/object_images/ -s %s -p 9092 > ./ret/o_cloudlet" % (APP_DIR, APP_DIR, cloudlet_server_ip)
-GRAPHICS_client = "%s/graphics_client.py -i %s/acc_input_50sec -s %s -p 9093 > ./ret/g_cloudlet" % (APP_DIR, APP_DIR, cloudlet_server_ip)
-FACE_client = "java -jar %s/FACE/FacerecDesktopControlClient.jar %s 9876 %s > ./ret/f_cloudlet" % (APP_DIR, cloudlet_server_ip, face_data)
-SPEECH_client = "java -jar %s/SPEECH/SpeechrecDesktopControlClient.jar %s 10191 %s > ./ret/s_cloudlet" % (APP_DIR, cloudlet_server_ip, speech_data)
+MOPED_client = "%s/moped_client.py -i %s/object_images/ -s %s -p 9092" % (APP_DIR, APP_DIR, cloudlet_server_ip)
+GRAPHICS_client = "%s/graphics_client.py -i %s/acc_input_10min -s %s -p 9093" % (APP_DIR, APP_DIR, cloudlet_server_ip)
+FACE_client = "java -jar %s/FACE/FacerecDesktopControlClient.jar %s 9876 %s" % (APP_DIR, cloudlet_server_ip, face_data)
+SPEECH_client = "java -jar %s/SPEECH/SpeechrecDesktopControlClient.jar %s 10191 %s" % (APP_DIR, cloudlet_server_ip, speech_data)
+
+
+def convert_to_CDF(input_file):
+    input_lines = open(input_file, "r").read().split("\n")
+    rtt_list = []
+    jitter_sum = 0.0
+    start_time = 0.0
+    end_time = 0.0
+    for index, oneline in enumerate(input_lines):
+        if len(oneline.split("\t")) != 6 and len(oneline.split("\t")) != 5:
+            #sys.stderr.write("Error at input line at %d, %s\n" % (index, oneline))
+            continue
+        try:
+            if float(oneline.split("\t")[2]) == 0:
+                sys.stderr.write("Error at input line at %d, %s\n" % (index, oneline))
+                continue
+        except ValueError:
+            continue
+        try:
+            rtt_list.append(float(oneline.split("\t")[3]))
+            if not index == 0:
+                # protect error case where initial jitter value is equals to latency
+                jitter_sum += (float(oneline.split("\t")[4]))
+
+            if start_time == 0.0:
+                start_time = float(oneline.split("\t")[1])
+            end_time = float(oneline.split("\t")[2])
+        except ValueError:
+            sys.stderr.write("Error at input line at %d, %s\n" % (index, oneline))
+            continue
+
+    rtt_sorted = sorted(rtt_list)
+    total_rtt_number = len(rtt_sorted)
+    cdf = []
+    summary = "1: %f\n50: %f\n99: %f\n:jitter: %f\ntotal: %f" % ( \
+            rtt_sorted[int(total_rtt_number*0.01)], \
+            rtt_sorted[int(total_rtt_number*0.5)], \
+            rtt_sorted[int(total_rtt_number*0.99)], \
+            jitter_sum/total_rtt_number, \
+            (end_time-start_time))
+    for index, value in enumerate(rtt_sorted):
+        data = (value, 1.0 * (index+1)/total_rtt_number)
+        cdf.append(data)
+    return summary, cdf
+
 
 def recv_all(sock, size):
     data = ''
@@ -124,16 +169,22 @@ def synthesis_from_cloud(url, app_name):
 def run_application(app_name):
     global application_names
     cmd = ''
+    output_file = ''
+    time_str = datetime.now().strftime("%a:%X")
     if app_name == application_names[0]:    # moped
-        cmd = MOPED_client
+        output_file = "./ret/o_cloudlet_" + time_str 
+        cmd = MOPED_client + " > %s" % str(output_file)
     elif app_name == application_names[1]:  # face
-        cmd = FACE_client
+        output_file = "./ret/f_cloudlet_" + time_str
+        cmd = FACE_client + " > %s" % output_file
     elif app_name == application_names[2]:  # physics
-        cmd = GRAPHICS_client
+        output_file = "./ret/g_cloudlet_" + time_str
+        cmd = GRAPHICS_client + " > %s" % output_file
     elif app_name == application_names[3]:  # speech
-        cmd = SPEECH_client
+        output_file = "./ret/s_cloudlet_" + time_str
+        cmd = SPEECH_client + " > %s" % output_file
     elif app_name == application_names[4]:  # null
-        return 0
+        return 0, output_file
 
     print "Run client : %s" % (cmd)
     proc = subprocess.Popen(cmd, shell=True, stdin=subprocess.PIPE, stdout=subprocess.PIPE)
@@ -145,7 +196,8 @@ def run_application(app_name):
         sys.stdout.flush()
         time.sleep(0.01)
     proc.wait()
-    return proc.returncode
+    return proc.returncode, output_file
+
 
 def get_overlay_info(app_name):
     global OVERLAY_DIR
@@ -293,7 +345,9 @@ def main(argv=None):
     is_stop_thread = False
 
     settings, args = process_command_line(sys.argv[1:])
-    energy_thread = Thread(target=energy_measurement, args=("dagama.isr.cs.cmu.edu", 22, "%s.%s.VM" % (settings.command, settings.app)))
+    time_str = datetime.now().strftime("%a:%X")
+    energy_thread = Thread(target=energy_measurement, args=("dagama.isr.cs.cmu.edu", \
+            22, "./ret/%s.%s.VM.%s" % (settings.command, settings.app, time_str)))
     energy_thread.start()
     time.sleep(2)
 
@@ -319,10 +373,12 @@ def main(argv=None):
 
     # run application
     is_stop_thread = False
-    energy_thread = Thread(target=energy_measurement, args=("dagama.isr.cs.cmu.edu", 22, "%s.%s.APP" % (settings.command, settings.app)))
+    time_str = datetime.now().strftime("%a:%X")
+    energy_thread = Thread(target=energy_measurement, args=("dagama.isr.cs.cmu.edu", \
+            22, "./ret/%s.%s.APP.%s" % (settings.command, settings.app, time_str)))
     energy_thread.start()
     app_start_time = time.time()
-    run_application(settings.app)
+    ret, output_file = run_application(settings.app)
     app_end_time = time.time()
 
     # wait power meter logging
@@ -334,11 +390,20 @@ def main(argv=None):
     # Print out measurement
     vm_time = vm_end_time-vm_start_time
     app_time = app_end_time-app_start_time
-    print "VM_time\tVM_power\tVM_J\tApp_time\App_power\tApp_J"
-    print "%f\t%f\t%f\t%f\t%f\t%f" % (vm_time, vm_power, (vm_power*vm_time), app_time, app_power, (app_power*app_time))
+    summary, cdf = convert_to_CDF(output_file)
+    message = "-------------------------------------\n"
+    message += "VM_time\tApp_time\tVM_power\tVM_Joule\tApp_power\tApp_Jouel\n"
+    message += "%f\t%f\t%f\t%f\t%f\t%f\n" % (vm_time, app_time, vm_power, (vm_power*vm_time), app_power, (app_power*app_time))
+    message += "min\t1\t25\t\t50\t75\t99\tmax\n%s\n" % (summary)
+    print message
+    open(output_file + ".log", "w").write(message)
     return 0
 
 
 if __name__ == "__main__":
-    status = main()
-    sys.exit(status)
+    try:
+        status = main()
+        sys.exit(status)
+    except KeyboardInterrupt:
+        is_stop_thread = True
+        sys.exit(1)
