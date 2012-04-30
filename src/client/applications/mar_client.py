@@ -44,7 +44,7 @@ def process_command_line(argv):
             '-s', '--server', action='store', type='string', dest='server_address', default="localhost",
             help='Set Input image directory')
     parser.add_option(
-            '-p', '--port', action='store', type='int', dest='server_port', default=9092,
+            '-p', '--port', action='store', type='int', dest='server_port', default=9094,
             help='Set Input image directory')
     settings, args = parser.parse_args(argv)
     if not len(args) == 0:
@@ -74,7 +74,7 @@ def send_request(address, port, inputs):
     print "image\tstart\tend\tduration\tjitter"
     for each_input in inputs:
         start_time_request = time.time() * 1000.0
-        binary = open(each_input, 'r').read();
+        binary = open(each_input, 'rb').read();
         length = os.path.getsize(each_input)
         if len(binary) != length:
             sys.stderr.write("Error, input length is wrong");
