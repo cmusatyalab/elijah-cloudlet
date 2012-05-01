@@ -49,8 +49,7 @@ MOPED_client = "%s/moped_client.py -i %s/object_images/ -s %s -p 9092" % (APP_DI
 GRAPHICS_client = "%s/graphics_client.py -i %s/acc_input_10min -s %s -p 9093" % (APP_DIR, APP_DIR, cloudlet_server_ip)
 FACE_client = "java -jar %s/FACE/FacerecDesktopControlClient.jar %s 9876 %s" % (APP_DIR, cloudlet_server_ip, face_data)
 SPEECH_client = "java -jar %s/SPEECH/SpeechrecDesktopControlClient.jar %s 10191 %s" % (APP_DIR, cloudlet_server_ip, speech_data)
-MAR_client = "%s/moped_client.py -i %s -s %s -p 9092" % (APP_DIR, mar_data, cloudlet_server_ip)
-
+MAR_client = "%s/mar_client.py -i %s -s %s -p 9094" % (APP_DIR, mar_data, cloudlet_server_ip)
 
 def convert_to_CDF(input_file):
     input_lines = open(input_file, "r").read().split("\n")
@@ -84,12 +83,10 @@ def convert_to_CDF(input_file):
     rtt_sorted = sorted(rtt_list)
     total_rtt_number = len(rtt_sorted)
     cdf = []
-    summary = "1: %f\n50: %f\n99: %f\n:jitter: %f\ntotal: %f" % ( \
+    summary = "%f\t%f\t%f" % ( \
             rtt_sorted[int(total_rtt_number*0.01)], \
             rtt_sorted[int(total_rtt_number*0.5)], \
-            rtt_sorted[int(total_rtt_number*0.99)], \
-            jitter_sum/total_rtt_number, \
-            (end_time-start_time))
+            rtt_sorted[int(total_rtt_number*0.99)])
     for index, value in enumerate(rtt_sorted):
         data = (value, 1.0 * (index+1)/total_rtt_number)
         cdf.append(data)
@@ -187,7 +184,7 @@ def run_application(app_name):
         cmd = SPEECH_client + " > %s" % output_file
     elif app_name == application_names[4]:  # mar
         output_file = "./ret/a_cloudlet_" + time_str
-        cmd = SPEECH_client + " > %s" % output_file
+        cmd = MAR_client + " > %s" % output_file
     elif app_name == application_names[5]:  # null
         return 0, output_file
 
@@ -238,9 +235,9 @@ def get_overlay_info(app_name):
         overlay_mem_size = os.path.getsize(overlay_mem_path)
     elif app_name == application_names[4]:  # mar
         base_name = 'window7'
-        overlay_disk_path = "%s/%s/mar/ubuntu-11.overlay.4cpu.4096mem.qcow2.lzma" % (OVERLAY_DIR, base_name)
+        overlay_disk_path = "%s/%s/mar/window7-enterprise-i386.overlay.4cpu.4096mem.qcow2.lzma" % (OVERLAY_DIR, base_name)
         overlay_disk_size = os.path.getsize(overlay_disk_path)
-        overlay_mem_path = "%s/%s/mar/ubuntu-11.overlay.4cpu.4096mem.mem.lzma" % (OVERLAY_DIR, base_name)
+        overlay_mem_path = "%s/%s/mar/window7-enterprise-i386.overlay.4cpu.4096mem.mem.lzma" % (OVERLAY_DIR, base_name)
         overlay_mem_size = os.path.getsize(overlay_mem_path)
     elif app_name == application_names[5]:  # null
         base_name = 'ubuntu11.10-server'
@@ -405,7 +402,7 @@ def main(argv=None):
     message = "-------------------------------------\n"
     message += "VM_time\tApp_time\tVM_power\tVM_Joule\tApp_power\tApp_Jouel\n"
     message += "%f\t%f\t%f\t%f\t%f\t%f\n" % (vm_time, app_time, vm_power, (vm_power*vm_time), app_power, (app_power*app_time))
-    message += "min\t1\t25\t\t50\t75\t99\tmax\n%s\n" % (summary)
+    message += "app performance\n1\t50\t99\n%s\n" % (summary)
     print message
     open(output_file + ".log", "w").write(message)
     return 0
