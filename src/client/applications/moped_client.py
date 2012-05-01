@@ -74,7 +74,7 @@ def send_request(address, port, inputs):
     print "image\tstart\tend\tduration\tjitter"
     for each_input in inputs:
         start_time_request = time.time() * 1000.0
-        binary = open(each_input, 'r').read();
+        binary = open(each_input, 'rb').read();
         length = os.path.getsize(each_input)
         if len(binary) != length:
             sys.stderr.write("Error, input length is wrong");
@@ -87,7 +87,7 @@ def send_request(address, port, inputs):
             sys.exit(1)
         sent_size = sock.send(binary)
         if not sent_size == length:
-            sys.strerr.write("Error, send wrong size of file : %d" % sent_size)
+            sys.stderr.write("Error, send wrong size of file : %d" % sent_size)
             sys.exit(1)
         
         #recv

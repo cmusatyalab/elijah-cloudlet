@@ -134,18 +134,17 @@ def create_overlay(base_image, base_mem, os_type):
     command_str = 'qemu-img create -f qcow2 -b ' + base_image + ' ' + tmp_disk
     ret = commands.getoutput(command_str)
 
-    print '[INFO] run Base Image to generate memory snapshot'
     telnet_port = 19823; vnc_port = 2
 
     # Run VM
     argument = []
     if base_mem == None:
         # create overlay only for disk image
-        if not os.path.exists(OVF_TRANSPORTER):
-            print >> sys.stderr, "Error, you must have OVF transport at %s\n(or change path at cloudlet.py file" % (OVF_TRANSPORTER)
-            sys.exit(2)
-
-        run_image(tmp_disk, telnet_port, vnc_port, wait_vnc_end=True, cdrom=OVF_TRANSPORTER, os_type=os_type)
+        if os.path.exists(OVF_TRANSPORTER):
+            run_image(tmp_disk, telnet_port, vnc_port, wait_vnc_end=True, cdrom=OVF_TRANSPORTER, os_type=os_type)
+        else:
+            print >> sys.stderr, "Warning, Make sure that you have OVF transport at %s\n" % (OVF_TRANSPORTER)
+            run_image(tmp_disk, telnet_port, vnc_port, wait_vnc_end=True, cdrom=None, os_type=os_type)
         # terminal VM
         terminate_vm(telnet_port)
         argument.append((base_image, tmp_disk, overlay_disk))
@@ -334,14 +333,18 @@ def run_snapshot(disk_image, memory_image, telnet_port, vnc_port, wait_vnc_end, 
 
 
 def terminate_vm(telnet_port):
-    tn = telnetlib.Telnet('localhost', telnet_port)
-    tn.read_until("(qemu)", 10)
-
-    # Stop running VM
-    tn.write("stop\n")
-    tn.read_until("(qemu)", 10)
-    tn.write("quit\n")
-    time.sleep(1)
+    try:
+        tn = telnetlib.Telnet('localhost', telnet_port)
+        tn.read_until("(qemu)", 10)
+        # Stop running VM
+        tn.write("stop\n")
+        tn.read_until("(qemu)", 10)
+        tn.write("quit\n")
+        time.sleep(1)
+    except EOFError:
+        print "VM is already terminated"
+    except socket.error:
+        print "VM is already terminated"
 
 
 # execute file migration command using telnet qemu command
@@ -485,7 +488,7 @@ def run_image(disk_image, telnet_port, vnc_port, wait_vnc_end=True, cdrom=None, 
         command_str += " -net nic"
 
     if telnet_port != 0 and vnc_port != -1:
-        command_str += " -m " + str(VM_MEMORY) + " -monitor telnet:localhost:" + str(telnet_port) + ",server,nowait -enable-kvm -net user -serial none -parallel none -usb -usbdevice tablet -redir tcp:9876::9876 -redir tcp:2222::22"
+        command_str += " -m " + str(VM_MEMORY) + " -monitor telnet:localhost:" + str(telnet_port) + ",server,nowait -enable-kvm -net user -serial none -parallel none -usb -usbdevice tablet " + PORT_FORWARDING
         command_str += " -vnc :" + str(vnc_port)
         command_str += " -smp " + str(VCPU_NUMBER)
         command_str += " -balloon virtio"
@@ -544,8 +547,9 @@ def main(argv):
     elif o in ("-o", "--overlay"):
         if len(args) == 2:
             # create overlay for EC2 (disk only)
+            os_type = args[0]
             base_image = os.path.abspath(args[1])
-            ret_files = create_overlay(base_image, None)
+            ret_files = create_overlay(base_image, None, os_type=os_type)
             print '[INFO] Overlay (%s) is created from %s' % (str(ret_files[0]), os.path.basename(base_image))
         elif len(args) == 3:
             # create overlay for mobile (disk and memory)
@@ -560,12 +564,8 @@ def main(argv):
             return;
     elif o in ("-r", "--run"):
         if len(args) == 5:
-            # running VM from booting, EC2 case
-            # check OVF cdrom. It is required to run AMI
-            if not os.path.exists(OVF_TRANSPORTER):
-                print >> sys.stderr, "Error, you must have OVF transport at %s" % (OVF_TRANSPORTER)
-                sys.exit(2)
-                
+            # running VM from booting, (e.g. EC2 case)
+            os_type = args[0]
             base_img = os.path.abspath(args[1]); 
             comp_img = os.path.abspath(args[2]); 
             telnet_port = int(args[3]); vnc_port = int(args[4])
@@ -573,8 +573,14 @@ def main(argv):
             # recover image from overlay
             ret_files = recover_snapshot(base_img, None, comp_img, None)
 
+            if os.path.exists(OVF_TRANSPORTER):
+                run_image(ret_files[0], telnet_port, vnc_port, wait_vnc_end=False, cdrom=OVF_TRANSPORTER, os_type=os_type)
+            else:
+                run_image(ret_files[0], telnet_port, vnc_port, wait_vnc_end=False, os_type=os_type)
+                print "Warning, you may require OVF transport at %s" % (OVF_TRANSPORTER)
+
+
             # run snapshot non-blocking mode
-            run_image(ret_files[0], telnet_port, vnc_port, wait_vnc_end=False, cdrom=OVF_TRANSPORTER, os_type=args[0])
             print '[INFO] Launch overlay Disk image'
             return;
         if len(args) == 7:

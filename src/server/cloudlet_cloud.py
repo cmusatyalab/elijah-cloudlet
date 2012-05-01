@@ -29,19 +29,22 @@ FACE_DISK = WEB_SERVER_URL + '/cloudlet/overlay/window7/face/window7-enterprise-
 FACE_MEM = WEB_SERVER_URL + '/cloudlet/overlay/window7/face/window7-enterprise-i386.overlay.4cpu.4096mem.mem.lzma'
 SPEECH_DISK = WEB_SERVER_URL + '/cloudlet/overlay/window7/speech/window7-enterprise-i386.overlay.4cpu.4096mem.qcow2.lzma'
 SPEECH_MEM = WEB_SERVER_URL + '/cloudlet/overlay/window7/speech/window7-enterprise-i386.overlay.4cpu.4096mem.mem.lzma'
+MAR_DISK = WEB_SERVER_URL + '/cloudlet/overlay/window7/mar/window7-enterprise-i386.overlay.4cpu.4096mem.qcow2.lzma'
+MAR_MEM = WEB_SERVER_URL + '/cloudlet/overlay/window7/mar/window7-enterprise-i386.overlay.4cpu.4096mem.mem.lzma'
 # BASE VM PATH
 UBUNTU_BASE_DISK = '/home/krha/cloudlet/image/ubuntu-11.10-x86_64-server/ubuntu-11.base.img'
 UBUNTU_BASE_MEM = '/home/krha/cloudlet/image/ubuntu-11.10-x86_64-server/ubuntu-11.base.mem'
 WINDOW_BASE_DISK = '/home/krha/cloudlet/image/window7-enterprise-x86/window7-enterprise-i386.base.img'
 WINDOW_BASE_MEM = '/home/krha/cloudlet/image/window7-enterprise-x86/window7-enterprise-i386.base.mem'
 
-application_names = ("moped", "graphics", "face", "speech", "null")
+application_names = ("moped", "graphics", "face", "speech", "mar", "null")
 VM_INFO = {\
         'moped':(MOPED_DISK, MOPED_MEM, UBUNTU_BASE_DISK, UBUNTU_BASE_MEM, 'linux'), \
         'graphics':(GRAPHICS_DISK, GRAPHICS_MEM, UBUNTU_BASE_DISK, UBUNTU_BASE_MEM, 'linux'), \
         'null':(NULL_DISK, NULL_MEM, UBUNTU_BASE_DISK, UBUNTU_BASE_MEM, 'linux'), \
         'face':(FACE_DISK, FACE_MEM, WINDOW_BASE_DISK, WINDOW_BASE_MEM, 'window'), \
-        'speech':(SPEECH_DISK, SPEECH_MEM, WINDOW_BASE_DISK, WINDOW_BASE_MEM, 'window') \
+        'speech':(SPEECH_DISK, SPEECH_MEM, WINDOW_BASE_DISK, WINDOW_BASE_MEM, 'window'), \
+        'mar':(MAR_DISK, MAR_MEM, WINDOW_BASE_DISK, WINDOW_BASE_MEM, 'window') \
         }
 
 

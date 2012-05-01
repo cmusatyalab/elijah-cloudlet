@@ -19,6 +19,7 @@ IF=eth0
 # Download and Upload Bandwidth
 DNLD=10mbit
 UPLD=10mbit
+LATENCY=100ms
 
 # Destination Host
 IP=128.2.212.178
@@ -30,9 +31,11 @@ start() {
 # We'll use Hierarchical Token Bucket (HTB) to shape bandwidth.
 # For detailed configuration options, please consult Linux man
 # page.
-    $TC qdisc add dev $IF root handle 1: htb default 30
+    $TC qdisc add dev $IF root handle 1: htb default 30 
     $TC class add dev $IF parent 1: classid 1:1 htb rate $DNLD
     $TC class add dev $IF parent 1: classid 1:2 htb rate $UPLD
+	$TC qdisc add dev $IF parent 1:1 handle 10: netem delay $LATENCY
+	$TC qdisc add dev $IF parent 1:2 handle 20: netem delay $LATENCY
     $U32 match ip dst $IP/32 flowid 1:1
     $U32 match ip src $IP/32 flowid 1:2
 # The first line creates the root qdisc, and the next two lines
