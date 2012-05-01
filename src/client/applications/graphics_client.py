@@ -68,6 +68,12 @@ def recv_data(sock, last_client_id):
     try:
         while True:
             data = sock.recv(4)
+            if not data:
+                print "recved data is null"
+                time.sleep(0.1)
+                continue
+            else:
+                print "recved data : %s %d" % (str(data), len(data))
             client_id = struct.unpack("!I", data)[0]
             data = sock.recv(4)
             server_token_id = struct.unpack("!I", data)[0]

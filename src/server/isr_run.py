@@ -27,7 +27,7 @@ user_name = ''
 server_address = ''
 launch_start = datetime.now()
 launch_end = datetime.now()
-application_names = ("moped", "face", "null", "graphics", "speech")
+application_names = ("moped", "face", "null", "graphics", "speech", "mar")
 
 # web server configuration
 app = Flask(__name__)
@@ -235,9 +235,11 @@ def do_cloud_isr(user_name, vm_name, server_address):
         return False
 
     # step2. remove all cache
+    '''
     ret, err = remove_cache(user_name, server_address, vm_name)
     if not ret:
         return False
+    '''
 
     # step3. resume VM, wait until finish (close window)
     resume_vm(user_name, server_address, vm_name)
@@ -255,9 +257,11 @@ def do_mobile_isr(user_name, vm_name, server_address):
     trick_parcel_address(ISR_ANDROID_PARCEL_PATH, vm_name, server_address)
 
     # step1. remove all cache
+    '''
     ret, err = remove_cache(user_name, server_address, vm_name)
     if not ret:
         return False
+    '''
 
     # step2. resume VM, wait until finish (close window)
     start_time = datetime.now()

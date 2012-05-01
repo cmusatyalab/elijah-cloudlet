@@ -33,7 +33,7 @@ import struct
 CHUNK_SIZE = 1024*16
 END_OF_FILE = "Overlay Transfer End Marker"
 operation_mode = ('run', 'mock')
-application_names = ("moped", "face", "speech", "null")
+application_names = ("moped", "face", "speech", "mar", "null")
 
 # Web server for Andorid Client
 LOCAL_IPADDRESS = 'localhost'
