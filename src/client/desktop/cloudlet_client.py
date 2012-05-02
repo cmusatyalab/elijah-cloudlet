@@ -299,6 +299,37 @@ def synthesis(address, port, app_name):
     return 0
 
 
+def server_run(address, port, command, server_output_file):
+    global is_stop_thread
+    if command == command_type[0]:     #synthesis from cloud
+        server_cmd = "/home/krha/cloudlet/src/server/cloudlet_cloud.py run"
+    elif command == command_type[1]:   #synthesis from mobile
+        server_cmd = "/home/krha/cloudlet/src/server/synthesis.py run -c /home/krha/cloudlet/src/server/config/VM_config.json"
+        synthesis(cloudlet_server_ip, cloudlet_server_port, settings.app)
+    elif command == command_type[2]:   #ISR from cloud
+        server_cmd = "/home/krha/cloudlet/src/server/isr_run.py run -u test -s dagama.isr.cs.cmu.edu"
+    elif command == command_type[3]:   #ISR from mobile
+        server_cmd = "/home/krha/cloudlet/src/server/isr_run.py run -u test -s netbook.krha.kr"
+    cmd = "ssh -A -p %d krha@%s %s" % (port, address, server_cmd)
+    print cmd
+    proc = subprocess.Popen(cmd.split(), stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+    server_log = open(server_output_file, "w")
+    while is_stop_thread == False:
+        time.sleep(1)
+        if not proc.returncode:
+            continue
+        if proc.returncode != 0:
+            print proc.stderr.readline()
+            break
+        if proc.returncode == 0:
+            print "Server closed"
+            break
+
+    print "Terminate Server"
+    server_log.close()
+    proc.terminate()
+    return 0
+
 def energy_measurement(address, port, power_out_file):
     global is_stop_thread
     global last_average_power
@@ -354,10 +385,14 @@ def main(argv=None):
 
     settings, args = process_command_line(sys.argv[1:])
     time_str = datetime.now().strftime("%a:%X")
+    server_thread = Thread(target=server_run, args=("server.krha.kr", \
+            22, settings.command, "./ret/%s.%s.server.%s" % (settings.command, settings.app, time_str)))
     energy_thread = Thread(target=energy_measurement, args=("dagama.isr.cs.cmu.edu", \
             22, "./ret/%s.%s.VM.%s" % (settings.command, settings.app, time_str)))
+    server_thread.start()
+    time.sleep(10)
     energy_thread.start()
-    time.sleep(2)
+    time.sleep(5)
 
     vm_start_time = time.time()
     if settings.command == command_type[0]:     #synthesis from cloud
@@ -393,6 +428,7 @@ def main(argv=None):
     is_stop_thread = True
     print "Waiting for stop power measurement"
     energy_thread.join()
+    server_thread.join()
     app_power = last_average_power
 
     # Print out measurement
