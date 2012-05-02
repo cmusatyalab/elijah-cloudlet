@@ -27,7 +27,10 @@ user_name = ''
 server_address = ''
 launch_start = datetime.now()
 launch_end = datetime.now()
-application_names = ("moped", "face", "null", "graphics", "speech", "mar")
+application_names = ( \
+        "moped", "face", "null", "graphics", "speech", "mar", \
+        "boot-moped", "boot-face", "boot-graphics", "boot-speech", "boot-mar" \
+        )
 
 # web server configuration
 app = Flask(__name__)
@@ -143,7 +146,7 @@ def resume_vm(user_name, server_address, vm_name):
     log_filename = "%s-%s-%s" % (str(server_address), str(vm_name), str(time_str))
     log_file = open(log_filename, "w")
 
-    command_str = 'isr resume ' + vm_name + ' -s ' + server_address + ' -u ' + user_name + ' -F -D'
+    command_str = 'isr resume ' + vm_name + ' -s ' + server_address + ' -u ' + user_name + ' -F'
     print command_str
     print "VM Resume Process start : " + str(time_start)
     proc = subprocess.Popen(command_str, shell=True, stdin=subprocess.PIPE, stdout=subprocess.PIPE)
@@ -203,9 +206,16 @@ def resume_vm(user_name, server_address, vm_name):
     message += "[Time] VM Resume          : %04d.%06d\n" % (kvm_diff.seconds, kvm_diff.microseconds)
     message += "[Time] Total Time         : %04d.%06d\n" % (total_diff.seconds, total_diff.microseconds)
 
+    ret_message = "\n"
+    ret_message += 'Transfer\tDecompression\tDelta apply\tVM Boot\tKVM resume\n'
+    ret_message += "%04d.%06d\t" % (transfer_diff.seconds, transfer_diff.microseconds)
+    ret_message += "%04d.%06d\t" % (decomp_diff.seconds, decomp_diff.microseconds)
+
     print message
     log_file.write(message)
     log_file.close()
+
+    return ret_message, kvm_diff
 
 
 # stop VM
@@ -214,6 +224,7 @@ def stop_vm(user_name, server_address, vm_name):
     print command_str
     proc = subprocess.Popen(command_str, shell=True, stdin=subprocess.PIPE, stdout=subprocess.PIPE)
     proc.stdin.write('y\n')
+    proc.wait()
 
     return True
 
@@ -242,9 +253,9 @@ def do_cloud_isr(user_name, vm_name, server_address):
     '''
 
     # step3. resume VM, wait until finish (close window)
-    resume_vm(user_name, server_address, vm_name)
+    ret_message, kvm_time = resume_vm(user_name, server_address, vm_name)
 
-    return True
+    return True, ret_message, kvm_time
 
 
 def do_mobile_isr(user_name, vm_name, server_address):
@@ -264,10 +275,9 @@ def do_mobile_isr(user_name, vm_name, server_address):
     '''
 
     # step2. resume VM, wait until finish (close window)
-    start_time = datetime.now()
-    resume_vm(user_name, server_address, vm_name)
-    end_time = datetime.now()
-    return True
+    ret_message, kvm_time = resume_vm(user_name, server_address, vm_name)
+
+    return True, ret_message, kvm_time
 
 
 def trick_parcel_address(parcel_dir, vm_name, server_address):
@@ -297,7 +307,7 @@ def isr_clean_all(server_address, user_name):
     global application_names
 
     # kill all process that has 'isr'
-    # I really hate this way, but it is almost only way that I can clean cache
+    # BAD, but it is almost only way that I can clean cache
     command_str = 'ps aux | grep isr'
     ret1, ret_string = commands.getstatusoutput(command_str)
     for line in ret_string.split('\n'):
