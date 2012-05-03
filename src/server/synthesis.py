@@ -427,12 +427,16 @@ class SynthesisTCPHandler(SocketServer.StreamRequestHandler):
         decomp_diff = mem_decomp_end_time-mem_transfer_end_time
         delta_diff = mem_delta_end_time-mem_decomp_end_time
         total_diff = datetime.now()-start_time
-        print '\n'
-        print "[Time] Transfer Time      : %04d.%06d" % (transfer_diff.seconds, transfer_diff.microseconds)
-        print "[Time] Decomp (Overlapped): %04d.%06d" % (decomp_diff.seconds, decomp_diff.microseconds)
-        print "[Time] Delta (Overlapped) : %04d.%06d" % (delta_diff.seconds, delta_diff.microseconds)
-        print "[Time] VM Resume          : " + str(exe_time).split(":")[-1]
-        print "[Time] Total Time         : %04d.%06d" % (total_diff.seconds, total_diff.microseconds)
+        message = "\n"
+        message += 'Transfer\tDecomp\tDelta\tBoot\tResume\tTotal\n'
+        message += "%04d.%06d\t" % (transfer_diff.seconds, transfer_diff.microseconds)
+        message += "%04d.%06d\t" % (decomp_diff.seconds, decomp_diff.microseconds)
+        message += "%04d.%06d\t" % (delta_diff.seconds, delta_diff.microseconds)
+        message += "N/A\t"
+        message += str(exe_time).split(":")[-1] + "\t"
+        message += "%04d.%06d\t" % (total_diff.seconds, total_diff.microseconds)
+        message += "\n"
+        print message
         self.ret_success()
 
 

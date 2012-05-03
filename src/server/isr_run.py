@@ -187,35 +187,28 @@ def resume_vm(user_name, server_address, vm_name):
     time_kvm_end = datetime.now()
     time_end = datetime.now()
 
-    print time_start
-    print time_transfer_start
-    print time_transfer_end
-    print time_decomp_mem_start
-    print time_decomp_mem_end
-    print time_kvm_start
-    print time_kvm_end
-    print time_end
-
     transfer_diff = time_transfer_end-time_transfer_start
     decomp_diff = time_decomp_mem_end-time_decomp_mem_start
     kvm_diff = time_kvm_end-time_kvm_start
     total_diff = time_end-time_start
+    ret_msg = "----------------------------------------------------------\n"
+    ret_msg += 'Transfer\tDecompression\tDelta apply\tVM Boot\tKVM resume\n'
+    ret_msg += "%04d.%06d\t" % (transfer_diff.seconds, transfer_diff.microseconds)
+    ret_msg += "%04d.%06d\t" % (decomp_diff.seconds, decomp_diff.microseconds)
+    print ret_msg
+
     message = "Return from Resume\n"
     message += "[Time] Transfer Time      : %04d.%06d\n" % (transfer_diff.seconds, transfer_diff.microseconds)
     message += "[Time] Decomp (Overlapped): %04d.%06d\n" % (decomp_diff.seconds, decomp_diff.microseconds)
     message += "[Time] VM Resume          : %04d.%06d\n" % (kvm_diff.seconds, kvm_diff.microseconds)
     message += "[Time] Total Time         : %04d.%06d\n" % (total_diff.seconds, total_diff.microseconds)
-
-    ret_message = "\n"
-    ret_message += 'Transfer\tDecompression\tDelta apply\tVM Boot\tKVM resume\n'
-    ret_message += "%04d.%06d\t" % (transfer_diff.seconds, transfer_diff.microseconds)
-    ret_message += "%04d.%06d\t" % (decomp_diff.seconds, decomp_diff.microseconds)
-
     print message
+
+
     log_file.write(message)
     log_file.close()
 
-    return ret_message, kvm_diff
+    return ret_msg, kvm_diff
 
 
 # stop VM
