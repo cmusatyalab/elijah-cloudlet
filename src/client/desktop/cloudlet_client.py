@@ -41,15 +41,15 @@ isr_server_port = 9091
 is_stop_thread = False
 last_average_power = 0.0
 
+
+delivery_server = "server.krha.kr"
 APP_DIR = "/home/krha/cloudlet/src/client/applications"
-face_data = "/home/krha/cloudlet/src/client/desktop/face_input"
-speech_data = "/home/krha/cloudlet/src/client/desktop/speech_input/"
-mar_data = "/home/krha/cloudlet/src/client/desktop/mar_input/"
-MOPED_client = "%s/moped_client.py -i %s/object_images/ -s %s -p 9092" % (APP_DIR, APP_DIR, cloudlet_server_ip)
-GRAPHICS_client = "%s/graphics_client.py -i %s/acc_input_10min -s %s -p 9093" % (APP_DIR, APP_DIR, cloudlet_server_ip)
-FACE_client = "java -jar %s/FACE/FacerecDesktopControlClient.jar %s 9876 %s" % (APP_DIR, cloudlet_server_ip, face_data)
-SPEECH_client = "java -jar %s/SPEECH/SpeechrecDesktopControlClient.jar %s 10191 %s" % (APP_DIR, cloudlet_server_ip, speech_data)
-MAR_client = "%s/mar_client.py -i %s -s %s -p 9094" % (APP_DIR, mar_data, cloudlet_server_ip)
+MOPED_client = "%s/moped_client.py -i ./input/moped -s %s -p 9092" % (APP_DIR, delivery_server)
+GRAPHICS_client = "%s/graphics_client.py -i ./input/graphics/acc_input_50sec -s %s -p 9093" % (APP_DIR, delivery_server)
+FACE_client = "java -jar %s/FACE/FacerecDesktopControlClient.jar %s 9876 ./input/face/" % (APP_DIR, delivery_server)
+SPEECH_client = "java -jar %s/SPEECH/SpeechrecDesktopControlClient.jar %s 10191 ./input/speech" % (APP_DIR, delivery_server)
+MAR_client = "%s/mar_client.py -i ./input/mar/ -s %s -p 9094" % (APP_DIR, delivery_server)
+
 
 def convert_to_CDF(input_file):
     input_lines = open(input_file, "r").read().split("\n")
@@ -172,19 +172,19 @@ def run_application(app_name):
     time_str = datetime.now().strftime("%a:%X")
     if app_name == application_names[0]:    # moped
         output_file = "./ret/o_cloudlet_" + time_str 
-        cmd = MOPED_client + " > %s" % str(output_file)
+        cmd = MOPED_client + " 2>&1 > %s" % str(output_file)
     elif app_name == application_names[1]:  # face
         output_file = "./ret/f_cloudlet_" + time_str
-        cmd = FACE_client + " > %s" % output_file
+        cmd = FACE_client + " 2>&1 > %s" % output_file
     elif app_name == application_names[2]:  # physics
         output_file = "./ret/g_cloudlet_" + time_str
-        cmd = GRAPHICS_client + " > %s" % output_file
+        cmd = GRAPHICS_client + " 2>&1 > %s" % output_file
     elif app_name == application_names[3]:  # speech
         output_file = "./ret/s_cloudlet_" + time_str
-        cmd = SPEECH_client + " > %s" % output_file
-    elif app_name == application_names[4]:  # mar
-        output_file = "./ret/a_cloudlet_" + time_str
-        cmd = MAR_client + " > %s" % output_file
+        cmd = SPEECH_client + " 2>&1 > %s" % output_file
+    elif app_name == application_names[4]:  # speech
+        output_file = "./ret/s_cloudlet_" + time_str
+        cmd = MAR_client + " 2>&1 > %s" % output_file
     elif app_name == application_names[5]:  # null
         return 0, output_file
 
@@ -300,12 +300,12 @@ def synthesis(address, port, app_name):
 
 
 def server_run(address, port, command, server_output_file):
+    return
     global is_stop_thread
     if command == command_type[0]:     #synthesis from cloud
         server_cmd = "/home/krha/cloudlet/src/server/cloudlet_cloud.py run"
     elif command == command_type[1]:   #synthesis from mobile
         server_cmd = "/home/krha/cloudlet/src/server/synthesis.py run -c /home/krha/cloudlet/src/server/config/VM_config.json"
-        synthesis(cloudlet_server_ip, cloudlet_server_port, settings.app)
     elif command == command_type[2]:   #ISR from cloud
         server_cmd = "/home/krha/cloudlet/src/server/isr_run.py run -u test -s dagama.isr.cs.cmu.edu"
     elif command == command_type[3]:   #ISR from mobile
@@ -389,10 +389,9 @@ def main(argv=None):
             22, settings.command, "./ret/%s.%s.server.%s" % (settings.command, settings.app, time_str)))
     energy_thread = Thread(target=energy_measurement, args=("dagama.isr.cs.cmu.edu", \
             22, "./ret/%s.%s.VM.%s" % (settings.command, settings.app, time_str)))
-    server_thread.start()
-    time.sleep(10)
-    energy_thread.start()
-    time.sleep(5)
+    #server_thread.start()
+    #energy_thread.start()
+    #time.sleep(5)
 
     vm_start_time = time.time()
     if settings.command == command_type[0]:     #synthesis from cloud
@@ -409,36 +408,48 @@ def main(argv=None):
     vm_end_time = time.time()
 
     is_stop_thread = True
+    '''
     print "Finish VM Delivery and Wait for cool down 10 seconds for Application power measurement"
     energy_thread.join()
     vm_power = last_average_power
     time.sleep(10)
+    '''
 
     # run application
+    '''
     is_stop_thread = False
     time_str = datetime.now().strftime("%a:%X")
     energy_thread = Thread(target=energy_measurement, args=("dagama.isr.cs.cmu.edu", \
             22, "./ret/%s.%s.APP.%s" % (settings.command, settings.app, time_str)))
     energy_thread.start()
+    '''
     app_start_time = time.time()
-    ret, output_file = run_application(settings.app)
+    while True:
+        # Try to connect to Server program at VM until it gets some data
+        ret, output_file = run_application(settings.app)
+        if ret == 0:
+            break;
+        else:
+            print "waiting for client connection"
+        time.sleep(0.1)
     app_end_time = time.time()
 
     # wait power meter logging
+    '''
     is_stop_thread = True
     print "Waiting for stop power measurement"
     energy_thread.join()
     server_thread.join()
     app_power = last_average_power
+    '''
 
     # Print out measurement
     vm_time = vm_end_time-vm_start_time
     app_time = app_end_time-app_start_time
-    summary, cdf = convert_to_CDF(output_file)
+    #summary, cdf = convert_to_CDF(output_file)
     message = "-------------------------------------\n"
-    message += "VM_time\tApp_time\tVM_power\tVM_Joule\tApp_power\tApp_Jouel\n"
-    message += "%f\t%f\t%f\t%f\t%f\t%f\n" % (vm_time, app_time, vm_power, (vm_power*vm_time), app_power, (app_power*app_time))
-    message += "app performance\n1\t50\t99\n%s\n" % (summary)
+    message += "VM_time\tApp_time\n"
+    message += "%f\t%f\n" % (vm_time, app_time)
     print message
     open(output_file + ".log", "w").write(message)
     return 0
