@@ -117,6 +117,9 @@ def process_command_line(argv):
     parser.add_option(
             '-a', '--app', action='store', type='string', dest='app',
             help="Set Application name among (%s)" % ",".join(application_names))
+    parser.add_option(
+            '-p', '--power', dest='power',
+            help="Set power measurement")
     settings, args = parser.parse_args(argv)
     if not len(args) == 0:
         parser.error('program takes no command-line arguments; "%s" ignored.' % (args,))
@@ -385,13 +388,18 @@ def main(argv=None):
 
     settings, args = process_command_line(sys.argv[1:])
     time_str = datetime.now().strftime("%a:%X")
+    '''
+    # This thread launch server-side counterpart using ssh command execute
+    # We DO NOT recommend to use it beacuse it might cause problem related to X
     server_thread = Thread(target=server_run, args=("server.krha.kr", \
             22, settings.command, "./ret/%s.%s.server.%s" % (settings.command, settings.app, time_str)))
-    energy_thread = Thread(target=energy_measurement, args=("dagama.isr.cs.cmu.edu", \
-            22, "./ret/%s.%s.VM.%s" % (settings.command, settings.app, time_str)))
-    #server_thread.start()
-    #energy_thread.start()
-    #time.sleep(5)
+    server_thread.start()
+    '''
+    if settings.power:
+        energy_thread = Thread(target=energy_measurement, args=("dagama.isr.cs.cmu.edu", \
+                22, "./ret/%s.%s.VM.%s" % (settings.command, settings.app, time_str)))
+        energy_thread.start()
+        time.sleep(5)
 
     vm_start_time = time.time()
     if settings.command == command_type[0]:     #synthesis from cloud
@@ -407,22 +415,7 @@ def main(argv=None):
         isr_launch(url, "mobile", settings.app)
     vm_end_time = time.time()
 
-    is_stop_thread = True
-    '''
-    print "Finish VM Delivery and Wait for cool down 10 seconds for Application power measurement"
-    energy_thread.join()
-    vm_power = last_average_power
-    time.sleep(10)
-    '''
-
     # run application
-    '''
-    is_stop_thread = False
-    time_str = datetime.now().strftime("%a:%X")
-    energy_thread = Thread(target=energy_measurement, args=("dagama.isr.cs.cmu.edu", \
-            22, "./ret/%s.%s.APP.%s" % (settings.command, settings.app, time_str)))
-    energy_thread.start()
-    '''
     app_start_time = time.time()
     while True:
         # Try to connect to Server program at VM until it gets some data
@@ -434,14 +427,13 @@ def main(argv=None):
         time.sleep(0.1)
     app_end_time = time.time()
 
-    # wait power meter logging
-    '''
+    # wait for energy measurement
     is_stop_thread = True
-    print "Waiting for stop power measurement"
-    energy_thread.join()
-    server_thread.join()
-    app_power = last_average_power
-    '''
+    if settings.power:
+        print "Finish VM Delivery and Wait for cool down 10 seconds for Application power measurement"
+        energy_thread.join()
+        vm_power = last_average_power
+        time.sleep(10)
 
     # Print out measurement
     vm_time = vm_end_time-vm_start_time
