@@ -172,6 +172,8 @@ def run_application(app_name):
     global application_names
     cmd = ''
     output_file = ''
+    if not os.path.exists("./ret"):
+        os.mkdir("./ret")
     time_str = datetime.now().strftime("%a:%X")
     if app_name == application_names[0]:    # moped
         output_file = "./ret/o_cloudlet_" + time_str 

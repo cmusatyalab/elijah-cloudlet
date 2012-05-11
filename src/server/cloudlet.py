@@ -249,7 +249,8 @@ def telnet_connection_waiting(telnet_port):
         tn.close()
 
     if is_connected:
-        for i in xrange(200):
+        count = 0
+        while True:
             try:
                 tn = telnetlib.Telnet('localhost', telnet_port, 0.1)
                 ret = tn.read_until("(qemu)", 0.1)
@@ -265,6 +266,9 @@ def telnet_connection_waiting(telnet_port):
                 #print "Connection timeout error"
                 pass
             tn.close()
+            count += 1
+            if count%100 == 0:
+                print "Waiting for connection to KVM controller"
 
     print "Error, No connection to KVM" 
     return False
@@ -305,13 +309,17 @@ def run_snapshot(disk_image, memory_image, telnet_port, vnc_port, wait_vnc_end, 
     start_time = datetime.now()
     
     # waiting for TCP socket open
-    for i in xrange(200):
+    loop_counter = 0
+    while True:
         command_net = "netstat -an | grep 127.0.0.1:" + str(telnet_port)
         proc = subprocess.Popen(command_net, shell=True, stdin=subprocess.PIPE, stdout=subprocess.PIPE)
         output = proc.stdout.readline()
         if output.find("LISTEN") != -1:
             break;
         time.sleep(0.1)
+        loop_counter += 1
+        if loop_counter%100 == 0:
+            print "Waiting for KVM Start"
 
     # Getting VM Status information through Telnet
     ret = telnet_connection_waiting(telnet_port)

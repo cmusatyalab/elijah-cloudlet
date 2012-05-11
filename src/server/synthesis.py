@@ -196,11 +196,53 @@ def delta_worker(in_queue, time_queue, base_filename, out_filename):
         return False
 
 
+def delta_worker_pipe(in_queue, time_queue, base_filename, kvm_pipe):
+    start_time = datetime.now()
+    data_size = 0
+    counter = 0
+
+    # create named pipe for xdelta3
+    out_pipename = (base_filename + ".fifo")
+    if os.path.exists(out_pipename):
+        os.unlink(out_pipename)
+    os.mkfifo(out_pipename)
+
+    # run xdelta 3 with named pipe
+    command_str = "xdelta3 -df -s %s %s %s" % (base_filename, out_pipename, kvm_pipe)
+    xdelta_process = subprocess.Popen(command_str, shell=True)
+    out_pipe = open(out_pipename, "w")
+
+    # TODO: If chunk size is too big, XDELTA checksum error occur
+    # TODO: It is probably related to the maximum queue buffer size
+    while True:
+        chunk = in_queue.get()
+        if chunk == END_OF_FILE:
+            break;
+
+        data_size = data_size + len(chunk)
+        #print "in delta : %d, %d, %d %s" %(counter, len(chunk), data_size, out_filename)
+
+        out_pipe.write(chunk)
+        in_queue.task_done()
+        counter = counter + 1
+
+    out_pipe.close()
+    ret = xdelta_process.wait()
+    os.unlink(out_pipename)
+    end_time = datetime.now()
+    time_queue.put({'start_time':start_time, 'end_time':end_time})
+
+    if ret == 0:
+        print "[Delta] : (%s)-(%s)=(%s) (%d loop, %d bytes)" % (start_time.strftime('%X'), end_time.strftime('%X'), str(end_time-start_time), counter, data_size)
+        return True
+    else:
+        print "Error, xdelta process has not successed"
+        return False
+
+
 def piping_synthesis(vm_name):
     disk_url, mem_url, base_disk, base_mem, os_type = get_download_url(vm_name)
     prev = datetime.now()
-    recover_file = []
-    delta_processes = []
     tmp_dir = '/tmp/'
     time_transfer = Queue()
     time_decomp = Queue()
@@ -208,32 +250,51 @@ def piping_synthesis(vm_name):
 
     print "[INFO] Chunk size : %d" % (CHUNK_SIZE)
 
-    for (overlay_url, base_name) in ((disk_url, base_disk), (mem_url, base_mem)):
-        download_queue = JoinableQueue()
-        decomp_queue = JoinableQueue()
-        (download_pipe_in, download_pipe_out) = Pipe()
-        (decomp_pipe_in, decomp_pipe_out) = Pipe()
-        out_filename = os.path.join(tmp_dir, overlay_url.split("/")[-1] + ".recover")
-        recover_file.append(out_filename)
-        
-        url = urllib2.urlopen(overlay_url)
-        download_process = Process(target=network_worker, args=(url, download_queue, time_transfer, CHUNK_SIZE))
-        decomp_process = Process(target=decomp_worker, args=(download_queue, decomp_queue, time_decomp))
-        delta_process = Process(target=delta_worker, args=(decomp_queue, time_delta, base_name, out_filename))
-        delta_processes.append(delta_process)
-        
-        download_process.start()
-        decomp_process.start()
-        delta_process.start()
+    # handling disk overlay
+    disk_download_queue = JoinableQueue()
+    disk_decomp_queue = JoinableQueue()
+    (disk_download_pipe_in, disk_download_pipe_out) = Pipe()
+    (disk_decomp_pipe_in, disk_decomp_pipe_out) = Pipe()
+    disk_out_filename = os.path.join(tmp_dir, disk_url.split("/")[-1] + ".recover")
+    url = urllib2.urlopen(disk_url)
+    disk_download_process = Process(target=network_worker, args=(url, disk_download_queue, time_transfer, CHUNK_SIZE))
+    disk_decomp_process = Process(target=decomp_worker, args=(disk_download_queue, disk_decomp_queue, time_decomp))
+    disk_delta_process = Process(target=delta_worker, args=(disk_decomp_queue, time_delta, base_disk, disk_out_filename))
 
-    for delta_p in delta_processes:
-        delta_p.join()
+    # handling memory overlay
+    mem_download_queue = JoinableQueue()
+    mem_decomp_queue = JoinableQueue()
+    (mem_download_pipe_in, mem_download_pipe_out) = Pipe()
+    (mem_decomp_pipe_in, mem_decomp_pipe_out) = Pipe()
+    url = urllib2.urlopen(mem_url)
+    mem_download_process = Process(target=network_worker, args=(url, mem_download_queue, time_transfer, CHUNK_SIZE))
+    mem_decomp_process = Process(target=decomp_worker, args=(mem_download_queue, mem_decomp_queue, time_decomp))
+
+    # memory snapshot result will be pipelined to KVM
+    kvm_pipename = os.path.join(tmp_dir, mem_url.split("/")[-1] + ".fifo")
+    if os.path.exists(kvm_pipename):
+        os.unlink(kvm_pipename)
+    os.mkfifo(kvm_pipename)
+    mem_delta_process = Process(target=delta_worker_pipe, args=(mem_decomp_queue, time_delta, base_mem, kvm_pipename))
+    
+    # start processes
+    disk_download_process.start()
+    disk_decomp_process.start()
+    disk_delta_process.start()
+    mem_download_process.start()
+    mem_decomp_process.start()
+    mem_delta_process.start()
+
+    # Once disk is ready, start KVM
+    # Memory snapshot will be completed by pipelining
+    disk_delta_process.join()
 
     telnet_port = 9999
     vnc_port = 2
-    exe_time = run_snapshot(recover_file[0], recover_file[1], telnet_port, vnc_port, wait_vnc_end=False)
+    exe_time = run_snapshot(disk_out_filename, kvm_pipename, telnet_port, vnc_port, wait_vnc_end=False)
     print "[Time] VM Resume : %s" + exe_time
     print "\n[Time] Total Time except VM Resume : " + str(datetime.now()-prev)
+    mem_delta_process.join()
 
 
 def process_command_line(argv):
@@ -354,8 +415,6 @@ class SynthesisTCPHandler(SocketServer.StreamRequestHandler):
 
         # read overlay files
         tmp_dir = tempfile.mkdtemp()
-        recover_file = []
-        delta_processes = []
         time_transfer = Queue()
         time_decomp = Queue()
         time_delta = Queue()
@@ -369,32 +428,48 @@ class SynthesisTCPHandler(SocketServer.StreamRequestHandler):
             os_type = 'window'
 
         start_time = datetime.now()
-        print "[INFO] Chunk size : %d" % (CHUNK_SIZE)
-        for overlay_name, file_size, base in (('disk', disk_size, base_disk_path), ('memory', mem_size, base_mem_path)):
-            download_queue = JoinableQueue()
-            decomp_queue = JoinableQueue()
-            (download_pipe_in, download_pipe_out) = Pipe()
-            (decomp_pipe_in, decomp_pipe_out) = Pipe()
-            out_filename = os.path.join(tmp_dir, overlay_name + ".recover")
-            recover_file.append(out_filename)
-            
-            download_process = Process(target=network_worker, args=(self.rfile, download_queue, time_transfer, CHUNK_SIZE, file_size))
-            decomp_process = Process(target=decomp_worker, args=(download_queue, decomp_queue, time_decomp))
-            delta_process = Process(target=delta_worker, args=(decomp_queue, time_delta, base, out_filename))
-            download_process.start()
-            decomp_process.start()
-            delta_process.start()
-            delta_processes.append(delta_process)
+        # handling disk overlay
+        disk_download_queue = JoinableQueue()
+        disk_decomp_queue = JoinableQueue()
+        (disk_download_pipe_in, disk_download_pipe_out) = Pipe()
+        (disk_decomp_pipe_in, disk_decomp_pipe_out) = Pipe()
+        disk_out_filename = os.path.join(tmp_dir, "disk.recover")
+        disk_download_process = Process(target=network_worker, args=(self.rfile, disk_download_queue, time_transfer, CHUNK_SIZE, disk_size))
+        disk_decomp_process = Process(target=decomp_worker, args=(disk_download_queue, disk_decomp_queue, time_decomp))
+        disk_delta_process = Process(target=delta_worker, args=(disk_decomp_queue, time_delta, base_disk_path, disk_out_filename))
 
-            #print "Waiting for download disk first"
-            download_process.join()
-            
-        for delta_p in delta_processes:
-            delta_p.join()
+        # handling memory overlay
+        mem_download_queue = JoinableQueue()
+        mem_decomp_queue = JoinableQueue()
+        (mem_download_pipe_in, mem_download_pipe_out) = Pipe()
+        (mem_decomp_pipe_in, mem_decomp_pipe_out) = Pipe()
+        mem_download_process = Process(target=network_worker, args=(self.rfile, mem_download_queue, time_transfer, CHUNK_SIZE, mem_size))
+        mem_decomp_process = Process(target=decomp_worker, args=(mem_download_queue, mem_decomp_queue, time_decomp))
+        # memory snapshot result will be pipelined to KVM
+        kvm_pipename = os.path.join(tmp_dir, "mem.fifo")
+        if os.path.exists(kvm_pipename):
+            os.unlink(kvm_pipename)
+        os.mkfifo(kvm_pipename)
+        mem_delta_process = Process(target=delta_worker_pipe, args=(mem_decomp_queue, time_delta, base_mem_path, kvm_pipename))
+        
+        # start processes
+        # wait for download disk first
+        disk_download_process.start()
+        disk_decomp_process.start()
+        disk_delta_process.start()
 
+        # Once disk is ready, start KVM
+        # Memory snapshot will be completed by pipelining
+        disk_delta_process.join()
+        mem_download_process.start()
+        mem_decomp_process.start()
+        mem_delta_process.start()
         telnet_port = 9999
         vnc_port = 2
-        exe_time = run_snapshot(recover_file[0], recover_file[1], telnet_port, vnc_port, wait_vnc_end=False, terminal_mode=True, os_type=os_type)
+        exe_time = run_snapshot(disk_out_filename, kvm_pipename, telnet_port, vnc_port, wait_vnc_end=False, os_type=os_type)
+        kvm_end_time = datetime.now()
+
+        mem_delta_process.join()
 
         # Print out Time Measurement
         disk_transfer_time = time_transfer.get()
@@ -426,14 +501,14 @@ class SynthesisTCPHandler(SocketServer.StreamRequestHandler):
         transfer_diff = mem_transfer_end_time-disk_transfer_start_time
         decomp_diff = mem_decomp_end_time-mem_transfer_end_time
         delta_diff = mem_delta_end_time-mem_decomp_end_time
+        kvm_diff = kvm_end_time-mem_delta_end_time
         total_diff = datetime.now()-start_time
         message = "\n"
         message += 'Transfer\tDecomp\tDelta\tBoot\tResume\tTotal\n'
         message += "%04d.%06d\t" % (transfer_diff.seconds, transfer_diff.microseconds)
         message += "%04d.%06d\t" % (decomp_diff.seconds, decomp_diff.microseconds)
         message += "%04d.%06d\t" % (delta_diff.seconds, delta_diff.microseconds)
-        message += "N/A\t"
-        message += str(exe_time).split(":")[-1] + "\t"
+        message += "%04d.%06d\t" % (kvm_diff.seconds, kvm_diff.microseconds)
         message += "%04d.%06d\t" % (total_diff.seconds, total_diff.microseconds)
         message += "\n"
         print message
