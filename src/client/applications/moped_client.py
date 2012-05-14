@@ -94,6 +94,7 @@ def send_request(address, port, inputs):
         data = sock.recv(4)
         ret_size = struct.unpack("!I", data)[0]
         
+        ret_data = ''
         if not ret_size == 0:
             ret_data = sock.recv(ret_size)
             #print "Return obj : %s" % ret_data
@@ -113,6 +114,7 @@ def send_request(address, port, inputs):
                     end_time_request, \
                     current_duration, \
                     math.fabs(current_duration-prev_duration))
+        return ret_data
 
 def main(argv=None):
     global LOCAL_IPADDRESS
