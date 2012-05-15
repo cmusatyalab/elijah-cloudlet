@@ -21,29 +21,37 @@ import socket
 from optparse import OptionParser
 from datetime import datetime
 import time
-import struct
-import math
-import urllib2
-import urllib
-import json
-import subprocess
-import paramiko
-import cv
+import cv2.cv
 import cloudlet_client
 
 MOPED_CLIENT_PATH = "/home/krha/cloudlet/src/client/applications/"
 application_names = ["moped", "face", "graphics", "speech", "mar", "null"]
 
+camera_index = 0
+capture = cv2.cv.CaptureFromCAM(camera_index)
+
+def FPV_init():
+    for i in range(3):
+        if capture:
+            print "Init camera at index %d" % (i)
+            break;
+
+
 def FPV_capture(output_name):
-    frame = cv.QueryFrame(camcapture)
-    pass
+    global camera_index
+    global capture
+
+    frame = cv2.cv.QueryFrame(capture)
+    resized = cv2.cv.CreatMat((640, 480), frame.depth, frame.nChannels)
+    cv2.cv.Resize(frame, resized)
+    cv2.cv.SaveImage(resized, output_name)
 
 
 def process_command_line(argv):
     global command_type
     global application_names
 
-    parser = OptionParser(usage="usage: ./FPV_client.py", version="FPV Desktop Client")
+    parser = OptionParser(usage="usage: ./FPV_client.py -s server -a app_name", version="FPV Desktop Client")
     parser.add_option(
             '-s', '--server', action='store', type='string', dest='server', default="server.krha.kr",
             help="Set Server IP")
@@ -51,7 +59,7 @@ def process_command_line(argv):
             '-a', '--app', action='store', type='string', dest='app',
             help="Set Application name among (%s)" % ",".join(application_names))
     parser.add_option(
-            '-p', '--port', dest='port', type='int', default='8081',
+            '-p', '--port', dest='port', type='int', default='8021',
             help="Set Server Port")
     settings, args = parser.parse_args(argv)
     if not len(args) == 0:
@@ -65,13 +73,30 @@ def process_command_line(argv):
     return settings, args
 
 
+def run_application(server, app_name):
+    if app_name == application_names[0]: # moped
+        capture_image = "./.fpv_capture.jpg"
+        if not FPV_capture(capture_image):
+            sys.stderr.write("Error, Cannot capture image fro FPV")
+            sys.exit(1)
+        moped_client.send_request(server, 9092, [capture_image])
+    else:
+        sys.stderr.write("Error, not support app(%s), yet" % app_name)
+        sys.exit(1)
+    return True
+
 
 def main():
     settings, args = process_command_line(sys.argv[1:])
+
+    # Init FPV camera
+    FPV_init()
+
+    # Synthesis
     cloudlet_client.synthesis(settings.server, settings.port, settings.app)
 
     # Run Client
-
+    run_application(settings.server, settings.app)
 
 
 if __name__ == "__main__":
