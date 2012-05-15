@@ -112,6 +112,7 @@ def main():
     FPV_thread = Thread(target=FPV_thread, args=())
     FPV_thread.start()
     '''
+    # Init FPV camera
     FPV_init()
 
     # Synthesis
