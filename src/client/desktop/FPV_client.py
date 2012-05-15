@@ -29,32 +29,31 @@ application_names = ["moped", "face", "graphics", "speech", "mar", "null"]
 camera_index = 0
 capture = cv.CaptureFromCAM(camera_index)
 FPV_thread_stop = False
+font = cv.InitFont(1, 3, 3)
 
 def FPV_init():
     global capture
     #cv.SetCaptureProperty(capture, cv.CV_CAP_PROP_FRAME_WIDTH, 640)
     #cv.SetCaptureProperty(capture, cv.CV_CAP_PROP_FRAME_HEIGHT, 480)
 
-
-def FPV_capture(output_name):
+def FPV_capture():
     global camera_index
     global capture
 
     frame = cv.QueryFrame(capture)
-    cv.ShowImage("FPV", frame)
-    c = cv.WaitKey(10)
-    if c == 110: # n
-        print "Switch to next Camera"
-        camera_index += 1
-        capture = cv.CaptureFromCAM(camera_index)
-        if not capture:
-            camera_index = 0
-            capture = cv.CaptureFromCAM(camera_index)
-
+    cv.Flip(frame, None, 1)
     resize = cv.CreateImage((640, 480), frame.depth, frame.nChannels)
     cv.Resize(frame, resize)
-    cv.SaveImage(output_name, resize)
-    return True
+    ret_obj = "Test:asad"
+
+    #Display Result
+    cv.PutText(frame, "Objects: " + str(ret_obj), (100, 100), font, cv.Scalar(0, 0, 0))
+    cv.ShowImage("FPV", frame)
+    c = cv.WaitKey(10)
+    if c == ord('q'):
+        sys.exit(0)
+
+    return frame
 
 
 def process_command_line(argv):
@@ -87,11 +86,21 @@ def run_application(server, app_name):
     if app_name == application_names[0]: # moped
         capture_image = "./.fpv_capture.jpg"
         while True:
-            if not FPV_capture(capture_image):
-                sys.stderr.write("Error, Cannot capture image fro FPV")
-                sys.exit(1)
+            frame = cv.QueryFrame(capture)
+            cv.Flip(frame, None, 1)
+            resize = cv.CreateImage((640, 480), frame.depth, frame.nChannels)
+            cv.Resize(frame, resize)
+            cv.SaveImage(capture_image, resize)
             ret_obj = moped_client.send_request(server, 9092, [capture_image])
             print "Return : %s" % (ret_obj)
+            print "-"*20
+
+            #Display Result
+            cv.PutText(frame, "Objects: " + str(ret_obj), (100, 100), font, cv.Scalar(0xaa, 0xaa, 0xaa))
+            cv.ShowImage("FPV", frame)
+            c = cv.WaitKey(10)
+            if c == ord('q'):
+                break;
     else:
         sys.stderr.write("Error, not support app(%s), yet" % app_name)
         sys.exit(1)
@@ -101,7 +110,7 @@ def run_application(server, app_name):
 def FPV_thread():
     FPV_init()
     while not FPV_thread_stop:
-        FPV_capture("test.jpg")
+        FPV_capture()
 
 
 def main():
@@ -109,8 +118,8 @@ def main():
 
     # FPV camera Thread
     '''
-    FPV_thread = Thread(target=FPV_thread, args=())
-    FPV_thread.start()
+    F_thread = Thread(target=FPV_thread, args=())
+    F_thread.start()
     '''
     # Init FPV camera
     FPV_init()
