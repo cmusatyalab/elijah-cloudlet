@@ -15,13 +15,13 @@
 # for more details.
 #
 import sys
-import socket
 from optparse import OptionParser
 from datetime import datetime
 import time
 import cloudlet_client
 import cv
 from threading import Thread
+import threading
 
 MOPED_CLIENT_PATH = "/home/krha/cloudlet/src/client/applications/"
 application_names = ["moped", "face", "graphics", "speech", "mar", "null"]
@@ -31,11 +31,18 @@ camera_index = 0
 capture = cv.CaptureFromCAM(camera_index)
 FPV_thread_stop = False
 font = cv.InitFont(1, 3, 3)
+latest_frame = ''
+frame_lock = threading.Lock()
 
 def FPV_init():
     global capture
+    global latest_frame
     #cv.SetCaptureProperty(capture, cv.CV_CAP_PROP_FRAME_WIDTH, 640)
     #cv.SetCaptureProperty(capture, cv.CV_CAP_PROP_FRAME_HEIGHT, 480)
+
+def FPV_close():
+    cv.DestroyWindow(WINDOW_NAME)
+
 
 def FPV_capture():
     global camera_index
@@ -109,32 +116,63 @@ def run_application(server, app_name):
 
 
 def FPV_thread():
-    FPV_init()
     global camera_index
     global capture
     global WINDOW_NAME
+    global latest_frame
+    global FPV_thread_stop
 
+    FPV_init()
+
+    cv.NamedWindow(WINDOW_NAME, cv.CV_WINDOW_NORMAL)
+    cv.MoveWindow(WINDOW_NAME, 0, 0)
     while True:
         frame = cv.QueryFrame(capture)
         cv.Flip(frame, None, 1)
-        resize = cv.CreateImage((640, 480), frame.depth, frame.nChannels)
-        cv.Resize(frame, resize)
-        ret_obj = "Test:asad"
+
+        #copy to buffer
+        frame_lock.acquire()
+        if not latest_frame:
+            latest_frame = cv.CreateImage((640, 480), frame.depth, frame.nChannels)
+        cv.Resize(frame, latest_frame)
+        frame_lock.release()
+
 
         #Display Result
-        cv.PutText(frame, "Objects: " + str(ret_obj), (100, 100), font, cv.Scalar(0, 0, 0))
+        ret_obj = "Test:asad"
+        cv.PutText(frame, "Objects: " + str(ret_obj), (100, 100), font, cv.Scalar(255, 255, 255))
         cv.ShowImage(WINDOW_NAME, frame)
-        cv.ResizeWindow(WINDOW_NAME, 500, 500)
+        cv.ResizeWindow(WINDOW_NAME, 200, 100)
+        cv.NamedWindow(WINDOW_NAME, cv.CV_WINDOW_NORMAL);
+        cv.SetWindowProperty(WINDOW_NAME, 0, cv.CV_WINDOW_FULLSCREEN);
         c = cv.WaitKey(10)
         if c == ord('q'):
-            sys.exit(0)
+            break
+
+    print "FPV Thread is finished"
+    FPV_thread_stop = True
+    FPV_close()
 
 def main():
+    global frame_lock
     settings, args = process_command_line(sys.argv[1:])
 
     # FPV camera Thread
     F_thread = Thread(target=FPV_thread, args=())
     F_thread.start()
+
+    while True:
+        if FPV_thread_stop:
+            break;
+
+        frame_lock.acquire()
+        try:
+            cv.SaveImage("save_%s.jpg" % (datetime.now()), latest_frame)
+        except Exception:
+            frame_lock.release()
+            break;
+        frame_lock.release()
+        time.sleep(0.05)
 
     # Init FPV camera
     '''
@@ -152,10 +190,8 @@ if __name__ == "__main__":
     if MOPED_CLIENT_PATH not in sys.path:
         sys.path.append(MOPED_CLIENT_PATH)
         import moped_client
-
     try:
         status = main()
         sys.exit(status)
     except KeyboardInterrupt:
-        FPV_thread_stop = True
         sys.exit(1)
