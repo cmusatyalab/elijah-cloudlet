@@ -26,6 +26,7 @@ from threading import Thread
 MOPED_CLIENT_PATH = "/home/krha/cloudlet/src/client/applications/"
 application_names = ["moped", "face", "graphics", "speech", "mar", "null"]
 
+WINDOW_NAME = "FPV"
 camera_index = 0
 capture = cv.CaptureFromCAM(camera_index)
 FPV_thread_stop = False
@@ -109,19 +110,34 @@ def run_application(server, app_name):
 
 def FPV_thread():
     FPV_init()
-    while not FPV_thread_stop:
-        FPV_capture()
+    global camera_index
+    global capture
+    global WINDOW_NAME
 
+    while True:
+        frame = cv.QueryFrame(capture)
+        cv.Flip(frame, None, 1)
+        resize = cv.CreateImage((640, 480), frame.depth, frame.nChannels)
+        cv.Resize(frame, resize)
+        ret_obj = "Test:asad"
+
+        #Display Result
+        cv.PutText(frame, "Objects: " + str(ret_obj), (100, 100), font, cv.Scalar(0, 0, 0))
+        cv.ShowImage(WINDOW_NAME, frame)
+        cv.ResizeWindow(WINDOW_NAME, 500, 500)
+        c = cv.WaitKey(10)
+        if c == ord('q'):
+            sys.exit(0)
 
 def main():
     settings, args = process_command_line(sys.argv[1:])
 
     # FPV camera Thread
-    '''
     F_thread = Thread(target=FPV_thread, args=())
     F_thread.start()
-    '''
+
     # Init FPV camera
+    '''
     FPV_init()
 
     # Synthesis
@@ -129,6 +145,7 @@ def main():
 
     # Run Client
     run_application(settings.server, settings.app)
+    '''
 
 
 if __name__ == "__main__":
