@@ -16,6 +16,7 @@
 #
 import sys
 from optparse import OptionParser
+import socket
 from datetime import datetime
 import time
 import cloudlet_client
@@ -30,7 +31,8 @@ WINDOW_NAME = "FPV"
 camera_index = 0
 capture = cv.CaptureFromCAM(camera_index)
 FPV_thread_stop = False
-font = cv.InitFont(1, 3, 3)
+font = cv.InitFont(cv.CV_FONT_HERSHEY_SIMPLEX, 1, 1)
+overlay_message = "Initiaiting"
 latest_frame = ''
 frame_lock = threading.Lock()
 
@@ -43,25 +45,6 @@ def FPV_init():
 def FPV_close():
     cv.DestroyWindow(WINDOW_NAME)
 
-
-def FPV_capture():
-    global camera_index
-    global capture
-
-    frame = cv.QueryFrame(capture)
-    cv.Flip(frame, None, 1)
-    resize = cv.CreateImage((640, 480), frame.depth, frame.nChannels)
-    cv.Resize(frame, resize)
-    ret_obj = "Test:asad"
-
-    #Display Result
-    cv.PutText(frame, "Objects: " + str(ret_obj), (100, 100), font, cv.Scalar(0, 0, 0))
-    cv.ShowImage("FPV", frame)
-    c = cv.WaitKey(10)
-    if c == ord('q'):
-        sys.exit(0)
-
-    return frame
 
 
 def process_command_line(argv):
@@ -91,27 +74,40 @@ def process_command_line(argv):
 
 
 def run_application(server, app_name):
-    if app_name == application_names[0]: # moped
-        capture_image = "./.fpv_capture.jpg"
-        while True:
-            frame = cv.QueryFrame(capture)
-            cv.Flip(frame, None, 1)
-            resize = cv.CreateImage((640, 480), frame.depth, frame.nChannels)
-            cv.Resize(frame, resize)
-            cv.SaveImage(capture_image, resize)
-            ret_obj = moped_client.send_request(server, 9092, [capture_image])
-            print "Return : %s" % (ret_obj)
-            print "-"*20
+    global overlay_message
+    #connection
+    try:
+        print "Connecting to (%s, %d).." % (server, 9092)
+        sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        sock.setblocking(True)
+        sock.connect((server, 9092))
+    except socket.error, msg:
+        sys.stderr.write("Error, %s\n" % msg[1])
+        overlay_message = "Error, %s\n" % msg[1]
+        return
 
-            #Display Result
-            cv.PutText(frame, "Objects: " + str(ret_obj), (100, 100), font, cv.Scalar(0xaa, 0xaa, 0xaa))
-            cv.ShowImage("FPV", frame)
-            c = cv.WaitKey(10)
-            if c == ord('q'):
-                break;
-    else:
-        sys.stderr.write("Error, not support app(%s), yet" % app_name)
-        sys.exit(1)
+    capture_image = "./.fpv_capture.jpg"
+    while True:
+        if FPV_thread_stop:
+            break;
+        frame_lock.acquire()
+        try:
+            cv.SaveImage(capture_image, latest_frame)
+        except Exception:
+            frame_lock.release()
+            break;
+        frame_lock.release()
+
+        start_time = time.time()
+        if app_name == application_names[0]: # moped
+            binary = open(capture_image, 'rb').read();
+            ret_obj = moped_client.moped_request(sock, binary)
+            overlay_message = "Return : %s (latency:%02.03f)" % (ret_obj, time.time()-start_time)
+            print overlay_message
+            print "-"*20
+        else:
+            overlay_message = "Does not support %s, yet" % (app_name)
+
     return True
 
 
@@ -121,6 +117,7 @@ def FPV_thread():
     global WINDOW_NAME
     global latest_frame
     global FPV_thread_stop
+    global overlay_message
 
     FPV_init()
 
@@ -139,8 +136,7 @@ def FPV_thread():
 
 
         #Display Result
-        ret_obj = "Test:asad"
-        cv.PutText(frame, "Objects: " + str(ret_obj), (100, 100), font, cv.Scalar(255, 255, 255))
+        cv.PutText(frame, overlay_message, (10, 50), font, cv.Scalar(0,0,0))
         cv.ShowImage(WINDOW_NAME, frame)
         cv.ResizeWindow(WINDOW_NAME, 200, 100)
         cv.NamedWindow(WINDOW_NAME, cv.CV_WINDOW_NORMAL);
@@ -161,29 +157,11 @@ def main():
     F_thread = Thread(target=FPV_thread, args=())
     F_thread.start()
 
-    while True:
-        if FPV_thread_stop:
-            break;
-
-        frame_lock.acquire()
-        try:
-            cv.SaveImage("save_%s.jpg" % (datetime.now()), latest_frame)
-        except Exception:
-            frame_lock.release()
-            break;
-        frame_lock.release()
-        time.sleep(0.05)
-
-    # Init FPV camera
-    '''
-    FPV_init()
-
     # Synthesis
     cloudlet_client.synthesis(settings.server, settings.port, settings.app)
 
     # Run Client
     run_application(settings.server, settings.app)
-    '''
 
 
 if __name__ == "__main__":

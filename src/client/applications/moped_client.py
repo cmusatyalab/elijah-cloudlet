@@ -75,30 +75,7 @@ def send_request(address, port, inputs):
     for each_input in inputs:
         start_time_request = time.time() * 1000.0
         binary = open(each_input, 'rb').read();
-        length = os.path.getsize(each_input)
-        if len(binary) != length:
-            sys.stderr.write("Error, input length is wrong");
-            sys.exit(1)
-
-        # send
-        sent_size = sock.send(struct.pack("!I", length))
-        if not sent_size == 4:
-            sys.stderr.write("Error, send wrong size of int : %d" % sent_size)
-            sys.exit(1)
-        sent_size = sock.send(binary)
-        if not sent_size == length:
-            sys.stderr.write("Error, send wrong size of file : %d" % sent_size)
-            sys.exit(1)
-        
-        #recv
-        data = sock.recv(4)
-        ret_size = struct.unpack("!I", data)[0]
-        
-        ret_data = ''
-        if not ret_size == 0:
-            ret_data = sock.recv(ret_size)
-            #print "Return obj : %s" % ret_data
-
+        ret_data = moped_request(sock, binary)
 
         # print result
         end_time_request = time.time() * 1000.0
@@ -115,6 +92,31 @@ def send_request(address, port, inputs):
                     current_duration, \
                     math.fabs(current_duration-prev_duration))
         return ret_data
+
+
+def moped_request(sock, data):
+    length = len(data)
+
+    # send
+    sent_size = sock.send(struct.pack("!I", length))
+    if not sent_size == 4:
+        sys.stderr.write("Error, send wrong size of int : %d" % sent_size)
+        sys.exit(1)
+    sent_size = sock.send(data)
+    if not sent_size == length:
+        sys.stderr.write("Error, send wrong size of file : %d" % sent_size)
+        sys.exit(1)
+    
+    #recv
+    data = sock.recv(4)
+    ret_size = struct.unpack("!I", data)[0]
+    
+    ret_data = ''
+    if not ret_size == 0:
+        ret_data = sock.recv(ret_size)
+        return ret_data
+
+    return None
 
 def main(argv=None):
     global LOCAL_IPADDRESS
