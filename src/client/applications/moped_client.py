@@ -91,21 +91,14 @@ def send_request(address, port, inputs):
                     end_time_request, \
                     current_duration, \
                     math.fabs(current_duration-prev_duration))
-        return ret_data
 
 
 def moped_request(sock, data):
     length = len(data)
 
     # send
-    sent_size = sock.send(struct.pack("!I", length))
-    if not sent_size == 4:
-        sys.stderr.write("Error, send wrong size of int : %d" % sent_size)
-        sys.exit(1)
-    sent_size = sock.send(data)
-    if not sent_size == length:
-        sys.stderr.write("Error, send wrong size of file : %d" % sent_size)
-        sys.exit(1)
+    sock.sendall(struct.pack("!I", length))
+    sock.sendall(data)
     
     #recv
     data = sock.recv(4)
