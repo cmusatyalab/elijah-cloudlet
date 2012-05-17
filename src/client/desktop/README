@@ -1,4 +1,5 @@
 REQUIRENENT FOR FPV_CAPTURE
 -------------------------------------
 openCV 2.3.1
-sudo apt-get install python-opencv
+	sudo apt-get install python-opencv
+
