@@ -24,8 +24,9 @@ import cv
 from threading import Thread
 import threading
 
-MOPED_CLIENT_PATH = "/home/krha/cloudlet/src/client/applications/"
+CLIENT_PATH = "/home/krha/cloudlet/src/client/applications/"
 application_names = ["moped", "face", "graphics", "speech", "mar", "null"]
+application_ports = {"moped":9092, "face":9876, "graphics":9093, "speech":6789, "mar":9094}
 
 WINDOW_NAME = "FPV"
 camera_index = 0
@@ -36,15 +37,16 @@ overlay_message = "Initiaiting"
 latest_frame = ''
 frame_lock = threading.Lock()
 
+
 def FPV_init():
     global capture
     global latest_frame
     #cv.SetCaptureProperty(capture, cv.CV_CAP_PROP_FRAME_WIDTH, 640)
     #cv.SetCaptureProperty(capture, cv.CV_CAP_PROP_FRAME_HEIGHT, 480)
 
+
 def FPV_close():
     cv.DestroyWindow(WINDOW_NAME)
-
 
 
 def process_command_line(argv):
@@ -75,9 +77,10 @@ def process_command_line(argv):
 
 def run_application(server, app_name):
     global overlay_message
-    #connection
+
+    # Connection
     try:
-        print "Connecting to (%s, %d).." % (server, 9092)
+        print "Connecting to (%s, %d).." % (server, application_ports[app_name])
         sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
         sock.setblocking(True)
         sock.connect((server, 9092))
@@ -88,6 +91,7 @@ def run_application(server, app_name):
 
     capture_image = "./.fpv_capture.jpg"
     while True:
+        # Retreive Image
         if FPV_thread_stop:
             break;
         frame_lock.acquire()
@@ -98,15 +102,20 @@ def run_application(server, app_name):
             break;
         frame_lock.release()
 
+        # Application request
         start_time = time.time()
+        image_bin = open(capture_image, 'rb').read();
         if app_name == application_names[0]: # moped
-            binary = open(capture_image, 'rb').read();
-            ret_obj = moped_client.moped_request(sock, binary)
+            ret_obj = moped_client.moped_request(sock, image_bin)
             overlay_message = "Return : %s (latency:%02.03f)" % (ret_obj, time.time()-start_time)
-            print overlay_message
-            print "-"*20
+        elif app_name == application_names[1]: # face
+            ret_obj = moped_client.moped_request(sock, image_bin)
+            overlay_message = "Return : %s (latency:%02.03f)" % (ret_obj, time.time()-start_time)
         else:
             overlay_message = "Does not support %s, yet" % (app_name)
+
+        print overlay_message
+        print "-"*20
 
     return True
 
@@ -165,8 +174,8 @@ def main():
 
 
 if __name__ == "__main__":
-    if MOPED_CLIENT_PATH not in sys.path:
-        sys.path.append(MOPED_CLIENT_PATH)
+    if CLIENT_PATH not in sys.path:
+        sys.path.append(CLIENT_PATH)
         import moped_client
     try:
         status = main()
