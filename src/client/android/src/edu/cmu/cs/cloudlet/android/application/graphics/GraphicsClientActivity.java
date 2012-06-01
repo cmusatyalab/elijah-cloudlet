@@ -15,9 +15,11 @@ import edu.cmu.cs.cloudlet.android.R;
 
 import android.app.Activity;
 import android.app.AlertDialog;
+import android.content.Context;
 import android.graphics.Point;
 import android.hardware.SensorListener;
 import android.hardware.SensorManager;
+import android.opengl.GLSurfaceView;
 import android.os.Bundle;
 import android.os.Environment;
 import android.util.Log;
@@ -41,14 +43,25 @@ public class GraphicsClientActivity extends Activity implements SensorListener {
 	
 	// Visualization
 	ParticleDrawView particleDrawableView;
+	private Graphics graphics;
+	private PointRendererSurfaceView GLView;
 
+	class PointRendererSurfaceView extends GLSurfaceView {
+	    public PointRendererSurfaceView(Context context, Graphics ds){
+	        super(context);        
+	        setRenderer(new PointRenderer(ds));
+	    }
+	}
 	
 	/** Called when the activity is first created. */
 	@Override
 	public void onCreate(Bundle savedInstanceState) {
 	    super.onCreate(savedInstanceState);
-	    particleDrawableView = new ParticleDrawView(this);
-	    setContentView(particleDrawableView);
+//	    particleDrawableView = new ParticleDrawView(this);
+//	    setContentView(particleDrawableView);
+	    graphics = new Graphics();
+        GLView = new PointRendererSurfaceView(this, graphics);
+  		setContentView(GLView);
 		sensor = (SensorManager) getSystemService(SENSOR_SERVICE);
 
 		this.connector = new GNetworkClient(this, GraphicsClientActivity.this);
@@ -84,7 +97,8 @@ public class GraphicsClientActivity extends Activity implements SensorListener {
 	
 	public void updateData(Object obj) {
 		ByteBuffer buffer = (ByteBuffer)obj;
-		particleDrawableView.updatePosition(buffer);
+//		particleDrawableView.updatePosition(buffer);
+		graphics.updatePosition(buffer);
 	}
 	
 	
@@ -117,6 +131,7 @@ public class GraphicsClientActivity extends Activity implements SensorListener {
 	@Override
 	protected void onResume() {
 		super.onResume();
+		GLView.onResume();
 		this.sensor.registerListener(this, SensorManager.SENSOR_ACCELEROMETER,
 				SensorManager.SENSOR_DELAY_GAME);
 	}
@@ -132,6 +147,7 @@ public class GraphicsClientActivity extends Activity implements SensorListener {
 	@Override
     protected void onPause() {
         super.onPause();
+		GLView.onPause();
         this.sensor.unregisterListener(this);
     }
 
