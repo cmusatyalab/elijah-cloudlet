@@ -127,6 +127,7 @@ public class GNetworkClientSender extends Thread {
 					networkWriter.flush();
 				} catch (IOException e) {
 					e.printStackTrace();
+					break;
 				}
 				lastSentTime = System.currentTimeMillis();
 				
