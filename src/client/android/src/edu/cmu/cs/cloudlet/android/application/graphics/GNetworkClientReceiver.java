@@ -26,6 +26,7 @@ import java.util.TreeMap;
 
 import org.apache.http.util.ByteArrayBuffer;
 import org.json.JSONException;
+import org.teleal.common.util.ByteArray;
 
 import android.os.Bundle;
 import android.os.Handler;
@@ -38,8 +39,8 @@ public class GNetworkClientReceiver extends Thread {
 	private boolean isThreadRun = true;
 
 	private int messageCounter = 0;
-	protected int maxByteSize = 1024*1024*1;	// 1MB
-	protected byte[] recvByte = new byte[maxByteSize];
+	protected byte[] recvByte = null;
+	ArrayList<Particle> particleList = new ArrayList<Particle>();
 	private int frameID = 0;
 	private int clientID = 0;
 	TreeMap<Integer, Long> receiver_stamps = new TreeMap<Integer, Long>(); 
@@ -70,7 +71,7 @@ public class GNetworkClientReceiver extends Thread {
 			
 			try {
 				recvSize = this.receiveMsg(networkReader);
-				this.notifyStatus(GNetworkClient.PROGRESS_MESSAGE, "Received (accID: " + this.clientID + ", frameID:" + this.frameID + ")" , null);
+				this.notifyStatus(GNetworkClient.PROGRESS_MESSAGE, "Received (accID: " + this.clientID + ", frameID:" + this.frameID + ")" , recvByte);
 			} catch (IOException e) {
 				Log.e("krha", e.toString());
 //				this.notifyStatus(GNetworkClient.NETWORK_ERROR, e.toString(), null);
@@ -84,19 +85,23 @@ public class GNetworkClientReceiver extends Thread {
 		this.frameID = reader.readInt();
 		int retLength = reader.readInt();
 		
+		if(recvByte == null || recvByte.length < retLength){
+			recvByte = new byte[retLength];
+		}
+		
 		int readSize = 0;
 		while(readSize < retLength){
-			int ret = reader.read(this.recvByte, 0, retLength-readSize);
+			int ret = reader.read(this.recvByte, readSize, retLength-readSize);
 			if(ret <= 0){
 				break;
 			}
 			readSize += ret;
 		}
+		
 		long currentTime = System.currentTimeMillis();
-		Log.d("krha", "Received");
 		if(this.receiver_stamps.get(this.clientID) == null){
 			this.receiver_stamps.put(this.clientID, currentTime);
-			Log.d("krha", "Save Client ID : " + this.clientID);			
+//			Log.d("krha", "Save Client ID : " + this.clientID);			
 		}else{
 			duplicated_client_id++;
 		}
@@ -104,10 +109,17 @@ public class GNetworkClientReceiver extends Thread {
 		return readSize;
 	}
 	
-	private void notifyStatus(int command, String string, byte[] recvMsg) {
+	private void notifyStatus(int command, String string, byte[] recvData) {
+		// Copy data with endian switching
+        ByteBuffer buf = ByteBuffer.allocate(recvData.length);
+        buf.order(ByteOrder.LITTLE_ENDIAN);
+        buf.put(recvData);
+		buf.flip();
+		buf.compact();
+		
 		Message msg = Message.obtain();
 		msg.what = command;
-		msg.obj = recvMsg;
+		msg.obj = buf;
 		Bundle data = new Bundle();
 		data.putString("message", string);
 		msg.setData(data);

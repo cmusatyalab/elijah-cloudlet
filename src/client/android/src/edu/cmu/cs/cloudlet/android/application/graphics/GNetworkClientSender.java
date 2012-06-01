@@ -109,31 +109,27 @@ public class GNetworkClientSender extends Thread {
 		long lastSentTime = 0;
 		while(isThreadRun == true){
 			if(commandQueue.size() == 0){
-				break;
-			}else{
-				if(System.currentTimeMillis() - lastSentTime >= 20){
-					// Request to Server
-					GNetworkMessage msg = commandQueue.remove(0);
-					try {
-						float[] accData = msg.getAccData();
-						networkWriter.writeInt(this.accIndex++);
-						networkWriter.writeInt(this.receiver.getLastFrameID());
-						networkWriter.writeFloat(accData[0]);
-						networkWriter.writeFloat(accData[1]);
-						networkWriter.flush();
-					} catch (IOException e) {
-						e.printStackTrace();
-					}
-					lastSentTime = System.currentTimeMillis();
-					Log.d("krha", "Send Data " + this.accIndex);
-				}else{
-					try {
-						sleep(1);
-					} catch (InterruptedException e) {
-						e.printStackTrace();
-					}
+				try {
+					Thread.sleep(1);
+				} catch (InterruptedException e) {
+					// TODO Auto-generated catch block
+					e.printStackTrace();
 				}
-				
+			}else{
+				// Request to Server
+				GNetworkMessage msg = commandQueue.remove(0);
+				try {
+					float[] accData = msg.getAccData();
+					networkWriter.writeInt(this.accIndex++);
+					networkWriter.writeInt(this.receiver.getLastFrameID());
+					networkWriter.writeFloat(accData[0]);
+					networkWriter.writeFloat(accData[1]);
+					networkWriter.flush();
+					Log.d("krha", "X: " + accData[0] + "\tY: " + accData[1]);
+				} catch (IOException e) {
+					e.printStackTrace();
+				}
+				lastSentTime = System.currentTimeMillis();
 				
 			}
 		}

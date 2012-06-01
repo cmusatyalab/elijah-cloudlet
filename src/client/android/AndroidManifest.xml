@@ -66,6 +66,10 @@
             android:theme="@android:style/Theme.NoTitleBar.Fullscreen" >
         </activity>
         <activity android:name=".application.speech.SpeechPreferenceActivity" />
+        <activity
+            android:name=".application.graphics.GraphicsClientActivity"
+            android:screenOrientation="portrait"
+            android:theme="@android:style/Theme.NoTitleBar.Fullscreen" />
         <activity android:name=".application.speech.FileBrowserActivity" />
         <activity android:name=".application.speech.SpeechAndroidBatchClientActivity" />
         <activity android:name=".application.face.batch.FaceAndroidBatchClientActivity" />

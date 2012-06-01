@@ -52,7 +52,7 @@ public class GNetworkClient {
 	protected Context mContext;
 	protected GNetworkClientSender networkClient;
 
-	private ArrayList<String> mAcclist;	
+//	private ArrayList<String> mAcclist;	
 	protected long prevDuration = Long.MAX_VALUE;
 	
 
@@ -72,19 +72,22 @@ public class GNetworkClient {
 		networkClient.setConnector(this);
 		networkClient.setConnection(ipAddress, port);
 		networkClient.start();
-
-		for(String request : this.mAcclist){
-			String[] accs = request.split(" ");
-			GNetworkMessage networkMsg = new GNetworkMessage(GNetworkMessage.COMMAND_REQ_TRANSFER_START, new float[]{Float.parseFloat(accs[0]), Float.parseFloat(accs[1])});
+		
+	}
+	
+	public void updateAccValue(float[] values){
+		GNetworkMessage networkMsg = new GNetworkMessage(GNetworkMessage.COMMAND_REQ_TRANSFER_START, values);
+		if(networkClient != null && networkClient.isAlive()){
 			networkClient.requestCommand(networkMsg);
 		}
 		
 	}
 
+	/*
 	public void updateAccList(ArrayList<String> testAccList) {
-		this.mAcclist = testAccList;
-		
+		this.mAcclist = testAccList;		
 	}
+	*/
 	
 	public void updateMessage(String dialogMessage) {
 		this.activity.updateLog(dialogMessage);
@@ -111,6 +114,7 @@ public class GNetworkClient {
 				showAlertDialog(message);
 			} else if (msg.what == GNetworkClient.PROGRESS_MESSAGE) {
 				Bundle data = msg.getData();
+				activity.updateData(msg.obj);
 				activity.updateLog(data.getString("message") + "\n");
 			} else if (msg.what == GNetworkClient.FINISH_MESSAGE){
 				Bundle data = msg.getData();

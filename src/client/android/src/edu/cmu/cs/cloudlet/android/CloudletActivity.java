@@ -65,7 +65,7 @@ public class CloudletActivity extends Activity {
 
 	protected Button startConnectionButton;
 	protected CloudletConnector connector;
-	private UPnPDiscovery serviceDiscovery;
+//	private UPnPDiscovery serviceDiscovery;
 	protected int selectedOveralyIndex;
 
 	@Override
@@ -76,12 +76,14 @@ public class CloudletActivity extends Activity {
 		// Initiate Environment Settings
 		CloudletEnv.instance();
 
-		// upnp service binding and show dialog
-		this.serviceDiscovery = new UPnPDiscovery(this, CloudletActivity.this, discoveryHandler);
 		this.connector = new CloudletConnector(this, CloudletActivity.this);
+		// upnp service binding and show dialog
+		/*
+		this.serviceDiscovery = new UPnPDiscovery(this, CloudletActivity.this, discoveryHandler);
 		getApplicationContext().bindService(new Intent(this, AndroidUpnpServiceImpl.class),
 				this.serviceDiscovery.serviceConnection, Context.BIND_AUTO_CREATE);
 		// serviceDiscovery.showDialogSelectOption();
+		 */
 
 		// Performance Button
 		findViewById(R.id.testSynthesis).setOnClickListener(clickListener);
@@ -265,6 +267,7 @@ public class CloudletActivity extends Activity {
 	/*
 	 * Service Discovery Handler
 	 */
+	/*
 	Handler discoveryHandler = new Handler() {
 		public void handleMessage(Message msg) {
 			if (msg.what == UPnPDiscovery.DEVICE_SELECTED) {
@@ -281,6 +284,7 @@ public class CloudletActivity extends Activity {
 			}
 		}
 	};
+	*/
 
 	View.OnClickListener clickListener = new View.OnClickListener() {
 		@Override
@@ -340,8 +344,8 @@ public class CloudletActivity extends Activity {
 
 	@Override
 	public void onDestroy() {
-		getApplicationContext().unbindService(this.serviceDiscovery.serviceConnection);
-		this.serviceDiscovery.close();
+//		getApplicationContext().unbindService(this.serviceDiscovery.serviceConnection);
+//		this.serviceDiscovery.close();
 		this.connector.close();
 		super.onDestroy();
 	}

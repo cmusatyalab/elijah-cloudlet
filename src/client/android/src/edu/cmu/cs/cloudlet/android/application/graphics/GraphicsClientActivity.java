@@ -5,6 +5,8 @@ import java.io.File;
 import java.io.FileReader;
 import java.io.FilenameFilter;
 import java.io.IOException;
+import java.nio.ByteBuffer;
+import java.nio.ByteOrder;
 import java.util.ArrayList;
 import java.util.Timer;
 import java.util.TimerTask;
@@ -30,26 +32,34 @@ public class GraphicsClientActivity extends Activity implements SensorListener {
 
 	private SensorManager sensor;
 	private GNetworkClient connector;
-	private TextView textView;
-	private ScrollView scrollView;
+//	private TextView textView;
+//	private ScrollView scrollView;
 
 	protected ArrayList<String> testAccList = new ArrayList<String>();
 	private float[] latest_acc = new float[2];
 	
+	// Visualization
+	ParticleDrawView particleDrawableView;
+
+	
 	/** Called when the activity is first created. */
 	@Override
 	public void onCreate(Bundle savedInstanceState) {
-		super.onCreate(savedInstanceState);
-		setContentView(R.layout.graphics);
+	    super.onCreate(savedInstanceState);
+	    particleDrawableView = new ParticleDrawView(this);
+	    setContentView(particleDrawableView);
 		sensor = (SensorManager) getSystemService(SENSOR_SERVICE);
-		this.textView = (TextView)findViewById(R.id.logView);
+
 		this.connector = new GNetworkClient(this, GraphicsClientActivity.this);
-	    this.scrollView = (ScrollView) this.findViewById(R.id.logScroll);
+//		setContentView(R.layout.graphics);
+//		this.textView = (TextView)findViewById(R.id.logView);
+//	    this.scrollView = (ScrollView) this.findViewById(R.id.logScroll);
 
 		Bundle extras = getIntent().getExtras();
 		this.SERVER_ADDRESS = extras.getString("address");
 		this.SERVER_PORT = extras.getInt("port");
-		
+
+		/*
 		// For OSDI Test, just start sending data
 		File testFile = new File(TEST_ACC_FILE);
 		if(testFile.exists() == false){
@@ -72,11 +82,11 @@ public class GraphicsClientActivity extends Activity implements SensorListener {
 		}catch(IOException e){
 			Log.e("krha", e.toString());
 		}
+		*/
 		
 		TimerTask autoStart = new TimerTask(){
 			@Override
 			public void run() {
-				connector.updateAccList(testAccList);
 				connector.startConnection(SERVER_ADDRESS, SERVER_PORT);
 			} 
 		};
@@ -97,7 +107,15 @@ public class GraphicsClientActivity extends Activity implements SensorListener {
 		return this.latest_acc;
 	}
 	
+	
+	public void updateData(Object obj) {
+		ByteBuffer buffer = (ByteBuffer)obj;
+		particleDrawableView.updatePosition(buffer);
+	}
+	
+	
 	public void updateLog(String msg){
+		/*
 		this.textView.append(msg);
 		this.scrollView.post(new Runnable()
 	    {
@@ -106,6 +124,7 @@ public class GraphicsClientActivity extends Activity implements SensorListener {
 	            scrollView.fullScroll(View.FOCUS_DOWN);
 	        }
 	    });
+	    */
 	}
 
 	
@@ -117,9 +136,9 @@ public class GraphicsClientActivity extends Activity implements SensorListener {
 	@Override
 	public void onSensorChanged(int sensor, float[] values) {
         if (sensor == SensorManager.SENSOR_ACCELEROMETER) {
-//            Log.d("krha", "X: " + values[0] + "\tY: " + values[1] + "\tZ: " + values[2]);
         	this.latest_acc[0] = values[0];
         	this.latest_acc[1] = values[1];
+        	connector.updateAccValue(values);
         }
 	}
 
@@ -133,7 +152,8 @@ public class GraphicsClientActivity extends Activity implements SensorListener {
 	@Override
 	protected void onStop() {
 		this.sensor.unregisterListener(this);
-		this.connector.close();
+		if(this.connector != null)
+			this.connector.close();
 		super.onStop();
 	}
 
@@ -142,4 +162,7 @@ public class GraphicsClientActivity extends Activity implements SensorListener {
         super.onPause();
         this.sensor.unregisterListener(this);
     }
+
+
+	
 }
