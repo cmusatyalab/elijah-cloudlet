@@ -123,9 +123,8 @@ public class GNetworkClientSender extends Thread {
 					networkWriter.writeInt(this.accIndex++);
 					networkWriter.writeInt(this.receiver.getLastFrameID());
 					networkWriter.writeFloat(accData[0]);
-					networkWriter.writeFloat(accData[1]);
+					networkWriter.writeFloat(-1.0f * accData[1]); //upside down for y-axis
 					networkWriter.flush();
-					Log.d("krha", "X: " + accData[0] + "\tY: " + accData[1]);
 				} catch (IOException e) {
 					e.printStackTrace();
 				}

@@ -66,6 +66,25 @@ public class GNetworkClientReceiver extends Thread {
 
 	@Override
 	public void run() {
+		while(isThreadRun == false){
+			try {
+				Thread.sleep(1);
+			} catch (InterruptedException e) {
+			}
+		}
+		
+		// Recv initial simulation information
+		try {
+			int containerWidth = networkReader.readInt();
+			int containerHeight = networkReader.readInt();
+			Log.d("krha", "container size : " + containerWidth + ", " + containerHeight);
+			VisualizationStaticInfo.containerWidth = containerWidth;
+			VisualizationStaticInfo.containerHeight = containerHeight;
+			
+		} catch (IOException e1) {
+			e1.printStackTrace();
+		}
+		
 		while(isThreadRun == true){
 			int recvSize = 0;
 			
