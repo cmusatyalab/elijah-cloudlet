@@ -118,7 +118,7 @@ public class GNetworkClient {
 				activity.updateLog(data.getString("message") + "\n");
 			} else if (msg.what == GNetworkClient.FINISH_MESSAGE){
 				Bundle data = msg.getData();
-				activity.updateLog(data.getString("message") + "\n");
+//				activity.updateLog(data.getString("message") + "\n");
 				if (networkClient != null) {
 					networkClient.close();
 				}

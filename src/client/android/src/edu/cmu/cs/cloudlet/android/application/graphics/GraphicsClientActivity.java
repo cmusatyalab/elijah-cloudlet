@@ -12,6 +12,7 @@ import java.util.Timer;
 import java.util.TimerTask;
 
 import edu.cmu.cs.cloudlet.android.R;
+import edu.cmu.cs.cloudlet.android.application.Preview;
 
 import android.app.Activity;
 import android.app.AlertDialog;
@@ -22,6 +23,7 @@ import android.hardware.SensorManager;
 import android.opengl.GLSurfaceView;
 import android.os.Bundle;
 import android.os.Environment;
+import android.util.AttributeSet;
 import android.util.Log;
 import android.view.Display;
 import android.view.View;
@@ -36,41 +38,34 @@ public class GraphicsClientActivity extends Activity implements SensorListener {
 
 	private SensorManager sensor;
 	private GNetworkClient connector;
-//	private TextView textView;
-//	private ScrollView scrollView;
+	private TextView textView;
 
 	protected ArrayList<String> testAccList = new ArrayList<String>();
 	
 	// Visualization
-	ParticleDrawView particleDrawableView;
 	private Graphics graphics;
-	private PointRendererSurfaceView GLView;
-
-	class PointRendererSurfaceView extends GLSurfaceView {
-	    public PointRendererSurfaceView(Context context, Graphics ds){
-	        super(context);        
-	        setRenderer(new PointRenderer(ds));
-	    }
-	}
+	private GLSurfaceView GLView;
 	
 	/** Called when the activity is first created. */
 	@Override
 	public void onCreate(Bundle savedInstanceState) {
 	    super.onCreate(savedInstanceState);
-//	    particleDrawableView = new ParticleDrawView(this);
-//	    setContentView(particleDrawableView);
-	    graphics = new Graphics();
-        GLView = new PointRendererSurfaceView(this, graphics);
-  		setContentView(GLView);
-		sensor = (SensorManager) getSystemService(SENSOR_SERVICE);
 
+		setContentView(R.layout.graphics);
+		this.GLView = (GLSurfaceView) findViewById(R.id.fluidgl_view);
+		this.textView = (TextView) findViewById(R.id.fluid_textView);
+		this.graphics = new Graphics();
+		GLView.setRenderer(new PointRenderer(this.graphics));
+		textView.setText("Initialization");
+		
+		sensor = (SensorManager) getSystemService(SENSOR_SERVICE);
 		this.connector = new GNetworkClient(this, GraphicsClientActivity.this);
 
 		Bundle extras = getIntent().getExtras();
 		this.SERVER_ADDRESS = extras.getString("address");
 		this.SERVER_PORT = extras.getInt("port");
 		
-		//Screen Size for visualization
+		// Screen Size for visualization
 		Display display = getWindowManager().getDefaultDisplay();
 		Point size = new Point();
 		VisualizationStaticInfo.screenWidth = display.getWidth();
@@ -97,12 +92,12 @@ public class GraphicsClientActivity extends Activity implements SensorListener {
 	
 	public void updateData(Object obj) {
 		ByteBuffer buffer = (ByteBuffer)obj;
-//		particleDrawableView.updatePosition(buffer);
 		graphics.updatePosition(buffer);
 	}
 	
 	
 	public void updateLog(String msg){
+		textView.setText(msg);
 		/*
 		this.textView.append(msg);
 		this.scrollView.post(new Runnable()

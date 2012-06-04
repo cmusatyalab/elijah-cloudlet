@@ -5,25 +5,18 @@
     android:orientation="vertical" >
 
     <TextView
+        android:id="@+id/fluid_textView"
         android:layout_width="fill_parent"
         android:layout_height="wrap_content"
-        android:layout_weight="1"
         android:gravity="center_vertical"
         android:text="Latency Test"
-        android:textSize="20sp" />
+        android:textSize="15sp" />
+        
+    <android.opengl.GLSurfaceView
+        android:id="@+id/fluidgl_view"
+        android:layout_width="match_parent"
+        android:layout_height="match_parent"
+        />
 
-
-    <ScrollView
-        android:id="@+id/logScroll"
-        android:layout_width="fill_parent"
-        android:layout_height="wrap_content"
-        android:layout_weight="5" >
-
-        <TextView
-            android:id="@+id/logView"
-            android:layout_width="fill_parent"
-            android:layout_height="fill_parent" >
-        </TextView>
-    </ScrollView>
 
 </LinearLayout>

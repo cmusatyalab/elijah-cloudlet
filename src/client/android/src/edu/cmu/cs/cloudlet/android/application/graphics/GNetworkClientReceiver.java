@@ -41,7 +41,8 @@ public class GNetworkClientReceiver extends Thread {
 	private int messageCounter = 0;
 	protected byte[] recvByte = null;
 	ArrayList<Particle> particleList = new ArrayList<Particle>();
-	private int frameID = 0;
+	private int startFrameID = 0;
+	private int currentFrameID = 0;
 	private int clientID = 0;
 	TreeMap<Integer, Long> receiver_stamps = new TreeMap<Integer, Long>(); 
 	ArrayList<Long> reciver_time_list = new ArrayList<Long>();
@@ -85,12 +86,15 @@ public class GNetworkClientReceiver extends Thread {
 			e1.printStackTrace();
 		}
 		
+		long startTime = System.currentTimeMillis();
 		while(isThreadRun == true){
 			int recvSize = 0;
 			
 			try {
 				recvSize = this.receiveMsg(networkReader);
-				this.notifyStatus(GNetworkClient.PROGRESS_MESSAGE, "Received (accID: " + this.clientID + ", frameID:" + this.frameID + ")" , recvByte);
+				long duration = System.currentTimeMillis()-startTime;
+				String message = "Average " + 1000*(this.getLastFrameID()-this.startFrameID)/duration + " FPS, ACC Rate " + 1000*this.clientID/duration + " FPS";
+				this.notifyStatus(GNetworkClient.PROGRESS_MESSAGE, message, recvByte);
 			} catch (IOException e) {
 				Log.e("krha", e.toString());
 //				this.notifyStatus(GNetworkClient.NETWORK_ERROR, e.toString(), null);
@@ -101,8 +105,10 @@ public class GNetworkClientReceiver extends Thread {
 
 	private int receiveMsg(DataInputStream reader) throws IOException {
 		this.clientID = reader.readInt();
-		this.frameID = reader.readInt();
+		this.currentFrameID = reader.readInt();
 		int retLength = reader.readInt();
+		if(this.startFrameID == 0)
+			this.startFrameID = this.currentFrameID;
 		
 		if(recvByte == null || recvByte.length < retLength){
 			recvByte = new byte[retLength];
@@ -156,6 +162,6 @@ public class GNetworkClientReceiver extends Thread {
 	}
 
 	public int getLastFrameID() {
-		return this.frameID;
+		return this.currentFrameID;
 	}
 }

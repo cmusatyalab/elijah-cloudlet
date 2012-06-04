@@ -41,17 +41,31 @@
             android:name=".CloudletActivity"
             android:label="@string/app_name"
             android:screenOrientation="portrait" >
+        </activity>
+        
+        <activity
+            android:name=".application.graphics.GraphicsActivity"
+            android:label="@string/app_name"
+            android:screenOrientation="portrait" >
             <intent-filter>
                 <action android:name="android.intent.action.MAIN" />
-
                 <category android:name="android.intent.category.LAUNCHER" />
             </intent-filter>
         </activity>
+        
+        <activity
+            android:name=".application.graphics.GraphicsClientActivity"
+            android:screenOrientation="portrait"
+            android:theme="@android:style/Theme.NoTitleBar.Fullscreen" >
+            
+        </activity>
+        
         <activity
             android:name=".application.CloudletCameraActivity"
             android:label="@string/app_name"
             android:screenOrientation="landscape"
             android:theme="@android:style/Theme.NoTitleBar.Fullscreen" >
+            
         </activity>
         <activity
             android:name=".application.face.ui.FaceRecClientCameraPreview"
@@ -66,10 +80,6 @@
             android:theme="@android:style/Theme.NoTitleBar.Fullscreen" >
         </activity>
         <activity android:name=".application.speech.SpeechPreferenceActivity" />
-        <activity
-            android:name=".application.graphics.GraphicsClientActivity"
-            android:screenOrientation="portrait"
-            android:theme="@android:style/Theme.NoTitleBar.Fullscreen" />
         <activity android:name=".application.speech.FileBrowserActivity" />
         <activity android:name=".application.speech.SpeechAndroidBatchClientActivity" />
         <activity android:name=".application.face.batch.FaceAndroidBatchClientActivity" />
