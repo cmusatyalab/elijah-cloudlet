@@ -20,6 +20,7 @@ import java.io.IOException;
 import java.nio.ByteBuffer;
 import java.nio.ByteOrder;
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.SortedMap;
 import java.util.SortedSet;
 import java.util.TreeMap;
@@ -44,9 +45,12 @@ public class GNetworkClientReceiver extends Thread {
 	private int startFrameID = 0;
 	private int currentFrameID = 0;
 	private int clientID = 0;
-	TreeMap<Integer, Long> receiver_stamps = new TreeMap<Integer, Long>(); 
-	ArrayList<Long> reciver_time_list = new ArrayList<Long>();
+	private TreeMap<Integer, Long> receiver_stamps = new TreeMap<Integer, Long>(); 
+	private ArrayList<Long> reciver_time_list = new ArrayList<Long>();
 	private int duplicated_client_id;
+	
+	private HashMap<Integer, Long> latencyRecords = new HashMap<Integer, Long>();
+	private long totalLatency = 0;
 	
 	public GNetworkClientReceiver(DataInputStream dataInputStream, Handler mHandler) {
 		this.networkReader = dataInputStream;
@@ -92,9 +96,19 @@ public class GNetworkClientReceiver extends Thread {
 			
 			try {
 				recvSize = this.receiveMsg(networkReader);
-				long duration = System.currentTimeMillis()-startTime;
-				String message = "Average " + 1000*(this.getLastFrameID()-this.startFrameID)/duration + " FPS, ACC Rate " + 1000*this.clientID/duration + " FPS";
-				this.notifyStatus(GNetworkClient.PROGRESS_MESSAGE, message, recvByte);
+				long currentTime = System.currentTimeMillis();
+				long duration = currentTime - startTime;
+				long latency = currentTime - this.getSentTime(this.clientID);
+				if(latency > 0)
+					totalLatency += latency; 
+				int totalFrameNumber = this.getLastFrameID()-this.startFrameID;
+				if(totalFrameNumber != 0 && latency > 0){
+					String message = "FPS: " + this.roundDigit(1000.0*totalFrameNumber/duration) + 
+							", ACC: " + this.roundDigit(1000.0*this.clientID/duration) + 
+							", Latency: "  + this.roundDigit(1.0*totalLatency/totalFrameNumber) + 
+							" / " + latency; 
+					this.notifyStatus(GNetworkClient.PROGRESS_MESSAGE, message, recvByte);
+				}
 			} catch (IOException e) {
 				Log.e("krha", e.toString());
 //				this.notifyStatus(GNetworkClient.NETWORK_ERROR, e.toString(), null);
@@ -163,5 +177,22 @@ public class GNetworkClientReceiver extends Thread {
 
 	public int getLastFrameID() {
 		return this.currentFrameID;
+	}
+
+	public void recordSentTime(int accIndex, long currentTimeMillis) {
+		this.latencyRecords.put(accIndex, System.currentTimeMillis());		
+	}
+
+	public long getSentTime(int accID){
+		if(this.latencyRecords.containsKey(accID) == false){
+			return Long.MAX_VALUE;
+		}else{
+			long sentTime = this.latencyRecords.remove(accID);
+			return sentTime;			
+		}
+	}
+	
+	public static String roundDigit(double paramFloat) {
+	    return String.format("%.2f", paramFloat);
 	}
 }

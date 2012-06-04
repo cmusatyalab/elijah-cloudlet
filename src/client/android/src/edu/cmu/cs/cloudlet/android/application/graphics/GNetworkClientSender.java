@@ -28,6 +28,8 @@ import java.net.InetSocketAddress;
 import java.net.Socket;
 import java.net.UnknownHostException;
 import java.util.ArrayList;
+import java.util.HashMap;
+import java.util.HashSet;
 import java.util.TreeMap;
 import java.util.Vector;
 
@@ -120,11 +122,13 @@ public class GNetworkClientSender extends Thread {
 				GNetworkMessage msg = commandQueue.remove(0);
 				try {
 					float[] accData = msg.getAccData();
-					networkWriter.writeInt(this.accIndex++);
+					networkWriter.writeInt(this.accIndex);
 					networkWriter.writeInt(this.receiver.getLastFrameID());
 					networkWriter.writeFloat(accData[0]);
 					networkWriter.writeFloat(accData[1]);
 					networkWriter.flush();
+					this.receiver.recordSentTime(this.accIndex, System.currentTimeMillis());
+					this.accIndex++;
 				} catch (IOException e) {
 					e.printStackTrace();
 					break;
@@ -175,5 +179,5 @@ public class GNetworkClientSender extends Thread {
 		}
 		Log.d("krha", "Socket Connection Closed");
 	}
-
+	
 }

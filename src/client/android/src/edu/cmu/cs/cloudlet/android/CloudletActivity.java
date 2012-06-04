@@ -51,11 +51,6 @@ import android.widget.Button;
 
 public class CloudletActivity extends Activity {
 	public static final String SYNTHESIS_SERVER_IP = "cage.coda.cs.cmu.edu"; // Cloudlet
-//	public static String SYNTHESIS_SERVER_IP = "176.34.100.63";	// EU
-//	public static String SYNTHESIS_SERVER_IP = "184.169.142.70";	// West
-//	public static String SYNTHESIS_SERVER_IP = "23.21.103.194";		// East
-																		// IP
-																		// Address
 	public static final int SYNTHESIS_PORT = 8021;					// Cloudlet port for VM Synthesis
 	public static final int ISR_TRIGGER_PORT = 9091;
 	

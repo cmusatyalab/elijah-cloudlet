@@ -12,47 +12,31 @@ import android.util.Log;
 
 public class Graphics {
 
-	protected FloatBuffer vertexBuffer;
-	protected FloatBuffer colorBuffer;
+	protected FloatBuffer tmpVertextBuffer, vertexBuffer;
+	protected FloatBuffer tmpColorBuffer, colorBuffer;
 	protected int particleNumber = 0;
 	private String lock = "lock";
 
 	
 	public Graphics() {
-		/**
-		 * initialize
-		 */
-		// /**
-		// * byte array into bytbe buffer test
-		// */
-		// byte[] barr = toByta(vertices);
-		// ByteBuffer byteBuf = ByteBuffer.wrap(barr);
-		// byteBuf.order(ByteOrder.nativeOrder());
-		// vertexBuffer = byteBuf.asFloatBuffer();
-		// vertexBuffer.position(0);
-
-		ByteBuffer byteBuf = ByteBuffer.allocateDirect(1000);
-		byteBuf.order(ByteOrder.nativeOrder());
-		vertexBuffer = byteBuf.asFloatBuffer();
-		vertexBuffer.position(0);
-
 	}
 
 	public void draw(GL10 gl) {
-		if(this.particleNumber <= 0)
+		if(this.particleNumber <= 0 || this.vertexBuffer == null)
 			return;
 
-		synchronized(lock){
 			gl.glFrontFace(GL10.GL_CW);
 			gl.glPointSize(10);
 			gl.glVertexPointer(2, GL10.GL_FLOAT, 0, vertexBuffer);
 			gl.glColorPointer(4, GL10.GL_FLOAT, 0, colorBuffer);
 			gl.glEnableClientState(GL10.GL_VERTEX_ARRAY);
 			gl.glEnableClientState(GL10.GL_COLOR_ARRAY);
+
+		synchronized(lock){
 			gl.glDrawArrays(GL10.GL_POINTS, 0, this.particleNumber); // draw points
+		}
 			gl.glDisableClientState(GL10.GL_VERTEX_ARRAY);
 			gl.glDisableClientState(GL10.GL_COLOR_ARRAY);
-		}
 	}
 
 	public static byte[] toByta(float data) {
@@ -70,23 +54,22 @@ public class Graphics {
 	}
 
 	public void updatePosition(ByteBuffer buffer) {
-		synchronized (lock) {
 			int particleSize = buffer.limit() / (8 * 2 + 4);
-			if (this.vertexBuffer == null || this.particleNumber < particleSize) {
+			if (this.tmpVertextBuffer == null || this.particleNumber < particleSize) {
 				this.particleNumber = particleSize;
 				
 				// Inint Vertext Buffer
 				int buffer_size = this.particleNumber*(Float.SIZE/8)*2;
 				ByteBuffer tempBuf = ByteBuffer.allocateDirect(this.particleNumber*(Float.SIZE/8)*2);				
 				tempBuf.order(ByteOrder.nativeOrder());
-				vertexBuffer = tempBuf.asFloatBuffer();
-				vertexBuffer.position(0);
+				tmpVertextBuffer = tempBuf.asFloatBuffer();
+				tmpVertextBuffer.position(0);
 				
 				// Inint Vertext Color Buffer
 				tempBuf = ByteBuffer.allocateDirect(this.particleNumber*(Float.SIZE/8)*4);
 				tempBuf.order(ByteOrder.nativeOrder());
-				colorBuffer = tempBuf.asFloatBuffer();
-				colorBuffer.position(0);
+				tmpColorBuffer = tempBuf.asFloatBuffer();
+				tmpColorBuffer.position(0);
 			}
 
 			final int color_offset = particleSize * (8 * 2);
@@ -98,22 +81,26 @@ public class Graphics {
 				double y = (buffer.getDouble(i * 16 + 8) / (VisualizationStaticInfo.containerHeight/2)) -1;
 				int color_int = buffer.getInt(i * 4 + color_offset);
 				byte[] bytes = ByteBuffer.allocate(4).putInt(color_int).array();
-				vertexBuffer.put(i*2, (float)x);
-				vertexBuffer.put(i*2+1, (float)y);
-				colorBuffer.put(i*4,(float)(0x00ff & bytes[0])/255.0f);
-				colorBuffer.put(i*4+1,(float)(0x00ff & bytes[1])/255.0f);
-				colorBuffer.put(i*4+2,(float)(0x00ff & bytes[2])/255.0f);
-				colorBuffer.put(i*4+3,(float)(0x00ff & bytes[3])/255.0f);
+				tmpVertextBuffer.put(i*2, (float)x);
+				tmpVertextBuffer.put(i*2+1, (float)y);
+				tmpColorBuffer.put(i*4,(float)(0x00ff & bytes[0])/255.0f);
+				tmpColorBuffer.put(i*4+1,(float)(0x00ff & bytes[1])/255.0f);
+				tmpColorBuffer.put(i*4+2,(float)(0x00ff & bytes[2])/255.0f);
+				tmpColorBuffer.put(i*4+3,(float)(0x00ff & bytes[3])/255.0f);
 			}
 
-			double x1 = buffer.getDouble(0) * w_scale;
-			double y1 = buffer.getDouble(8) * h_scale;
-			int color = buffer.getInt(color_offset);
-			byte[] bytes = ByteBuffer.allocate(4).putInt(color).array();
+			synchronized (lock) {
+				this.vertexBuffer = this.tmpVertextBuffer.asReadOnlyBuffer();
+				this.colorBuffer = this.tmpColorBuffer.asReadOnlyBuffer();
+			}
+			
+//			double x1 = buffer.getDouble(0) * w_scale;
+//			double y1 = buffer.getDouble(8) * h_scale;
+//			int color = buffer.getInt(color_offset);
+//			byte[] bytes = ByteBuffer.allocate(4).putInt(color).array();
 //			Log.d("krha", "#: " + particleSize + ", position : (" + x1 + ", " + y1 + "), red="
 //					+ (float)(0x00ff & bytes[0])/255.0f + " g=" + (float)(0x00ff & bytes[1])/255.0f + " b=" + (float)(0x00ff & bytes[2])/255.0f
 //					+ " alpah=" + (float)(0x00ff & bytes[3])/255.0f);
-		}
 
 		try {
 			Thread.sleep(1);
