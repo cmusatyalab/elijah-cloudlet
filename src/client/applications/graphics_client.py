@@ -78,6 +78,7 @@ def recv_data(sock, last_client_id):
                 print "container size : (%d %d)" % (recv_data[0], recv_data[1])
                 break;
 
+        start_time = time.time()
         while True:
             data = sock.recv(4)
             client_id = struct.unpack("!I", data)[0]
@@ -85,8 +86,10 @@ def recv_data(sock, last_client_id):
             server_token_id = struct.unpack("!I", data)[0]
             data = sock.recv(4)
             ret_size = struct.unpack("!I", data)[0]
-            #print "Client ID : %d, Recv size : %d" % (server_token_id, ret_size)
+            #print "Client ID : %d, Server_token: %d, Recv size : %d" % (client_id, server_token_id, ret_size)
             token_id = server_token_id
+            if server_token_id%100 == 0:
+                print "id: %d, FPS: %4.2f" % (token_id, token_id/(time.time()-start_time))
             
             if not ret_size == 0:
                 ret_data = recv_all(sock, ret_size)
@@ -138,10 +141,10 @@ def send_request(sock, input_data):
                 y_acc = float(input_data[index].split("  ")[2])
 
                 sender_time_stamps[index] = time.time()*1000
-                sock.send(struct.pack("!iiff", index, token_id, x_acc, y_acc))
+                sock.send(struct.pack("!IIff", index, token_id, x_acc, y_acc))
                 last_sent_time = time.time()
                 index += 1
-                print "[%03d/%d] Sent ACK(%d), acc (%f, %f)" % (index, loop_length, token_id, x_acc, y_acc)
+                #print "[%03d/%d] Sent ACK(%d), acc (%f, %f)" % (index, loop_length, token_id, x_acc, y_acc)
     sock.close()
 
 

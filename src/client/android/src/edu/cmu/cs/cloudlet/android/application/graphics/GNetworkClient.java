@@ -54,6 +54,7 @@ public class GNetworkClient {
 
 //	private ArrayList<String> mAcclist;	
 	protected long prevDuration = Long.MAX_VALUE;
+	private int messageUpdateRateCount = 0;
 	
 
 	public GNetworkClient(GraphicsClientActivity activity, Context context) {
@@ -114,8 +115,10 @@ public class GNetworkClient {
 				showAlertDialog(message);
 			} else if (msg.what == GNetworkClient.PROGRESS_MESSAGE) {
 				Bundle data = msg.getData();
-				activity.updateData(msg.obj);
-				activity.updateLog(data.getString("message") + "\n");
+				activity.updateData(msg.obj);				
+				if(messageUpdateRateCount++ % 10 ==0){
+					activity.updateLog(data.getString("message"));
+				}	
 			} else if (msg.what == GNetworkClient.FINISH_MESSAGE){
 				Bundle data = msg.getData();
 //				activity.updateLog(data.getString("message") + "\n");

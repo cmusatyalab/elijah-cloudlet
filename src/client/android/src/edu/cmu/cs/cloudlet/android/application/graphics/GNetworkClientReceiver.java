@@ -102,7 +102,7 @@ public class GNetworkClientReceiver extends Thread {
 				if(latency > 0)
 					totalLatency += latency; 
 				int totalFrameNumber = this.getLastFrameID()-this.startFrameID;
-				if(totalFrameNumber != 0 && latency > 0){
+				if(totalFrameNumber > 0 && latency > 0){
 					String message = "FPS: " + this.roundDigit(1000.0*totalFrameNumber/duration) + 
 							", ACC: " + this.roundDigit(1000.0*this.clientID/duration) + 
 							", Latency: "  + this.roundDigit(1.0*totalLatency/totalFrameNumber) + 
