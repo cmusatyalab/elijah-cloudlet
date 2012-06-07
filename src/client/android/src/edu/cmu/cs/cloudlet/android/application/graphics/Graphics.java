@@ -3,8 +3,6 @@ package edu.cmu.cs.cloudlet.android.application.graphics;
 import java.nio.ByteBuffer;
 import java.nio.ByteOrder;
 import java.nio.FloatBuffer;
-import java.nio.IntBuffer;
-import java.util.Random;
 
 import javax.microedition.khronos.opengles.GL10;
 
@@ -12,116 +10,136 @@ import android.util.Log;
 
 public class Graphics {
 
-	protected FloatBuffer tmpVertextBuffer, vertexBuffer;
+	protected FloatBuffer tmpVertexBuffer, vertexBuffer;
 	protected FloatBuffer tmpColorBuffer, colorBuffer;
+	//NEW
+	protected ByteBuffer tmpByteColorBuffer, byteColorBuffer;
+	private byte[] byteBuf;
+	private float[] vertextFloats;
+	private byte[] colorBytes;
+	private boolean is3D;
+	
 	protected int particleNumber = 0;
 	private String lock = "lock";
-
 	
-	public Graphics() {
+	public Graphics(boolean is3D) {
+		this.is3D = is3D;
 	}
-
+	
+	public boolean is3D(){
+		return this.is3D;
+	}
+	
 	public void draw(GL10 gl) {
 		if(this.particleNumber <= 0 || this.vertexBuffer == null)
 			return;
-
-			gl.glFrontFace(GL10.GL_CW);
-			gl.glPointSize(10);
-			gl.glVertexPointer(2, GL10.GL_FLOAT, 0, vertexBuffer);
-			gl.glColorPointer(4, GL10.GL_FLOAT, 0, colorBuffer);
-			gl.glEnableClientState(GL10.GL_VERTEX_ARRAY);
-			gl.glEnableClientState(GL10.GL_COLOR_ARRAY);
-
-		synchronized(lock){
-			gl.glDrawArrays(GL10.GL_POINTS, 0, this.particleNumber); // draw points
+		//DATA RECEIVED
+		gl.glFrontFace(GL10.GL_CW);											//set face direction
+		gl.glPointSize(5);													//set point size
+		if(is3D)															//assign vertex buffer
+			gl.glVertexPointer(3, GL10.GL_FLOAT, 0, vertexBuffer);	
+		else  	
+			gl.glVertexPointer(2, GL10.GL_FLOAT, 0, vertexBuffer);	
+		gl.glColorPointer(4, GL10.GL_UNSIGNED_BYTE, 0, byteColorBuffer);	//assign color buffer
+		gl.glEnableClientState(GL10.GL_VERTEX_ARRAY);						//enable arrays
+		gl.glEnableClientState(GL10.GL_COLOR_ARRAY);
+		
+		/************** BAD HARDCODED BOO **************/
+		if(is3D){
+//			synchronized(lock){
+				gl.glDrawArrays(GL10.GL_POINTS, 0, this.particleNumber * num_z); 		//draw points
+//			}
 		}
-			gl.glDisableClientState(GL10.GL_VERTEX_ARRAY);
-			gl.glDisableClientState(GL10.GL_COLOR_ARRAY);
+		
+		else{
+//			synchronized(lock){
+				gl.glDrawArrays(GL10.GL_POINTS, 0, this.particleNumber); 		//draw points
+//			}
+		}
+		/**********************************************/
+		gl.glDisableClientState(GL10.GL_VERTEX_ARRAY);						//disable arrays
+		gl.glDisableClientState(GL10.GL_COLOR_ARRAY);
+
 	}
 
-	public static byte[] toByta(float data) {
-		return toByta(Float.floatToRawIntBits(data));
-	}
-
-	public static byte[] toByta(float[] data) {
-		if (data == null)
-			return null;
-		// ----------
-		byte[] byts = new byte[data.length * 4];
-		for (int i = 0; i < data.length; i++)
-			System.arraycopy(toByta(data[i]), 0, byts, i * 4, 4);
-		return byts;
-	}
-
+	/** CONTROL EXECUTION **/
+	final int frac = 1;
+	final int num_z = 1;
+	/***********************/
+	
+	
 	public void updatePosition(ByteBuffer buffer) {
-			int particleSize = buffer.limit() / (8 * 2 + 4);
-			if (this.tmpVertextBuffer == null || this.particleNumber < particleSize) {
-				this.particleNumber = particleSize;
-				
-				// Inint Vertext Buffer
-				int buffer_size = this.particleNumber*(Float.SIZE/8)*2;
-				ByteBuffer tempBuf = ByteBuffer.allocateDirect(this.particleNumber*(Float.SIZE/8)*2);				
-				tempBuf.order(ByteOrder.nativeOrder());
-				tmpVertextBuffer = tempBuf.asFloatBuffer();
-				tmpVertextBuffer.position(0);
-				
-				// Inint Vertext Color Buffer
-				tempBuf = ByteBuffer.allocateDirect(this.particleNumber*(Float.SIZE/8)*4);
-				tempBuf.order(ByteOrder.nativeOrder());
-				tmpColorBuffer = tempBuf.asFloatBuffer();
-				tmpColorBuffer.position(0);
-			}
-
-			final int color_offset = particleSize * (8 * 2);
-			final double w_scale = (1.0 * VisualizationStaticInfo.containerWidth);
-			final double h_scale = (1.0 * VisualizationStaticInfo.containerHeight);
-
-			for (int i = 0; i < this.particleNumber; i++) {
-				double x = (buffer.getDouble(i * 16) / (VisualizationStaticInfo.containerWidth/2)) -1;
-				double y = (buffer.getDouble(i * 16 + 8) / (VisualizationStaticInfo.containerHeight/2)) -1;
-				int color_int = buffer.getInt(i * 4 + color_offset);
-				byte[] bytes = ByteBuffer.allocate(4).putInt(color_int).array();
-				tmpVertextBuffer.put(i*2, (float)x);
-				tmpVertextBuffer.put(i*2+1, (float)y);
-				tmpColorBuffer.put(i*4,(float)(0x00ff & bytes[0])/255.0f);
-				tmpColorBuffer.put(i*4+1,(float)(0x00ff & bytes[1])/255.0f);
-				tmpColorBuffer.put(i*4+2,(float)(0x00ff & bytes[2])/255.0f);
-				tmpColorBuffer.put(i*4+3,(float)(0x00ff & bytes[3])/255.0f);
-			}
-
-			synchronized (lock) {
-				this.vertexBuffer = this.tmpVertextBuffer.asReadOnlyBuffer();
-				this.colorBuffer = this.tmpColorBuffer.asReadOnlyBuffer();
-			}
+		/**
+		 * NOTE: THE FOLLOWING CODE HAS A HARD-CODED THIRD DIMENSION CONSISTING
+		 * OF X,Y POINTS EXTENDED BY 100 POINTS IN THE Z-DIRECTION. IT STILL
+		 * BASES THE RENDERING ON ONLY (X,Y) POINTS RECEIVED FROM THE SERVER
+		 * 
+		 * COLORS FOR EACH POINT ARE RECEIVED IN SETS OF 4 CONSECUTIVE BYTES,
+		 * EACH REPRESENTING R,G,B,A VALUES RESPECTIVELY. COLOR INFORMATION IS
+		 * RECEIVED AT THE END OF VERTEX INFORMATION (NOT MIXED TOGETHER)
+		 */
+		//int numCoords = is3D ? 3 : 2;
+		int numCoords = 2;
+	 	//particleSize is the number of particles (size of double * 2 coordinates + 4 byte int for color)
+		int particleSize = buffer.limit() / (4 * numCoords + 4);
+		
+		final int color_offset = particleSize * (4 * numCoords);
+		
+		
+		// Initialize (one time only)
+		if ((this.tmpVertexBuffer == null && this.tmpColorBuffer == null) 
+				|| this.particleNumber < particleSize) {
+			this.particleNumber = particleSize;
 			
-//			double x1 = buffer.getDouble(0) * w_scale;
-//			double y1 = buffer.getDouble(8) * h_scale;
-//			int color = buffer.getInt(color_offset);
-//			byte[] bytes = ByteBuffer.allocate(4).putInt(color).array();
-//			Log.d("krha", "#: " + particleSize + ", position : (" + x1 + ", " + y1 + "), red="
-//					+ (float)(0x00ff & bytes[0])/255.0f + " g=" + (float)(0x00ff & bytes[1])/255.0f + " b=" + (float)(0x00ff & bytes[2])/255.0f
-//					+ " alpah=" + (float)(0x00ff & bytes[3])/255.0f);
-
+			// Init Vertex Buffer
+			// int buffer_size = this.particleNumber*(Float.SIZE/8)*numCoords;
+			int buffer_size = this.particleNumber*(Float.SIZE/8)*2;
+			
+			/*******************************/
+			buffer_size *= num_z;
+			/*******************************/
+			ByteBuffer tempBuf = ByteBuffer.allocateDirect(buffer_size);				
+			tempBuf.order(ByteOrder.nativeOrder());
+			tmpVertexBuffer = tempBuf.asFloatBuffer();
+			tmpVertexBuffer.position(0);
+			
+			buffer_size = is3D ? num_z * this.particleNumber * 4 
+					: this.particleNumber * 4;
+			tmpByteColorBuffer = ByteBuffer.allocateDirect(buffer_size);
+			tmpByteColorBuffer.order(ByteOrder.nativeOrder());
+		}
+		
+		// VERTEX DATA
+		ByteBuffer tmpByteBuffer = ByteBuffer.wrap(buffer.array(), 0, color_offset);
+		tmpByteBuffer.order(ByteOrder.nativeOrder());
+		tmpVertexBuffer = tmpByteBuffer.asFloatBuffer();
+		tmpVertexBuffer.position(0);
+		float val = tmpVertexBuffer.get(0);
+		
+		// EXTRACT COLOR DATA
+		byteBuf = buffer.array(); 
+		colorBytes = new byte[buffer.limit() - color_offset];
+		System.arraycopy(byteBuf, color_offset, colorBytes, 0, buffer.limit() - color_offset);
+		
+		//Reverses every 4 consecutive bytes
+		for(int i = 0; i < colorBytes.length; i += 4){
+			for(int j = 0; j < 2; j++){
+				byte tmp = colorBytes[i + j];
+				colorBytes[i + j] = colorBytes[i + 3 - j];
+				colorBytes[i + 3 - j] = tmp;
+			}
+		}
+		
+		tmpByteColorBuffer.put(colorBytes);
+		tmpByteColorBuffer.position(0);
+		
+		this.vertexBuffer = this.tmpVertexBuffer.asReadOnlyBuffer();
+		this.byteColorBuffer = this.tmpByteColorBuffer.asReadOnlyBuffer();
+			
 		try {
 			Thread.sleep(1);
 		} catch (InterruptedException e) {
 			e.printStackTrace();
 		}
-	}
-	
-
-	float[] colorRamp(float t) {
-		final int ncolors = 6;
-		float c[][] = { { 1.0f, 0.0f, 0.0f, }, { 1.0f, 0.5f, 0.0f, }, { 1.0f, 1.0f, 0.0f, }, { 0.0f, 1.0f, 0.0f, },
-				{ 0.0f, 1.0f, 1.0f, }, { 0.0f, 0.0f, 1.0f, }, };
-		t = t * (ncolors - 1);
-		int i = (int) t;
-		float u = (float) (t - Math.floor(t));
-		float[] rgba = { 1.f, 1.f, 1.f, 1.f };
-		/*
-		 * rgba[0] = lerp(c[i][0], c[i+1][0], u); rgba[1] = lerp(c[i][1],
-		 * c[i+1][1], u); rgba[2] = lerp(c[i][2], c[i+1][2], u); rgba[3] = 1.f;
-		 */
-		return rgba;
 	}
 }

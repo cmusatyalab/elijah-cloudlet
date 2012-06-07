@@ -11,6 +11,8 @@ import java.util.ArrayList;
 import java.util.Timer;
 import java.util.TimerTask;
 
+import javax.microedition.khronos.opengles.GL10;
+
 import edu.cmu.cs.cloudlet.android.R;
 import edu.cmu.cs.cloudlet.android.application.Preview;
 
@@ -26,6 +28,7 @@ import android.os.Environment;
 import android.util.AttributeSet;
 import android.util.Log;
 import android.view.Display;
+import android.view.MotionEvent;
 import android.view.View;
 import android.widget.ScrollView;
 import android.widget.TextView;
@@ -45,6 +48,8 @@ public class GraphicsClientActivity extends Activity implements SensorListener {
 	// Visualization
 	private Graphics graphics;
 	private GLSurfaceView GLView;
+	private PointRenderer pointRenderer;
+	
 	
 	/** Called when the activity is first created. */
 	@Override
@@ -54,8 +59,19 @@ public class GraphicsClientActivity extends Activity implements SensorListener {
 		setContentView(R.layout.graphics);
 		this.GLView = (GLSurfaceView) findViewById(R.id.fluidgl_view);
 		this.textView = (TextView) findViewById(R.id.fluid_textView);
-		this.graphics = new Graphics();
-		GLView.setRenderer(new PointRenderer(this.graphics));
+		
+		/** INIT GRAPHICS **/
+		//Graphics(true) == 3D, Graphics(false) == 2D
+		this.graphics = new Graphics(false);	
+		pointRenderer = new PointRenderer(this.graphics);
+		GLView.setRenderer(pointRenderer);
+		//RENDER ONLY WHEN THE SCENE HAS CHANGED
+		GLView.setRenderMode(GLSurfaceView.RENDERMODE_WHEN_DIRTY);
+		/***************ALLOW TOUCH COMMANDS **************/
+		GLView.requestFocus();
+		GLView.setFocusableInTouchMode(true);
+		/*******************/
+		
 		textView.setText("Initialization");
 		
 		sensor = (SensorManager) getSystemService(SENSOR_SERVICE);
@@ -67,7 +83,6 @@ public class GraphicsClientActivity extends Activity implements SensorListener {
 		
 		// Screen Size for visualization
 		Display display = getWindowManager().getDefaultDisplay();
-		Point size = new Point();
 		VisualizationStaticInfo.screenWidth = display.getWidth();
 		VisualizationStaticInfo.screenHeight = display.getHeight();
 		
@@ -90,9 +105,15 @@ public class GraphicsClientActivity extends Activity implements SensorListener {
 				.setNegativeButton("Confirm", null).show();
 	}
 	
+	private int counter = 0;
+	
 	public void updateData(Object obj) {
 		ByteBuffer buffer = (ByteBuffer)obj;
+		
 		graphics.updatePosition(buffer);
+		
+		//TELL THE RENDERER TO REDRAW THE SCENE
+		GLView.requestRender();
 	}
 	
 	
@@ -146,6 +167,72 @@ public class GraphicsClientActivity extends Activity implements SensorListener {
         this.sensor.unregisterListener(this);
     }
 
+	
+	
+	/**********************************************************************
+	 * 							SCREEN ROTATION 						  *
+	 * ****************************************************************** */
+	
+    /* Rotation values */
+	private float xrot = 19.0f;					//X Rotation
+	private float yrot = -64.0f;					//Y Rotation
 
+	private float z = -5.0f;	
+    /*
+	 * These variables store the previous X and Y
+	 * values as well as a fix touch scale factor.
+	 * These are necessary for the rotation transformation
+	 * added to this lesson, based on the screen touches. ( NEW )
+	 */
+	private float oldX;
+    private float oldY;
+	private final float TOUCH_SCALE = 0.2f;		//Proved to be good for normal rotation ( NEW )
+	
+    /**
+	 * Override the touch screen listener.
+	 * 
+	 * React to moves and presses on the touchscreen.
+	 */
+	public boolean onTouchEvent(MotionEvent event) {
+		//
+		float x = event.getX();
+        float y = event.getY();
+        
+        //If a touch is moved on the screen
+        if(event.getAction() == MotionEvent.ACTION_MOVE) {
+        	//Calculate the change
+        	float dx = x - oldX;
+	        float dy = y - oldY;
+        	//Define an upper area of 10% on the screen
+        	int upperArea = VisualizationStaticInfo.screenHeight / 10;
+        	
+        	//Zoom in/out if the touch move has been made in the upper
+        	if(y < upperArea) {
+        		z -= dx * TOUCH_SCALE / 4;
+        	
+        	//Rotate around the axis otherwise
+        	} else {        		
+    	        xrot += dy * TOUCH_SCALE;
+    	        yrot += dx * TOUCH_SCALE;
+        	}        
+        	
+        	//send changed data
+        	pointRenderer.xrot = xrot;
+        	pointRenderer.yrot = yrot;
+        	pointRenderer.z = z;
+        	
+        	GLView.requestRender();
+        }
+        
+        //Remember the values
+        oldX = x;
+        oldY = y;
+        
+        //We handled the event
+		return true;
+	}
+	
+	
+	
 	
 }
