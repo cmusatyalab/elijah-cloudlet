@@ -62,7 +62,7 @@ public class GraphicsClientActivity extends Activity implements SensorListener {
 		
 		/** INIT GRAPHICS **/
 		//Graphics(true) == 3D, Graphics(false) == 2D
-		this.graphics = new Graphics(false);	
+		this.graphics = new Graphics();	
 		pointRenderer = new PointRenderer(this.graphics);
 		GLView.setRenderer(pointRenderer);
 		//RENDER ONLY WHEN THE SCENE HAS CHANGED
@@ -217,9 +217,9 @@ public class GraphicsClientActivity extends Activity implements SensorListener {
         	}        
         	
         	//send changed data
-        	pointRenderer.xrot = xrot;
-        	pointRenderer.yrot = yrot;
-        	pointRenderer.z = z;
+//        	pointRenderer.xrot = xrot;
+//        	pointRenderer.yrot = yrot;
+//        	pointRenderer.z = z;
         	
         	GLView.requestRender();
         }
