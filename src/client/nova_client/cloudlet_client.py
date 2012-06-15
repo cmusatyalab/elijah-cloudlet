@@ -21,6 +21,7 @@ import httplib
 import json
 import sys
 import urllib
+import base64
 
 
 def get_list(server_address, token, end_point, request_list):
@@ -28,19 +29,71 @@ def get_list(server_address, token, end_point, request_list):
         sys.stderr.write("Error, Cannot support listing for %s\n" % request_list)
         sys.exit(1)
 
-    url = end_point[1]
     params = urllib.urlencode({})
     headers = { "X-Auth-Token":token, "Content-type":"application/json" }
     end_string = "%s/%s" % (end_point[2], request_list)
 
     # HTTP response
-    conn = httplib.HTTPConnection(url)
+    conn = httplib.HTTPConnection(end_point[1])
     conn.request("GET", end_string, params, headers)
     response = conn.getresponse()
     data = response.read()
     dd = json.loads(data)
-    print json.dumps(dd, indent=2)
+    #print json.dumps(dd, indent=2)
     conn.close()
+    return dd[request_list]
+
+
+def request_new_server(server_address, token, end_point, server_name):
+    # basic data
+    image_ref = get_ref(server_address, token, end_point, "images", "cirros-0.3-x86_64")
+    flavor_ref = get_ref(server_address, token, end_point, "flavors", "m1.tiny")
+    # other data
+    sMetadata = {}
+    personality_path = ""
+    personality_contents = ""
+    personality = [ { "path":personality_path, "contents":base64.b64encode( personality_contents ) } ]
+
+    s = { "server": { "name": server_name, "imageRef": image_ref, "flavorRef": flavor_ref, "metadata": sMetadata, "personality": personality } }
+    params = json.dumps(s)
+    headers = { "X-Auth-Token":token, "Content-type":"application/json" }
+    print json.dumps(s, indent=4)
+
+    conn = httplib.HTTPConnection(end_point[1])
+    conn.request("POST", "%s/servers" % end_point[2], params, headers)
+    print "request new server: %s/servers" % (end_point[2])
+    response = conn.getresponse()
+    data = response.read()
+    dd = json.loads(data)
+    conn.close()
+
+    print json.dumps(dd, indent=2)
+
+
+def request_start_stop(server_address, token, end_point, server_name, is_request_start):
+    server_list = get_list(server_address, token, end_point, "servers")
+    server_id = ''
+    for server in server_list:
+        if server['name'] == server_name:
+            server_id = server['id']
+            print "server id : " + server_id
+    if not server_id:
+        return False, "no such VM named : %s" % server_name
+
+    if is_request_start:
+        params = json.dumps({"os-start":"null"})
+    else:
+        params = json.dumps({"os-stop":"null"})
+    headers = { "X-Auth-Token":token, "Content-type":"application/json" }
+
+    conn = httplib.HTTPConnection(end_point[1])
+    command = "%s/servers/%s/action" % (end_point[2], server_id)
+    conn.request("POST", command, params, headers)
+    response = conn.getresponse()
+    data = response.read()
+    conn.close()
+    print data
+    #print json.dumps(dd, indent=2)
 
 
 def get_token(server_address, user, password, tenant_name):
@@ -96,17 +149,49 @@ def process_command_line(argv):
     return settings, args
 
 
+def get_extension(server_address, token, end_point, extension_name):
+    ext_list = get_list(server_address, token, end_point, "extensions")
+
+    for ext in ext_list:
+        if ext['name'] == extension_name:
+            return ext
+
+
+def get_ref(server_address, token, end_point, ref_string, name):
+    support_ref_string = ("images", "flavors")
+    if not ref_string in support_ref_string:
+        sys.stderr.write("We support only %s, but requested reference is %s", " ".join(support_ref_string), ref_string)
+        sys.exit(1)
+
+    params = urllib.urlencode({})
+    headers = { "X-Auth-Token":token, "Content-type":"application/json" }
+    conn = httplib.HTTPConnection(end_point[1])
+    conn.request("GET", "%s/%s" % (end_point[2], ref_string), params, headers)
+    print "requesting %s/%s" % (end_point[2], ref_string)
+    
+    # HTTP response
+    response = conn.getresponse()
+    data = response.read()
+    dd = json.loads(data)
+    conn.close()
+
+    # Server image URL
+    n = len(dd[ref_string])
+    for i in range(n):
+        if dd[ref_string][i]['name'] == name:
+            image_ref = dd[ref_string][i]["links"][0]["href"]
+            return image_ref
+
+
 def main(argv=None):
     global LOCAL_IPADDRESS
     settings, args = process_command_line(sys.argv[1:])
     print "Connecting to %s for tenant %s" % (settings.server_address, settings.tenant_name)
     token, endpoint = get_token(settings.server_address, settings.user_name, settings.password, settings.tenant_name)
-    print "Your token = %s" % token
-    get_list(settings.server_address, token, urlparse(endpoint), "images")
-    get_list(settings.server_address, token, urlparse(endpoint), "flavors")
-    get_list(settings.server_address, token, urlparse(endpoint), "extensions")
-    get_list(settings.server_address, token, urlparse(endpoint), "servers")
-    get_list(settings.server_address, token, urlparse(endpoint), "cloudlets")
+    #ext_info = get_extension(settings.server_address, token, urlparse(endpoint), "ServerStartStop")
+    #print ext_info
+    #request_new_server(settings.server_address, token, urlparse(endpoint), "test")
+    request_start_stop(settings.server_address, token, urlparse(endpoint), "run1", is_request_start=False)
 
 
 if __name__ == "__main__":
