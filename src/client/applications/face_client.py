@@ -98,7 +98,7 @@ def send_request(address, port, inputs):
 def face_request(sock, data):
     if len(data) > 100*1000: # 100k
         sys.stderr.write("Error, Server cannot support image bigger than 100KB\n")
-        return 'Server cannot support > 100 KB iamges'
+        return 'Server cannot support > 100 KB iamges', (0,0,0,0)
 
     # send
     sock.sendall(struct.pack("!I", MESSAGE_TYPE_JPEG_IMAGE))
@@ -108,23 +108,25 @@ def face_request(sock, data):
     #recv
     message_type = struct.unpack("!I", sock.recv(4))[0]
     message_size = struct.unpack("!I", sock.recv(4))[0]
-    recvedData = struct.unpack("!IIIIIIIII", sock.recv(4*9))
-    #detectTimeinMs = struct.unpack("!I", sock.recv(4(8))
-    #objectsFound = struct.unpack("!I", sock.recv(4))[0]
-    #drawRect = struct.unpack("!I", sock.recv(4))[0]
-    #havePerson = struct.unpack("!I", sock.recv(4))[0]
-    #rect_x = struct.unpack("!I", sock.recv(4))[0]
-    #rect_y = struct.unpack("!I", sock.recv(4))[0]
-    #rect_width = struct.unpack("!I", sock.recv(4))[0]
-    #rect_height = struct.unpack("!I", sock.recv(4))[0]
-    #confidence = struct.unpack("!I", sock.recv(4))[0]
+    recvedData = struct.unpack("!IIIIIIIIf", sock.recv(4*9))
+    detectTimeinMs = recvedData[0]
+    objectsFound = recvedData[1]
+    drawRect = recvedData[2]
+    havePerson = recvedData[3]
+    rect_x = recvedData[4]
+    rect_y = recvedData[5]
+    rect_width = recvedData[6]
+    rect_height = recvedData[7]
+    #confidence = recvedData[8]
     
+    #print "detectTime(%d), objectFound(%d), drawRect(%d), havePerson(%d)" % \
+    #        (detectTimeinMs, objectsFound, drawRect, havePerson)
     found_name = ''
     recv_size = message_size-36 # 36=9*4
     if not recv_size == 0:
         found_name = sock.recv(recv_size)
     
-    return found_name 
+    return str(found_name), (rect_x, rect_y, rect_width, rect_height)
 
 
 def main(argv=None):
