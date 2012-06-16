@@ -151,6 +151,7 @@ def process_command_line(argv):
 
 def get_extension(server_address, token, end_point, extension_name):
     ext_list = get_list(server_address, token, end_point, "extensions")
+    print json.dumps(ext_list, indent=4)
 
     for ext in ext_list:
         if ext['name'] == extension_name:
@@ -188,10 +189,10 @@ def main(argv=None):
     settings, args = process_command_line(sys.argv[1:])
     print "Connecting to %s for tenant %s" % (settings.server_address, settings.tenant_name)
     token, endpoint = get_token(settings.server_address, settings.user_name, settings.password, settings.tenant_name)
-    #ext_info = get_extension(settings.server_address, token, urlparse(endpoint), "ServerStartStop")
-    #print ext_info
+    ext_info = get_extension(settings.server_address, token, urlparse(endpoint), "Cloudlet")
+    print ext_info
     #request_new_server(settings.server_address, token, urlparse(endpoint), "test")
-    request_start_stop(settings.server_address, token, urlparse(endpoint), "run1", is_request_start=False)
+    #request_start_stop(settings.server_address, token, urlparse(endpoint), "run1", is_request_start=False)
 
 
 if __name__ == "__main__":
