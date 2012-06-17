@@ -18,12 +18,19 @@
 import libvirt
 import sys
 import os
-import tempfile
 import subprocess
 from xml.dom.minidom import parse
 from xml.dom.minidom import parseString
 from uuid import uuid4
+from tempfile import NamedTemporaryFile
+from datetime import datetime
+from time import time
+
 from vmnext import _QemuMemoryHeader
+from tool import comp_lzma
+from tool import decomp_lzma
+from tool import diff_files
+from tool import merge_files
 
 # default XML for Base VM
 BaseVM_xml = "./config/cloudlet_base.xml"
@@ -65,7 +72,7 @@ def create_baseVM(vm_name, disk_image_path):
     disk_elements = dom.getElementsByTagName('disk')
     uuid_elements = dom.getElementsByTagName('uuid')
     if not name_elements or not disk_elements or not uuid_elements:
-        raise CloudletGenerationError("Malfomed XML input: %s", os.path.abspath(BASEVM_xml))
+        raise CloudletGenerationError("Malfomed XML input: %s", os.path.abspath(BaseVM_xml))
     name_elements[0].firstChild.nodeValue = vm_name
     uuid_elements[0].firstChild.nodeValue = uuid4()
     disk_source_element = disk_elements[0].getElementsByTagName('source')[0] 
@@ -87,7 +94,7 @@ def run_vm(libvirt_xml, **kwargs):
     # vnc_disable       :   show vnc console
     # wait_vnc          :   wait until vnc finishes if vnc_enabled
 
-    conn = libvirt.open("qemu:///system")
+    conn = libvirt.open("qemu:///session")
     # TODO: get right parameter for second argument
     machine = conn.createXML(libvirt_xml, 0)
 
@@ -127,24 +134,25 @@ def run_snapshot(disk_image, mem_snapshot, **kwargs):
     hdr = _QemuMemoryHeader(open(mem_snapshot))
     domxml = parseString(hdr.xml)
     disk_elements = domxml.getElementsByTagName('disk')
-    uuid = domxml.getElementsByTagName('disk')
+    uuid_elements = domxml.getElementsByTagName('uuid')
     if not disk_elements:
         raise CloudletGenerationError("Malfomed XML embedded: %s", os.path.abspath(mem_snapshot))
     disk_source_element = disk_elements[0].getElementsByTagName('source')[0] 
     disk_source_element.setAttribute("file", os.path.abspath(disk_image))
-    print "[INFO] XML modified to new disk path"
+    uuid = str(uuid_elements[0].firstChild.nodeValue)
+    print "[INFO] XML modified to new disk path (%s)" % (uuid)
     print domxml.toxml()
 
     # resume
-    conn = libvirt.open("qemu:///system")
+    conn = libvirt.open("qemu:///session")
     print "[INFO] restoring VM..."
     try:
-        conn.restoreFlag(mem_snapshot, domxml.toxml(), libvirt.VIR_DOMAIN_SAVE_RUNNIGN)
+        conn.restoreFlags(mem_snapshot, domxml.toxml(), libvirt.VIR_DOMAIN_SAVE_RUNNING)
     except libvirt.libvirtError, e:
         raise CloudletGenerationError(str(e))
 
     # get machine
-    machine = libvirt.lookupByUUID(uuid)
+    machine = conn.lookupByUUIDString(uuid)
 
     # Run VNC and wait until user finishes working
     if kwargs.get('vnc_disable'):
@@ -154,6 +162,59 @@ def run_snapshot(disk_image, mem_snapshot, **kwargs):
         print "[INFO] waiting for finishing VNC interaction"
         vnc_process.wait()
     return machine
+
+
+def create_overlay(base_image, base_mem):
+    #check sanity
+    if not os.path.exists(base_image) or not os.path.exists(base_mem):
+        raise CloudletGenerationError("Cannot find base path at \n%s, \n%s" % (base_image, base_mem))
+
+    #make modified disk
+    modified_disk = NamedTemporaryFile(prefix="cloudlet-disk-", delete=False)
+    modified_mem = NamedTemporaryFile(prefix="cloudlet-mem-", delete=False)
+    modified_disk.close()
+    modified_mem.close()
+    copy_disk(base_image, modified_disk.name)
+
+    #filename for overlay VM
+    image_name = os.path.basename(base_image).split(".")[0]
+    overlay_diskpath = os.path.join(os.path.dirname(base_image), image_name+".overlay.disk")
+    overlay_mempath = os.path.join(os.path.dirname(base_mem), image_name+".overlay.mem")
+
+    #resume with modified disk
+    machine = run_snapshot(modified_disk.name, base_mem, wait_vnc=True)
+    #generate modified memory snapshot
+    save_mem_snapshot(machine, modified_mem.name)
+
+    output_list = []
+    output_list.append((base_image, modified_disk.name, overlay_diskpath))
+    output_list.append((base_mem, modified_mem.name, overlay_mempath))
+
+    # xdelta and compression
+    ret_files = []
+    for (base, modified, overlay) in output_list:
+        start_time = time()
+
+        # xdelta
+        ret = diff_files(base, modified, overlay)
+        print '[TIME] time for creating overlay : ', str(time()-start_time)
+        print '[INFO] (%d)-(%d)=(%d): ' % (os.path.getsize(base), os.path.getsize(modified), os.path.getsize(overlay))
+        if ret == None:
+            print >> sys.stderr, '[ERROR] cannot create overlay ' + str(overlay)
+            if os.path.exists(modified):
+                os.remove(modified)
+            continue
+        
+        # compression
+        comp = overlay + '.lzma'
+        comp, time1 = comp_lzma(overlay, comp)
+        ret_files.append(comp)
+
+        # remove temporary files
+        os.remove(modified)
+        os.remove(overlay)
+
+    return ret_files
 
 
 def main(argv):
@@ -166,11 +227,18 @@ def main(argv):
     print "Mem: %s" % mem_path
 
     # run snapshot
-    raw_input("Will resume VM? ")
-    disk = '/home/krha/cloudlet/image/ubuntu-10.04-x86_64-desktop/ubuntu.base.disk'
+    '''
+    disk = './ubuntu.base.disk'
     mem = '/home/krha/cloudlet/image/ubuntu-10.04-x86_64-desktop/ubuntu.base.mem'
     run_snapshot(disk, mem, vnc_wait=True)
 
+    # create overlay
+    disk = '/home/krha/cloudlet/image/ubuntu-10.04-x86_64-desktop/ubuntu.moped.qcow2'
+    mem = '/home/krha/cloudlet/image/ubuntu-10.04-x86_64-desktop/ubuntu.base.mem'
+    overlay_files = create_overlay(disk, mem)
+    print "[INFO] disk overlay : %s" % overlay_files[0]
+    print "[INFO] mem overlay : %s" % overlay_files[1]
+    '''
 
 if __name__ == "__main__":
     status = main(sys.argv)
