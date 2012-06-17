@@ -1,8 +1,8 @@
 <domain type='kvm'>
 	<name>ubuntu-10.04-desktop-x86_64</name>
 	<uuid>c7a5fdbd-cdaf-9455-926a-d65c16db1801</uuid>
-	<memory>2147483</memory>
-	<currentMemory>2147483</currentMemory>
+	<memory>2097152</memory>
+	<currentMemory>2097152</currentMemory>
 	<vcpu>4</vcpu>
 	<cpu>
 		<arch>x86_64</arch>
