@@ -303,8 +303,8 @@ def run_snapshot(disk_image, memory_image, telnet_port, vnc_port, wait_vnc_end, 
     if os.path.exists(ovftransporter):
         command_str += " -cdrom " + str(os.path.abspath(ovftransporter))
 
-    print '[INFO] Run snapshot..'
-    print command_str
+    #print '[INFO] Run snapshot..'
+    #print command_str
     subprocess.Popen(command_str, shell=True)
     start_time = datetime.now()
     
@@ -327,6 +327,7 @@ def run_snapshot(disk_image, memory_image, telnet_port, vnc_port, wait_vnc_end, 
 
     if ret:
         if terminal_mode:
+            print "[Terminal Mode] Do not show Guest OS"
             return str(end_time-start_time)
 
         # Run VNC

@@ -291,7 +291,7 @@ def piping_synthesis(vm_name):
 
     telnet_port = 9999
     vnc_port = 2
-    exe_time = run_snapshot(disk_out_filename, kvm_pipename, telnet_port, vnc_port, wait_vnc_end=False)
+    exe_time = run_snapshot(disk_out_filename, kvm_pipename, telnet_port, vnc_port, wait_vnc_end=False, terminal_mode=True)
     print "[Time] VM Resume : %s" + exe_time
     print "\n[Time] Total Time except VM Resume : " + str(datetime.now()-prev)
     mem_delta_process.join()
@@ -466,7 +466,7 @@ class SynthesisTCPHandler(SocketServer.StreamRequestHandler):
         mem_delta_process.start()
         telnet_port = 9999
         vnc_port = 2
-        exe_time = run_snapshot(disk_out_filename, kvm_pipename, telnet_port, vnc_port, wait_vnc_end=False, os_type=os_type)
+        exe_time = run_snapshot(disk_out_filename, kvm_pipename, telnet_port, vnc_port, wait_vnc_end=False, terminal_mode=True, os_type=os_type)
         kvm_end_time = datetime.now()
 
         mem_delta_process.join()
@@ -486,17 +486,6 @@ class SynthesisTCPHandler(SocketServer.StreamRequestHandler):
         mem_transfer_end_time = mem_transfer_time['end_time']
         mem_decomp_end_time = mem_decomp_time['end_time']
         mem_delta_end_time = mem_delta_time['end_time']
-
-        print start_time
-        print disk_transfer_start_time
-        print disk_transfer_end_time
-        print disk_decomp_end_time
-        print disk_delta_end_time
-        print mem_transfer_start_time
-        print mem_transfer_end_time
-        print mem_decomp_end_time
-        print mem_delta_end_time
-        print datetime.now()
 
         transfer_diff = mem_transfer_end_time-disk_transfer_start_time
         decomp_diff = mem_decomp_end_time-mem_transfer_end_time
