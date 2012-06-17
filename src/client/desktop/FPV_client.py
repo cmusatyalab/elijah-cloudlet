@@ -80,12 +80,13 @@ def process_command_line(argv):
 
 
 def run_application(server, app_name):
+    print "[INFO] VM Launched. Offload start for %s" % (app_name)
     global overlay_message
     global face_position
 
     # Connection
     try:
-        print "Connecting to (%s, %d).." % (server, application_ports[app_name])
+        print "[INFO] Connecting to (%s, %d).." % (server, application_ports[app_name])
         sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
         sock.setblocking(True)
         sock.connect((server, application_ports[app_name]))
@@ -173,7 +174,7 @@ def FPV_thread():
             point2 = (int((face_position[0] + face_position[2])*width_scale), \
                     int((face_position[1]+face_position[3])*height_scale))
             cv.Rectangle(frame, point1, point2, \
-                    cv.Scalar(0,0,0), thickness=2)
+                    cv.Scalar(255, 255, 255), thickness=2)
         cv.ShowImage(WINDOW_NAME, frame)
         cv.ResizeWindow(WINDOW_NAME, 200, 100)
         cv.NamedWindow(WINDOW_NAME, cv.CV_WINDOW_NORMAL);
@@ -182,7 +183,7 @@ def FPV_thread():
         if c == ord('q'):
             break
 
-    print "FPV Thread is finished"
+    print "[INFO] FPV Thread is finished"
     FPV_thread_stop = True
     FPV_close()
 
