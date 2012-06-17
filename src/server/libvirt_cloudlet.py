@@ -78,6 +78,21 @@ def run_vm(libvirt_xml, **kwargs):
         vnc_process.wait()
 
 
+def run_migration(machine, mig_path):
+    #Pause VM
+    ret = machine.suspend()
+    if ret !=0 :
+        sys.stderr.write("Cannot pause VM : %s", machine.name())
+        return False
+
+    #Save memory state
+    ret = machine.save(mig_path)
+    if ret == 0:
+        return True
+    else:
+        return False
+
+
 def main(argv):
     # creat base VM
     vm_name = 'test_ubuntu_base'
