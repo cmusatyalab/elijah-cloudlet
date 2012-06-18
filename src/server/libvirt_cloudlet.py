@@ -23,8 +23,8 @@ from xml.dom.minidom import parse
 from xml.dom.minidom import parseString
 from uuid import uuid4
 from tempfile import NamedTemporaryFile
-from datetime import datetime
 from time import time
+from optparse import OptionParser
 
 from vmnext import _QemuMemoryHeader
 from tool import comp_lzma
@@ -82,11 +82,63 @@ def create_baseVM(vm_name, disk_image_path):
 
     # launch VM & vnc console
     machine = run_vm(dom.toxml(), wait_vnc=True)
-
     # make a snapshot
     save_mem_snapshot(machine, base_mempath)
 
     return base_diskpath, base_mempath
+
+
+def create_overlay(base_image, base_mem):
+    #check sanity
+    if not os.path.exists(base_image) or not os.path.exists(base_mem):
+        raise CloudletGenerationError("Cannot find base path at \n%s, \n%s" % (base_image, base_mem))
+
+    #make modified disk
+    modified_disk = NamedTemporaryFile(prefix="cloudlet-disk-", delete=False)
+    modified_mem = NamedTemporaryFile(prefix="cloudlet-mem-", delete=False)
+    modified_disk.close()
+    modified_mem.close()
+    copy_disk(base_image, modified_disk.name)
+
+    #filename for overlay VM
+    image_name = os.path.basename(base_image).split(".")[0]
+    overlay_diskpath = os.path.join(os.path.dirname(base_image), image_name+".overlay.disk")
+    overlay_mempath = os.path.join(os.path.dirname(base_mem), image_name+".overlay.mem")
+
+    #resume with modified disk
+    machine = run_snapshot(modified_disk.name, base_mem, wait_vnc=True)
+    #generate modified memory snapshot
+    save_mem_snapshot(machine, modified_mem.name)
+
+    output_list = []
+    output_list.append((base_image, modified_disk.name, overlay_diskpath))
+    output_list.append((base_mem, modified_mem.name, overlay_mempath))
+
+    # xdelta and compression
+    ret_files = []
+    for (base, modified, overlay) in output_list:
+        start_time = time()
+
+        # xdelta
+        ret = diff_files(base, modified, overlay)
+        print '[TIME] time for creating overlay : ', str(time()-start_time)
+        print '[INFO] (%d)-(%d)=(%d): ' % (os.path.getsize(base), os.path.getsize(modified), os.path.getsize(overlay))
+        if ret == None:
+            print >> sys.stderr, '[ERROR] cannot create overlay ' + str(overlay)
+            if os.path.exists(modified):
+                os.remove(modified)
+            continue
+        
+        # compression
+        comp = overlay + '.lzma'
+        comp, time1 = comp_lzma(overlay, comp)
+        ret_files.append(comp)
+
+        # remove temporary files
+        os.remove(modified)
+        os.remove(overlay)
+
+    return ret_files
 
 
 def run_vm(libvirt_xml, **kwargs):
@@ -164,81 +216,45 @@ def run_snapshot(disk_image, mem_snapshot, **kwargs):
     return machine
 
 
-def create_overlay(base_image, base_mem):
-    #check sanity
-    if not os.path.exists(base_image) or not os.path.exists(base_mem):
-        raise CloudletGenerationError("Cannot find base path at \n%s, \n%s" % (base_image, base_mem))
-
-    #make modified disk
-    modified_disk = NamedTemporaryFile(prefix="cloudlet-disk-", delete=False)
-    modified_mem = NamedTemporaryFile(prefix="cloudlet-mem-", delete=False)
-    modified_disk.close()
-    modified_mem.close()
-    copy_disk(base_image, modified_disk.name)
-
-    #filename for overlay VM
-    image_name = os.path.basename(base_image).split(".")[0]
-    overlay_diskpath = os.path.join(os.path.dirname(base_image), image_name+".overlay.disk")
-    overlay_mempath = os.path.join(os.path.dirname(base_mem), image_name+".overlay.mem")
-
-    #resume with modified disk
-    machine = run_snapshot(modified_disk.name, base_mem, wait_vnc=True)
-    #generate modified memory snapshot
-    save_mem_snapshot(machine, modified_mem.name)
-
-    output_list = []
-    output_list.append((base_image, modified_disk.name, overlay_diskpath))
-    output_list.append((base_mem, modified_mem.name, overlay_mempath))
-
-    # xdelta and compression
-    ret_files = []
-    for (base, modified, overlay) in output_list:
-        start_time = time()
-
-        # xdelta
-        ret = diff_files(base, modified, overlay)
-        print '[TIME] time for creating overlay : ', str(time()-start_time)
-        print '[INFO] (%d)-(%d)=(%d): ' % (os.path.getsize(base), os.path.getsize(modified), os.path.getsize(overlay))
-        if ret == None:
-            print >> sys.stderr, '[ERROR] cannot create overlay ' + str(overlay)
-            if os.path.exists(modified):
-                os.remove(modified)
-            continue
-        
-        # compression
-        comp = overlay + '.lzma'
-        comp, time1 = comp_lzma(overlay, comp)
-        ret_files.append(comp)
-
-        # remove temporary files
-        os.remove(modified)
-        os.remove(overlay)
-
-    return ret_files
-
-
 def main(argv):
-    # creat base VM
-    vm_name = 'test_ubuntu_base'
-    disk_image_path = '/home/krha/cloudlet/image/ubuntu-10.04-x86_64-desktop/ubuntu.moped.qcow2'
-    disk_path, mem_path = create_baseVM(vm_name, disk_image_path)
-    print "Base VM is created from %s" % disk_image_path
-    print "Disk: %s" % disk_path
-    print "Mem: %s" % mem_path
+    MODE = ('base', 'overlay', 'synthesis')
+    USAGE = 'Usage: %prog ' + ("[%s]" % "|".join(MODE))
+    VERSION = '%prog 0.1'
+    DESCRIPTION = 'Cloudlet Overlay Generation & Synthesis'
+
+    parser = OptionParser(usage=USAGE, version=VERSION, description=DESCRIPTION)
+    opts, args = parser.parse_args()
+    if len(args) == 0:
+        parser.error("Incorrect mode among %s" % "|".join(MODE))
+    mode = str(args[0]).lower()
+    if mode not in MODE:
+        parser.error("Incorrect mode %s" % mode)
+
+    if mode == MODE[0]: #base VM generation
+        # creat base VM
+        vm_name = 'test_ubuntu_base'
+        disk_image_path = '/home/krha/cloudlet/image/ubuntu-10.04-x86_64-desktop/ubuntu.moped.qcow2'
+        disk_path, mem_path = create_baseVM(vm_name, disk_image_path)
+        print "Base VM is created from %s" % disk_image_path
+        print "Disk: %s" % disk_path
+        print "Mem: %s" % mem_path
+    elif mode == MODE[1]:   #overlay VM creation
+        # create overlay
+        disk = '/home/krha/cloudlet/image/ubuntu-10.04-x86_64-desktop/ubuntu.moped.qcow2'
+        mem = '/home/krha/cloudlet/image/ubuntu-10.04-x86_64-desktop/ubuntu.base.mem'
+        overlay_files = create_overlay(disk, mem)
+        print "[INFO] disk overlay : %s" % overlay_files[0]
+        print "[INFO] mem overlay : %s" % overlay_files[1]
+    elif mode == MODE[2]:   #synthesis  
+        print "To be implemented"
 
     # run snapshot
     '''
     disk = './ubuntu.base.disk'
     mem = '/home/krha/cloudlet/image/ubuntu-10.04-x86_64-desktop/ubuntu.base.mem'
     run_snapshot(disk, mem, vnc_wait=True)
-
-    # create overlay
-    disk = '/home/krha/cloudlet/image/ubuntu-10.04-x86_64-desktop/ubuntu.moped.qcow2'
-    mem = '/home/krha/cloudlet/image/ubuntu-10.04-x86_64-desktop/ubuntu.base.mem'
-    overlay_files = create_overlay(disk, mem)
-    print "[INFO] disk overlay : %s" % overlay_files[0]
-    print "[INFO] mem overlay : %s" % overlay_files[1]
     '''
+
 
 if __name__ == "__main__":
     status = main(sys.argv)

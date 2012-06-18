@@ -17,10 +17,9 @@
 			<source file='/home/krha/cloudlet/image/ubuntu-10.04-x86_64-desktop/ubuntu.moped.qcow2' />
 			<target dev='hda'/>
 		</disk>
-		<interface type='network'>
-			<source network='default'/>
-			<mac address='00:16:3e:1a:b3:4a'/>
-		</interface>
 		<graphics type='vnc' port='-1'/>
+		<interface type='user'>
+			<mac address="42:e8:12:a8:e0:a1"/>
+		</interface>
 	</devices>
 </domain>
