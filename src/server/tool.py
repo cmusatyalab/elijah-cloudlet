@@ -21,6 +21,7 @@ import filecmp
 import sys
 import subprocess
 from time import time
+from hashlib import sha1
 
 def diff_files(source_file, target_file, output_file):
     if os.path.exists(source_file) == False:
@@ -90,6 +91,14 @@ def decomp_lzma(inputname, outputname):
 
     time_diff = str(time()-prev_time)
     return outputname, str(time_diff)
+
+def sha1_fromfile(file_path):
+    if not os.path.exists(file_path):
+        raise IOError("cannot find file while generating sha1")
+    data = open(file_path, "r").read()
+    s = sha1()
+    s.update(data)
+    return s.hexdigest()
 
 
 if __name__ == "__main__":
