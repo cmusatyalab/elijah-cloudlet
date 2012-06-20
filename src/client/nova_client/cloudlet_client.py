@@ -23,6 +23,11 @@ import sys
 import urllib
 import base64
 
+test_server_name = 'test-serve'
+
+class CloudletClientError(Exception):
+    pass
+
 
 def get_list(server_address, token, end_point, request_list):
     if not request_list in ('images', 'flavors', 'extensions', 'servers'):
@@ -31,7 +36,7 @@ def get_list(server_address, token, end_point, request_list):
 
     params = urllib.urlencode({})
     headers = { "X-Auth-Token":token, "Content-type":"application/json" }
-    end_string = "%s/%s" % (end_point[2], request_list)
+    end_string = "%s/%s/detail" % (end_point[2], request_list)
 
     # HTTP response
     conn = httplib.HTTPConnection(end_point[1])
@@ -88,12 +93,79 @@ def request_start_stop(server_address, token, end_point, server_name, is_request
 
     conn = httplib.HTTPConnection(end_point[1])
     command = "%s/servers/%s/action" % (end_point[2], server_id)
+    print command
     conn.request("POST", command, params, headers)
     response = conn.getresponse()
     data = response.read()
     conn.close()
     print data
-    #print json.dumps(dd, indent=2)
+
+
+def request_cloudlet_base(server_address, token, end_point, server_name, cloudlet_base_name):
+    server_list = get_list(server_address, token, end_point, "servers")
+    server_id = ''
+    for server in server_list:
+        if server['name'] == server_name:
+            server_id = server['id']
+            print "server id : " + server_id
+    if not server_id:
+        raise CloudletClientError("cannot find matching server name")
+
+    params = json.dumps({"cloudlet-base":{"name": cloudlet_base_name}})
+    headers = { "X-Auth-Token":token, "Content-type":"application/json" }
+
+    conn = httplib.HTTPConnection(end_point[1])
+    command = "%s/servers/%s/action" % (end_point[2], server_id)
+    conn.request("POST", command, params, headers)
+    response = conn.getresponse()
+    data = response.read()
+    conn.close()
+    print data
+
+
+def request_cloudlet_overlay_start(server_address, token, end_point, server_name, cloudlet_base_name):
+    server_list = get_list(server_address, token, end_point, "servers")
+    server_id = ''
+    for server in server_list:
+        if server['name'] == server_name:
+            server_id = server['id']
+            print "server id : " + server_id
+    if not server_id:
+        raise CloudletClientError("cannot find matching server name")
+
+    params = json.dumps({"cloudlet-overlay-start":{"base-name": cloudlet_base_name}})
+    headers = { "X-Auth-Token":token, "Content-type":"application/json" }
+
+    conn = httplib.HTTPConnection(end_point[1])
+    command = "%s/servers/%s/action" % (end_point[2], server_id)
+    conn.request("POST", command, params, headers)
+    response = conn.getresponse()
+    data = response.read()
+    conn.close()
+    print data
+
+
+def request_cloudlet_overlay_stop(server_address, token, end_point, server_name, cloudlet_base_name, overlay_name):
+    server_list = get_list(server_address, token, end_point, "servers")
+    server_id = ''
+    for server in server_list:
+        if server['name'] == server_name:
+            server_id = server['id']
+            print "server id : " + server_id
+    if not server_id:
+        raise CloudletClientError("cannot find matching server name")
+
+    params = json.dumps({"cloudlet-overlay-finish":{"base-name": cloudlet_base_name, "overlay-name": overlay_name}})
+    headers = { "X-Auth-Token":token, "Content-type":"application/json" }
+
+    conn = httplib.HTTPConnection(end_point[1])
+    command = "%s/servers/%s/action" % (end_point[2], server_id)
+    conn.request("POST", command, params, headers)
+    response = conn.getresponse()
+    data = response.read()
+    conn.close()
+    print data
+    
 
 
 def get_token(server_address, user, password, tenant_name):
@@ -117,10 +189,36 @@ def get_token(server_address, user, password, tenant_name):
     api_token = dd['access']['token']['id']
     service_list = dd['access']['serviceCatalog']
     nova_endpoint = None
+    glance_endpoint = None
     for service in service_list:
         if service['name'] == 'nova':
             nova_endpoint = service['endpoints'][0]['publicURL']
-    return api_token, nova_endpoint
+        elif service['name'] == 'glance':
+            glance_endpoint = service['endpoints'][0]['publicURL']
+    return api_token, nova_endpoint, glance_endpoint
+
+
+def overlay_download(server_address, uname, password, overlay_name, output_file):
+    from glance import client
+    glance_client = client.get_client(server_address, username=uname, password=password)
+    image_list = glance_client.get_images()
+    image_id = ''
+    for image in image_list:
+        print "image list : %s" % image.get('name')
+        if image.get('name') and image['name'] == overlay_name:
+            image_id = image.get('id')
+            break
+    if not image_id:
+        raise CloudletClientError("cannot find matching glance image")
+    
+    meta, raw = glance_client.get_image(image_id)
+    if not meta or not raw:
+        raise CloudletClientError("cannot download")
+
+    fout = open(output_file, "wb")
+    for chunk in raw:
+        fout.write(chunk)
+    fout.close()
 
 
 def process_command_line(argv):
@@ -144,8 +242,6 @@ def process_command_line(argv):
             '-x', '--token', action='store', type='string', dest='token',
             help='set tenant name')
     settings, args = parser.parse_args(argv)
-    if not len(args) == 0:
-        parser.error('program takes no command-line arguments; "%s" ignored.' % (args,))
     return settings, args
 
 
@@ -184,15 +280,56 @@ def get_ref(server_address, token, end_point, ref_string, name):
             return image_ref
 
 
+def get_cloudlet_base_list(server_address, token, end_point):
+    headers = { "X-Auth-Token":token, "Content-type":"application/json" }
+    params = urllib.urlencode({})
+
+    conn = httplib.HTTPConnection(end_point[1])
+    command = "%s/volumes" % (end_point[2])
+    print command
+    conn.request("GET", command, params, headers)
+    response = conn.getresponse()
+    data = response.read()
+    conn.close()
+    print json.dumps(data, indent=2)
+
+
+
 def main(argv=None):
     global LOCAL_IPADDRESS
+    global test_server_name
     settings, args = process_command_line(sys.argv[1:])
+
+    if len(args) != 1:
+        print "need command"
+        sys.exit(1)
+
     print "Connecting to %s for tenant %s" % (settings.server_address, settings.tenant_name)
-    token, endpoint = get_token(settings.server_address, settings.user_name, settings.password, settings.tenant_name)
-    ext_info = get_extension(settings.server_address, token, urlparse(endpoint), "Cloudlet")
-    print ext_info
-    #request_new_server(settings.server_address, token, urlparse(endpoint), "test")
-    #request_start_stop(settings.server_address, token, urlparse(endpoint), "run1", is_request_start=False)
+    token, endpoint, glance_endpoint = get_token(settings.server_address, settings.user_name, settings.password, settings.tenant_name)
+    if args[0] == 'image-list':
+        images = get_list(settings.server_address, token, urlparse(endpoint), "images")
+        print json.dumps(images, indent=2)
+    elif args[0] == 'ext-list':
+        ext_info = get_extension(settings.server_address, token, urlparse(endpoint), "Cloudlet")
+        print ext_info
+    elif args[0] == 'start':
+        request_start_stop(settings.server_address, token, urlparse(endpoint), test_server_name, is_request_start=True)
+    elif args[0] == 'stop':
+        request_start_stop(settings.server_address, token, urlparse(endpoint), test_server_name, is_request_start=False)
+    elif args[0] == 'base_stop':
+        request_cloudlet_base(settings.server_address, token, urlparse(endpoint), test_server_name, "cloudlet-base")
+    elif args[0] == 'overlay_start':
+        request_cloudlet_overlay_start(settings.server_address, token, urlparse(endpoint), test_server_name, "cloudlet-base")
+    elif args[0] == 'overlay_stop':
+        request_cloudlet_overlay_stop(settings.server_address, token, urlparse(endpoint), test_server_name, "cloudlet-base", "overlay1")
+    elif args[0] == 'cloudlet_list':
+        print get_cloudlet_base_list(settings.server_address, token, urlparse(endpoint))
+    elif args[0] == 'download':
+        overlay_download(settings.server_address, "admin", "admin", "cloudlet-base", "./overlay.disk")
+    else:
+        print "No such command"
+        sys.exit(1)
+    
 
 
 if __name__ == "__main__":
