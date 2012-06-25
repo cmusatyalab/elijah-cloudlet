@@ -303,8 +303,8 @@ def run_snapshot(disk_image, memory_image, telnet_port, vnc_port, wait_vnc_end, 
     if os.path.exists(ovftransporter):
         command_str += " -cdrom " + str(os.path.abspath(ovftransporter))
 
-    #print '[INFO] Run snapshot..'
-    #print command_str
+    print '[INFO] Run snapshot..'
+    print command_str
     subprocess.Popen(command_str, shell=True)
     start_time = datetime.now()
     
@@ -452,7 +452,7 @@ def stop_vm(telnet_port):
     tn.close()
 
 
-def create_base(imagefile, os_type):
+def create_base(imagefile, os_type=None):
     if os.path.exists(imagefile) == False:
         print >> sys.stderr, '[ERROR] %s is not exist' % imagefile
         return None
@@ -474,7 +474,7 @@ def create_base(imagefile, os_type):
     print '[INFO] run Base Image to generate memory snapshot'
     telnet_port = 12123; vnc_port = 3
 
-    run_image(base_image, telnet_port, vnc_port, os_type)
+    run_image(base_image, telnet_port, vnc_port, os_type=os_type)
     base_mem = os.path.join(vm_path, vm_name) + '.base.mem'
 
     # stop and migrate
@@ -486,12 +486,12 @@ def create_base(imagefile, os_type):
     return base_image, base_mem
 
 
-def run_image(disk_image, telnet_port, vnc_port, wait_vnc_end=True, cdrom=None, terminal_mode=False, os_type='window'):
+def run_image(disk_image, telnet_port, vnc_port, wait_vnc_end=True, cdrom=None, terminal_mode=False, os_type=None):
     command_str = "kvm -hda "
     command_str += disk_image
 
     # Virtio Support
-    if os_type.lower() == 'linux': 
+    if os_type and os_type.lower() == 'linux': 
         command_str += " -net nic,model=virtio"
     else:
         command_str += " -net nic"
@@ -550,8 +550,9 @@ def main(argv):
             print_usage(os.path.basename(argv[0]))
             print 'invalid argument'
             return;
+        os_type = args[0]
         input_image_path = os.path.abspath(args[1])
-        base_image, base_mem = create_base(input_image_path, os_type=args[0])
+        base_image, base_mem = create_base(input_image_path, os_type=os_type)
         print '[INFO] Base (%s, %s) is created from %s' % (base_image, base_mem, args[0])
     elif o in ("-o", "--overlay"):
         if len(args) == 2:
@@ -565,7 +566,7 @@ def main(argv):
             os_type = args[0]
             base_image = os.path.abspath(args[1])
             base_mem = os.path.abspath(args[2])
-            ret_files = create_overlay(base_image, base_mem, os_type)
+            ret_files = create_overlay(base_image, base_mem, os_type=os_type)
             print '[INFO] Overlay (%s, %s) is created from %s' % (str(ret_files[0]), str(ret_files[1]), os.path.basename(base_image))
         else:
             print_usage(os.path.basename(argv[0]))
