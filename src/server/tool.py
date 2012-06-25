@@ -24,12 +24,11 @@ from time import time
 from hashlib import sha1
 
 def diff_files(source_file, target_file, output_file):
-    if os.path.exists(source_file) == False:
-        print '[Error] No such file %s' % (source_file)
+    if os.path.exists(source_file) == False or open(source_file, "rb") == None:
+        raise IOError('[Error] No such file %s' % (source_file))
         return None
-    if os.path.exists(target_file) == False:
-        print '[Error] No such file %s' % (target_file)
-        return None
+    if os.path.exists(target_file) == False or open(target_file, "rb") == None:
+        raise IOError('[Error] No such file %s' % (target_file))
     if os.path.exists(output_file):
         os.remove(output_file)
 
@@ -39,22 +38,26 @@ def diff_files(source_file, target_file, output_file):
     if ret == 0:
         return output_file
     else:
-        return None
+        raise IOError('Cannot do file diff')
 
 
-def merge_files(source_file, overlay_file, output_file):
+def merge_files(source_file, overlay_file, output_file, **kwargs):
+    log = kwargs.get("log", None)
     #command_patch = ['xdelta3', '-df', '-s', source_file, overlay_file, output_file]
-    # ret = xdelta3.xd3_main_cmdline(command_patch)
-    command_patch = "xdelta3 -df -s %s %s %s" % (source_file, overlay_file, output_file)
-    proc = subprocess.Popen(command_patch, shell=True)
-    proc.wait()
+    #print command_patch
+    #ret = xdelta3.xd3_main_cmdline(command_patch)
+    command_patch = ["xdelta3", "-df", "-s", source_file, overlay_file, output_file]
+    ret = subprocess.call(command_patch)
 
     #print command_patch
-    if proc.returncode == 0:
-        #print "output : %s (%d)" % (output_file, os.path.getsize(output_file))
+    if ret == 0:
+        if log:
+            log.debug("output : %s (%d)" % (output_file, os.path.getsize(output_file)))
         return output_file
     else:
-        return None
+        if log:
+            log.debug("output : %s (%d)" % (output_file, os.path.getsize(output_file)))
+        raise IOError('xdelta merge failed')
 
 
 def compare_same(filename1, filename2):
@@ -76,6 +79,8 @@ def comp_lzma(inputname, outputname):
     ret = subprocess.call(['xz', '-9cv'], stdin=fin, stdout=fout)
     if ret:
         raise IOError('XZ compressor failed')
+    fin.close()
+    fout.close()
     time_diff = str(time()-prev_time)
     return outputname, str(time_diff)
 

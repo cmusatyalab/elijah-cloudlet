@@ -20,7 +20,7 @@ import sys
 import os
 import subprocess
 from xml.dom.minidom import parse
-from xml.dom.minidom import parseString
+from xml.etree import ElementTree
 from uuid import uuid4
 from tempfile import mkstemp 
 from time import time
@@ -50,7 +50,16 @@ def copy_disk(in_path, out_path):
         raise IOError("Copy failed: from %s to %s " % (in_path, out_path))
 
 
+def get_libvirt_connection():
+    conn = libvirt.open("qemu:///session")
+    return conn
+
 def create_baseVM(vm_name, disk_image_path):
+    """Create Base VM(disk, memory) snapshot using given VM disk image
+    :param vm_name : Name of the Base VM
+    :param disk_image_path : file path of the VM disk image
+    :returns: (generated base VM disk path, generated base VM memory path)
+    """
     global BaseVM_xml
 
     # check sanity
@@ -84,7 +93,8 @@ def create_baseVM(vm_name, disk_image_path):
     #print dom.toxml()
 
     # launch VM & vnc console
-    machine = run_vm(dom.toxml(), wait_vnc=True)
+    conn = get_libvirt_connection()
+    machine = run_vm(conn, dom.toxml(), wait_vnc=True)
     # make a snapshot
     save_mem_snapshot(machine, base_mempath)
 
@@ -120,7 +130,8 @@ def create_overlay(base_image, base_mem):
     copy_disk(base_image, modified_disk)
 
     #resume with modified disk
-    machine = run_snapshot(modified_disk, base_mem, wait_vnc=True)
+    conn = get_libvirt_connection()
+    machine = run_snapshot(conn, modified_disk, base_mem, wait_vnc=True)
     #generate modified memory snapshot
     save_mem_snapshot(machine, modified_mem)
 
@@ -128,9 +139,16 @@ def create_overlay(base_image, base_mem):
     output_list.append((base_image, modified_disk, overlay_diskpath))
     output_list.append((base_mem, modified_mem, overlay_mempath))
 
+    ret_files = run_delta_compression(output_list)
+    overlay_files = []
+    overlay_files.append(meta_file_path)
+    overlay_files.append(ret_files)
+    return overlay_files
+
+
+def run_delta_compression(output_list):
     # xdelta and compression
     ret_files = []
-    ret_files.append(meta_file_path)
     for (base, modified, overlay) in output_list:
         start_time = time()
 
@@ -156,10 +174,52 @@ def create_overlay(base_image, base_mem):
     return ret_files
 
 
-def recover_launchVM(meta, overlay_disk, overlay_mem, **kargs):
-    # kargs
-    # vnc_disable       :   show vnc console
-    # wait_vnc          :   wait until vnc finishes if vnc_enabled
+def recover_launchVM_from_URL(base_disk_path, base_mem_path, overlay_disk_url, overlay_mem_url, **kwargs):
+    #kwargs
+    #LOG = log object for nova
+    log = kwargs.get('LOG', None)
+
+    def download(url, out_path):
+        import urllib2
+        url = urllib2.urlopen(url)
+        out_file = open(out_path, "wb")
+        while True:
+            data = url.read(1024*1024)
+            if not data:
+                break
+            out_file.write(data)
+        out_file.close()
+
+    # download overlay
+    basedir = os.path.dirname(base_mem_path)
+    overlay_disk = os.path.join(basedir, "overlay.disk")
+    overlay_mem = os.path.join(basedir, "overlay.mem")
+    download(overlay_disk_url, overlay_disk)
+    download(overlay_mem_url, overlay_mem)
+
+    if log:
+        log.debug("Download overlay disk : %d" % os.path.getsize(overlay_disk))
+        log.debug("Download overlay mem: %d" % os.path.getsize(overlay_mem))
+    else:
+        print "Download overlay disk : %d" % os.path.getsize(overlay_disk)
+        print "Download overlay mem: %d" % os.path.getsize(overlay_mem)
+
+    # prepare meta data
+    meta = os.path.join(basedir, "overlay_meta")
+    metafile = open(meta, "w")
+    metafile.write(dumps({"base_disk_path":os.path.abspath(base_disk_path),"base_mem_path":os.path.abspath(base_mem_path)}))
+    metafile.close()
+
+    # recover launch VM
+    launch_disk, launch_mem = recover_launchVM(meta, overlay_disk, overlay_mem, skip_validation=True)
+    return launch_disk, launch_mem
+
+
+def recover_launchVM(meta, overlay_disk, overlay_mem, **kwargs):
+    # kwargs
+    # skip_validation   :   skipp sha1 validation
+    # LOG = log object for nova
+    log = kwargs.get('LOG', None)
 
     # find base VM using meta
     if not os.path.exists(meta):
@@ -168,13 +228,16 @@ def recover_launchVM(meta, overlay_disk, overlay_mem, **kargs):
     meta_info = loads(open(meta, "r").read()) # load json formatted meta info
     base_disk_path = meta_info['base_disk_path']
     base_mem_path = meta_info['base_mem_path']
-    base_disk_sha1 = sha1_fromfile(base_disk_path)
-    base_mem_sha1 = sha1_fromfile(base_mem_path)
-    if base_disk_sha1 != meta_info['base_disk_sha1'] or base_mem_sha1 != meta_info['base_mem_sha1']:
-        message = "sha1 does not match (%s!=%s) or (%s!=%s)" % \
-                (base_disk_sha1, meta_info['base_disk_sha1'], \
-                base_mem_sha1, meta_info['base_mem_sha1'])
-        raise CloudletGenerationError(message)
+
+    # base-vm validation with sha1 finger-print
+    if not kwargs.get('skip_validation'):
+        base_disk_sha1 = sha1_fromfile(base_disk_path)
+        base_mem_sha1 = sha1_fromfile(base_mem_path)
+        if base_disk_sha1 != meta_info['base_disk_sha1'] or base_mem_sha1 != meta_info['base_mem_sha1']:
+            message = "sha1 does not match (%s!=%s) or (%s!=%s)" % \
+                    (base_disk_sha1, meta_info['base_disk_sha1'], \
+                    base_mem_sha1, meta_info['base_mem_sha1'])
+            raise CloudletGenerationError(message)
 
     # add recover files
     recover_inputs= []
@@ -187,27 +250,34 @@ def recover_launchVM(meta, overlay_disk, overlay_mem, **kargs):
         overlay = comp + '.decomp'
         prev_time = time()
         decomp_lzma(comp, overlay)
-        print '[Time] Decompression(%s) - %s' % (comp, str(time()-prev_time))
+        msg = '[Time] Decompression(%s) - %s' % (comp, str(time()-prev_time))
+        if log:
+            log.debug(msg)
+        else:
+            print msg
 
         # merge with base image
         recover = os.path.join(os.path.dirname(base), os.path.basename(comp) + '.recover'); 
         prev_time = time()
         merge_files(base, overlay, recover)
-        print '[Time] Recover(xdelta) image(%s) - %s' %(recover, str(time()-prev_time))
+        msg = '[Time] Recover(xdelta) image(%s) - %s' %(recover, str(time()-prev_time))
+        if log:
+            log.debug(msg)
+        else:
+            print msg
 
         #delete intermeidate files
-        os.remove(overlay)
+        #os.remove(overlay)
         recover_outputs.append(recover)
         
     return recover_outputs
 
 
-def run_vm(libvirt_xml, **kwargs):
-    # kargs
+def run_vm(conn, libvirt_xml, **kwargs):
+    # kwargs
     # vnc_disable       :   show vnc console
     # wait_vnc          :   wait until vnc finishes if vnc_enabled
 
-    conn = libvirt.open("qemu:///session")
     # TODO: get right parameter for second argument
     machine = conn.createXML(libvirt_xml, 0)
 
@@ -238,33 +308,31 @@ def save_mem_snapshot(machine, fout_path):
         raise CloudletGenerationError("libvirt: Cannot save memory state")
 
 
-def run_snapshot(disk_image, mem_snapshot, **kwargs):
-    # kargs
+def run_snapshot(conn, disk_image, mem_snapshot, **kwargs):
+    # kwargs
     # vnc_disable       :   show vnc console
     # wait_vnc          :   wait until vnc finishes if vnc_enabled
 
     # read embedded XML at memory snapshot to change disk path
     hdr = _QemuMemoryHeader(open(mem_snapshot))
-    domxml = parseString(hdr.xml)
-    disk_elements = domxml.getElementsByTagName('disk')
-    uuid_elements = domxml.getElementsByTagName('uuid')
-    if not disk_elements:
-        raise CloudletGenerationError("Malfomed XML embedded: %s", os.path.abspath(mem_snapshot))
-    disk_source_element = disk_elements[0].getElementsByTagName('source')[0] 
-    disk_source_element.setAttribute("file", os.path.abspath(disk_image))
-    uuid = str(uuid_elements[0].firstChild.nodeValue)
-    #print "[INFO] XML modified to new disk path (%s)" % (uuid)
-    #print domxml.toxml()
+    domxml = ElementTree.fromstring(hdr.xml)
+    disk_element = domxml.find('devices/disk/source')
+    if not disk_element.get("file"):
+        raise CloudletGenerationError("Malfomed XML embedded: %s" % os.path.abspath(mem_snapshot))
+    disk_element.set("file", os.path.abspath(disk_image))
+
+    # set console path if it is
+    console_path = kwargs.get('console_path')
+    if console_path:
+        console = domxml.find('devices/serial/source')
+        console.set('path', console_path)
 
     # resume
-    conn = libvirt.open("qemu:///session")
-    print "[INFO] restoring VM..."
-    try:
-        conn.restoreFlags(mem_snapshot, domxml.toxml(), libvirt.VIR_DOMAIN_SAVE_RUNNING)
-    except libvirt.libvirtError, e:
-        raise CloudletGenerationError(str(e))
+    restore_with_config(conn, mem_snapshot, ElementTree.tostring(domxml))
 
     # get machine
+    uuid_element = domxml.find('uuid')
+    uuid = str(uuid_element.text)
     machine = conn.lookupByUUIDString(uuid)
 
     # Run VNC and wait until user finishes working
@@ -277,8 +345,32 @@ def run_snapshot(disk_image, mem_snapshot, **kwargs):
     return machine
 
 
+def restore_with_config(conn, mem_snapshot, xml):
+    print "[INFO] restoring VM..."
+    try:
+        conn.restoreFlags(mem_snapshot, xml, libvirt.VIR_DOMAIN_SAVE_RUNNING)
+    except libvirt.libvirtError, e:
+        message = "%s\nXML: %s" % (str(e), xml)
+        raise CloudletGenerationError(message)
+
+
+def copy_with_xml(in_path, out_path, xml):
+    fin = open(in_path)
+    fout = open(out_path, 'w')
+    hdr = _QemuMemoryHeader(fin)
+
+    # Write header
+    hdr.xml = xml
+    hdr.write(fout)
+    fout.flush()
+
+    # move to the content
+    hdr.seek_body(fin)
+    fout.write(fin.read())
+
+
 def main(argv):
-    MODE = ('base', 'overlay', 'synthesis')
+    MODE = ('base', 'overlay', 'synthesis', "test")
     USAGE = 'Usage: %prog ' + ("[%s]" % "|".join(MODE)) + " [paths..]"
     VERSION = '%prog 0.1'
     DESCRIPTION = 'Cloudlet Overlay Generation & Synthesis'
@@ -288,10 +380,8 @@ def main(argv):
     if len(args) == 0:
         parser.error("Incorrect mode among %s" % "|".join(MODE))
     mode = str(args[0]).lower()
-    if mode not in MODE:
-        parser.error("Incorrect mode %s" % mode)
 
-   if mode == MODE[0]: #base VM generation
+    if mode == MODE[0]: #base VM generation
         if len(args) != 3:
             parser.error("Generating base VM requires 2 arguements\n1) vm name\n2) disk path")
             sys.exit(1)
@@ -320,8 +410,29 @@ def main(argv):
         meta = args[1]
         overlay_disk = args[2] 
         overlay_mem = args[3]
-        launch_disk, launch_mem = recover_launchVM(meta, overlay_disk, overlay_mem)
-        run_snapshot(launch_disk, launch_mem, wait_vnc=True)
+        launch_disk, launch_mem = recover_launchVM(meta, overlay_disk, overlay_mem, skip_validation=True)
+        conn = get_libvirt_connection()
+        run_snapshot(conn, launch_disk, launch_mem, wait_vnc=True)
+    elif mode == 'test_overlay_download':    # To be delete
+        base_disk_path = "/home/krha/cloudlet/image/nova/base_disk"
+        base_mem_path = "/home/krha/cloudlet/image/nova/base_memory"
+        overlay_disk_url = "http://dagama.isr.cs.cmu.edu/overlay/nova_overlay_disk.lzma"
+        overlay_mem_url = "http://dagama.isr.cs.cmu.edu/overlay/nova_overlay_mem.lzma"
+        launch_disk, launch_mem = recover_launchVM_from_URL(base_disk_path, base_mem_path, overlay_disk_url, overlay_mem_url)
+        conn = get_libvirt_connection()
+        run_snapshot(conn, launch_disk, launch_mem, wait_vnc=True)
+    elif mode == 'test_new_xml':    # To be delete
+        in_path = args[1]
+        out_path = in_path + ".new"
+        hdr = _QemuMemoryHeader(open(in_path))
+        domxml = ElementTree.fromstring(hdr.xml)
+        domxml.find('uuid').text = "new-uuid"
+        new_xml = ElementTree.tostring(domxml)
+        copy_with_xml(in_path, out_path, new_xml)
+
+        hdr = _QemuMemoryHeader(open(out_path))
+        domxml = ElementTree.fromstring(hdr.xml)
+        print "new xml is changed uuid to " + domxml.find('uuid').text
 
 
 if __name__ == "__main__":
