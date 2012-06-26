@@ -146,14 +146,22 @@ def create_overlay(base_image, base_mem):
     return overlay_files
 
 
-def run_delta_compression(output_list):
+def run_delta_compression(output_list, **kwargs):
+    #kwargs
+    #LOG = log object for nova
+    #nova_util = nova_util is executioin wrapper for nova framework
+    #           You should use nova_util in OpenStack, or subprocess 
+    #           will be returned without finishing their work
+    log = kwargs.get('log', None)
+    nova_util = kwargs.get('nova_util', None)
+
     # xdelta and compression
     ret_files = []
     for (base, modified, overlay) in output_list:
         start_time = time()
 
         # xdelta
-        ret = diff_files(base, modified, overlay)
+        ret = diff_files(base, modified, overlay, nova_util=nova_util)
         print '[TIME] time for creating overlay : ', str(time()-start_time)
         print '[INFO] (%d)-(%d)=(%d): ' % (os.path.getsize(base), os.path.getsize(modified), os.path.getsize(overlay))
         if ret == None:
@@ -164,7 +172,7 @@ def run_delta_compression(output_list):
         
         # compression
         comp = overlay + '.lzma'
-        comp, time1 = comp_lzma(overlay, comp)
+        comp, time1 = comp_lzma(overlay, comp, nova_util=nova_util)
         ret_files.append(comp)
 
         # remove temporary files
@@ -177,7 +185,11 @@ def run_delta_compression(output_list):
 def recover_launchVM_from_URL(base_disk_path, base_mem_path, overlay_disk_url, overlay_mem_url, **kwargs):
     #kwargs
     #LOG = log object for nova
-    log = kwargs.get('LOG', None)
+    #nova_util = nova_util is executioin wrapper for nova framework
+    #           You should use nova_util in OpenStack, or subprocess 
+    #           will be returned without finishing their work
+    log = kwargs.get('log', None)
+    nova_util = kwargs.get('nova_util', None)
 
     def download(url, out_path):
         import urllib2
@@ -188,6 +200,7 @@ def recover_launchVM_from_URL(base_disk_path, base_mem_path, overlay_disk_url, o
             if not data:
                 break
             out_file.write(data)
+        out_file.flush()
         out_file.close()
 
     # download overlay
@@ -211,7 +224,8 @@ def recover_launchVM_from_URL(base_disk_path, base_mem_path, overlay_disk_url, o
     metafile.close()
 
     # recover launch VM
-    launch_disk, launch_mem = recover_launchVM(meta, overlay_disk, overlay_mem, skip_validation=True)
+    launch_disk, launch_mem = recover_launchVM(meta, overlay_disk, overlay_mem, \
+            skip_validation=True, log=log, nova_util=nova_util)
     return launch_disk, launch_mem
 
 
@@ -219,7 +233,11 @@ def recover_launchVM(meta, overlay_disk, overlay_mem, **kwargs):
     # kwargs
     # skip_validation   :   skipp sha1 validation
     # LOG = log object for nova
-    log = kwargs.get('LOG', None)
+    # nova_util = nova_util is executioin wrapper for nova framework
+    #           You should use nova_util in OpenStack, or subprocess 
+    #           will be returned without finishing their work
+    log = kwargs.get('log', None)
+    nova_util = kwargs.get('nova_util', None)
 
     # find base VM using meta
     if not os.path.exists(meta):
@@ -249,7 +267,7 @@ def recover_launchVM(meta, overlay_disk, overlay_mem, **kwargs):
         # decompress
         overlay = comp + '.decomp'
         prev_time = time()
-        decomp_lzma(comp, overlay)
+        decomp_lzma(comp, overlay, nova_util=nova_util)
         msg = '[Time] Decompression(%s) - %s' % (comp, str(time()-prev_time))
         if log:
             log.debug(msg)
@@ -259,9 +277,10 @@ def recover_launchVM(meta, overlay_disk, overlay_mem, **kwargs):
         # merge with base image
         recover = os.path.join(os.path.dirname(base), os.path.basename(comp) + '.recover'); 
         prev_time = time()
-        merge_files(base, overlay, recover)
+        merge_files(base, overlay, recover, log=log, nova_util=nova_util)
         msg = '[Time] Recover(xdelta) image(%s) - %s' %(recover, str(time()-prev_time))
         if log:
+            log.debug("base: %s, overlay: %s, recover: %s", base, overlay, recover)
             log.debug(msg)
         else:
             print msg

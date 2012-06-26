@@ -23,7 +23,16 @@ import subprocess
 from time import time
 from hashlib import sha1
 
-def diff_files(source_file, target_file, output_file):
+def diff_files(source_file, target_file, output_file, kwargs):
+    # kwargs
+    # skip_validation   :   skipp sha1 validation
+    # LOG = log object for nova
+    # nova_util = nova_util is executioin wrapper for nova framework
+    #           You should use nova_util in OpenStack, or subprocess 
+    #           will be returned without finishing their work
+    log = kwargs.get("log", None)
+    nova_util = kwargs.get('nova_util', None)
+
     if os.path.exists(source_file) == False or open(source_file, "rb") == None:
         raise IOError('[Error] No such file %s' % (source_file))
         return None
@@ -32,31 +41,38 @@ def diff_files(source_file, target_file, output_file):
     if os.path.exists(output_file):
         os.remove(output_file)
 
-    print '[INFO] %s(base) - %s  =  %s' % (os.path.basename(source_file), os.path.basename(target_file), os.path.basename(output_file))
-    command_delta = ['xdelta3', '-f', '-s', source_file, target_file, output_file]
-    ret = xdelta3.xd3_main_cmdline(command_delta)
-    if ret == 0:
-        return output_file
+    if nova_util:
+        nova_util.execute("xdelta3", "-f", "-s", str(source_file), str(target_file), str(output_file))
     else:
+        print '[INFO] %s(base) - %s  =  %s' % (os.path.basename(source_file), os.path.basename(target_file), os.path.basename(output_file))
+        command_delta = ['xdelta3', '-f', '-s', source_file, target_file, output_file]
+        ret = xdelta3.xd3_main_cmdline(command_delta)
+
+    if ret != 0:
         raise IOError('Cannot do file diff')
 
 
 def merge_files(source_file, overlay_file, output_file, **kwargs):
+    # kwargs
+    # skip_validation   :   skipp sha1 validation
+    # LOG = log object for nova
+    # nova_util = nova_util is executioin wrapper for nova framework
+    #           You should use nova_util in OpenStack, or subprocess 
+    #           will be returned without finishing their work
     log = kwargs.get("log", None)
-    #command_patch = ['xdelta3', '-df', '-s', source_file, overlay_file, output_file]
-    #print command_patch
-    #ret = xdelta3.xd3_main_cmdline(command_patch)
-    command_patch = ["xdelta3", "-df", "-s", source_file, overlay_file, output_file]
-    ret = subprocess.call(command_patch)
+    nova_util = kwargs.get('nova_util', None)
 
-    #print command_patch
-    if ret == 0:
-        if log:
-            log.debug("output : %s (%d)" % (output_file, os.path.getsize(output_file)))
-        return output_file
+    fout = open(output_file, "wb")
+    fout.close()
+    if log:
+        log.debug("merge: %s (%d)" % (source_file, os.path.getsize(source_file)))
+
+    if nova_util:
+        nova_util.execute("xdelta3", "-df", "-s", str(source_file), str(overlay_file), str(output_file))
     else:
-        if log:
-            log.debug("output : %s (%d)" % (output_file, os.path.getsize(output_file)))
+        command_patch = ["xdelta3", "-df", "-s", source_file, overlay_file, output_file]
+        ret = subprocess.call(command_patch)
+    if ret != 0:
         raise IOError('xdelta merge failed')
 
 
@@ -72,13 +88,27 @@ def compare_same(filename1, filename2):
 
 
 # lzma compression
-def comp_lzma(inputname, outputname):
+def comp_lzma(inputname, outputname, **kwargs):
+    # kwargs
+    # skip_validation   :   skipp sha1 validation
+    # LOG = log object for nova
+    # nova_util = nova_util is executioin wrapper for nova framework
+    #           You should use nova_util in OpenStack, or subprocess 
+    #           will be returned without finishing their work
+    log = kwargs.get("log", None)
+    nova_util = kwargs.get('nova_util', None)
+
     prev_time = time()
     fin = open(inputname, 'rb')
     fout = open(outputname, 'wb')
-    ret = subprocess.call(['xz', '-9cv'], stdin=fin, stdout=fout)
-    if ret:
-        raise IOError('XZ compressor failed')
+    if nova_util:
+        (stdout, stderr) = nova_util.execute('xz', '-9cv', process_input=fin.read())
+        fout.write(stdout)
+    else:
+        ret = subprocess.call(['xz', '-9cv'], stdin=fin, stdout=fout)
+        if ret:
+            raise IOError('XZ compressor failed')
+
     fin.close()
     fout.close()
     time_diff = str(time()-prev_time)
@@ -86,13 +116,28 @@ def comp_lzma(inputname, outputname):
 
 
 # lzma decompression
-def decomp_lzma(inputname, outputname):
+def decomp_lzma(inputname, outputname, **kwargs):
+    # kwargs
+    # skip_validation   :   skipp sha1 validation
+    # LOG = log object for nova
+    # nova_util = nova_util is executioin wrapper for nova framework
+    #           You should use nova_util in OpenStack, or subprocess 
+    #           will be returned without finishing their work
+    log = kwargs.get("log", None)
+    nova_util = kwargs.get('nova_util', None)
+
     prev_time = time()
     fin = open(inputname, 'rb')
     fout = open(outputname, 'wb')
-    ret = subprocess.call(['xz', '-d'], stdin=fin, stdout=fout)
-    if ret:
-        raise IOError('XZ decompressor failed')
+    if nova_util:
+        (stdout, stderr) = nova_util.execute('xz', '-d', process_input=fin.read())
+        fout.write(stdout)
+    else:
+        ret = subprocess.call(['xz', '-d'], stdin=fin, stdout=fout)
+        if ret:
+            raise IOError('XZ decompressor failed')
+    fin.close()
+    fout.close()
 
     time_diff = str(time()-prev_time)
     return outputname, str(time_diff)

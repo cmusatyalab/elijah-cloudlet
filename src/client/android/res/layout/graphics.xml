@@ -10,7 +10,7 @@
         android:layout_height="wrap_content"
         android:gravity="center_vertical"
         android:text="Latency Test"
-        android:textSize="15sp" />
+        android:textSize="12sp" />
         
     <android.opengl.GLSurfaceView
         android:id="@+id/fluidgl_view"
