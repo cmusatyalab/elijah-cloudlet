@@ -23,7 +23,7 @@ import subprocess
 from time import time
 from hashlib import sha1
 
-def diff_files(source_file, target_file, output_file, kwargs):
+def diff_files(source_file, target_file, output_file, **kwargs):
     # kwargs
     # skip_validation   :   skipp sha1 validation
     # LOG = log object for nova
@@ -43,13 +43,14 @@ def diff_files(source_file, target_file, output_file, kwargs):
 
     if nova_util:
         nova_util.execute("xdelta3", "-f", "-s", str(source_file), str(target_file), str(output_file))
+        return 0
     else:
         print '[INFO] %s(base) - %s  =  %s' % (os.path.basename(source_file), os.path.basename(target_file), os.path.basename(output_file))
         command_delta = ['xdelta3', '-f', '-s', source_file, target_file, output_file]
         ret = xdelta3.xd3_main_cmdline(command_delta)
-
-    if ret != 0:
-        raise IOError('Cannot do file diff')
+        if ret != 0:
+            raise IOError('Cannot do file diff')
+        return ret
 
 
 def merge_files(source_file, overlay_file, output_file, **kwargs):

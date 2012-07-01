@@ -28,7 +28,7 @@ from optparse import OptionParser
 from json import dumps
 from json import loads
 
-from vmnext import _QemuMemoryHeader
+from vmnetx import _QemuMemoryHeader
 from tool import comp_lzma
 from tool import decomp_lzma
 from tool import diff_files
@@ -161,14 +161,9 @@ def run_delta_compression(output_list, **kwargs):
         start_time = time()
 
         # xdelta
-        ret = diff_files(base, modified, overlay, nova_util=nova_util)
+        diff_files(base, modified, overlay, nova_util=nova_util)
         print '[TIME] time for creating overlay : ', str(time()-start_time)
         print '[INFO] (%d)-(%d)=(%d): ' % (os.path.getsize(base), os.path.getsize(modified), os.path.getsize(overlay))
-        if ret == None:
-            print >> sys.stderr, '[ERROR] cannot create overlay ' + str(overlay)
-            if os.path.exists(modified):
-                os.remove(modified)
-            continue
         
         # compression
         comp = overlay + '.lzma'
@@ -311,7 +306,15 @@ def run_vm(conn, libvirt_xml, **kwargs):
     return machine
 
 
-def save_mem_snapshot(machine, fout_path):
+def save_mem_snapshot(machine, fout_path, **kwargs):
+    #kwargs
+    #LOG = log object for nova
+    #nova_util = nova_util is executioin wrapper for nova framework
+    #           You should use nova_util in OpenStack, or subprocess 
+    #           will be returned without finishing their work
+    log = kwargs.get('log', None)
+    nova_util = kwargs.get('nova_util', None)
+
     #Pause VM
     ret = machine.suspend()
     if ret != 0:
