@@ -372,8 +372,8 @@ def main(argv=None):
         overlay_download(settings.server_address, "admin", "admin", overlay_name + "-disk", "./overlay.disk")
         overlay_download(settings.server_address, "admin", "admin", overlay_name + "-mem", "./overlay.mem")
     elif args[0] == 'synthesis':
-        overlay_disk_url = "http://dagama.isr.cs.cmu.edu/overlay/nova_overlay_disk.lzma"
-        overlay_mem_url = "http://dagama.isr.cs.cmu.edu/overlay/nova_overlay_mem.lzma"
+        overlay_disk_url = "http://server.krha.kr:8000/overlay.disk"
+        overlay_mem_url = "http://server.krha.kr:8000/overlay.mem"
         request_synthesis(settings.server_address, token, urlparse(endpoint), \
                 key_name="test", image_name="ubuntu-base-disk", server_name='synthesis', \
                 overlay_disk_url=overlay_disk_url, overlay_memory_url=overlay_mem_url)

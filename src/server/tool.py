@@ -70,11 +70,13 @@ def merge_files(source_file, overlay_file, output_file, **kwargs):
 
     if nova_util:
         nova_util.execute("xdelta3", "-df", "-s", str(source_file), str(overlay_file), str(output_file))
+        return 0
     else:
         command_patch = ["xdelta3", "-df", "-s", source_file, overlay_file, output_file]
         ret = subprocess.call(command_patch)
-    if ret != 0:
-        raise IOError('xdelta merge failed')
+        if ret != 0:
+            raise IOError('xdelta merge failed')
+        return 0
 
 
 def compare_same(filename1, filename2):
