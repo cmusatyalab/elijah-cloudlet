@@ -377,6 +377,12 @@ def main(argv=None):
         request_synthesis(settings.server_address, token, urlparse(endpoint), \
                 key_name="test", image_name="ubuntu-base-disk", server_name='synthesis', \
                 overlay_disk_url=overlay_disk_url, overlay_memory_url=overlay_mem_url)
+    elif args[0] == 'start':
+        instance_name = args[1]
+        request_start_stop(settings.server_address, token, urlparse(endpoint), instance_name, is_request_start=True)
+    elif args[0] == 'stop':
+        instance_name = args[1]
+        request_start_stop(settings.server_address, token, urlparse(endpoint), instance_name, is_request_start=False)
     else:
         print "No such command"
         sys.exit(1)
@@ -390,10 +396,6 @@ def main(argv=None):
     elif args[0] == 'ext-list':
         ext_info = get_extension(settings.server_address, token, urlparse(endpoint), "Cloudlet")
         print ext_info
-    elif args[0] == 'start':
-        request_start_stop(settings.server_address, token, urlparse(endpoint), test_server_name, is_request_start=True)
-    elif args[0] == 'stop':
-        request_start_stop(settings.server_address, token, urlparse(endpoint), test_server_name, is_request_start=False)
     elif args[0] == 'overlay_start':
         request_cloudlet_overlay_start(settings.server_address, token, urlparse(endpoint), image_name=test_base_name, key_name="test")
     elif args[0] == 'cloudlet_list':

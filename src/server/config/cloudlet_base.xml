@@ -18,8 +18,15 @@
 			<target dev='hda'/>
 		</disk>
 		<graphics type='vnc' port='-1'/>
-		<interface type='user'>
-			<mac address="42:e8:12:a8:e0:a1"/>
+
+		<interface type="bridge">
+			<source bridge="br100" />
+			<mac address="fa:16:3e:1f:e8:b1" />
+			<model type="virtio" />
+			<filterref filter="nova-instance-instance-00000029-fa163e1fe8b1">
+				<parameter name="IP" value="192.168.4.36" />
+				<parameter name="DHCPSERVER" value="192.168.4.33" />
+			</filterref>
 		</interface>
 	</devices>
 </domain>

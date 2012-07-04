@@ -24,6 +24,7 @@ from xml.etree import ElementTree
 from uuid import uuid4
 from tempfile import mkstemp 
 from time import time
+from time import sleep
 from optparse import OptionParser
 from json import dumps
 from json import loads
@@ -51,7 +52,8 @@ def copy_disk(in_path, out_path):
 
 
 def get_libvirt_connection():
-    conn = libvirt.open("qemu:///session")
+    conn = libvirt.open("qemu:///system")
+    #conn = libvirt.open("qemu:///session")
     return conn
 
 def create_baseVM(vm_name, disk_image_path):
@@ -171,8 +173,8 @@ def run_delta_compression(output_list, **kwargs):
         ret_files.append(comp)
 
         # remove temporary files
-        os.remove(modified)
-        os.remove(overlay)
+        #os.remove(modified)
+        #os.remove(overlay)
 
     return ret_files
 
@@ -343,12 +345,6 @@ def run_snapshot(conn, disk_image, mem_snapshot, **kwargs):
         raise CloudletGenerationError("Malfomed XML embedded: %s" % os.path.abspath(mem_snapshot))
     disk_element.set("file", os.path.abspath(disk_image))
 
-    # set console path if it is
-    console_path = kwargs.get('console_path')
-    if console_path:
-        console = domxml.find('devices/serial/source')
-        console.set('path', console_path)
-
     # resume
     restore_with_config(conn, mem_snapshot, ElementTree.tostring(domxml))
 
@@ -366,6 +362,37 @@ def run_snapshot(conn, disk_image, mem_snapshot, **kwargs):
         vnc_process.wait()
     return machine
 
+def rettach_nic(conn, xml, **kwargs):
+    #kwargs
+    #LOG = log object for nova
+    #nova_util = nova_util is executioin wrapper for nova framework
+    #           You should use nova_util in OpenStack, or subprocess 
+    #           will be returned without finishing their work
+    log = kwargs.get('log', None)
+
+    # get machine
+    domxml = ElementTree.fromstring(xml)
+    uuid = domxml.find('uuid').text
+    machine = conn.lookupByUUIDString(uuid)
+
+    # get xml info of running xml
+    running_xml = machine.XMLDesc(libvirt.VIR_DOMAIN_XML_SECURE)
+    machinexml = ElementTree.fromstring(running_xml)
+    nic = machinexml.find('devices/interface')
+    nic_xml = ElementTree.tostring(nic)
+    
+    if log:
+        log.DEBUG(_("Rettaching device : %s" % str(nic_xml)))
+    else:
+        print "[Debug] Rettaching device : %s" % str(nic_xml)
+
+    #detach
+    machine.detachDevice(nic_xml)
+    sleep(3)
+
+    #attach
+    machine.attachDevice(nic_xml)
+
 
 def restore_with_config(conn, mem_snapshot, xml):
     print "[INFO] restoring VM..."
@@ -374,6 +401,23 @@ def restore_with_config(conn, mem_snapshot, xml):
     except libvirt.libvirtError, e:
         message = "%s\nXML: %s" % (str(e), xml)
         raise CloudletGenerationError(message)
+
+
+def copy_with_uuid(in_path, out_path, uuid):
+    fin = open(in_path)
+    fout = open(out_path, 'w')
+    hdr = _QemuMemoryHeader(fin)
+
+    # Write header with new uuid
+    domxml = ElementTree.fromstring(hdr.xml)
+    domxml.find('uuid').text = uuid
+    hdr.xml = ElementTree.tostring(domxml)
+    hdr.write(fout)
+    fout.flush()
+
+    # move to the content
+    hdr.seek_body(fin)
+    fout.write(fin.read())
 
 
 def copy_with_xml(in_path, out_path, xml):
@@ -455,6 +499,11 @@ def main(argv):
         hdr = _QemuMemoryHeader(open(out_path))
         domxml = ElementTree.fromstring(hdr.xml)
         print "new xml is changed uuid to " + domxml.find('uuid').text
+    elif mode == 'nic':
+        mem_path = args[1]
+        conn = get_libvirt_connection()
+        hdr = _QemuMemoryHeader(open(mem_path))
+        rettach_nic(conn, hdr.xml)
 
 
 if __name__ == "__main__":
