@@ -173,16 +173,16 @@ def run_delta_compression(output_list, **kwargs):
         ret_files.append(comp)
 
         # remove temporary files
-        #os.remove(modified)
-        #os.remove(overlay)
+        os.remove(modified)
+        os.remove(overlay)
 
     return ret_files
 
 
 def recover_launchVM_from_URL(base_disk_path, base_mem_path, overlay_disk_url, overlay_mem_url, **kwargs):
-    #kwargs
-    #LOG = log object for nova
-    #nova_util = nova_util is executioin wrapper for nova framework
+    # kwargs
+    # LOG = log object for nova
+    # nova_util = nova_util is executioin wrapper for nova framework
     #           You should use nova_util in OpenStack, or subprocess 
     #           will be returned without finishing their work
     log = kwargs.get('log', None)
@@ -202,6 +202,8 @@ def recover_launchVM_from_URL(base_disk_path, base_mem_path, overlay_disk_url, o
 
     # download overlay
     basedir = os.path.dirname(base_mem_path)
+    #overlay_disk = os.path.join("/tmp", "overlay.disk")
+    #overlay_mem = os.path.join("/tmp", "overlay.mem")
     overlay_disk = os.path.join(basedir, "overlay.disk")
     overlay_mem = os.path.join(basedir, "overlay.mem")
     download(overlay_disk_url, overlay_disk)
@@ -223,6 +225,9 @@ def recover_launchVM_from_URL(base_disk_path, base_mem_path, overlay_disk_url, o
     # recover launch VM
     launch_disk, launch_mem = recover_launchVM(meta, overlay_disk, overlay_mem, \
             skip_validation=True, log=log, nova_util=nova_util)
+
+    os.remove(overlay_disk)
+    os.remove(overlay_mem)
     return launch_disk, launch_mem
 
 
@@ -272,7 +277,8 @@ def recover_launchVM(meta, overlay_disk, overlay_mem, **kwargs):
             print msg
 
         # merge with base image
-        recover = os.path.join(os.path.dirname(base), os.path.basename(comp) + '.recover'); 
+        from random import randint
+        recover = os.path.join(os.path.dirname(base), 'recover_%04d' % randint(0, 9999)); 
         prev_time = time()
         merge_files(base, overlay, recover, log=log, nova_util=nova_util)
         msg = '[Time] Recover(xdelta) image(%s) - %s' %(recover, str(time()-prev_time))
@@ -283,7 +289,7 @@ def recover_launchVM(meta, overlay_disk, overlay_mem, **kwargs):
             print msg
 
         #delete intermeidate files
-        #os.remove(overlay)
+        os.remove(overlay)
         recover_outputs.append(recover)
         
     return recover_outputs
@@ -382,16 +388,28 @@ def rettach_nic(conn, xml, **kwargs):
     nic_xml = ElementTree.tostring(nic)
     
     if log:
-        log.DEBUG(_("Rettaching device : %s" % str(nic_xml)))
+        log.debug(_("Rettaching device : %s" % str(nic_xml)))
+        log.debug(_("memory xml"))
+        log.debug(_("%s" % xml))
+        log.debug(_("running xml"))
+        log.debug(_("%s" % running_xml))
     else:
         print "[Debug] Rettaching device : %s" % str(nic_xml)
 
     #detach
     machine.detachDevice(nic_xml)
     sleep(3)
+    if log:
+        log.debug(_("dettached xml"))
+        dettached_xml = machine.XMLDesc(libvirt.VIR_DOMAIN_XML_SECURE)
+        log.debug(_("%s" % str(dettached_xml)))
 
     #attach
     machine.attachDevice(nic_xml)
+    if log:
+        log.debug(_("rettached xml"))
+        rettached_xml = machine.XMLDesc(libvirt.VIR_DOMAIN_XML_SECURE)
+        log.debug(_("%s" % str(rettached_xml)))
 
 
 def restore_with_config(conn, mem_snapshot, xml):
