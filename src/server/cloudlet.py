@@ -452,7 +452,7 @@ def stop_vm(telnet_port):
     tn.close()
 
 
-def create_base(imagefile, os_type=None):
+def create_base(imagefile, os_type=None, **kwargs):
     if os.path.exists(imagefile) == False:
         print >> sys.stderr, '[ERROR] %s is not exist' % imagefile
         return None
@@ -474,7 +474,7 @@ def create_base(imagefile, os_type=None):
     print '[INFO] run Base Image to generate memory snapshot'
     telnet_port = 12123; vnc_port = 3
 
-    run_image(base_image, telnet_port, vnc_port, os_type=os_type)
+    run_image(base_image, telnet_port, vnc_port, os_type=os_type, terminal_mode=kwargs.get("terminal_mode", False))
     base_mem = os.path.join(vm_path, vm_name) + '.base.mem'
 
     # stop and migrate

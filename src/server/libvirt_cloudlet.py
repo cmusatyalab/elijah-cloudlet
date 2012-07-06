@@ -19,7 +19,6 @@ import libvirt
 import sys
 import os
 import subprocess
-from xml.dom.minidom import parse
 from xml.etree import ElementTree
 from uuid import uuid4
 from tempfile import mkstemp 
@@ -52,16 +51,14 @@ def copy_disk(in_path, out_path):
 
 
 def get_libvirt_connection():
-    conn = libvirt.open("qemu:///system")
-    #conn = libvirt.open("qemu:///session")
+    conn = libvirt.open("qemu:///session")
     return conn
 
 def create_baseVM(vm_name, disk_image_path):
-    """Create Base VM(disk, memory) snapshot using given VM disk image
-    :param vm_name : Name of the Base VM
-    :param disk_image_path : file path of the VM disk image
-    :returns: (generated base VM disk path, generated base VM memory path)
-    """
+    # Create Base VM(disk, memory) snapshot using given VM disk image
+    # :param vm_name : Name of the Base VM
+    # :param disk_image_path : file path of the VM disk image
+    # :returns: (generated base VM disk path, generated base VM memory path)
     global BaseVM_xml
 
     # check sanity
@@ -81,22 +78,21 @@ def create_baseVM(vm_name, disk_image_path):
     copy_disk(disk_image_path, base_diskpath)
 
     # edit default XML to use give disk image
-    dom = parse(os.path.abspath(BaseVM_xml))
-    name_elements = dom.getElementsByTagName('name')
-    disk_elements = dom.getElementsByTagName('disk')
-    uuid_elements = dom.getElementsByTagName('uuid')
-    if not name_elements or not disk_elements or not uuid_elements:
+    domxml = ElementTree.fromstring(BaseVM_xml)
+    name_element = domxml.find('name')
+    disk_element = domxml.getElementsByTagName('devices/disk/source')
+    uuid_element = domxml.getElementsByTagName('uuid')
+    if not name_element or not disk_element or not uuid_element:
         raise CloudletGenerationError("Malfomed XML input: %s", os.path.abspath(BaseVM_xml))
-    name_elements[0].firstChild.nodeValue = vm_name
-    uuid_elements[0].firstChild.nodeValue = uuid4()
-    disk_source_element = disk_elements[0].getElementsByTagName('source')[0] 
-    disk_source_element.setAttribute("file", os.path.abspath(base_diskpath))
+    name_element.text = vm_name
+    uuid_element.text = uuid4()
+    disk_element.set("file", os.path.abspath(base_diskpath))
     #print "XML Converted"
     #print dom.toxml()
 
     # launch VM & vnc console
     conn = get_libvirt_connection()
-    machine = run_vm(conn, dom.toxml(), wait_vnc=True)
+    machine = run_vm(conn, ElementTree.tostring(domxml), wait_vnc=True)
     # make a snapshot
     save_mem_snapshot(machine, base_mempath)
 
@@ -297,7 +293,7 @@ def recover_launchVM(meta, overlay_disk, overlay_mem, **kwargs):
 
 def run_vm(conn, libvirt_xml, **kwargs):
     # kwargs
-    # vnc_disable       :   show vnc console
+    # vnc_disable       :   do not show vnc console
     # wait_vnc          :   wait until vnc finishes if vnc_enabled
 
     # TODO: get right parameter for second argument
