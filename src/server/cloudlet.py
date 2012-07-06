@@ -29,9 +29,11 @@ import telnetlib
 import socket
 import pylzma
 
-VM_MEMORY = 4096
-BALLOON_MEM_SIZE = VM_MEMORY
-VCPU_NUMBER = 4
+#VM_MEMORY = 4096
+#VCPU_NUMBER = 4
+VM_MEMORY = 2048
+VCPU_NUMBER = 2
+#BALLOON_MEM_SIZE = VM_MEMORY
 
 #KVM = '../kvm-qemu/x86_64-softmmu/qemu-system-x86_64'
 OVF_TRANSPORTER = "../../image/ubuntu-11.10-x86_64-server/ovftransport.iso"
@@ -170,9 +172,14 @@ def create_overlay(base_image, base_mem, os_type):
         argument.append((base_image, tmp_disk, overlay_disk))
         argument.append((base_mem, tmp_mem, overlay_mem))
 
+    ret_files = run_delta_compress(argument)
+    return ret_files
+
+
+def run_delta_compress(overlay_list):
     # xdelta and compression
     ret_files = []
-    for (base, tmp, overlay) in argument:
+    for (base, tmp, overlay) in overlay_list:
         prev_time = datetime.now()
 
         # xdelta
@@ -274,7 +281,7 @@ def telnet_connection_waiting(telnet_port):
     return False
 
 
-def run_snapshot(disk_image, memory_image, telnet_port, vnc_port, wait_vnc_end, terminal_mode=False, os_type='window'):
+def run_snapshot(disk_image, memory_image, telnet_port, vnc_port, wait_vnc_end=True, terminal_mode=False, os_type='window'):
     vm_path = os.path.dirname(memory_image)
     vnc_file = os.path.join(vm_path, 'kvm.vnc')
     

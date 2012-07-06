@@ -80,15 +80,15 @@ def create_baseVM(vm_name, disk_image_path):
     # edit default XML to use give disk image
     domxml = ElementTree.fromstring(BaseVM_xml)
     name_element = domxml.find('name')
-    disk_element = domxml.getElementsByTagName('devices/disk/source')
-    uuid_element = domxml.getElementsByTagName('uuid')
-    if not name_element or not disk_element or not uuid_element:
-        raise CloudletGenerationError("Malfomed XML input: %s", os.path.abspath(BaseVM_xml))
+    disk_element = domxml.find('devices/disk/source')
+    uuid_element = domxml.find('uuid')
+    if name_element == None or disk_element == None or uuid_element == None:
+        raise Exception("Malfomed XML input: %s", os.path.abspath(BaseVM_xml))
     name_element.text = vm_name
-    uuid_element.text = uuid4()
+    uuid_element.text = str(uuid4())
     disk_element.set("file", os.path.abspath(base_diskpath))
     #print "XML Converted"
-    #print dom.toxml()
+    #print ElementTree.tostring(domxml)
 
     # launch VM & vnc console
     conn = get_libvirt_connection()
