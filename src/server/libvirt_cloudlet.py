@@ -1,4 +1,5 @@
 #!/usr/bin/env python
+
 #
 # Elijah: Cloudlet Infrastructure for Mobile Computing
 # Copyright (C) 2011-2012 Carnegie Mellon University
@@ -145,13 +146,15 @@ def create_overlay(base_image, base_mem):
 
 
 def run_delta_compression(output_list, **kwargs):
-    #kwargs
-    #LOG = log object for nova
-    #nova_util = nova_util is executioin wrapper for nova framework
+    # kwargs
+    # LOG = log object for nova
+    # nova_util = nova_util is executioin wrapper for nova framework
     #           You should use nova_util in OpenStack, or subprocess 
     #           will be returned without finishing their work
+    # custom_delta
     log = kwargs.get('log', None)
     nova_util = kwargs.get('nova_util', None)
+    custom_delta = kwargs.get('custom_delta', False)
 
     # xdelta and compression
     ret_files = []
@@ -159,7 +162,10 @@ def run_delta_compression(output_list, **kwargs):
         start_time = time()
 
         # xdelta
-        diff_files(base, modified, overlay, nova_util=nova_util)
+        if custom_delta:
+            diff_files(base, modified, overlay, nova_util=nova_util)
+        else:
+            diff_files(base, modified, overlay, nova_util=nova_util)
         print '[TIME] time for creating overlay : ', str(time()-start_time)
         print '[INFO] (%d)-(%d)=(%d): ' % (os.path.getsize(base), os.path.getsize(modified), os.path.getsize(overlay))
         

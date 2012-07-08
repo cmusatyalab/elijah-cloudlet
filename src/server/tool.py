@@ -22,6 +22,12 @@ import sys
 import subprocess
 from time import time
 from hashlib import sha1
+from hashlib import sha256
+import mmap
+import struct
+
+#global
+HASH_CHUNKING_SIZE = 4012
 
 def diff_files(source_file, target_file, output_file, **kwargs):
     # kwargs
@@ -52,6 +58,35 @@ def diff_files(source_file, target_file, output_file, **kwargs):
             raise IOError('Cannot do file diff')
         return ret
 
+
+def diff_files_custom(source_file, target_file, output_file, **kwargs):
+    # kwargs
+    # skip_validation   :   skipp sha1 validation
+    # LOG = log object for nova
+    # nova_util = nova_util is executioin wrapper for nova framework
+    #           You should use nova_util in OpenStack, or subprocess 
+    #           will be returned without finishing their work
+    log = kwargs.get("log", None)
+    nova_util = kwargs.get('nova_util', None)
+
+    #sanity check
+    if os.path.exists(source_file) == False or open(source_file, "rb") == None:
+        raise IOError('[Error] No such file %s' % (source_file))
+        return None
+    if os.path.exists(target_file) == False or open(target_file, "rb") == None:
+        raise IOError('[Error] No such file %s' % (target_file))
+    if os.path.exists(output_file):
+        os.remove(output_file)
+
+    '''
+    base_disk_hash = hashlist_from_file()
+    base_mem_hash = hashlist_from_file()
+    modified_mem_hash = extract_hashlist(open(modified_mem, "rb"))
+    hash_for_disk = [(1, base_disk, base_disk_hash), (2, base_mem, base_mem_hash), (3, modified_mem, modified_mem_hash)]
+    hash_for_mem = [(1, base_disk, base_disk_hash), (2, base_mem, base_mem_hash)]
+    disk_deltalist = get_delta(open(modified_mem, "rb"), hash_for_disk)
+    mem_deltalist = get_delta(open(modified_mem, "rb"), hash_for_mem)
+    '''
 
 def merge_files(source_file, overlay_file, output_file, **kwargs):
     # kwargs
@@ -152,6 +187,190 @@ def sha1_fromfile(file_path):
     s = sha1()
     s.update(data)
     return s.hexdigest()
+
+
+def _chunking_fixed_size(in_stream, size):
+    s_index = 0
+    while True:
+        data = in_stream.read(size)
+        data_len = len(data)
+        if data_len <= 0:
+            break
+        #print "%d %d %d" % (s_index, s_index+data_len, data_len)
+        yield (s_index, s_index+data_len, data)
+        s_index += data_len
+
+
+def extract_hashlist(in_stream):
+    global HASH_CHUNKING_SIZE
+    hash_list = []
+    for (start, end, data) in _chunking_fixed_size(in_stream, HASH_CHUNKING_SIZE): # 4Kbyte fixed chunking
+        hash_list.append((sha256(data).digest(), start, end))
+
+    from operator import itemgetter
+    hash_list.sort(key=itemgetter(1,2))
+    hashlist_statistics(hash_list)
+    return hash_list
+
+
+def hashlist_statistics(hash_list):
+    # hash_list : list of (hash_value, start_index, end_index)
+    # hash_list must be sorted 
+    cur_hash = 0
+    duplicated = 0
+    unique_counter = 0
+    unique_size = 0
+    total_size = 0
+    for (hash_value, s_index, e_index) in hash_list:
+        total_size += (e_index-s_index)
+        if cur_hash != hash_value:
+            cur_hash = hash_value
+            unique_counter += 1
+            unique_size += (e_index-s_index)
+        else:
+            duplicated += 1
+
+    print "total : %d, unique: %d, compress: %lf" % (total_size, unique_size, (1.0*unique_size/total_size))
+
+
+def _search_matching(hash_value, hash_list, search_start_index):
+    # search from the previous search point
+    # good for search performance if list is already sorted
+    for index, (value, s_offset, e_offset) in enumerate(hash_list[search_start_index:]):
+        if value == hash_value:
+            return (search_start_index+index, s_offset, e_offset)
+    return None, None, None
+
+
+def get_delta(in_stream, hash_lists):
+    global HASH_CHUNKING_SIZE
+
+    matching_count = 0
+    total_count = 0
+    latest_found = {}
+    for ref_id, path, hast_list in hash_lists:
+        latest_found[ref_id] = 0
+
+    delta_result = []
+    for (start, end, data) in _chunking_fixed_size(in_stream, HASH_CHUNKING_SIZE):
+        total_count += 1
+        hash_value = sha256(data).digest()
+
+        if total_count%1000 == 0:
+            done_size = total_count*HASH_CHUNKING_SIZE
+            print "%d/%d , %lf percent" % (matching_count, total_count, 100.0*done_size/400000000)
+
+        #find matching hash for each hash_list
+        for ref_hashlist_id, path, hash_list in hash_lists:
+            found_index , s_offset, e_offset = _search_matching(hash_value, hash_list, latest_found[ref_hashlist_id])
+            if found_index:
+                break
+
+        # save ref if it is found
+        if found_index:
+            # save it with hash value
+            delta_result.append((start, end, ref_hashlist_id, hash_value))
+            latest_found[ref_hashlist_id] = found_index
+            matching_count += 1
+            #print "found from hast_list %d, at the %d" % (ref_hashlist_id, latest_found[ref_hashlist_id])
+        else:
+            delta_result.append((start, end, 0, data))
+
+    print "matching %d/%d = %lf" % (matching_count, total_count, 1.0*matching_count/total_count)
+    return delta_result 
+
+
+def merge_delta(delta_list, hash_lists):
+    global HASH_CHUNKING_SIZE
+
+    ref_mmap = {}
+    for (ref_id, filepath, hast_list) in hash_lists:
+        f = open(filepath, "rb")
+        ref_mmap[ref_id] = mmap.mmap(f.fileno(), 0, prot=mmap.PROT_READ)
+
+    recover_data = ''
+    # delta list is sorted by start_offset when saved it to file
+    for (start_offset, end_offset, ref_id, data) in delta_list:
+        if ref_id:
+            for (id, path, hash_list) in hash_lists:
+                if ref_id == id:
+                    break
+            index, s_offset, e_offset = _search_matching(data, hash_list, 0)
+            ref_data = ref_mmap[ref_id][s_offset:e_offset]
+            #print "from hash[%d]\t%d ~ %d : %d" % (ref_id, start_offset, end_offset, len(ref_data))
+        else:
+            ref_data = data
+            #print "from data\t%d ~ %d : %d" % (start_offset, end_offset, len(ref_data))
+        recover_data += ref_data
+    return recover_data
+
+
+def hashlist_to_file(hash_list, out_path):
+    fd = open(out_path, "wb")
+    for (data, start_offset, end_offset) in hash_list:
+        # save it as little endian format
+        row = struct.pack("<32sqq", data, start_offset, end_offset)
+        fd.write(row)
+    fd.close()
+
+
+def hashlist_from_file(in_path):
+    fd = open(in_path, "rb")
+    hash_list = []
+    while True:
+        data = fd.read(32+8+8) # hash value, start_offset, end_offset
+        if not data:
+            break
+        sha256, start_offset, end_offset = struct.unpack("<32sqq", data)
+        hash_list.append((sha256, start_offset, end_offset))
+
+    fd.close()
+    return hash_list 
+
+def deltalist_to_file(delta_list, out_path):
+    # delta list format
+    # list of (start_offset, end_offset, ref_hashlist_id, data)
+    # data : hash value of reference hash list, if ref_hashlist_id exist
+    #       real data, if ref_hashlist_id is None
+    from operator import itemgetter
+    delta_list.sort(key=itemgetter(1))  # sort by start_offset
+
+    fd = open(out_path, "wb")
+    for (start_offset, end_offset, ref_id, data) in delta_list:
+        # save it as little endian format,
+        header = struct.pack("<qqc", start_offset, end_offset, chr(ref_id))
+        fd.write(header)
+        fd.write(data)
+    fd.close()
+
+
+def deltalist_from_file(in_path):
+    # delta list format
+    # list of (start_offset, end_offset, ref_hashlist_id, data)
+    # data : hash value of reference hash list, if ref_hashlist_id exist
+    #       real data, if ref_hashlist_id is 0
+
+    fd = open(in_path, "rb")
+    delta_list = []
+    while True:
+        header = fd.read(8+8+1)
+        if not header:
+            break
+
+        start_offset, end_offset, ref_hashlist_id = struct.unpack("<qqc", header)
+        ref_hashlist_id = ord(ref_hashlist_id)
+        if ref_hashlist_id:
+            # get hash value, which is size of SHA256(==256 bit)
+            data = fd.read(256/8)
+            #print "hash, recovering : %d %d" % (start_offset, end_offset)
+        else:
+            # get real data, which is HASH_CHUNKING_SIZE
+            data = fd.read(HASH_CHUNKING_SIZE)
+            #print "data, recovering : %d %d" % (start_offset, end_offset)
+        delta_list.append((start_offset, end_offset, ref_hashlist_id, data))
+
+    fd.close()
+    return delta_list
 
 
 if __name__ == "__main__":

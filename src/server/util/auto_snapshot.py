@@ -58,8 +58,6 @@ def create_base_with_libvirt(image_file, base_image, base_mem):
     name_element.text = "Test Base VM"
     uuid_element.text = str(uuid4())
     disk_element.set("file", os.path.abspath(base_image))
-    #print "XML Converted"
-    #print ElementTree.tostring(domxml)
 
     # launch VM & vnc console
     conn = libvirt_cloudlet.get_libvirt_connection()
@@ -68,11 +66,18 @@ def create_base_with_libvirt(image_file, base_image, base_mem):
     time.sleep(base_wait_time)
     libvirt_cloudlet.save_mem_snapshot(machine, base_mem)
 
+    # make hashing info
+    base_disk_hash = tool.extract_hashlist(open(base_image, "rb"))
+    base_mem_hash = tool.extract_hashlist(open(base_mem, "rb"))
+    tool.hashlist_to_file(base_disk_hash, base_image+".hash")
+    tool.hashlist_to_file(base_mem_hash, base_mem+".hash")
+
     return base_image, base_mem
 
+
 def create_overlay_with_kvm(base_disk, base_mem, overlay_disk, overlay_mem):
-    tmp_disk = base_disk + ".temp"
-    tmp_mem = base_mem + ".temp"
+    tmp_disk = base_disk + ".modi"
+    tmp_mem = base_mem + ".modi"
     telnet_port = 9999
     vnc_port = 1
     command_str = 'qemu-img create -f qcow2 -b ' + base_disk + ' ' + tmp_disk
@@ -89,7 +94,7 @@ def create_overlay_with_kvm(base_disk, base_mem, overlay_disk, overlay_mem):
     return ret_files
 
 
-def create_overlay_with_libvirt(base_disk, base_mem, overlay_diskpath, overlay_mempath):
+def create_overlay_with_libvirt(base_disk, base_mem, overlay_diskpath, overlay_mempath, custom_delta=False):
     meta_file_path = "./overlay_meta"
 
     #create meta file that has base VM information
@@ -100,9 +105,8 @@ def create_overlay_with_libvirt(base_disk, base_mem, overlay_diskpath, overlay_m
     meta_file.close()
     
     #make modified disk
-    from tempfile import mkstemp
-    fd1, modified_disk = mkstemp(prefix="cloudlet-disk-")
-    fd2, modified_mem = mkstemp(prefix="cloudlet-mem-")
+    modified_disk = base_disk + ".modi"
+    modified_mem = base_mem + ".modi"
     libvirt_cloudlet.copy_disk(base_disk, modified_disk)
 
     #resume with modified disk
@@ -116,9 +120,8 @@ def create_overlay_with_libvirt(base_disk, base_mem, overlay_diskpath, overlay_m
     output_list.append((base_disk, modified_disk, overlay_diskpath))
     output_list.append((base_mem, modified_mem, overlay_mempath))
 
-    ret_files = libvirt_cloudlet.run_delta_compression(output_list)
+    ret_files = libvirt_cloudlet.run_delta_compression(output_list, custom_delta=custom_delta)
     return ret_files
-    pass
 
 
 if __name__ == "__main__":
@@ -128,16 +131,11 @@ if __name__ == "__main__":
     sys.path.append(library_path)
     import cloudlet
     import libvirt_cloudlet
-
-    disk1, mem1 = create_base_with_kvm(image, "./kvm_base_disk", "./kvm_base_mem" )
-    kvm_overlay_disk, kvm_overlay_mem = create_overlay_with_kvm(disk1, mem1, \
-            "kvm_overlay_disk", "./kvm_overlay_mem") 
-    print "Create base : %s, %s" % (disk1, mem1)
-    print "Create overlay: %s, %s" % (kvm_overlay_disk, kvm_overlay_mem)
+    import tool
     
     disk2, mem2 = create_base_with_libvirt(image, "./libvirt_base_disk", "libvirt_base_mem")
     libvirt_overlay_disk, libvirt_overlay_mem =create_overlay_with_libvirt(disk2, mem2, \
             "libvirt_overlay_disk", "./libvirt_overlay_mem") 
     print "Create base : %s, %s" % (disk2, mem2)
-    print "Create base : %s, %s" % (libvirt_overlay_disk, libvirt_overlay_mem)
+    print "Create overlay: %s, %s" % (libvirt_overlay_disk, libvirt_overlay_mem)
 
