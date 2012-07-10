@@ -132,10 +132,16 @@ if __name__ == "__main__":
     import cloudlet
     import libvirt_cloudlet
     import tool
-    
+
+    disk2, mem2 = create_base_with_kvm(image, "./kvm_base_disk", "kvm_base_mem")
+    libvirt_overlay_disk, libvirt_overlay_mem =create_overlay_with_kvm(disk2, mem2, \
+            "libvirt_overlay_disk", "./libvirt_overlay_mem") 
+
+    '''
     disk2, mem2 = create_base_with_libvirt(image, "./libvirt_base_disk", "libvirt_base_mem")
     libvirt_overlay_disk, libvirt_overlay_mem =create_overlay_with_libvirt(disk2, mem2, \
             "libvirt_overlay_disk", "./libvirt_overlay_mem") 
     print "Create base : %s, %s" % (disk2, mem2)
     print "Create overlay: %s, %s" % (libvirt_overlay_disk, libvirt_overlay_mem)
+    '''
 
