@@ -280,7 +280,8 @@ def recover_launchVM(meta, overlay_disk, overlay_mem, **kwargs):
 
         # merge with base image
         from random import randint
-        recover = os.path.join(os.path.dirname(base), 'recover_%04d' % randint(0, 9999)); 
+        #recover = os.path.join(os.path.dirname(base), 'recover_%04d.qcow2' % randint(0, 9999)); 
+        recover = comp + '.recover.qcow2'
         prev_time = time()
         merge_files(base, overlay, recover, log=log, nova_util=nova_util)
         msg = '[Time] Recover(xdelta) image(%s) - %s' %(recover, str(time()-prev_time))
