@@ -16,9 +16,11 @@
 # for more details.
 #
 
-import libvirt
 import sys
 import struct
+import tool
+from hashlib import sha256
+from operator import itemgetter
 from pprint import pprint
 
 
@@ -41,9 +43,30 @@ class KVMMemory(object):
     RAM_SAVE_FLAG_CONTINUE = 0x20
     BLK_MIG_FLAG_EOS       = 0x02
 
-    def __init__(self, filepath):
-        self._mem_path = filepath
-        self.load_file(self._mem_path)
+    def __init__(self):
+        self.hash_list = []
+
+    @staticmethod
+    def import_from_libvirt(filepath):
+        memory = KVMMemory()
+        pass
+
+    @staticmethod
+    def import_from_hashfile(filepath):
+        memory = KVMMemory()
+        memory.hash_list = tool.hashlist_from_file(filepath)
+        tool.hashlist_statistics(memory.hash_list)
+        return memory
+
+    @staticmethod
+    def import_from_kvm(filepath):
+        memory = KVMMemory()
+        memory._load_file(filepath)
+        tool.hashlist_statistics(memory.hash_list)
+        return memory
+        
+    def export_to_file(self, f_path):
+        tool.hashlist_to_file(self.hash_list, f_path)
 
     def _seek_string(self, f, string):
         # return: index of end of the found string
@@ -62,7 +85,7 @@ class KVMMemory(object):
                     return position
             start_index += len(memdata)
 
-    def _load_cont_ram_block(self, f, max_size):
+    def _load_cont_ram_block(self, f, hash_list, max_size):
         offset = 0
         while True:
             header_flag =  struct.unpack(">q", f.read(8))[0]
@@ -74,19 +97,22 @@ class KVMMemory(object):
             if comp_flag & self.RAM_SAVE_FLAG_COMPRESS:
                 #print "processing (%ld)\tcompressed" % (offset)
                 compressed_byte = f.read(1)
+                data = compressed_byte*self.RAM_PAGE_SIZE
             elif comp_flag & self.RAM_SAVE_FLAG_PAGE:
                 #print "processing (%ld)\traw" % (offset)
                 data = f.read(self.RAM_PAGE_SIZE)
             else:
                 raise KVMMemoryError("Cannot interpret the memory: invalid header compression flag")
 
+            # make hash list
+            hash_list.append((sha256(data).digest(), offset, offset+self.RAM_PAGE_SIZE))
             # read can be continued to pc.rom without EOS flag
             if offset+self.RAM_PAGE_SIZE == max_size:
                 break;
 
         return offset
 
-    def load_file(self, filepath):
+    def _load_file(self, filepath):
         # All values are big-endian,
         # so that we need to convert to little-endian, which is x86 default
         f = open(filepath, "rb")
@@ -106,14 +132,17 @@ class KVMMemory(object):
         header_flag, id_length, id_string = struct.unpack(">qc%ds" % \
                 self.RAM_ID_LENGTH, f.read(8+1+self.RAM_ID_LENGTH))
         comp_flag = header_flag & 0x0fff
+        offset = header_flag & ~0x0fff
         if comp_flag == self.RAM_SAVE_FLAG_COMPRESS:
             compressed_byte = f.read(1)
+            data = compressed_byte*self.RAM_PAGE_SIZE
         elif comp_flag == self.RAM_SAVE_FLAG_PAGE:
             data = f.read(self.RAM_PAGE_SIZE)
+        self.hash_list.append((sha256(data).digest(), 0, offset))
 
         read_mem_size = 0
         while True:
-            read_mem_size = self._load_cont_ram_block(f, total_mem_size)
+            read_mem_size = self._load_cont_ram_block(f, self.hash_list, total_mem_size)
             if (read_mem_size+self.RAM_PAGE_SIZE) == total_mem_size:
                 break;
             section_start, section_id = struct.unpack(">cI", f.read(5))
@@ -126,19 +155,34 @@ class KVMMemory(object):
                 raise KVMMemoryError("Block migration is enabled, so this script does not compatilbe")
             section_start, section_id = struct.unpack(">cI", f.read(5))
 
-        print "load %ld memory from %ld file" % (read_mem_size, f.tell())
+        #self.hash_list.sort(key=itemgetter(1,2))
+        #tool.hashlist_statistics(self.hash_list)
+        #print "load %ld memory from %ld file" % (read_mem_size, f.tell())
 
+    def __hash__(self):
+        return self.hash_list
 
-    def hashing():
-        pass
+    def __sub__(self, other):
+        new_hashlist = other.hash_list
+        if len(self.hash_list) != len(new_hashlist):
+            raise KVMMemoryError("Cannot compare it: Different length of hashlist")
+
+        diff_list = []
+        for index, (value, s_offset, e_offset) in enumerate(self.hash_list):
+            (new_value, new_soffset, new_eoffset) = new_hashlist[index]
+            if (s_offset != new_soffset) or (e_offset != new_eoffset):
+                msg = "Cannot compare it: Different offset\nsource:(%ld,%ld) != dest:(%ld,%ld)" % \
+                        (s_offset, e_offset, new_soffset, new_eoffset)
+                raise KVMMemoryError(msg)
+            if value != new_value:
+                diff_list.append((value, s_offset, e_offset))
+        return diff_list
 
 
 if __name__ == "__main__":
-    memory_path = sys.argv[1]
-    memory = KVMMemory(memory_path)
-    '''
-    memory.hashing()
-    hashlist = memory.get_hashlist()
-    for item in hashlist:
-        print item
-    '''
+    base = KVMMemory.import_from_kvm(sys.argv[1])
+    modified = KVMMemory.import_from_hashfile(sys.argv[1]+".hash")
+    diff = base-modified
+    pprint(diff)
+    print "Diff page: %d" % len(diff)
+
