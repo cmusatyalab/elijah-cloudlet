@@ -61,6 +61,18 @@ def diff_files(source_file, target_file, output_file, **kwargs):
         return ret
 
 
+def diff_data(source_data, modi_data, **kwargs):
+    # kwargs
+    if len(source_data) == 0 or len(modi_data) == 0:
+        raise IOError("[Error] Not valid data length: %d, %d" % (len(source_data), len(modi_data)))
+    
+    result, patch = xdelta3.xd3_encode_memory(modi_data, source_data, len(modi_data))
+    if result != 0:
+        msg = "Error while xdelta3: %d" % result
+        raise IOError(msg)
+    return patch
+
+
 def diff_files_custom(source_file, target_file, output_file, **kwargs):
     # kwargs
     # skip_validation   :   skipp sha1 validation
@@ -116,6 +128,16 @@ def merge_files(source_file, overlay_file, output_file, **kwargs):
         return 0
 
 
+def merge_data(source_data, overlay_data, recover_size, **kwargs):
+    if len(source_data) == 0 or len(overlay_data) == 0:
+        raise IOError("[Error] Not valid data length: %d, %d" % (len(source_data), len(overlay_data)))
+    
+    result, target = xdelta3.xd3_decode_memory(overlay_data, source_data, recover_size)
+    if result != 0:
+        raise IOError("Error while xdelta3")
+    return target
+
+
 def compare_same(filename1, filename2):
     print '[INFO] checking validity of generated file'
     compare = filecmp.cmp(filename1, filename2)
@@ -130,7 +152,6 @@ def compare_same(filename1, filename2):
 # lzma compression
 def comp_lzma(inputname, outputname, **kwargs):
     # kwargs
-    # skip_validation   :   skipp sha1 validation
     # LOG = log object for nova
     # nova_util = nova_util is executioin wrapper for nova framework
     #           You should use nova_util in OpenStack, or subprocess 
@@ -153,6 +174,14 @@ def comp_lzma(inputname, outputname, **kwargs):
     fout.close()
     time_diff = str(time()-prev_time)
     return outputname, str(time_diff)
+
+
+def comp_lzma_memory(in_data):
+    _PIPE = subprocess.PIPE
+    process = subprocess.Popen(['xz', '-9cv'], shell=True, stdin=_PIPE, stdout=_PIPE)
+    out_data = process.communicate(in_data)
+    process.wait()
+    return out_data
 
 
 # lzma decompression
@@ -239,10 +268,13 @@ def _search_matching(hash_value, hash_list, search_start_index):
     # search from the previous search point
     # good for search performance if list is already sorted
     for index, (value, s_offset, e_offset) in enumerate(hash_list[search_start_index:]):
-        print "Search start at : %d, %d" % (index, search_start_index)
-        if value == hash_value:
+        print "Search start at : %d(%s), %d(%s)" % (index, search_start_index)
+        if hash_value == value:
             return (search_start_index+index, s_offset, e_offset)
-    return index, None, None
+        if hash_value > value:
+            return (search_start_index+index, None, None)
+
+    return None, None, None
 
 
 def get_delta(in_stream, hash_lists):
@@ -390,8 +422,17 @@ def deltalist_from_file(in_path):
 
 
 if __name__ == "__main__":
-    infile = sys.argv[1]
-    outfile = sys.argv[2]
-    comp_lzma(infile, infile+".lzma")
-    decomp_lzma(infile+".lzma", outfile)
+    import random
+    import string
+    base = ''.join(random.choice(string.ascii_uppercase + string.digits) for x in range(4096))
+    modi = '~'*4096
+    delta = diff_data(base, modi)
+    original = merge_data(base, delta, len(base))
+    
+    if sha256(original).digest() == sha256(modi).digest():
+        print "SUCCESS"
+        print len(delta)
+    else:
+        print "Failed"
+
 
