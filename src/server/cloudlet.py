@@ -198,8 +198,8 @@ def run_delta_compress(overlay_list):
         ret_files.append(comp)
 
         # remove temporary files
-        os.remove(tmp)
-        os.remove(overlay)
+        #os.remove(tmp)
+        #os.remove(overlay)
 
     return ret_files
 

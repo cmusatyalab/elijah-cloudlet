@@ -27,6 +27,8 @@ import mmap
 import struct
 
 #global
+HASHFILE_MAGIC = 0x1145511a
+HASHFILE_VERSION = 0x00000001
 HASH_CHUNKING_SIZE = 4012
 
 def diff_files(source_file, target_file, output_file, **kwargs):
@@ -237,9 +239,10 @@ def _search_matching(hash_value, hash_list, search_start_index):
     # search from the previous search point
     # good for search performance if list is already sorted
     for index, (value, s_offset, e_offset) in enumerate(hash_list[search_start_index:]):
+        print "Search start at : %d, %d" % (index, search_start_index)
         if value == hash_value:
             return (search_start_index+index, s_offset, e_offset)
-    return None, None, None
+    return index, None, None
 
 
 def get_delta(in_stream, hash_lists):
@@ -307,6 +310,11 @@ def merge_delta(delta_list, hash_lists):
 
 def hashlist_to_file(hash_list, out_path):
     fd = open(out_path, "wb")
+
+    # Write MAGIC & VERSION
+    fd.write(struct.pack("<q", HASHFILE_MAGIC))
+    fd.write(struct.pack("<q", HASHFILE_VERSION))
+
     for (data, start_offset, end_offset) in hash_list:
         # save it as little endian format
         row = struct.pack("<32sqq", data, start_offset, end_offset)
@@ -317,6 +325,14 @@ def hashlist_to_file(hash_list, out_path):
 def hashlist_from_file(in_path):
     fd = open(in_path, "rb")
     hash_list = []
+
+    # Write MAGIC & VERSION
+    magic, version = struct.unpack("<qq", fd.read(8+8))
+    if magic != HASHFILE_MAGIC or version != HASHFILE_VERSION:
+        msg = "Hash file magic number(%ld), version(%ld) does not match" \
+                % (HASHFILE_MAGIC, HASHFILE_VERSION)
+        raise IOError(msg)
+
     while True:
         data = fd.read(32+8+8) # hash value, start_offset, end_offset
         if not data:
