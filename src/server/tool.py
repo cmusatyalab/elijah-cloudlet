@@ -25,6 +25,7 @@ from hashlib import sha1
 from hashlib import sha256
 import mmap
 import struct
+import tempfile
 
 #global
 HASHFILE_MAGIC = 0x1145511a
@@ -62,15 +63,32 @@ def diff_files(source_file, target_file, output_file, **kwargs):
 
 
 def diff_data(source_data, modi_data, **kwargs):
-    # kwargs
     if len(source_data) == 0 or len(modi_data) == 0:
         raise IOError("[Error] Not valid data length: %d, %d" % (len(source_data), len(modi_data)))
-    
+
     result, patch = xdelta3.xd3_encode_memory(modi_data, source_data, len(modi_data))
     if result != 0:
         msg = "Error while xdelta3: %d" % result
         raise IOError(msg)
     return patch
+    '''
+    s_fd, s_path = tempfile.mkstemp(prefix="xdelta-")
+    m_fd, m_path = tempfile.mkstemp(prefix="xdelta-")
+    d_fd, d_path = tempfile.mkstemp(prefix="xdelta-")
+    os.write(s_fd, source_data)
+    os.write(m_fd, modi_data)
+    diff_files(s_path, m_path, d_path)
+    patch = open(d_path, "rb").read()
+    os.close(s_fd)
+    os.close(m_fd)
+    os.close(d_fd)
+    os.remove(s_path)
+    os.remove(m_path)
+    os.remove(d_path)
+
+    return patch
+
+    '''
 
 
 def diff_files_custom(source_file, target_file, output_file, **kwargs):
@@ -128,14 +146,31 @@ def merge_files(source_file, overlay_file, output_file, **kwargs):
         return 0
 
 
-def merge_data(source_data, overlay_data, recover_size, **kwargs):
+def merge_data(source_data, overlay_data):
     if len(source_data) == 0 or len(overlay_data) == 0:
         raise IOError("[Error] Not valid data length: %d, %d" % (len(source_data), len(overlay_data)))
     
-    result, target = xdelta3.xd3_decode_memory(overlay_data, source_data, recover_size)
+    esult, target = xdelta3.xd3_decode_memory(overlay_data, source_data, len(overlay_data))
     if result != 0:
         raise IOError("Error while xdelta3")
     return target
+    '''
+    s_fd, s_path = tempfile.mkstemp(prefix="xdelta-")
+    o_fd, o_path = tempfile.mkstemp(prefix="xdelta-")
+    r_fd, r_path = tempfile.mkstemp(prefix="xdelta-")
+    os.write(s_fd, source_data)
+    os.write(o_fd, overlay_data)
+    merge_files(s_path, o_path, r_path)
+    recovered = open(r_path, "rb").read()
+    os.close(s_fd)
+    os.close(o_fd)
+    os.close(r_fd)
+    os.remove(s_path)
+    os.remove(o_path)
+    os.remove(r_path)
+    return recovered
+
+    '''
 
 
 def compare_same(filename1, filename2):
@@ -425,14 +460,13 @@ if __name__ == "__main__":
     import random
     import string
     base = ''.join(random.choice(string.ascii_uppercase + string.digits) for x in range(4096))
-    modi = '~'*4096
-    delta = diff_data(base, modi)
-    original = merge_data(base, delta, len(base))
-    
-    if sha256(original).digest() == sha256(modi).digest():
+    modi = "~"*4096
+    patch = diff_data(base, modi)
+    recover = merge_data(base, patch)
+   
+    if sha256(modi).digest() == sha256(recover).digest():
         print "SUCCESS"
-        print len(delta)
+        print len(patch)
     else:
-        print "Failed"
-
+        print "Failed %d == %d" % (len(modi), len(recover))
 
