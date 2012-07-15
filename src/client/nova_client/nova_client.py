@@ -37,7 +37,10 @@ def get_list(server_address, token, end_point, request_list):
 
     params = urllib.urlencode({})
     headers = { "X-Auth-Token":token, "Content-type":"application/json" }
-    end_string = "%s/%s/detail" % (end_point[2], request_list)
+    if request_list == 'extensions':
+        end_string = "%s/%s" % (end_point[2], request_list)
+    else:
+        end_string = "%s/%s/detail" % (end_point[2], request_list)
 
     # HTTP response
     conn = httplib.HTTPConnection(end_point[1])
@@ -299,11 +302,14 @@ def process_command_line(argv):
 
 def get_extension(server_address, token, end_point, extension_name):
     ext_list = get_list(server_address, token, end_point, "extensions")
-    print json.dumps(ext_list, indent=4)
+    #print json.dumps(ext_list, indent=4)
 
-    for ext in ext_list:
-        if ext['name'] == extension_name:
-            return ext
+    if extension_name:
+        for ext in ext_list:
+            if ext['name'] == extension_name:
+                return ext
+    else:
+        return ext_list
 
 
 def get_ref_id(server_address, token, end_point, ref_string, name):
@@ -383,6 +389,12 @@ def main(argv=None):
     elif args[0] == 'stop':
         instance_name = args[1]
         request_start_stop(settings.server_address, token, urlparse(endpoint), instance_name, is_request_start=False)
+    elif args[0] == 'ext-list':
+        filter_name = None
+        if len(args)==2:
+            filter_name = args[1]
+        ext_info = get_extension(settings.server_address, token, urlparse(endpoint), filter_name)
+        print json.dumps(ext_info, indent=2)
     else:
         print "No such command"
         sys.exit(1)
@@ -393,9 +405,6 @@ def main(argv=None):
     elif args[0] == 'server-list':
         images = get_list(settings.server_address, token, urlparse(endpoint), "servers")
         print json.dumps(images, indent=2)
-    elif args[0] == 'ext-list':
-        ext_info = get_extension(settings.server_address, token, urlparse(endpoint), "Cloudlet")
-        print ext_info
     elif args[0] == 'overlay_start':
         request_cloudlet_overlay_start(settings.server_address, token, urlparse(endpoint), image_name=test_base_name, key_name="test")
     elif args[0] == 'cloudlet_list':

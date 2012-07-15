@@ -187,14 +187,18 @@ class KVMMemory(object):
                     #get xdelta comparing self.raw
                     source_data = self.get_raw_data(offset, self.RAM_PAGE_SIZE)
                     try:
-                        patch = tool.diff_data(source_data, data)
+                        patch = tool.diff_data(source_data, data, 2*len(source_data))
                         delta_item = DeltaItem(offset, self.RAM_PAGE_SIZE, 
                                 hash_value=sha256(data).digest(),
                                 ref_id=DeltaItem.REF_XDELTA,
                                 data_len=len(patch),
                                 data=patch)
                     except IOError:
-                        #print "[INFO] xdelta failed, so save it as raw"
+                        print "[INFO] xdelta failed, so save it as raw"
+                        #print "%ld, %ld" % (len(source_data), len(data))
+                        #open("./error_source", "wb").write(source_data)
+                        #open("./error_modi", "wb").write(data)
+                        #sys.exit(1)
                         patch = data
                         delta_item = DeltaItem(offset, self.RAM_PAGE_SIZE, 
                                 hash_value=sha256(data).digest(),

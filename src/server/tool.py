@@ -62,13 +62,14 @@ def diff_files(source_file, target_file, output_file, **kwargs):
         return ret
 
 
-def diff_data(source_data, modi_data, **kwargs):
+def diff_data(source_data, modi_data, buf_len):
     if len(source_data) == 0 or len(modi_data) == 0:
         raise IOError("[Error] Not valid data length: %d, %d" % (len(source_data), len(modi_data)))
 
-    result, patch = xdelta3.xd3_encode_memory(modi_data, source_data, len(modi_data))
+    result, patch = xdelta3.xd3_encode_memory(modi_data, source_data, buf_len, xdelta3.XD3_COMPLEVEL_9)
     if result != 0:
         msg = "Error while xdelta3: %d" % result
+        print msg
         raise IOError(msg)
     return patch
     '''
@@ -146,14 +147,14 @@ def merge_files(source_file, overlay_file, output_file, **kwargs):
         return 0
 
 
-def merge_data(source_data, overlay_data):
+def merge_data(source_data, overlay_data, buf_len):
     if len(source_data) == 0 or len(overlay_data) == 0:
         raise IOError("[Error] Not valid data length: %d, %d" % (len(source_data), len(overlay_data)))
     
-    esult, target = xdelta3.xd3_decode_memory(overlay_data, source_data, len(overlay_data))
+    result, recover = xdelta3.xd3_decode_memory(overlay_data, source_data, buf_len)
     if result != 0:
         raise IOError("Error while xdelta3")
-    return target
+    return recover 
     '''
     s_fd, s_path = tempfile.mkstemp(prefix="xdelta-")
     o_fd, o_path = tempfile.mkstemp(prefix="xdelta-")
@@ -461,8 +462,8 @@ if __name__ == "__main__":
     import string
     base = ''.join(random.choice(string.ascii_uppercase + string.digits) for x in range(4096))
     modi = "~"*4096
-    patch = diff_data(base, modi)
-    recover = merge_data(base, patch)
+    patch = diff_data(base, modi, len(base))
+    recover = merge_data(base, patch, len(base))
    
     if sha256(modi).digest() == sha256(recover).digest():
         print "SUCCESS"
