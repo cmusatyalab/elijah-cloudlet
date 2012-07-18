@@ -282,7 +282,7 @@ def process_command_line(argv):
     parser = OptionParser(usage="usage: %prog" + " [option]",
             version="Cloudlet Synthesys(piping) 0.1")
     parser.add_option(
-            '-s', '--server', action='store', type='string', dest='server_address', default='localhost',
+            '-s', '--server', action='store', type='string', dest='server_address', default='dagama.isr.cs.cmu.edu',
             help='set openstack api server address')
     parser.add_option(
             '-u', '--user', action='store', type='string', dest='user_name', default='admin',
