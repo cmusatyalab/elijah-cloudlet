@@ -68,7 +68,7 @@ def recv_data(sock, last_client_id):
     try:
         # recv initial simulation variable
         while True:
-            data = sock.recv(8)
+            data = recv_all(sock, 8)
             if not data:
                 print "recved data is null"
                 time.sleep(0.1)
