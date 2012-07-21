@@ -319,8 +319,8 @@ class KVMMemory(object):
         # pack hash list
         original_length = len(hash_list)
         hash_list = dict((x[2], x) for x in hash_list).values()
-        #print "[Debug] hashlist is packed: from %d to %d : %lf" % \
-        #        (original_length, len(hash_list), 1.0*len(hash_list)/original_length)
+        print "[Debug] hashlist is packed: from %d to %d : %lf" % \
+                (original_length, len(hash_list), 1.0*len(hash_list)/original_length)
         
 
     def export_to_file(self, f_path):
@@ -488,7 +488,7 @@ if __name__ == "__main__":
         print "[Debug] get delta from base Memory"
         base.get_delta(delta_list, ref_id=DeltaItem.REF_BASE_MEM)
 
-        # 3.find shared with self
+        # 3.find shared within self
         print "[Debug] get delta from itself"
         DeltaList.get_self_delta(delta_list)
         delta_list.sort(key=itemgetter('offset'))
