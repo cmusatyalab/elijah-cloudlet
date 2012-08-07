@@ -183,7 +183,9 @@ class KVMMemory(object):
             if diff:
                 # compare it with self, save only when it is different
                 self_hash_value = self.hash_list[offset/self.RAM_PAGE_SIZE][2]
-                if self_hash_value != sha256(data).digest():
+                if self_hash_value == sha256(data).digest():
+                    raise IOError("Implement")
+                else:
                     #get xdelta comparing self.raw
                     source_data = self.get_raw_data(offset, self.RAM_PAGE_SIZE)
                     try:

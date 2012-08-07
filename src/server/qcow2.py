@@ -380,7 +380,108 @@ class Qcow2(object):
         d = self.f.read(self.cluster_size)
         return d[cluster_index]
 
-def main():
+
+    @staticmethod
+    def _find_hash_matching(hash_list, value):
+        pass
+
+    @staticmethod
+    def get_modified_sectors(s_filepath, s_hashlist, m_path):
+        # return list of DeltaItem
+        global SECTOR_SIZE
+
+        m_file = open(m_path, "rb")
+        m_file.seek(0, os.SEEK_SET)
+        d = m_file.read(Qcow2.Header.size)
+        magic, version, backing_file_offset, backing_file_size, cluster_bits, size, crypt_method, l1_size, l1_table_offset, refcount_table_offset, refcount_table_clusters, nb_snapshots, snapshots_offset = Qcow2.Header.unpack_from(d)
+
+        #sanity check
+        if magic != "QFI\xfb" or version != 2:
+            raise Qcow2Error("modified file is not Qcow2 format")
+        if (not backing_file_offset) or (backing_file_size <= 0):
+            raise Qcow2Error("modified file does not have backing file")
+        m_file.seek(backing_file_offset, os.SEEK_SET)
+        backing_file = m_file.read(backing_file_size)
+        if os.path.absname(s_filepath) != backing_file:
+            raise Qcow2Error("backing file of modified file does not same with given base")
+
+        # Load L1 table
+        L1 = Struct('''>    #big-endian
+                %dQ    #offset''' % l1_size)
+        m_file.seek(l1_table_offset)
+        l1_table = L1.unpack_from(m_file.read(L1.size))
+
+        # set cluster bits
+        cluster_bits = cluster_bits
+        l2_bits = cluster_bits - 3 # each entry is u64
+        l2_size = 1L << l2_bits # entries
+        L2 = Struct('''>    #big-endian
+                %dQ    #offset''' % l2_size)
+
+        delta_list = []
+        # traverse each L1 entry
+        for l1_index in range(l1_size):
+            offset = l1_table[l1_index] & ~(3L << 62)
+            if not (offset > 0): continue
+            # Load L2 table
+            m_file.seek(offset)
+            d = m_file.read(L2.size)
+            l2_table = L2.unpack_from(d)
+
+            #traverse each L2 entry
+            for l2_index in range(l2_size):
+                offset = l2_table[l2_index] & ~(3L << 62)
+                if not offset:
+                    continue
+                
+                position = (l1_index << (cluster_bits+l2_bits)) + (l2_index << cluster_bits)
+                original_offset = m_file.tell()
+                m_file.seek(position)
+                m_data = m_file.read(1<<cluster_bits)
+                m_file.seek(original_offset)
+                m_hash = hashlib.sha256(m_data).digest()
+                s_offset = Qcow2._find_hash_matching(s_hashlist, m_hash)
+                if s_offset >= 0:
+                    #get xdelta comparing self.raw
+                    source_data = self.get_raw_data(offset, self.RAM_PAGE_SIZE)
+                    try:
+                        patch = tool.diff_data(source_data, data, 2*len(source_data))
+                        delta_item = DeltaItem(offset, self.RAM_PAGE_SIZE, 
+                                hash_value=sha256(data).digest(),
+                                ref_id=DeltaItem.REF_XDELTA,
+                                data_len=len(patch),
+                                data=patch)
+                    except IOError:
+                        print "[INFO] xdelta failed, so save it as raw"
+                        #print "%ld, %ld" % (len(source_data), len(data))
+                        #open("./error_source", "wb").write(source_data)
+                        #open("./error_modi", "wb").write(data)
+                        #sys.exit(1)
+                        patch = data
+                        delta_item = DeltaItem(offset, self.RAM_PAGE_SIZE, 
+                                hash_value=sha256(data).digest(),
+                                ref_id=DeltaItem.REF_RAW,
+                                data_len=len(patch),
+                                data=patch)
+                    hash_list.append(delta_item)
+
+
+                '''
+                for index in xrange(length/SECTOR_SIZE):
+                    sectors_list.append((position/SECTOR_SIZE+index, offset+index*SECTOR_SIZE))
+                '''
+
+
+    @staticmethod
+    def recover_qcow2(header_info, delta_list, out_path):
+        if type(header_info) != Qcow2.Header:
+            raise Qcow2Error("Need Qcow2 Header")
+        if len(delta_list) == 0 or type(delta_list[0]) != DeltaItem:
+            raise Qcow2Error("Need list of DeltaItem")
+        pass
+
+
+def obsolete_main():
     usage = 'usage: %prog [options] file.qcwo2'
     parser = OptionParser(usage=usage)
     parser.set_defaults(rcdump=True, l1dump=True, l2dump=True, ssdump=True, offset=True, valid=True)
