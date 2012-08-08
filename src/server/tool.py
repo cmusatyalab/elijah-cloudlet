@@ -152,7 +152,7 @@ def merge_data(source_data, overlay_data, buf_len):
     
     result, recover = xdelta3.xd3_decode_memory(overlay_data, source_data, buf_len)
     if result != 0:
-        raise IOError("Error while xdelta3")
+        raise IOError("Error while xdelta3 : %d" % result)
     return recover 
     '''
     s_fd, s_path = tempfile.mkstemp(prefix="xdelta-")
