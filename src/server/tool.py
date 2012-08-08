@@ -69,7 +69,6 @@ def diff_data(source_data, modi_data, buf_len):
     result, patch = xdelta3.xd3_encode_memory(modi_data, source_data, buf_len, xdelta3.XD3_COMPLEVEL_9)
     if result != 0:
         msg = "Error while xdelta3: %d" % result
-        print msg
         raise IOError(msg)
     return patch
     '''

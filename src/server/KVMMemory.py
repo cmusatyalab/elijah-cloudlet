@@ -24,6 +24,7 @@ import mmap
 from hashlib import sha256
 from operator import itemgetter
 from pprint import pprint
+from optparse import OptionParser
 
 class KVMMemoryError(Exception):
     pass
@@ -183,30 +184,27 @@ class KVMMemory(object):
             if diff:
                 # compare it with self, save only when it is different
                 self_hash_value = self.hash_list[offset/self.RAM_PAGE_SIZE][2]
-                if self_hash_value == sha256(data).digest():
-                    raise IOError("Implement")
-                else:
+                if self_hash_value != sha256(data).digest():
                     #get xdelta comparing self.raw
                     source_data = self.get_raw_data(offset, self.RAM_PAGE_SIZE)
+                    #save xdelta as DeltaItem only when it gives smaller
                     try:
                         patch = tool.diff_data(source_data, data, 2*len(source_data))
-                        delta_item = DeltaItem(offset, self.RAM_PAGE_SIZE, 
-                                hash_value=sha256(data).digest(),
-                                ref_id=DeltaItem.REF_XDELTA,
-                                data_len=len(patch),
-                                data=patch)
-                    except IOError:
-                        print "[INFO] xdelta failed, so save it as raw"
-                        #print "%ld, %ld" % (len(source_data), len(data))
-                        #open("./error_source", "wb").write(source_data)
-                        #open("./error_modi", "wb").write(data)
-                        #sys.exit(1)
-                        patch = data
+                        if len(patch) < len(data):
+                            delta_item = DeltaItem(offset, self.RAM_PAGE_SIZE, 
+                                    hash_value=sha256(data).digest(),
+                                    ref_id=DeltaItem.REF_XDELTA,
+                                    data_len=len(patch),
+                                    data=patch)
+                        else:
+                            raise IOError("xdelta3 patch is bigger than origianl")
+                    except IOError as e:
+                        #print "[INFO] xdelta failed, so save it as raw (%s)" % str(e)
                         delta_item = DeltaItem(offset, self.RAM_PAGE_SIZE, 
                                 hash_value=sha256(data).digest(),
                                 ref_id=DeltaItem.REF_RAW,
-                                data_len=len(patch),
-                                data=patch)
+                                data_len=len(data),
+                                data=data)
                     hash_list.append(delta_item)
                 # memory overusage protection
                 if len(hash_list) > 200000: # 800MB if PAGE_SIZE == 4K
@@ -232,10 +230,10 @@ class KVMMemory(object):
         # kwargs
         #  diff_file: compare filepath(modified ram) with self hash
         #  decomp_stream: write decompress memory to given path
+        decomp_stream = kwargs.get("decomp_stream", None)
         diff = kwargs.get("diff", None)
         if diff and len(self.hash_list) == 0:
             raise KVMMemoryError("Cannot compare give file this self.hashlist")
-        decomp_stream = kwargs.get("decomp_stream", None)
 
         # Convert big-endian to little-endian
         hash_list = []
@@ -275,11 +273,11 @@ class KVMMemory(object):
         return hash_list
 
     @staticmethod
-    def load_from_kvm(filepath, raw_path=None):
+    def load_from_kvm(filepath, out_path=None):
         # filepath  : input KVM Memory Snapshot file path
         # outpath   : make raw Memory file at a given path
         memory = KVMMemory()
-        memory.raw_file = open(raw_path, "wb")
+        memory.raw_file = open(out_path, "wb")
         memory.hash_list = memory._load_file(filepath, decomp_stream=memory.raw_file)
         return memory
 
@@ -329,8 +327,8 @@ class KVMMemory(object):
         fd = open(f_path, "wb")
 
         # Write MAGIC & VERSION
-        fd.write(struct.pack("<q", self.HASH_FILE_MAGIC))
-        fd.write(struct.pack("<q", self.HASH_FILE_VERSION))
+        fd.write(struct.pack("<q", KVMMemory.HASH_FILE_MAGIC))
+        fd.write(struct.pack("<q", KVMMemory.HASH_FILE_VERSION))
         for (start_offset, length, data) in self.hash_list:
             # save it as little endian format
             row = struct.pack("<qI32s", start_offset, length, data)
@@ -374,13 +372,16 @@ class KVMMemory(object):
                 delta.data = long(start)
             s_index += 1
 
-        print "[Debug] matching: %d/%d" % (matching_count, len(delta_list))
+        print "[Debug] matching %d out of %d total pages" % (matching_count, len(delta_list))
         return delta_list
 
 
 class DeltaList(object):
     @staticmethod
     def tofile(delta_list, f_path):
+        if len(delta_list) == 0 or type(delta_list[0]) != DeltaItem:
+            raise KVMMemoryError("Need list of DeltaItem")
+
         fd = open(f_path, "wb")
         # Write MAGIC & VERSION
         fd.write(struct.pack("<q", KVMMemory.DELTA_FILE_MAGIC))
@@ -432,6 +433,7 @@ class DeltaList(object):
                 pivot=delta_item
 
         print "[Debug] self delta : %ld/%ld" % (matching, len(delta_list))
+        delta_list.sort(key=itemgetter('offset'))
 
     @staticmethod
     def statistics(delta_list):
@@ -461,30 +463,66 @@ class DeltaList(object):
             elif delta_item.ref_id == DeltaItem.REF_RAW:
                 from_raw += 1
 
+        print "[INFO] Total Modified page #\t:%ld" % len(delta_list)
+        print "[INFO] Saved as RAW\t\t:%ld" % from_raw
+        print "[INFO] Saved by xdelta3\t\t:%ld" % from_xdelta
+        print "[INFO] Shared within Self\t:%ld" % from_self
+        print "[INFO] Shared with Base Disk\t:%ld" % from_base_disk
+        print "[INFO] Shared with Base Mem\t:%ld" % from_base_mem
+        print "[INFO] Shared with Overlay Disk\t:%ld" % from_overlay_disk
+        print "[INFO] Shared with Overlay Mem\t:%ld" % from_overlay_mem
 
-        print "[INFO] Modified page #\t:%ld" % len(delta_list)
-        print "[INFO] Delta from Self\t:%ld" % from_self
-        print "[INFO] Delta from RAW\t:%ld" % from_raw
-        print "[INFO] Delta from Base Disk\t:%ld" % from_base_disk
-        print "[INFO] Delta from Base Mem\t:%ld" % from_base_mem
-        print "[INFO] Delta from Overlay Disk\t:%ld" % from_overlay_disk
-        print "[INFO] Delta from Overlay Mem\t:%ld" % from_overlay_mem
-        print "[INFO] Delta from xDelta\t:%ld" % from_xdelta
+
+def process_cmd(argv):
+    COMMANDS = ['hashing', 'delta']
+    USAGE = "Usage: %prog " + "[%s] [option]" % '|'.join(COMMANDS)
+    VERSION = '%prog ' + str(1.0)
+    DESCRIPTION = "KVM Memory struction interpreste"
+
+    parser = OptionParser(usage=USAGE, version=VERSION, description=DESCRIPTION)
+    parser.add_option("-m", "--migrated_file", type="string", dest="mig_file", action='store', \
+            help="Migrated file path")
+    parser.add_option("-r", "--raw_file", type="string", dest="raw_file", action='store', \
+            help="Raw memory path")
+    parser.add_option("-s", "--hash_file", type="string", dest="hash_file", action='store', \
+            help="Hashsing file path")
+    parser.add_option("-d", "--delta", type="string", dest="delta_file", action='store', \
+            default="mem_delta", help="path for delta list")
+    settings, args = parser.parse_args()
+    if len(args) != 1:
+        parser.error("Cannot find command")
+    command = args[0]
+    if command not in COMMANDS:
+        parser.error("Invalid Command: %s, supporing %s" % (command, ' '.join(COMMANDS)))
+    return settings, command
 
 
 if __name__ == "__main__":
-    command = sys.argv[1]
+    settings, command = process_cmd(sys.argv)
     if command == "hashing":
-        infile = sys.argv[2]
-        base = KVMMemory.load_from_kvm(infile, raw_path=infile+".raw")
+        if not settings.mig_file:
+            sys.stderr.write("Error, Cannot find migrated file. See help\n")
+            sys.exit(1)
+        infile = settings.mig_file
+        base = KVMMemory.load_from_kvm(infile, out_path=infile+".raw")
         base.export_to_file(infile+".hash")
-    elif command == "diff":
-        raw_path = sys.argv[2][:-5]+".raw"
-        base = KVMMemory.import_from_hashfile(sys.argv[2], raw_path)
+    elif command == "delta":
+        if (not settings.raw_file) or (not settings.hash_file):
+            sys.stderr.write("Error, Cannot find raw/hash file. See help\n")
+            sys.exit(1)
+        if (not settings.mig_file) or (not settings.delta_file):
+            sys.stderr.write("Error, Cannot find modified memory file. See help\n")
+            sys.exit(1)
+        raw_path = settings.raw_file
+        hash_path = settings.hash_file
+        modi_mem_path = settings.mig_file
+        out_path = settings.delta_file
+
+        base = KVMMemory.import_from_hashfile(hash_path, raw_path)
 
         # 1.get modified page
         print "[Debug] get modified page list"
-        delta_list = base.get_modified_page(sys.argv[3])
+        delta_list = base.get_modified_page(modi_mem_path)
 
         # 2.find shared with base memory 
         print "[Debug] get delta from base Memory"
@@ -493,11 +531,10 @@ if __name__ == "__main__":
         # 3.find shared within self
         print "[Debug] get delta from itself"
         DeltaList.get_self_delta(delta_list)
-        delta_list.sort(key=itemgetter('offset'))
 
         DeltaList.statistics(delta_list)
-        DeltaList.tofile(delta_list, sys.argv[3]+".delta")
-        new_delta_list = DeltaList.fromfile(sys.argv[3]+".delta")
+        DeltaList.tofile(delta_list, out_path)
+        new_delta_list = DeltaList.fromfile(out_path)
         for index, values in enumerate(delta_list):
             new_values = new_delta_list[index]
             if values.offset != new_values.offset or \
@@ -505,5 +542,4 @@ if __name__ == "__main__":
                 print "new: " + str(new_values.offset)
                 print "old: " + str(values.offset)
                 raise Exception("import/export failed")
-
 
