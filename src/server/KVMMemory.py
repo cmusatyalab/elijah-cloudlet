@@ -168,10 +168,8 @@ class KVMMemory(object):
         # kwargsG
         #  diff: compare hash_list with self object
         #  decomp_stream: write decompress memory to decopm_stream
-        #  raw_hash_list: None xdelta hash_list to check sanity (temporary)
         diff = kwargs.get("diff", None)
         decomp_stream = kwargs.get("decomp_stream", None)
-        raw_hash_list = kwargs.get("raw_hash_list", None)
 
         offset = 0
         while True:
@@ -225,14 +223,6 @@ class KVMMemory(object):
                                 data=data)
                     hash_list.append(delta_item)
 
-                    #TODO: delete later
-                    if 'raw_hash_list' in locals():
-                        raw_item = DeltaItem(offset, self.RAM_PAGE_SIZE, 
-                                hash_value=sha256(data).digest(),
-                                ref_id=DeltaItem.REF_RAW,
-                                data_len=len(data),
-                                data=data)
-                        raw_hash_list.append(raw_item)
                 # memory overusage protection
                 if len(hash_list) > 200000: # 800MB if PAGE_SIZE == 4K
                     raise KVMMemoryError("possibly comparing with wrong base VM")
@@ -262,8 +252,6 @@ class KVMMemory(object):
         diff = kwargs.get("diff", None)
         if diff and len(self.hash_list) == 0:
             raise KVMMemoryError("Cannot compare give file this self.hashlist")
-        if diff:
-            raw_hash_list = [] # TODO:delete
 
         header_data = None
         footer_data = None
@@ -292,7 +280,7 @@ class KVMMemory(object):
         read_mem_size = 0
         while True:
             read_mem_size = self._load_cont_ram_block(f, hash_list, total_mem_size, \
-                    diff=diff, decomp_stream=decomp_stream, raw_hash_list=raw_hash_list)
+                    diff=diff, decomp_stream=decomp_stream)
             if (read_mem_size+self.RAM_PAGE_SIZE) == total_mem_size:
                 break;
 
@@ -320,7 +308,7 @@ class KVMMemory(object):
 
         #print "load %ld memory from %ld file" % (read_mem_size, f.tell())
         if diff:
-            return header_data, footer_data, hash_list, raw_hash_list
+            return header_data, footer_data, hash_list
         else:
             return header_data, footer_data, hash_list
 
@@ -419,7 +407,7 @@ class KVMMemory(object):
 
     def get_modified(self, new_kvm_file):
         # get modified pages, header delta, footer delta
-        modi_header_data, modi_footer_data, hash_list, raw_hash_list = self._load_file(new_kvm_file, diff=True)
+        modi_header_data, modi_footer_data, hash_list = self._load_file(new_kvm_file, diff=True)
         try:
             header_delta = tool.diff_data(self.header_data, modi_header_data, 2*len(modi_header_data))
             footer_delta = tool.diff_data(self.footer_data, modi_footer_data, 2*len(modi_footer_data))
@@ -429,7 +417,7 @@ class KVMMemory(object):
         print "[INFO] header size(%ld->%ld), footer size(%ld->%ld)" % \
                 (len(modi_header_data), len(header_delta), \
                 len(modi_footer_data), len(footer_delta))
-        return header_delta, footer_delta, hash_list, raw_hash_list
+        return header_delta, footer_delta, hash_list
     
     def get_delta(self, delta_list, ref_id):
         if len(delta_list) == 0 or type(delta_list[0]) != DeltaItem:
@@ -642,105 +630,79 @@ def recover_memory(base_path, delta_list, header, footer):
 
     delta_iter = iter(delta_list)
     delta_item = delta_iter.next()
+    offset = 0
     while True:
-        offset = 0
-        while True:
-            header_data = f.read(8)
-            header_flag = struct.unpack(">q", header_data)[0]
-            comp_flag = header_flag & 0x0fff
-            if comp_flag & KVMMemory.RAM_SAVE_FLAG_EOS:
-                print "EOS Error, maynot recover memory properly"
-                break
+        header_data = f.read(8)
+        header_flag = struct.unpack(">q", header_data)[0]
+        comp_flag = header_flag & 0x0fff
+        if comp_flag & KVMMemory.RAM_SAVE_FLAG_EOS:
+            print "EOS Error, maynot recover memory properly"
+            break
 
-            offset = header_flag & ~0x0fff
-
-            is_matched = False
-            if offset == delta_item.offset:
-                # This page is modified and need to be recovered
-                # write header after changing to RAM_SAVE_FLAG_PAGE
-                is_matched = True
-                #print "[%ld] header flag changes\n%s -->\n%s" % (offset, bin(header_flag), bin(new_header_flag))
-                if not comp_flag & KVMMemory.RAM_SAVE_FLAG_CONTINUE:
-                    raise KVMMemoryError("Recover does not support modification at CONT flag")
-                if len(delta_item.data) != KVMMemory.RAM_PAGE_SIZE:
-                    msg = "invalid recover size: %d" % len(delta_item.data)
-                    raise KVMMemoryError(msg)
-
-                def is_identical_page(data):
-                    first = data[0]
-                    for item in data:
-                        if not first == item:
-                            return False
-                    return True
-
-                if is_identical_page(delta_item.data):
-                    new_header_flag = (header_flag & ~0x0fff) | KVMMemory.RAM_SAVE_FLAG_COMPRESS | KVMMemory.RAM_SAVE_FLAG_CONTINUE
-                    new_header_data = struct.pack(">q", new_header_flag)
-                    f_out.write(new_header_data)
-                    data = delta_item.data[0]
-                    f_out.write(data)
-                    print "Compresable, len: %d" % len(data)
-                else:
-                    new_header_flag = (header_flag & ~0x0fff) | KVMMemory.RAM_SAVE_FLAG_PAGE | KVMMemory.RAM_SAVE_FLAG_CONTINUE
-                    new_header_data = struct.pack(">q", new_header_flag)
-                    f_out.write(new_header_data)
-                    f_out.write(delta_item.data)
-
-                try:
-                    delta_item = delta_iter.next()
-                except StopIteration:
-                    delta_item.offset = -1
-            
-            # write header
-            if not is_matched:
-                f_out.write(header_data)
-            # write data
+        offset = header_flag & ~0x0fff
+        is_matched = False
+        if offset == delta_item.offset:
+            # This page is modified and need to be recovered
+            # write header after changing to RAM_SAVE_FLAG_PAGE
+            is_matched = True
+            #print "[%ld] header flag changes\n%s -->\n%s" % (offset, bin(header_flag), bin(new_header_flag))
             if not comp_flag & KVMMemory.RAM_SAVE_FLAG_CONTINUE:
-                data = f.read(1+KVMMemory.RAM_ID_LENGTH)
-                if not is_matched:
-                    f_out.write(data)
-                id_length, id_string = struct.unpack(">c%ds" % \
-                        KVMMemory.RAM_ID_LENGTH, data)
-            if comp_flag & KVMMemory.RAM_SAVE_FLAG_COMPRESS:
-                #print "processing (%ld)\tcompressed" % (offset)
-                data = f.read(1)
-                compressed_byte = data
-                if not is_matched:
-                    f_out.write(data)
-                data = compressed_byte*KVMMemory.RAM_PAGE_SIZE
-            elif comp_flag & KVMMemory.RAM_SAVE_FLAG_PAGE:
-                #print "processing (%ld)\traw" % (offset)
-                data = f.read(KVMMemory.RAM_PAGE_SIZE)
-                if not is_matched:
-                    f_out.write(data)
-            else:
-                msg = "Invalid header compression flag: %d" % \
-                        (comp_flag)
+                raise KVMMemoryError("Recover does not support modification at CONT flag")
+            if len(delta_item.data) != KVMMemory.RAM_PAGE_SIZE:
+                msg = "invalid recover size: %d" % len(delta_item.data)
                 raise KVMMemoryError(msg)
 
-            # read can be continued to pc.rom without EOS flag
-            if offset+KVMMemory.RAM_PAGE_SIZE == total_mem_size:
-                break;
+            def is_identical_page(data):
+                first = data[0]
+                for item in data:
+                    if not first == item:
+                        return False
+                return True
 
-        print "read_mem_size: %ld, %ld == %ld" % (offset, f.tell(), f_out.tell())
-        if (offset+KVMMemory.RAM_PAGE_SIZE) == total_mem_size:
+            new_header_flag = (header_flag & ~0x0fff) | KVMMemory.RAM_SAVE_FLAG_PAGE | KVMMemory.RAM_SAVE_FLAG_CONTINUE
+            new_header_data = struct.pack(">q", new_header_flag)
+            f_out.write(new_header_data)
+            f_out.write(delta_item.data)
+
+            try:
+                delta_item = delta_iter.next()
+            except StopIteration:
+                delta_item.offset = -1
+        
+        # write header
+        if not is_matched:
+            f_out.write(header_data)
+        # write data
+        if not comp_flag & KVMMemory.RAM_SAVE_FLAG_CONTINUE:
+            data = f.read(1+KVMMemory.RAM_ID_LENGTH)
+            if not is_matched:
+                f_out.write(data)
+            id_length, id_string = struct.unpack(">c%ds" % \
+                    KVMMemory.RAM_ID_LENGTH, data)
+        if comp_flag & KVMMemory.RAM_SAVE_FLAG_COMPRESS:
+            #print "processing (%ld)\tcompressed" % (offset)
+            data = f.read(1)
+            compressed_byte = data
+            if not is_matched:
+                f_out.write(data)
+            data = compressed_byte*KVMMemory.RAM_PAGE_SIZE
+        elif comp_flag & KVMMemory.RAM_SAVE_FLAG_PAGE:
+            #print "processing (%ld)\traw" % (offset)
+            data = f.read(KVMMemory.RAM_PAGE_SIZE)
+            if not is_matched:
+                f_out.write(data)
+        else:
+            msg = "Invalid header compression flag: %d" % \
+                    (comp_flag)
+            raise KVMMemoryError(msg)
+
+        # read can be continued to pc.rom without EOS flag
+        if offset+KVMMemory.RAM_PAGE_SIZE == total_mem_size:
             break;
 
-        # TODO: This is somewhat hardcoded assuming
-        # that block device migration is return with blk_enable = 0
-        # See block_save_live() at block-migration.c 
-        # Therefore, this script will not work with disk migration
-        read_data = f.read(5)
-        section_start1, section_id1 = struct.unpack(">cI", read_data)
-
-        read_data = f.read(8)
-        block_flag = struct.unpack(">q", read_data)[0]
-        if not block_flag == KVMMemory.BLK_MIG_FLAG_EOS:
-            raise KVMMemoryError("Block migration is enabled, so this script does not compatilbe")
-
-        read_data = f.read(5)
-        section_start2, section_id2 = struct.unpack(">cI", read_data)
-
+    #print "read_mem_size: %ld, %ld == %ld" % (offset, f.tell(), f_out.tell())
+    if not (offset+KVMMemory.RAM_PAGE_SIZE) == total_mem_size:
+        raise KVMMemoryError("Cannot recover mem because of sudden EOS")
     # save footer data
     f_out.write(footer)
 
@@ -806,7 +768,7 @@ if __name__ == "__main__":
 
         # 1.get modified page
         print "[Debug] get modified page list"
-        header_delta, footer_delta, original_delta_list, raw_delta_list = base.get_modified(modi_mem_path)
+        header_delta, footer_delta, original_delta_list = base.get_modified(modi_mem_path)
         delta_list = []
         for item in original_delta_list:
             delta_item = DeltaItem(item.offset, item.offset_len,
@@ -826,29 +788,6 @@ if __name__ == "__main__":
 
         DeltaList.statistics(delta_list)
         DeltaList.tofile(header_delta, footer_delta, delta_list, out_path)
-
-        # Check Integirity-Delta List
-        new_header_delta, new_footer_delta, new_delta_list = DeltaList.fromfile(out_path)
-        header = tool.merge_data(base.header_data, header_delta, 1024*1024)
-        footer = tool.merge_data(base.footer_data, footer_delta, 1024*1024*10)
-        if header_delta != new_header_delta or footer_delta != new_footer_delta:
-            raise KVMMemoryError("header/footer delta has been changed")
-        for index, values in enumerate(delta_list):
-            new_values = new_delta_list[index]
-            if values.offset != new_values.offset or \
-                    values.ref_id != new_values.ref_id or \
-                    values.data != new_values.data:
-                raise Exception("import/export failed")
-        print "[Success] Loaded delta is same as saved"
-
-        # Recover delta list to compare it with original
-        recover_modified_list(new_delta_list, raw_path)
-        for index, values in enumerate(raw_delta_list):
-            new_values = new_delta_list[index]
-            if values.offset != new_values.offset or \
-                    values.data != new_values.data:
-                raise Exception("import/export failed")
-        print "[Success] recovered delta is same as original extraction, len(%ld)" % (len(raw_delta_list))
 
     elif command == "recover":
         if (not settings.base_file) or (not settings.delta_file):
