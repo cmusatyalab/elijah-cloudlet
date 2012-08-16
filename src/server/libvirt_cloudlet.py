@@ -79,7 +79,7 @@ def create_baseVM(vm_name, disk_image_path):
     copy_disk(disk_image_path, base_diskpath)
 
     # edit default XML to use give disk image
-    domxml = ElementTree.fromstring(BaseVM_xml)
+    domxml = ElementTree.fromstring(open(BaseVM_xml, "r").read())
     name_element = domxml.find('name')
     disk_element = domxml.find('devices/disk/source')
     uuid_element = domxml.find('uuid')
@@ -104,8 +104,11 @@ def create_overlay(base_image, base_mem):
     #check sanity
     base_image = os.path.abspath(base_image)
     base_mem = os.path.abspath(base_mem)
-    if not os.path.exists(base_image) or not os.path.exists(base_mem):
-        message = "Cannot find base path at %s, %s" % (base_image, base_mem)
+    if not os.path.exists(base_image):
+        message = "Cannot find base image at %s" % (base_image)
+        raise CloudletGenerationError(message)
+    if not os.path.exists(base_mem):
+        message = "Cannot find base memory at %s" % (base_mem)
         raise CloudletGenerationError(message)
     
     #filename for overlay VM
@@ -141,7 +144,8 @@ def create_overlay(base_image, base_mem):
     ret_files = run_delta_compression(output_list)
     overlay_files = []
     overlay_files.append(meta_file_path)
-    overlay_files.append(ret_files)
+    overlay_files.append(ret_files[0])
+    overlay_files.append(ret_files[1])
     return overlay_files
 
 
@@ -326,6 +330,11 @@ def save_mem_snapshot(machine, fout_path, **kwargs):
     log = kwargs.get('log', None)
     nova_util = kwargs.get('nova_util', None)
 
+    #Set migration speed
+    ret = machine.migrateSetMaxSpeed(1000000, 0)   # 1000 Gbps, unlimited
+    if ret != 0:
+        raise CloudletGenerationError("Cannot set migration speed : %s", machine.name())
+
     #Pause VM
     ret = machine.suspend()
     if ret != 0:
@@ -484,8 +493,8 @@ def main(argv):
             parser.error("Overlay Creation requires 2 arguments\n1) Base disk path\n2) Base mem path")
             sys.exit(1)
         # create overlay
-        disk = '/home/krha/cloudlet/image/ubuntu-10.04-x86_64-desktop/ubuntu_disk.base.disk'
-        mem = '/home/krha/cloudlet/image/ubuntu-10.04-x86_64-desktop/ubuntu_disk.base.mem'
+        disk = args[1]
+        mem = args[2]
         overlay_files = create_overlay(disk, mem)
         print "[INFO] meta_info : %s" % overlay_files[0]
         print "[INFO] disk overlay : %s" % overlay_files[1]

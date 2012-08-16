@@ -382,6 +382,16 @@ def run_migration(telnet_port, vnc_port, mig_path):
             pass
         time.sleep(1)
 
+    # Set unlimited bandwidth for local migration
+    tn.write("migrate_set_speed 10g\n")
+    for i in xrange(20):
+        try:
+            ret = tn.read_until("(qemu)", 10)
+            if ret.find("(qemu)") != -1:
+                break;
+        except socket.timeout:
+            pass
+        time.sleep(1)
     # Do migration to the disk file
     tn.write(migration_cmd)
     for i in xrange(20):

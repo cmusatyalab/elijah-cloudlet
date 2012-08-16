@@ -23,20 +23,24 @@ import tool
 import mmap
 from hashlib import sha256
 from operator import itemgetter
-from pprint import pprint
 from optparse import OptionParser
+
+#GLOBAL
+EXT_RAW = ".raw"
+EXT_META = ".meta"
+
 
 class KVMMemoryError(Exception):
     pass
 
 class DeltaItem(object):
-    REF_RAW             =   0x00
-    REF_XDELTA          =   0x01
-    REF_SELF            =   0x02
-    REF_BASE_DISK       =   0x03
-    REF_BASE_MEM        =   0x04
-    REF_OVERLAY_DISK    =   0x05
-    REF_OVERLAY_MEM     =   0x06
+    REF_RAW = 0x00
+    REF_XDELTA = 0x01
+    REF_SELF = 0x02
+    REF_BASE_DISK = 0x03
+    REF_BASE_MEM = 0x04
+    REF_OVERLAY_DISK = 0x05
+    REF_OVERLAY_MEM =0x06
 
     # data exist only when ref_id is not xdelta
     def __init__(self, offset, offset_len, hash_value, ref_id, data_len=0, data=None):
@@ -74,7 +78,7 @@ class DeltaItem(object):
 
     @staticmethod
     def unpack_stream(stream):
-        data = stream.read(8+4+1)
+        data = stream.read(8 + 4 + 1)
         data_len = 0
         if not data:
             return None
@@ -94,7 +98,7 @@ class DeltaItem(object):
                 ref_id == DeltaItem.REF_OVERLAY_MEM:
             data = struct.unpack("<Q", stream.read(8))[0]
 
-        # hash value does not exist when recovered 
+        # hash value does not exist when recovered
         item = DeltaItem(offset, offset_len, None, ref_id, data_len, data)
         return item
 
@@ -124,7 +128,6 @@ class KVMMemory(object):
         self.raw_mmap = None
         self.header_data = None
         self.footer_data = None
-        self.section_list = []
 
     def __sub__(self, other):
         new_hashlist = other.hash_list
@@ -162,18 +165,21 @@ class KVMMemory(object):
         # Load KVM Memory snapshot file and 
         # extract hashlist of each memory page while interpreting the format
         # filepath = file path of the loading file
-        # kwargs
+        # kwargsG
         #  diff: compare hash_list with self object
         #  decomp_stream: write decompress memory to decopm_stream
+        #  raw_hash_list: None xdelta hash_list to check sanity (temporary)
         diff = kwargs.get("diff", None)
         decomp_stream = kwargs.get("decomp_stream", None)
+        raw_hash_list = kwargs.get("raw_hash_list", None)
 
         offset = 0
         while True:
             header_flag =  struct.unpack(">q", f.read(8))[0]
             comp_flag = header_flag & 0x0fff
             if comp_flag & self.RAM_SAVE_FLAG_EOS:
-                break
+                print "EOS at %ld" % (offset)
+                raise KVMMemoryError("Change migration speed to unlimited to avoid EOS")
 
             offset = header_flag & ~0x0fff
             if not comp_flag & self.RAM_SAVE_FLAG_CONTINUE:
@@ -188,8 +194,9 @@ class KVMMemory(object):
                 #print "processing (%ld)\traw" % (offset)
                 data = f.read(self.RAM_PAGE_SIZE)
             else:
-                raise KVMMemoryError("Cannot interpret the memory: \
-                        invalid header compression flag")
+                msg = "Invalid header compression flag: \n%s %ld %d" % \
+                        (bin(header_flag), offset, comp_flag)
+                raise KVMMemoryError(msg)
 
             # kwargs: diff
             if diff:
@@ -217,6 +224,15 @@ class KVMMemory(object):
                                 data_len=len(data),
                                 data=data)
                     hash_list.append(delta_item)
+
+                    #TODO: delete later
+                    if 'raw_hash_list' in locals():
+                        raw_item = DeltaItem(offset, self.RAM_PAGE_SIZE, 
+                                hash_value=sha256(data).digest(),
+                                ref_id=DeltaItem.REF_RAW,
+                                data_len=len(data),
+                                data=data)
+                        raw_hash_list.append(raw_item)
                 # memory overusage protection
                 if len(hash_list) > 200000: # 800MB if PAGE_SIZE == 4K
                     raise KVMMemoryError("possibly comparing with wrong base VM")
@@ -246,17 +262,19 @@ class KVMMemory(object):
         diff = kwargs.get("diff", None)
         if diff and len(self.hash_list) == 0:
             raise KVMMemoryError("Cannot compare give file this self.hashlist")
+        if diff:
+            raw_hash_list = [] # TODO:delete
 
         header_data = None
         footer_data = None
 
         # Convert big-endian to little-endian
         hash_list = []
-        section_list = []
         f = open(filepath, "rb")
         magic_number, version = struct.unpack(">II", f.read(4+4))
         if magic_number != KVMMemory.RAM_MAGIC or version != KVMMemory.RAM_VERSION:
-            raise KVMMemoryError("Invalid memory image magic/version")
+            pass
+            #raise KVMMemoryError("Invalid memory image magic/version")
 
         # find header information about pc.ram
         self._seek_string(f, self.RAM_ID_STRING)
@@ -273,8 +291,8 @@ class KVMMemory(object):
 
         read_mem_size = 0
         while True:
-            read_mem_size = self._load_cont_ram_block(f, hash_list, total_mem_size, diff=diff, decomp_stream=decomp_stream)
-            #print "read_mem_size: %ld" % read_mem_size
+            read_mem_size = self._load_cont_ram_block(f, hash_list, total_mem_size, \
+                    diff=diff, decomp_stream=decomp_stream, raw_hash_list=raw_hash_list)
             if (read_mem_size+self.RAM_PAGE_SIZE) == total_mem_size:
                 break;
 
@@ -287,10 +305,6 @@ class KVMMemory(object):
             if not block_flag == self.BLK_MIG_FLAG_EOS:
                 raise KVMMemoryError("Block migration is enabled, so this script does not compatilbe")
             section_start2, section_id2 = struct.unpack(">cI", f.read(5))
-
-            # migrated memory has internal data structure called section id, section flag
-            # this class is saving section information to recover migrated memory later
-            section_list.append((read_mem_size, section_start1, section_id1, block_flag, section_start2, section_id2))
 
         if decomp_stream:
             decomp_stream.close()
@@ -305,7 +319,10 @@ class KVMMemory(object):
         #        (cur_offset, total, len(self.footer_data))
 
         #print "load %ld memory from %ld file" % (read_mem_size, f.tell())
-        return header_data, footer_data, hash_list, section_list
+        if diff:
+            return header_data, footer_data, hash_list, raw_hash_list
+        else:
+            return header_data, footer_data, hash_list
 
     @staticmethod
     def load_from_kvm(filepath, out_path=None):
@@ -314,11 +331,10 @@ class KVMMemory(object):
         # outpath   : make raw Memory file at a given path
         memory = KVMMemory()
         memory.raw_file = open(out_path, "wb")
-        header_data, footer_data, hash_list, section_list = memory._load_file(filepath, decomp_stream=memory.raw_file)
+        header_data, footer_data, hash_list = memory._load_file(filepath, decomp_stream=memory.raw_file)
         memory.hash_list = hash_list
         memory.header_data = header_data
         memory.footer_data = footer_data
-        memory.section_list = section_list
         return memory
 
     @staticmethod
@@ -355,12 +371,6 @@ class KVMMemory(object):
         footer_data_len = struct.unpack("<q", fd.read(8))[0]
         memory.footer_data = fd.read(footer_data_len)
 
-        # Read section list
-        for (mem_offset, s1_start, s1_flag, block_flag, s2_start, s2_flag) in self.section_list:
-            # save it as little endian format
-            row = struct.pack("<QHHHHH", mem_offset, s1_start, s1_flag, block_flag, s2_start, s2_flag)
-            fd.write(row)
-
         # Read Hash Item List
         while True:
             data = fd.read(8+4+32) # start_offset, length, hash
@@ -393,13 +403,6 @@ class KVMMemory(object):
         # Write Footer data
         fd.write(struct.pack("<q", len(self.footer_data)))
         fd.write(self.footer_data)
-        '''
-        # Write section list
-        for (mem_offset, s1_start, s1_flag, block_flag, s2_start, s2_flag) in self.section_list:
-            # save it as little endian format
-            row = struct.pack("<QHHHHH", mem_offset, s1_start, s1_flag, block_flag, s2_start, s2_flag)
-            fd.write(row)
-        '''
         # Write hash item list
         for (start_offset, length, data) in self.hash_list:
             # save it as little endian format
@@ -415,9 +418,8 @@ class KVMMemory(object):
         return self.raw_mmap[offset:offset+length]
 
     def get_modified(self, new_kvm_file):
-        # get modified pages, header delta, footer delta, section info
-
-        modi_header_data, modi_footer_data, hash_list, section_list = self._load_file(new_kvm_file, diff=True)
+        # get modified pages, header delta, footer delta
+        modi_header_data, modi_footer_data, hash_list, raw_hash_list = self._load_file(new_kvm_file, diff=True)
         try:
             header_delta = tool.diff_data(self.header_data, modi_header_data, 2*len(modi_header_data))
             footer_delta = tool.diff_data(self.footer_data, modi_footer_data, 2*len(modi_footer_data))
@@ -427,13 +429,14 @@ class KVMMemory(object):
         print "[INFO] header size(%ld->%ld), footer size(%ld->%ld)" % \
                 (len(modi_header_data), len(header_delta), \
                 len(modi_footer_data), len(footer_delta))
-        return header_delta, footer_delta, hash_list, section_list
+        return header_delta, footer_delta, hash_list, raw_hash_list
     
     def get_delta(self, delta_list, ref_id):
         if len(delta_list) == 0 or type(delta_list[0]) != DeltaItem:
             raise KVMMemoryError("Need list of DeltaItem")
 
         # make self as a unique list for better comparison performance
+        # TODO: Avoid live packing
         KVMMemory.pack_hashlist(self.hash_list)
         self.hash_list.sort(key=itemgetter(2)) # sort by hash value
         delta_list.sort(key=itemgetter('hash_value')) # sort by hash value
@@ -460,91 +463,6 @@ class KVMMemory(object):
 
         print "[Debug] matching %d out of %d total pages" % (matching_count, len(delta_list))
         return delta_list
-
-    @staticmethod
-    def recover_memory(self, base_mem, header_data, footer_data, delta_list, out_file):
-        fin = open(base_mem, "rb")
-        fout = open(out_file, "wb")
-        fout.write(header_data)
-        delta_list.sort(key=itemgetter('offset')) # sort by hash value
-
-        # Convert big-endian to little-endian
-        magic_number, version = struct.unpack(">II", fin.read(4+4))
-        if magic_number != KVMMemory.RAM_MAGIC or version != KVMMemory.RAM_VERSION:
-            raise KVMMemoryError("Invalid memory image magic/version")
-
-        # find header information about pc.ram
-        KVMMemory._seek_string(fin, KVMMemory.RAM_ID_STRING)
-        id_string, total_mem_size = struct.unpack(">%dsq" % KVMMemory.RAM_ID_LENGTH,\
-                fin.read(KVMMemory.RAM_ID_LENGTH+8))
-
-        # interpret details of pc.ram
-        position = KVMMemory._seek_string(fin, KVMMemory.RAM_ID_STRING)
-        fin.seek(position-(1+8))    # move back to start of the memory section header 
-        fout.write(header_data)
-
-        read_mem_size = 0
-        delta_index = 0
-        while True:
-            delta_item = delta_list[delta_index]
-            offset = 0
-            while True:
-                header_data = fin.read(8)
-                fout.write(header_data)
-                header_flag = struct.unpack(">q", header_data)[0]
-                comp_flag = header_flag & 0x0fff
-                if comp_flag & self.RAM_SAVE_FLAG_EOS:
-                    break
-
-                offset = header_flag & ~0x0fff
-                if not comp_flag & self.RAM_SAVE_FLAG_CONTINUE:
-                    id_length, id_string = struct.unpack(">c%ds" % \
-                            self.RAM_ID_LENGTH, f.read(1+self.RAM_ID_LENGTH))
-                    #print "id string : %s" % id_string
-
-                if comp_flag & self.RAM_SAVE_FLAG_COMPRESS:
-                    #print "processing (%ld)\tcompressed" % (offset)
-                    compressed_byte = f.read(1)
-                    data = compressed_byte*self.RAM_PAGE_SIZE
-                elif comp_flag & self.RAM_SAVE_FLAG_PAGE:
-                    #print "processing (%ld)\traw" % (offset)
-                    data = f.read(self.RAM_PAGE_SIZE)
-                else:
-                    raise KVMMemoryError("Cannot interpret the memory: \
-                            invalid header compression flag")
-
-            # read can be continued to pc.rom without EOS flag
-            if offset+self.RAM_PAGE_SIZE == max_size:
-                break;
-
-            if (read_mem_size+self.RAM_PAGE_SIZE) == total_mem_size:
-                break;
-
-            # TODO: This is somewhat hardcoded assuming
-            # that block device migration is return with blk_enable = 0
-            # See block_save_live() at block-migration.c 
-            # Therefore, this script will not work with disk migration
-            section_start, section_id = struct.unpack(">cI", f.read(5))
-            block_flag = struct.unpack(">q", f.read(8))[0]
-            if not block_flag == self.BLK_MIG_FLAG_EOS:
-                raise KVMMemoryError("Block migration is enabled, so this script does not compatilbe")
-            section_start, section_id = struct.unpack(">cI", f.read(5))
-
-        if decomp_stream:
-            decomp_stream.close()
-
-        # save footer data
-        cur_offset = f.tell()
-        f.seek(0, 2)
-        total = f.tell()
-        f.seek(cur_offset)
-        footer_data = f.read(total-cur_offset)
-        #print "cur: %ld, total: %ld, read_size: %ld" % \
-        #        (cur_offset, total, len(self.footer_data))
-
-        #print "load %ld memory from %ld file" % (read_mem_size, f.tell())
-        return header_data, footer_data, hash_list
-
 
 
 class DeltaList(object):
@@ -669,9 +587,8 @@ def recover_modified_list(delta_list, raw_path):
         if delta_item.ref_id == DeltaItem.REF_RAW:
             continue
         elif delta_item.ref_id == DeltaItem.REF_BASE_MEM:
-            length = delta_item.data_len
             offset = delta_item.data
-            recover_data = raw_mmap[offset:offset+length]
+            recover_data = raw_mmap[offset:offset+KVMMemory.RAM_PAGE_SIZE]
         elif delta_item.ref_id == DeltaItem.REF_SELF:
             ref_offset = delta_item.data
             index = 0
@@ -684,31 +601,33 @@ def recover_modified_list(delta_list, raw_path):
             if index >= len(delta_list):
                 raise KVMMemoryError("Cannot find self reference")
         elif delta_item.ref_id == DeltaItem.REF_XDELTA:
-            continue
-            length = delta_item.data_len
             patch_data = delta_item.data
             base_data = raw_mmap[delta_item.offset:delta_item.offset+KVMMemory.RAM_PAGE_SIZE]
             recover_data = tool.merge_data(base_data, patch_data, len(base_data)*2)
         else:
             raise KVMMemoryError("Cannot recover: invalid referce id %d" % delta_item.ref_id)
 
+        if len(recover_data) != KVMMemory.RAM_PAGE_SIZE:
+            msg = "Recovered Size Error: %d, ref_id: %d, %ld, %ld" % \
+                    (len(recover_data), delta_item.ref_id, delta_item.data_len, delta_item.data)
+            raise KVMMemoryError(msg)
         delta_item.ref_id = DeltaItem.REF_RAW
         delta_item.data = recover_data
 
     raw_file.close()
 
 
-def recover_migrated_memory(mig_path, raw_path):
+def recover_memory(base_path, delta_list, header, footer):
     header_data = None
     footer_data = None
 
-    f = open(mig_path, "rb")
-    f_raw = open(raw_path, "rb")
-    raw_mmap = mmap.mmap(f_raw.fileno(), 0, prot=mmap.PROT_READ)
-    f_out = open(mig_path+".recover", "wb")
+    f = open(base_path, "rb")
+    dir_path = os.path.dirname(base_path)
+    f_out = open(os.path.join(dir_path, "recover"), "wb")
     magic_number, version = struct.unpack(">II", f.read(4+4))
     if magic_number != KVMMemory.RAM_MAGIC or version != KVMMemory.RAM_VERSION:
-        raise KVMMemoryError("Invalid memory image magic/version")
+        #raise KVMMemoryError("Invalid memory image magic/version")
+        pass
 
     # find header information about pc.ram
     KVMMemory._seek_string(f, KVMMemory.RAM_ID_STRING)
@@ -718,10 +637,11 @@ def recover_migrated_memory(mig_path, raw_path):
     # interpret details of pc.ram
     position = KVMMemory._seek_string(f, KVMMemory.RAM_ID_STRING)
     memory_start_offset = position-(1+8)# move back to start of the memory section header 
-    f.seek(0)
-    header_data = f.read(memory_start_offset)
-    f_out.write(header_data)
+    f.seek(memory_start_offset)
+    f_out.write(header)
 
+    delta_iter = iter(delta_list)
+    delta_item = delta_iter.next()
     while True:
         offset = 0
         while True:
@@ -729,31 +649,74 @@ def recover_migrated_memory(mig_path, raw_path):
             header_flag = struct.unpack(">q", header_data)[0]
             comp_flag = header_flag & 0x0fff
             if comp_flag & KVMMemory.RAM_SAVE_FLAG_EOS:
+                print "EOS Error, maynot recover memory properly"
                 break
 
-            # Do not write EOS
-            f_out.write(header_data)
             offset = header_flag & ~0x0fff
+
+            is_matched = False
+            if offset == delta_item.offset:
+                # This page is modified and need to be recovered
+                # write header after changing to RAM_SAVE_FLAG_PAGE
+                is_matched = True
+                #print "[%ld] header flag changes\n%s -->\n%s" % (offset, bin(header_flag), bin(new_header_flag))
+                if not comp_flag & KVMMemory.RAM_SAVE_FLAG_CONTINUE:
+                    raise KVMMemoryError("Recover does not support modification at CONT flag")
+                if len(delta_item.data) != KVMMemory.RAM_PAGE_SIZE:
+                    msg = "invalid recover size: %d" % len(delta_item.data)
+                    raise KVMMemoryError(msg)
+
+                def is_identical_page(data):
+                    first = data[0]
+                    for item in data:
+                        if not first == item:
+                            return False
+                    return True
+
+                if is_identical_page(delta_item.data):
+                    new_header_flag = (header_flag & ~0x0fff) | KVMMemory.RAM_SAVE_FLAG_COMPRESS | KVMMemory.RAM_SAVE_FLAG_CONTINUE
+                    new_header_data = struct.pack(">q", new_header_flag)
+                    f_out.write(new_header_data)
+                    data = delta_item.data[0]
+                    f_out.write(data)
+                    print "Compresable, len: %d" % len(data)
+                else:
+                    new_header_flag = (header_flag & ~0x0fff) | KVMMemory.RAM_SAVE_FLAG_PAGE | KVMMemory.RAM_SAVE_FLAG_CONTINUE
+                    new_header_data = struct.pack(">q", new_header_flag)
+                    f_out.write(new_header_data)
+                    f_out.write(delta_item.data)
+
+                try:
+                    delta_item = delta_iter.next()
+                except StopIteration:
+                    delta_item.offset = -1
+            
+            # write header
+            if not is_matched:
+                f_out.write(header_data)
+            # write data
             if not comp_flag & KVMMemory.RAM_SAVE_FLAG_CONTINUE:
                 data = f.read(1+KVMMemory.RAM_ID_LENGTH)
-                f_out.write(data)
+                if not is_matched:
+                    f_out.write(data)
                 id_length, id_string = struct.unpack(">c%ds" % \
                         KVMMemory.RAM_ID_LENGTH, data)
-
             if comp_flag & KVMMemory.RAM_SAVE_FLAG_COMPRESS:
                 #print "processing (%ld)\tcompressed" % (offset)
                 data = f.read(1)
                 compressed_byte = data
-                f_out.write(data)
+                if not is_matched:
+                    f_out.write(data)
                 data = compressed_byte*KVMMemory.RAM_PAGE_SIZE
             elif comp_flag & KVMMemory.RAM_SAVE_FLAG_PAGE:
                 #print "processing (%ld)\traw" % (offset)
                 data = f.read(KVMMemory.RAM_PAGE_SIZE)
-                new_data = raw_mmap[offset:offset+KVMMemory.RAM_PAGE_SIZE]
-                f_out.write(new_data)
+                if not is_matched:
+                    f_out.write(data)
             else:
-                raise KVMMemoryError("Cannot interpret the memory: \
-                        invalid header compression flag")
+                msg = "Invalid header compression flag: %d" % \
+                        (comp_flag)
+                raise KVMMemoryError(msg)
 
             # read can be continued to pc.rom without EOS flag
             if offset+KVMMemory.RAM_PAGE_SIZE == total_mem_size:
@@ -768,30 +731,20 @@ def recover_migrated_memory(mig_path, raw_path):
         # See block_save_live() at block-migration.c 
         # Therefore, this script will not work with disk migration
         read_data = f.read(5)
-        #f_out.write(read_data)
         section_start1, section_id1 = struct.unpack(">cI", read_data)
 
         read_data = f.read(8)
-        #f_out.write(read_data)
         block_flag = struct.unpack(">q", read_data)[0]
         if not block_flag == KVMMemory.BLK_MIG_FLAG_EOS:
             raise KVMMemoryError("Block migration is enabled, so this script does not compatilbe")
 
         read_data = f.read(5)
-        #f_out.write(read_data)
         section_start2, section_id2 = struct.unpack(">cI", read_data)
 
     # save footer data
-    cur_offset = f.tell()
-    f.seek(0, 2)
-    total = f.tell()
-    f.seek(cur_offset)
-    footer_data = f.read(total-cur_offset)
-    f_out.write(footer_data)
-    #print "load %ld memory from %ld file" % (read_mem_size, f.tell())
+    f_out.write(footer)
 
     f.close()
-    f_raw.close()
     f_out.close()
 
 
@@ -810,6 +763,8 @@ def process_cmd(argv):
             help="Hashsing file path")
     parser.add_option("-d", "--delta", type="string", dest="delta_file", action='store', \
             default="mem_delta", help="path for delta list")
+    parser.add_option("-b", "--base", type="string", dest="base_file", action='store', \
+            help="path for base memory file")
     settings, args = parser.parse_args()
     if len(args) != 1:
         parser.error("Cannot find command")
@@ -820,14 +775,15 @@ def process_cmd(argv):
 
 
 if __name__ == "__main__":
+
     settings, command = process_cmd(sys.argv)
     if command == "hashing":
-        if not settings.mig_file:
+        if not settings.base_file:
             sys.stderr.write("Error, Cannot find migrated file. See help\n")
             sys.exit(1)
-        infile = settings.mig_file
-        base = KVMMemory.load_from_kvm(infile, out_path=infile+".raw")
-        base.export_to_file(infile+".meta")
+        infile = settings.base_file
+        base = KVMMemory.load_from_kvm(infile, out_path=infile+EXT_RAW)
+        base.export_to_file(infile+EXT_META)
 
         # Check Integrity
         re_base = KVMMemory.import_from_metafile(infile+".meta", infile+".raw")
@@ -837,23 +793,20 @@ if __name__ == "__main__":
             raise KVMMemoryError("footer data is different")
         print "[SUCCESS] meta file information is matched with original"
     elif command == "delta":
-        if (not settings.raw_file) or (not settings.hash_file):
-            sys.stderr.write("Error, Cannot find raw/hash file. See help\n")
-            sys.exit(1)
-        if (not settings.mig_file) or (not settings.delta_file):
+        if (not settings.mig_file) or (not settings.base_file):
             sys.stderr.write("Error, Cannot find modified memory file. See help\n")
             sys.exit(1)
-        raw_path = settings.raw_file
-        meta_path = settings.hash_file
+        raw_path = settings.base_file + EXT_RAW
+        meta_path = settings.base_file + EXT_META
         modi_mem_path = settings.mig_file
-        out_path = settings.delta_file
+        out_path = settings.mig_file + ".delta"
 
         # Create Base Memory from meta file
         base = KVMMemory.import_from_metafile(meta_path, raw_path)
 
         # 1.get modified page
         print "[Debug] get modified page list"
-        header_delta, footer_delta, original_delta_list, section_list = base.get_modified(modi_mem_path)
+        header_delta, footer_delta, original_delta_list, raw_delta_list = base.get_modified(modi_mem_path)
         delta_list = []
         for item in original_delta_list:
             delta_item = DeltaItem(item.offset, item.offset_len,
@@ -885,21 +838,26 @@ if __name__ == "__main__":
             if values.offset != new_values.offset or \
                     values.ref_id != new_values.ref_id or \
                     values.data != new_values.data:
-                print "new: " + str(new_values.offset)
-                print "old: " + str(values.offset)
                 raise Exception("import/export failed")
         print "[Success] Loaded delta is same as saved"
+
+        # Recover delta list to compare it with original
+        recover_modified_list(new_delta_list, raw_path)
+        for index, values in enumerate(raw_delta_list):
+            new_values = new_delta_list[index]
+            if values.offset != new_values.offset or \
+                    values.data != new_values.data:
+                raise Exception("import/export failed")
+        print "[Success] recovered delta is same as original extraction, len(%ld)" % (len(raw_delta_list))
+
     elif command == "recover":
-        raw_path = settings.raw_file
-        mig_path = settings.mig_file
-        recover_migrated_memory(mig_path, raw_path)
-        '''
-        if (not settings.raw_file) or (not settings.hash_file) or (not settings.delta_file):
-            sys.stderr.write("Error, Cannot find raw/hash file. See help\n")
+        if (not settings.base_file) or (not settings.delta_file):
+            sys.stderr.write("Error, Cannot find base/delta file. See help\n")
             sys.exit(1)
-        raw_path = settings.raw_file
-        meta_path = settings.hash_file
+        base_path = settings.base_file
         delta_path = settings.delta_file
+        raw_path = settings.base_file + EXT_RAW
+        meta_path = settings.base_file + EXT_META
 
         # Create Base Memory from meta file
         base = KVMMemory.import_from_metafile(meta_path, raw_path)
@@ -908,5 +866,5 @@ if __name__ == "__main__":
         header = tool.merge_data(base.header_data, header_delta, 1024*1024)
         footer = tool.merge_data(base.footer_data, footer_delta, 1024*1024*10)
         recover_modified_list(delta_list, raw_path)
-        '''
+        recover_memory(base_path, delta_list, header, footer)
 
