@@ -20,6 +20,7 @@ import libvirt
 import sys
 import os
 import subprocess
+import KVMMemory
 from xml.etree import ElementTree
 from uuid import uuid4
 from tempfile import mkstemp 
@@ -51,6 +52,26 @@ def copy_disk(in_path, out_path):
         raise IOError("Copy failed: from %s to %s " % (in_path, out_path))
 
 
+def convert_xml(xml, conn, vm_name=None, disk_path=None):
+    if vm_name:
+        name_element = xml.find('name')
+        if not name_element:
+            raise CloudletGenerationError("Malfomed XML input: %s", os.path.abspath(BaseVM_xml))
+        name_element.text = vm_name
+
+    # disk path is required
+    if not disk_path:
+        raise CloudletGenerationError("Need disk_path to run new VM")
+    disk_element = xml.find('devices/disk/source')
+    uuid_element = xml.find('uuid')
+    if name_element == None or disk_element == None or uuid_element == None:
+        raise CloudletGenerationError("Malfomed XML input: %s", os.path.abspath(BaseVM_xml))
+
+    uuid_element.text = str(uuid4())
+    disk_element.set("file", os.path.abspath(disk_path))
+    return ElementTree.tostring(xml)
+
+
 def get_libvirt_connection():
     conn = libvirt.open("qemu:///session")
     return conn
@@ -75,25 +96,20 @@ def create_baseVM(vm_name, disk_image_path):
         if str(ret).lower() != 'y':
             sys.exit(1)
 
-    # make new disk not to modify input disk
-    copy_disk(disk_image_path, base_diskpath)
+    # copy_disk(disk_image_path, base_diskpath)
+    ret = raw_input("Your disk image will be modified. Proceed? (y/N) ")
+    if str(ret).lower() != 'y':
+        sys.exit(1)
+
+    # libvirt connection
+    conn = get_libvirt_connection()
 
     # edit default XML to use give disk image
-    domxml = ElementTree.fromstring(open(BaseVM_xml, "r").read())
-    name_element = domxml.find('name')
-    disk_element = domxml.find('devices/disk/source')
-    uuid_element = domxml.find('uuid')
-    if name_element == None or disk_element == None or uuid_element == None:
-        raise Exception("Malfomed XML input: %s", os.path.abspath(BaseVM_xml))
-    name_element.text = vm_name
-    uuid_element.text = str(uuid4())
-    disk_element.set("file", os.path.abspath(base_diskpath))
-    #print "XML Converted"
-    #print ElementTree.tostring(domxml)
+    xml = ElementTree.fromstring(open(BaseVM_xml, "r").read())
+    new_xml_string = convert_xml(xml, conn, vm_name=vm_name, disk_path=base_diskpath)
 
     # launch VM & vnc console
-    conn = get_libvirt_connection()
-    machine = run_vm(conn, ElementTree.tostring(domxml), wait_vnc=True)
+    machine = run_vm(conn, new_xml_string, wait_vnc=True)
     # make a snapshot
     save_mem_snapshot(machine, base_mempath)
 
@@ -119,17 +135,15 @@ def create_overlay(base_image, base_mem):
 
     #create meta file that has base VM information
     meta_file = open(meta_file_path, "w")
-    base_image_sha1 = sha1_fromfile(base_image)
-    base_mem_sha1 = sha1_fromfile(base_mem)
-    meta_info = {"base_disk_path":base_image, "base_disk_sha1":base_image_sha1,
-            "base_mem_path":base_mem, "base_mem_sha1":base_mem_sha1}
+    meta_info = {"base_disk_path":base_image, "base_disk_sha1":"None",
+            "base_mem_path":base_mem, "base_mem_sha1":"None"}
     meta_file.write(dumps(meta_info)) # save it as json format
     meta_file.close()
     
     #make modified disk
-    fd1, modified_disk = mkstemp(prefix="cloudlet-disk-")
+    fuse_mount_point = fuse.create_image(base_disk=base_image, chunck_size=4096)
+    modified_disk = os.path.join(fuse_mount_point, "disk", "image")
     fd2, modified_mem = mkstemp(prefix="cloudlet-mem-")
-    copy_disk(base_image, modified_disk)
 
     #resume with modified disk
     conn = get_libvirt_connection()
@@ -349,6 +363,10 @@ def save_mem_snapshot(machine, fout_path, **kwargs):
     if ret != 0:
         raise CloudletGenerationError("libvirt: Cannot save memory state")
 
+    # Get memory metadata
+    base = KVMMemory.Memory.load_from_kvm(fout_path, out_path=fout_path+KVMMemory.EXT_RAW)
+    base.export_to_file(fout_path+KVMMemory.EXT_META)
+
 
 def run_snapshot(conn, disk_image, mem_snapshot, **kwargs):
     # kwargs
@@ -357,14 +375,11 @@ def run_snapshot(conn, disk_image, mem_snapshot, **kwargs):
 
     # read embedded XML at memory snapshot to change disk path
     hdr = _QemuMemoryHeader(open(mem_snapshot))
-    domxml = ElementTree.fromstring(hdr.xml)
-    disk_element = domxml.find('devices/disk/source')
-    if not disk_element.get("file"):
-        raise CloudletGenerationError("Malfomed XML embedded: %s" % os.path.abspath(mem_snapshot))
-    disk_element.set("file", os.path.abspath(disk_image))
+    xml = ElementTree.fromstring(hdr.xml)
+    new_xml_string = convert_xml(xml, conn, disk_path=disk_image)
 
     # resume
-    restore_with_config(conn, mem_snapshot, ElementTree.tostring(domxml))
+    restore_with_config(conn, mem_snapshot, new_xml_string)
 
     # get machine
     uuid_element = domxml.find('uuid')

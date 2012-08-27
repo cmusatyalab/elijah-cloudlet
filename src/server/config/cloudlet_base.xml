@@ -4,17 +4,14 @@
 	<memory>2097152</memory>
 	<currentMemory>2097152</currentMemory>
 	<vcpu>4</vcpu>
-	<cpu>
-		<arch>x86_64</arch>
-	</cpu>
 	<os>
 		<type arch='x86_64' machine='pc'>hvm</type>
 	</os>
 	<devices>
 		<emulator>/usr/bin/qemu-system-x86_64</emulator>
 		<disk type='file' device='disk'>
-			<driver name='qemu' type='qcow2'/>
-			<source file='/home/krha/cloudlet/image/ubuntu-10.04-x86_64-desktop/ubuntu.moped.qcow2' />
+			<driver name='qemu' type='raw'/>
+			<source file='/home/krha/cloudlet/image/ubuntu-11.10-x86_64-server/ubuntu-11.raw' />
 			<target dev='hda'/>
 		</disk>
         <graphics type='vnc' port='-1' autoport='yes' keymap='en-us' listen='0.0.0.0'/>
