@@ -75,7 +75,7 @@ def recv_data(sock, last_client_id):
                 continue
             else:
                 recv_data = struct.unpack("!II", data)
-                print "container size : (%d %d)" % (recv_data[0], recv_data[1])
+                #print "container size : (%d %d)" % (recv_data[0], recv_data[1])
                 break;
 
         start_time = time.time()
@@ -88,8 +88,8 @@ def recv_data(sock, last_client_id):
             ret_size = struct.unpack("!I", data)[0]
             #print "Client ID : %d, Server_token: %d, Recv size : %d" % (client_id, server_token_id, ret_size)
             token_id = server_token_id
-            if server_token_id%100 == 0:
-                print "id: %d, FPS: %4.2f" % (token_id, token_id/(time.time()-start_time))
+            #if server_token_id%100 == 0:
+            #    print "id: %d, FPS: %4.2f" % (token_id, token_id/(time.time()-start_time))
             
             if not ret_size == 0:
                 ret_data = recv_all(sock, ret_size)
@@ -167,7 +167,7 @@ def connect(address, port, input_data):
     sender.start()
     recv.start()
 
-    print "Waiting for end of acc data transmit"
+    #print "Waiting for end of acc data transmit"
     sender.join()
     recv.join()
 
