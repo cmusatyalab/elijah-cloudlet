@@ -18,7 +18,7 @@ import os
 import sys
 from optparse import OptionParser
 
-sort_key = ['local', 'cloudlet', 'east', 'west', 'eu', 'asia']
+sort_key = ['local', 'cage', 'hail', 'east', 'west', 'eu', 'asia']
 
 
 def process_command_line(argv):

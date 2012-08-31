@@ -51,6 +51,7 @@ def run_application(cloud_ip, cloud_port, server_cmd, watts_ip, client_cmd, powe
     ssh.set_missing_host_key_policy(paramiko.AutoAddPolicy())
     ssh.connect(watts_ip, username='krha')
     command = "%s /dev/ttyUSB0" % WATTS_BIN
+    print command
     ssh_stdin, ssh_stdout, ssh_stderr = ssh.exec_command(command)
 
     # Start Client App
@@ -103,7 +104,7 @@ def process_command_line(argv):
             '-a', '--app', action='store', type='string', dest='app', default="graphics",
             help='Client Type Between moped and graphics')
     parser.add_option(
-            '-s', '--server', action='store', type='string', dest='watts_server', default="desk.krha.kr",
+            '-s', '--server', action='store', type='string', dest='watts_server', default="server.krha.kr",
             help='Server IP that has connected to WattsUp Gear')
     settings, args = parser.parse_args(argv)
 
@@ -132,7 +133,8 @@ def turn_cores(core_on):
 def batch_graphics_test(watts_server, input_file):
     if not input_file:
         input_file = 'acc_input_10min'
-    cloud_list = [("server.krha.kr", 19093, "g_cloudlet", 2221), \
+    cloud_list = [("cloudlet.krha.kr", 19093, "g_hail", 2221), \
+            ("server.krha.kr", 19093, "g_cage", 2221), \
             ("23.21.103.194", 9093, "g_east", 22), \
             ("184.169.142.70", 9093, "g_west", 22), \
             ("176.34.100.63", 9093, "g_eu", 22), \
@@ -166,7 +168,8 @@ def batch_object_test(watts_server, input_dir):
     if not input_dir:
         input_dir = 'object_images/'
 
-    cloud_list = [("server.krha.kr", 19092, "o_cloudlet", 2221), \
+    cloud_list = [("cloudlet.krha.kr", 19092, "o_hail", 2221), \
+            ("server.krha.kr", 19092, "o_cage", 2221), \
             ("23.21.103.194", 9092, "o_east", 22), \
             ("184.169.142.70", 9092, "o_west", 22), \
             ("176.34.100.63", 9092, "o_eu", 22), \
