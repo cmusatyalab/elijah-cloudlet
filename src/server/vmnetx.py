@@ -92,9 +92,6 @@ def copy_memory(in_path, out_path, xml=None):
     fin = open(in_path)
     fout = open(out_path, 'w')
     hdr = _QemuMemoryHeader(fin)
-    if hdr.compressed != hdr.COMPRESS_RAW:
-        raise MachineGenerationError('Cannot recompress save format %d' %
-                hdr.compressed)
 
     # Write header
     hdr.compressed = hdr.COMPRESS_CLOUDLET

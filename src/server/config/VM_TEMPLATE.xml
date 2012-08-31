@@ -1,5 +1,5 @@
-<domain type='kvm'>
-	<name>ubuntu-10.04-desktop-x86_64</name>
+<domain type='kvm' xmlns:qemu='http://libvirt.org/schemas/domain/qemu/1.0'>
+	<name>cloudlet</name>
 	<uuid>c7a5fdbd-cdaf-9455-926a-d65c16db1801</uuid>
 	<memory>2097152</memory>
 	<currentMemory>2097152</currentMemory>
@@ -16,7 +16,12 @@
 		</disk>
         <graphics type='vnc' port='-1' autoport='yes' keymap='en-us' listen='0.0.0.0'/>
 		<interface type='user'>
-			<mac address="42:e8:12:a8:e0:a1"/>
 		</interface>
 	</devices>
+	<!--
+	<qemu:commandline>
+		<qemu:arg value='-redir'/>
+		<qemu:arg value='tcp:2221::22' />
+	</qemu:commandline>
+	-->
 </domain>

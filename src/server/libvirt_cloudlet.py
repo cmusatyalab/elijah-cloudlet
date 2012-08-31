@@ -22,17 +22,18 @@ import os
 import subprocess
 import KVMMemory
 import vmnetfs
+import vmnetx
 import delta
 from xml.etree import ElementTree
 from uuid import uuid4
 from tempfile import mkstemp 
+from tempfile import NamedTemporaryFile
 from time import time
 from time import sleep
 from optparse import OptionParser
 from json import dumps
 from json import loads
 
-from vmnetx import _QemuMemoryHeader
 from tool import comp_lzma
 from tool import decomp_lzma
 from tool import diff_files
@@ -47,7 +48,8 @@ class Const(object):
     OVERLAY_MEM     = ".overlay-mem"
     OVERLAY_META    = ".overlay-meta"
 
-    TEMPLATE_XML = "./config/cloudlet_base.xml"
+    TEMPLATE_XML = "./config/VM_TEMPLATE.xml"
+    VMNETFS_PATH = "/home/krha/cloudlet/src/vmnetx/vmnetfs/vmnetfs"
     CHUNK_SIZE=4096
 
 
@@ -64,22 +66,24 @@ def copy_disk(in_path, out_path):
         raise IOError("Copy failed: from %s to %s " % (in_path, out_path))
 
 
-def convert_xml(xml, conn, vm_name=None, disk_path=None):
+def convert_xml(xml, conn, vm_name=None, disk_path=None, uuid=None):
     if vm_name:
         name_element = xml.find('name')
         if not name_element:
             raise CloudletGenerationError("Malfomed XML input: %s", Const.TEMPLATE_XML)
         name_element.text = vm_name
 
+    if uuid:
+        uuid_element = xml.find('uuid')
+        uuid_element.text = str(uuid)
+
     # disk path is required
     if not disk_path:
         raise CloudletGenerationError("Need disk_path to run new VM")
     disk_element = xml.find('devices/disk/source')
-    uuid_element = xml.find('uuid')
-    if name_element == None or disk_element == None or uuid_element == None:
+    if disk_element == None:
         raise CloudletGenerationError("Malfomed XML input: %s", Const.TEMPLATE_XML)
 
-    uuid_element.text = str(uuid4())
     disk_element.set("file", os.path.abspath(disk_path))
     return ElementTree.tostring(xml)
 
@@ -89,24 +93,22 @@ def get_libvirt_connection():
     return conn
 
 
-def create_baseVM(vm_name, disk_image_path):
+def create_baseVM(disk_image_path):
     # Create Base VM(disk, memory) snapshot using given VM disk image
-    # :param vm_name : Name of the Base VM
     # :param disk_image_path : file path of the VM disk image
     # :returns: (generated base VM disk path, generated base VM memory path)
 
     image_name = os.path.splitext(disk_image_path)[0]
-    dir_path = os.path.dirpath(disk_image_path)
-    base_diskpath = os.path.join(dir_path, image_name+Const.BASE_DISK)
+    dir_path = os.path.dirname(disk_image_path)
     base_mempath = os.path.join(dir_path, image_name+Const.BASE_MEM)
 
     # check sanity
     if not os.path.exists(Const.TEMPLATE_XML):
         raise CloudletGenerationError("Cannot find Base VM default XML at %s\n" \
                 % Const.TEMPLATE_XML)
-    if os.path.exists(base_diskpath) or os.path.exists(base_mempath):
-        warning_msg = "Warning: (%s/%s) exist.\nAre you sure to overwrite? (y/N) " \
-                % (base_diskpath, base_mempath)
+    if os.path.exists(base_mempath):
+        warning_msg = "Warning: (%s) exist.\nAre you sure to overwrite? (y/N) " \
+                % (base_mempath)
         ret = raw_input(warning_msg)
         if str(ret).lower() != 'y':
             sys.exit(1)
@@ -118,7 +120,7 @@ def create_baseVM(vm_name, disk_image_path):
     # edit default XML to use give disk image
     conn = get_libvirt_connection()
     xml = ElementTree.fromstring(open(Const.TEMPLATE_XML, "r").read())
-    new_xml_string = convert_xml(xml, conn, vm_name=vm_name, disk_path=base_diskpath)
+    new_xml_string = convert_xml(xml, conn, disk_path=disk_image_path, uuid=str(uuid4()))
 
     # launch VM & wait for end of vnc
     machine = run_vm(conn, new_xml_string, wait_vnc=True)
@@ -128,12 +130,12 @@ def create_baseVM(vm_name, disk_image_path):
 
     # TODO: Get hashing meta
 
-    return base_diskpath, base_mempath
+    return disk_image_path, base_mempath
 
 
 def create_overlay(base_image, base_mem):
     image_name = os.path.splitext(base_image)[0]
-    dir_path = os.path.dirpath(base_mem)
+    dir_path = os.path.dirname(base_mem)
 
     #check sanity
     if not os.path.exists(base_image):
@@ -143,37 +145,43 @@ def create_overlay(base_image, base_mem):
         message = "Cannot find base memory at %s" % (base_mem)
         raise CloudletGenerationError(message)
     
-    #filename for overlay VM
+    # filename for overlay VM
     image_name = os.path.basename(base_image).split(".")[0]
-    dir_path = os.path.dirpath(base_mem)
+    dir_path = os.path.dirname(base_mem)
     metafile_path = os.path.join(dir_path, image_name+Const.OVERLAY_META)
     overlay_diskpath = os.path.join(dir_path, image_name+Const.OVERLAY_DISK)
     overlay_mempath = os.path.join(dir_path, image_name+Const.OVERLAY_MEM)
     
-    #make modified disk
-    conn = get_libvirt_connection()
-    fuse = run_fuse()
+    # make FUSE disk & memory
+    fuse = run_fuse(Const.VMNETFS_PATH, base_image, Const.CHUNK_SIZE,
+            resumed_disk=None, overlay_map=None)
     modified_disk = os.path.join(fuse.mountpoint, 'disk', 'image')
-    fd2, modified_mem = mkstemp(prefix="cloudlet-mem-")
+    modified_mem = NamedTemporaryFile(prefix="cloudlet-mem-")
     # monitor modified chunks
-    modified_disk_monitor = os.path.join(fuse.mountpoint, 'disk', 'streams', 'chunks_modified')
-    monitor = vmnetfs.StreamMonitor(modified_disk_monitor)
+    stream_modified = os.path.join(fuse.mountpoint, 'disk', 'streams', 'chunks_modified')
+    stream_access = os.path.join(fuse.mountpoint, 'disk', 'streams', 'chunks_accessed')
+    monitor = vmnetfs.StreamMonitor()
+    monitor.add_path(stream_modified)
+    monitor.add_path(stream_access)
+    monitor.start()
 
     # 1-1. resume & get modified disk
     conn = get_libvirt_connection()
     machine = run_snapshot(conn, modified_disk, base_mem, wait_vnc=True)
 
     # 1-2. get modified memory
-    save_mem_snapshot(machine, modified_mem)
+    save_mem_snapshot(machine, modified_mem.name)
 
     # 2-1. get disk overlay
-    m_chunk_list = monitor.chunk_set
+    m_chunk_list = monitor.chunk_list
     m_chunk_list.sort()
-    print "total overlay chunk : %ld" % len(m_chunk_list)
     delta.create_disk_overlay(overlay_diskpath, metafile_path, \
             modified_disk, m_chunk_list, Const.CHUNK_SIZE)
 
     # 2-2. get memory overlay
+    monitor.terminate()
+    monitor.join()
+    return (metafile_path, overlay_diskpath, overlay_mempath)
     '''
     output_list = []
     output_list.append((base_image, modified_disk, overlay_diskpath))
@@ -186,7 +194,6 @@ def create_overlay(base_image, base_mem):
     overlay_files.append(ret_files[1])
     return overlay_files
     '''
-
 
 def run_delta_compression(output_list, **kwargs):
     # kwargs
@@ -341,38 +348,39 @@ def recover_launchVM(meta, overlay_disk, overlay_mem, **kwargs):
     return recover_outputs
 
 
-def run_fuse(original_disk, resumed_disk, chunk_size):
+def run_fuse(bin_path, original_disk, chunk_size, resumed_disk=None, overlay_map=None):
     # launch fuse
     execute_args = ['', '', 'http://cloudlet.krha.kr/ubuntu-11/', \
             "%s" % (os.path.abspath(original_disk)), \
-            "", \
-            "", \
+            ("%s" % os.path.abspath(resumed_disk)) if resumed_disk else "", \
+            ("%s" % overlay_map) if overlay_map else "", \
             '%d' % os.path.getsize(original_disk), \
             '0',\
             "%d" % chunk_size]
-    vmnetfs_args = '%d\n%s\n' % (len(execute_args), '\n'.join(a.replace('\n', '') for a in execute_args))
-    fuse_process = vmnetfs.VMNetFS(execute_args)
+    fuse_process = vmnetfs.VMNetFS(bin_path, execute_args)
     fuse_process.start()
     return fuse_process
+
 
 def run_vm(conn, domain_xml, **kwargs):
     # kwargs
     # vnc_disable       :   do not show vnc console
     # wait_vnc          :   wait until vnc finishes if vnc_enabled
-    machine = conn.createXML(domain_xml, libvirt.VIR_DOMAIN_START_AUTODESTROY)
+    machine = conn.createXML(domain_xml, 0)
 
     # Run VNC and wait until user finishes working
     if kwargs.get('vnc_disable'):
         return machine
 
     # Get VNC port
-    running_xml = machine.XMLDesc(libvirt.VIR_DOMAIN_XML_SECURE)
     vnc_port = 5900
     try:
+        running_xml_string = machine.XMLDesc(libvirt.VIR_DOMAIN_XML_SECURE)
+        running_xml = ElementTree.fromstring(running_xml_string)
         vnc_port = running_xml.find("devices/graphics").get("port")
-        vnc_port = vnc_port-5900
+        vnc_port = int(vnc_port)-5900
     except AttributeError as e:
-        sys.stderr.write("Possible VNC port error:%s" % str(e))
+        sys.stderr.write("Warning, Possible VNC port error:%s\n" % str(e))
 
     vnc_process = subprocess.Popen("gvncviewer localhost:%d" % vnc_port, shell=True)
     if kwargs.get('wait_vnc'):
@@ -420,12 +428,14 @@ def run_snapshot(conn, disk_image, mem_snapshot, **kwargs):
     # wait_vnc          :   wait until vnc finishes if vnc_enabled
 
     # read embedded XML at memory snapshot to change disk path
-    hdr = _QemuMemoryHeader(open(mem_snapshot))
+    hdr = vmnetx._QemuMemoryHeader(open(mem_snapshot))
     xml = ElementTree.fromstring(hdr.xml)
-    new_xml_string = convert_xml(xml, conn, disk_path=disk_image)
+    new_xml_string = convert_xml(xml, conn, disk_path=disk_image, uuid=uuid4())
+    temp_mem = NamedTemporaryFile(prefix="cloudlet-mem-")
+    copy_with_xml(mem_snapshot, temp_mem.name, new_xml_string)
 
     # resume
-    restore_with_config(conn, mem_snapshot, new_xml_string)
+    restore_with_config(conn, temp_mem.name, new_xml_string)
 
     # get machine
     domxml = ElementTree.fromstring(new_xml_string)
@@ -438,13 +448,14 @@ def run_snapshot(conn, disk_image, mem_snapshot, **kwargs):
         return machine
 
     # Get VNC port
-    running_xml = machine.XMLDesc(libvirt.VIR_DOMAIN_XML_SECURE)
     vnc_port = 5900
     try:
+        running_xml_string = machine.XMLDesc(libvirt.VIR_DOMAIN_XML_SECURE)
+        running_xml = ElementTree.fromstring(running_xml_string)
         vnc_port = running_xml.find("devices/graphics").get("port")
-        vnc_port = vnc_port-5900
+        vnc_port = int(vnc_port)-5900
     except AttributeError as e:
-        sys.stderr.write("Possible VNC port error:%s" % str(e))
+        sys.stderr.write("Warning, Possible VNC port error:%s\n" % str(e))
 
     # Run VNC
     vnc_process = subprocess.Popen("gvncviewer localhost:%d" % vnc_port, shell=True)
@@ -506,28 +517,10 @@ def restore_with_config(conn, mem_snapshot, xml):
         message = "%s\nXML: %s" % (str(e), xml)
         raise CloudletGenerationError(message)
 
-
-def copy_with_uuid(in_path, out_path, uuid):
-    fin = open(in_path)
-    fout = open(out_path, 'w')
-    hdr = _QemuMemoryHeader(fin)
-
-    # Write header with new uuid
-    domxml = ElementTree.fromstring(hdr.xml)
-    domxml.find('uuid').text = uuid
-    hdr.xml = ElementTree.tostring(domxml)
-    hdr.write(fout)
-    fout.flush()
-
-    # move to the content
-    hdr.seek_body(fin)
-    fout.write(fin.read())
-
-
 def copy_with_xml(in_path, out_path, xml):
     fin = open(in_path)
-    fout = open(out_path, 'w')
-    hdr = _QemuMemoryHeader(fin)
+    fout = open(out_path, 'w+b')
+    hdr = vmnetx._QemuMemoryHeader(fin)
 
     # Write header
     hdr.xml = xml
@@ -552,25 +545,24 @@ def main(argv):
     mode = str(args[0]).lower()
 
     if mode == MODE[0]: #base VM generation
-        if len(args) != 3:
-            parser.error("Generating base VM requires 2 arguements\n1) vm name\n2) disk path")
+        if len(args) != 2:
+            parser.error("Generating base VM requires 1 arguements\n1) VM disk path")
             sys.exit(1)
         # creat base VM
-        vm_name = args[1]
-        disk_image_path = args[2]
-        disk_path, mem_path = create_baseVM(vm_name, disk_image_path)
+        disk_image_path = args[1]
+        disk_path, mem_path = create_baseVM(disk_image_path)
         print "Base VM is created from %s" % disk_image_path
         print "Disk: %s" % disk_path
         print "Mem: %s" % mem_path
     elif mode == MODE[1]:   #overlay VM creation
-        if len(args) != 3:
-            parser.error("Overlay Creation requires 2 arguments\n1) Base disk path\n2) Base mem path")
+        if len(args) != 2:
+            parser.error("Overlay Creation requires 2 arguments\n1) Base disk path")
             sys.exit(1)
         # create overlay
-        disk = args[1]
-        mem = args[2]
-        overlay_files = create_overlay(disk, mem)
-        print "[INFO] meta_info : %s" % overlay_files[0]
+        disk_path = args[1]
+        mem_path = os.path.splitext(disk_path)[0] + Const.BASE_MEM
+        overlay_files = create_overlay(disk_path, mem_path)
+        print "[INFO] meta file: %s" % overlay_files[0]
         print "[INFO] disk overlay : %s" % overlay_files[1]
         print "[INFO] mem overlay : %s" % overlay_files[2]
     elif mode == MODE[2]:   #synthesis
@@ -594,19 +586,19 @@ def main(argv):
     elif mode == 'test_new_xml':    # To be delete
         in_path = args[1]
         out_path = in_path + ".new"
-        hdr = _QemuMemoryHeader(open(in_path))
+        hdr = vmnetx._QemuMemoryHeader(open(in_path))
         domxml = ElementTree.fromstring(hdr.xml)
         domxml.find('uuid').text = "new-uuid"
         new_xml = ElementTree.tostring(domxml)
         copy_with_xml(in_path, out_path, new_xml)
 
-        hdr = _QemuMemoryHeader(open(out_path))
+        hdr = vmnetx._QemuMemoryHeader(open(out_path))
         domxml = ElementTree.fromstring(hdr.xml)
         print "new xml is changed uuid to " + domxml.find('uuid').text
     elif mode == 'nic':
         mem_path = args[1]
         conn = get_libvirt_connection()
-        hdr = _QemuMemoryHeader(open(mem_path))
+        hdr = vmnetx._QemuMemoryHeader(open(mem_path))
         rettach_nic(conn, hdr.xml)
 
 
