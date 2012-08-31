@@ -21,6 +21,8 @@ import sys
 import os
 import subprocess
 import KVMMemory
+import vmnetfs
+import delta
 from xml.etree import ElementTree
 from uuid import uuid4
 from tempfile import mkstemp 
@@ -37,11 +39,21 @@ from tool import diff_files
 from tool import merge_files
 from tool import sha1_fromfile
 
-# default XML for Base VM
-BaseVM_xml = "./config/cloudlet_base.xml"
+
+class Const(object):
+    BASE_DISK   = ".base-img"
+    BASE_MEM    = ".base-mem"
+    OVERLAY_DISK    = ".overlay-img"
+    OVERLAY_MEM     = ".overlay-mem"
+    OVERLAY_META    = ".overlay-meta"
+
+    TEMPLATE_XML = "./config/cloudlet_base.xml"
+    CHUNK_SIZE=4096
+
 
 class CloudletGenerationError(Exception):
     pass
+
 
 def copy_disk(in_path, out_path):
     print "[INFO] Copying disk image to %s" % out_path
@@ -56,7 +68,7 @@ def convert_xml(xml, conn, vm_name=None, disk_path=None):
     if vm_name:
         name_element = xml.find('name')
         if not name_element:
-            raise CloudletGenerationError("Malfomed XML input: %s", os.path.abspath(BaseVM_xml))
+            raise CloudletGenerationError("Malfomed XML input: %s", Const.TEMPLATE_XML)
         name_element.text = vm_name
 
     # disk path is required
@@ -65,7 +77,7 @@ def convert_xml(xml, conn, vm_name=None, disk_path=None):
     disk_element = xml.find('devices/disk/source')
     uuid_element = xml.find('uuid')
     if name_element == None or disk_element == None or uuid_element == None:
-        raise CloudletGenerationError("Malfomed XML input: %s", os.path.abspath(BaseVM_xml))
+        raise CloudletGenerationError("Malfomed XML input: %s", Const.TEMPLATE_XML)
 
     uuid_element.text = str(uuid4())
     disk_element.set("file", os.path.abspath(disk_path))
@@ -76,50 +88,54 @@ def get_libvirt_connection():
     conn = libvirt.open("qemu:///session")
     return conn
 
+
 def create_baseVM(vm_name, disk_image_path):
     # Create Base VM(disk, memory) snapshot using given VM disk image
     # :param vm_name : Name of the Base VM
     # :param disk_image_path : file path of the VM disk image
     # :returns: (generated base VM disk path, generated base VM memory path)
-    global BaseVM_xml
+
+    image_name = os.path.splitext(disk_image_path)[0]
+    dir_path = os.path.dirpath(disk_image_path)
+    base_diskpath = os.path.join(dir_path, image_name+Const.BASE_DISK)
+    base_mempath = os.path.join(dir_path, image_name+Const.BASE_MEM)
 
     # check sanity
-    image_name = os.path.basename(disk_image_path).split(".")[0]
-    base_diskpath = os.path.join(os.path.dirname(disk_image_path), image_name+".base.disk")
-    base_mempath = os.path.join(os.path.dirname(disk_image_path), image_name+".base.mem")
-    if not os.path.exists(os.path.abspath(BaseVM_xml)):
-        sys.stderr.write("Cannot find Base VM default XML at %s\n" % BaseVM_xml)
-        sys.exit(1)
+    if not os.path.exists(Const.TEMPLATE_XML):
+        raise CloudletGenerationError("Cannot find Base VM default XML at %s\n" \
+                % Const.TEMPLATE_XML)
     if os.path.exists(base_diskpath) or os.path.exists(base_mempath):
-        key_in = "Warning: (%s) exist.\nAre you sure to overwrite? (y/N) " % (base_diskpath)
-        ret = raw_input(key_in)
+        warning_msg = "Warning: (%s/%s) exist.\nAre you sure to overwrite? (y/N) " \
+                % (base_diskpath, base_mempath)
+        ret = raw_input(warning_msg)
         if str(ret).lower() != 'y':
             sys.exit(1)
 
-    # copy_disk(disk_image_path, base_diskpath)
     ret = raw_input("Your disk image will be modified. Proceed? (y/N) ")
     if str(ret).lower() != 'y':
         sys.exit(1)
 
-    # libvirt connection
-    conn = get_libvirt_connection()
-
     # edit default XML to use give disk image
-    xml = ElementTree.fromstring(open(BaseVM_xml, "r").read())
+    conn = get_libvirt_connection()
+    xml = ElementTree.fromstring(open(Const.TEMPLATE_XML, "r").read())
     new_xml_string = convert_xml(xml, conn, vm_name=vm_name, disk_path=base_diskpath)
 
-    # launch VM & vnc console
+    # launch VM & wait for end of vnc
     machine = run_vm(conn, new_xml_string, wait_vnc=True)
-    # make a snapshot
+
+    # make memory snapshot
     save_mem_snapshot(machine, base_mempath)
+
+    # TODO: Get hashing meta
 
     return base_diskpath, base_mempath
 
 
 def create_overlay(base_image, base_mem):
+    image_name = os.path.splitext(base_image)[0]
+    dir_path = os.path.dirpath(base_mem)
+
     #check sanity
-    base_image = os.path.abspath(base_image)
-    base_mem = os.path.abspath(base_mem)
     if not os.path.exists(base_image):
         message = "Cannot find base image at %s" % (base_image)
         raise CloudletGenerationError(message)
@@ -129,28 +145,36 @@ def create_overlay(base_image, base_mem):
     
     #filename for overlay VM
     image_name = os.path.basename(base_image).split(".")[0]
-    meta_file_path = os.path.join(os.path.dirname(base_image), image_name+".overlay.meta")
-    overlay_diskpath = os.path.join(os.path.dirname(base_image), image_name+".overlay.disk")
-    overlay_mempath = os.path.join(os.path.dirname(base_mem), image_name+".overlay.mem")
-
-    #create meta file that has base VM information
-    meta_file = open(meta_file_path, "w")
-    meta_info = {"base_disk_path":base_image, "base_disk_sha1":"None",
-            "base_mem_path":base_mem, "base_mem_sha1":"None"}
-    meta_file.write(dumps(meta_info)) # save it as json format
-    meta_file.close()
+    dir_path = os.path.dirpath(base_mem)
+    metafile_path = os.path.join(dir_path, image_name+Const.OVERLAY_META)
+    overlay_diskpath = os.path.join(dir_path, image_name+Const.OVERLAY_DISK)
+    overlay_mempath = os.path.join(dir_path, image_name+Const.OVERLAY_MEM)
     
     #make modified disk
-    fuse_mount_point = fuse.create_image(base_disk=base_image, chunck_size=4096)
-    modified_disk = os.path.join(fuse_mount_point, "disk", "image")
+    conn = get_libvirt_connection()
+    fuse = run_fuse()
+    modified_disk = os.path.join(fuse.mountpoint, 'disk', 'image')
     fd2, modified_mem = mkstemp(prefix="cloudlet-mem-")
+    # monitor modified chunks
+    modified_disk_monitor = os.path.join(fuse.mountpoint, 'disk', 'streams', 'chunks_modified')
+    monitor = vmnetfs.StreamMonitor(modified_disk_monitor)
 
-    #resume with modified disk
+    # 1-1. resume & get modified disk
     conn = get_libvirt_connection()
     machine = run_snapshot(conn, modified_disk, base_mem, wait_vnc=True)
-    #generate modified memory snapshot
+
+    # 1-2. get modified memory
     save_mem_snapshot(machine, modified_mem)
 
+    # 2-1. get disk overlay
+    m_chunk_list = monitor.chunk_set
+    m_chunk_list.sort()
+    print "total overlay chunk : %ld" % len(m_chunk_list)
+    delta.create_disk_overlay(overlay_diskpath, metafile_path, \
+            modified_disk, m_chunk_list, Const.CHUNK_SIZE)
+
+    # 2-2. get memory overlay
+    '''
     output_list = []
     output_list.append((base_image, modified_disk, overlay_diskpath))
     output_list.append((base_mem, modified_mem, overlay_mempath))
@@ -161,6 +185,7 @@ def create_overlay(base_image, base_mem):
     overlay_files.append(ret_files[0])
     overlay_files.append(ret_files[1])
     return overlay_files
+    '''
 
 
 def run_delta_compression(output_list, **kwargs):
@@ -316,19 +341,40 @@ def recover_launchVM(meta, overlay_disk, overlay_mem, **kwargs):
     return recover_outputs
 
 
-def run_vm(conn, libvirt_xml, **kwargs):
+def run_fuse(original_disk, resumed_disk, chunk_size):
+    # launch fuse
+    execute_args = ['', '', 'http://cloudlet.krha.kr/ubuntu-11/', \
+            "%s" % (os.path.abspath(original_disk)), \
+            "", \
+            "", \
+            '%d' % os.path.getsize(original_disk), \
+            '0',\
+            "%d" % chunk_size]
+    vmnetfs_args = '%d\n%s\n' % (len(execute_args), '\n'.join(a.replace('\n', '') for a in execute_args))
+    fuse_process = vmnetfs.VMNetFS(execute_args)
+    fuse_process.start()
+    return fuse_process
+
+def run_vm(conn, domain_xml, **kwargs):
     # kwargs
     # vnc_disable       :   do not show vnc console
     # wait_vnc          :   wait until vnc finishes if vnc_enabled
-
-    # TODO: get right parameter for second argument
-    machine = conn.createXML(libvirt_xml, 0)
+    machine = conn.createXML(domain_xml, libvirt.VIR_DOMAIN_START_AUTODESTROY)
 
     # Run VNC and wait until user finishes working
     if kwargs.get('vnc_disable'):
         return machine
 
-    vnc_process = subprocess.Popen("gvncviewer localhost:0", shell=True)
+    # Get VNC port
+    running_xml = machine.XMLDesc(libvirt.VIR_DOMAIN_XML_SECURE)
+    vnc_port = 5900
+    try:
+        vnc_port = running_xml.find("devices/graphics").get("port")
+        vnc_port = vnc_port-5900
+    except AttributeError as e:
+        sys.stderr.write("Possible VNC port error:%s" % str(e))
+
+    vnc_process = subprocess.Popen("gvncviewer localhost:%d" % vnc_port, shell=True)
     if kwargs.get('wait_vnc'):
         print "[INFO] waiting for finishing VNC interaction"
         vnc_process.wait()
@@ -382,6 +428,7 @@ def run_snapshot(conn, disk_image, mem_snapshot, **kwargs):
     restore_with_config(conn, mem_snapshot, new_xml_string)
 
     # get machine
+    domxml = ElementTree.fromstring(new_xml_string)
     uuid_element = domxml.find('uuid')
     uuid = str(uuid_element.text)
     machine = conn.lookupByUUIDString(uuid)
@@ -389,11 +436,23 @@ def run_snapshot(conn, disk_image, mem_snapshot, **kwargs):
     # Run VNC and wait until user finishes working
     if kwargs.get('vnc_disable'):
         return machine
-    vnc_process = subprocess.Popen("gvncviewer localhost:0", shell=True)
+
+    # Get VNC port
+    running_xml = machine.XMLDesc(libvirt.VIR_DOMAIN_XML_SECURE)
+    vnc_port = 5900
+    try:
+        vnc_port = running_xml.find("devices/graphics").get("port")
+        vnc_port = vnc_port-5900
+    except AttributeError as e:
+        sys.stderr.write("Possible VNC port error:%s" % str(e))
+
+    # Run VNC
+    vnc_process = subprocess.Popen("gvncviewer localhost:%d" % vnc_port, shell=True)
     if kwargs.get('wait_vnc'):
         print "[INFO] waiting for finishing VNC interaction"
         vnc_process.wait()
     return machine
+
 
 def rettach_nic(conn, xml, **kwargs):
     #kwargs

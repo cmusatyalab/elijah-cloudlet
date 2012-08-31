@@ -1,12 +1,12 @@
 image/
-\*.a
-\*.lzma
-\*.qcow2
-\*.mem
+*.a
+*.lzma
+*.qcow2
+*.mem
+*.pyc
 paper/
 src/kvm-qemu/ 
 src/ec2/image/
 src/app/graphics/bin/
 src/app/graphics/lib/linux/x86_64/release/
 src/app/graphics/.sconsign.dblite
-\*.pyc

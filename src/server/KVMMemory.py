@@ -118,6 +118,7 @@ class Memory(object):
     RAM_SAVE_FLAG_COMPRESS = 0x02
     RAM_SAVE_FLAG_MEM_SIZE = 0x04
     RAM_SAVE_FLAG_PAGE     = 0x08
+    RAM_SAVE_FLAG_RAW      = 0x40
     RAM_SAVE_FLAG_EOS      = 0x10
     RAM_SAVE_FLAG_CONTINUE = 0x20
     BLK_MIG_FLAG_EOS       = 0x02
@@ -188,7 +189,7 @@ class Memory(object):
                 #print "processing (%ld)\tcompressed" % (offset)
                 compressed_byte = f.read(1)
                 data = compressed_byte*self.RAM_PAGE_SIZE
-            elif comp_flag & self.RAM_SAVE_FLAG_PAGE:
+            elif comp_flag & self.RAM_SAVE_FLAG_PAGE or comp_flag & self.RAM_SAVE_FLAG_RAW:
                 #print "processing (%ld)\traw" % (offset)
                 data = f.read(self.RAM_PAGE_SIZE)
             else:
