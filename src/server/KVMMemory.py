@@ -30,7 +30,7 @@ EXT_RAW = ".raw"
 EXT_META = ".meta"
 
 
-class KVMMemoryError(Exception):
+class MemoryError(Exception):
     pass
 
 class DeltaItem(object):
@@ -133,13 +133,13 @@ class Memory(object):
     def __sub__(self, other):
         new_hashlist = other.hash_list
         if len(self.hash_list) != len(new_hashlist):
-            raise KVMMemoryError("Cannot compare it: Different length of hashlist")
+            raise MemoryError("Cannot compare it: Different length of hashlist")
         diff_list = []
         for index, item in enumerate(self.hash_list):
             new_item = new_hashlist[index]
             if (item.offset_start != new_item.offset_start) or (item.offset_len != new_item.offset_len):
                 msg = "Cannot compare it: Different offset"
-                raise KVMMemoryError(msg)
+                raise MemoryError(msg)
             if item.hash_value != new_item.hash_value:
                 diff_list.append(item)
         return diff_list
@@ -152,7 +152,7 @@ class Memory(object):
         while True:
             memdata = f.read(4096)
             if not memdata:
-                raise KVMMemoryError("Cannot find %s from give memory snapshot" % Memory.RAM_ID_STRING)
+                raise MemoryError("Cannot find %s from give memory snapshot" % Memory.RAM_ID_STRING)
 
             ram_index = memdata.find(Memory.RAM_ID_STRING)
             if ram_index:
@@ -178,7 +178,7 @@ class Memory(object):
             comp_flag = header_flag & 0x0fff
             if comp_flag & self.RAM_SAVE_FLAG_EOS:
                 print "EOS at %ld" % (offset)
-                raise KVMMemoryError("Change migration speed to unlimited to avoid EOS")
+                raise MemoryError("Change migration speed to unlimited to avoid EOS")
 
             offset = header_flag & ~0x0fff
             if not comp_flag & self.RAM_SAVE_FLAG_CONTINUE:
@@ -195,7 +195,7 @@ class Memory(object):
             else:
                 msg = "Invalid header compression flag: \n%s %ld %d" % \
                         (bin(header_flag), offset, comp_flag)
-                raise KVMMemoryError(msg)
+                raise MemoryError(msg)
 
             # kwargs: diff
             if diff:
@@ -226,7 +226,7 @@ class Memory(object):
 
                 # memory overusage protection
                 if len(hash_list) > 200000: # 800MB if PAGE_SIZE == 4K
-                    raise KVMMemoryError("possibly comparing with wrong base VM")
+                    raise MemoryError("possibly comparing with wrong base VM")
             else:
                 # make new hash list
                 hash_list.append((offset, self.RAM_PAGE_SIZE, sha256(data).digest()))
@@ -252,7 +252,7 @@ class Memory(object):
         decomp_stream = kwargs.get("decomp_stream", None)
         diff = kwargs.get("diff", None)
         if diff and len(self.hash_list) == 0:
-            raise KVMMemoryError("Cannot compare give file this self.hashlist")
+            raise MemoryError("Cannot compare give file this self.hashlist")
 
         header_data = None
         footer_data = None
@@ -263,7 +263,7 @@ class Memory(object):
         magic_number, version = struct.unpack(">II", f.read(4+4))
         if magic_number != Memory.RAM_MAGIC or version != Memory.RAM_VERSION:
             pass
-            #raise KVMMemoryError("Invalid memory image magic/version")
+            #raise MemoryError("Invalid memory image magic/version")
 
         # find header information about pc.ram
         self._seek_string(f, self.RAM_ID_STRING)
@@ -292,7 +292,7 @@ class Memory(object):
             section_start1, section_id1 = struct.unpack(">cI", f.read(5))
             block_flag = struct.unpack(">q", f.read(8))[0]
             if not block_flag == self.BLK_MIG_FLAG_EOS:
-                raise KVMMemoryError("Block migration is enabled, so this script does not compatilbe")
+                raise MemoryError("Block migration is enabled, so this script does not compatilbe")
             section_start2, section_id2 = struct.unpack(">cI", f.read(5))
 
         if decomp_stream:
@@ -314,31 +314,11 @@ class Memory(object):
             return header_data, footer_data, hash_list
 
     @staticmethod
-    def load_from_kvm(filepath, out_path=None):
-        # Contstuct KVM Base Memory DS from KVM migrated memory
-        # filepath  : input KVM Memory Snapshot file path
-        # outpath   : make raw Memory file at a given path
-        memory = Memory()
-        memory.raw_file = open(out_path, "wb")
-        header_data, footer_data, hash_list = memory._load_file(filepath, decomp_stream=memory.raw_file)
-        memory.hash_list = hash_list
-        memory.header_data = header_data
-        memory.footer_data = footer_data
-        return memory
-
-    @staticmethod
-    def load_from_libvirt(filepath, out_path=None):
-        # Contstuct KVM Base Memory DS from Libvirt migrated memory
-        # filepath  : input KVM Memory Snapshot file path
-        # outpath   : make raw Memory file at a given path
-        pass
-
-    @staticmethod
     def import_from_metafile(meta_path, raw_path):
         # Regenerate KVM Base Memory DS from previously generated meta file
         if (not os.path.exists(raw_path)) or (not os.path.exists(meta_path)):
             msg = "Cannot import from hash file, No raw file at : %s" % raw_path
-            raise KVMMemoryError(msg)
+            raise MemoryError(msg)
 
         memory = Memory()
         memory.raw_file = open(raw_path, "rb")
@@ -422,7 +402,7 @@ class Memory(object):
     
     def get_delta(self, delta_list, ref_id):
         if len(delta_list) == 0 or type(delta_list[0]) != DeltaItem:
-            raise KVMMemoryError("Need list of DeltaItem")
+            raise MemoryError("Need list of DeltaItem")
 
         # make self as a unique list for better comparison performance
         # TODO: Avoid live packing
@@ -450,7 +430,7 @@ class Memory(object):
                 delta.data = long(start)
             s_index += 1
 
-        print "[Debug] matching %d out of %d total pages" % (matching_count, len(delta_list))
+        #print "[Debug] matching %d out of %d total pages" % (matching_count, len(delta_list))
         return delta_list
 
 
@@ -458,9 +438,9 @@ class DeltaList(object):
     @staticmethod
     def tofile(header_delta, footer_delta, delta_list, f_path):
         if (not header_delta)or (not footer_delta):
-            raise KVMMemoryError("header/footer delta is invalid")
+            raise MemoryError("header/footer delta is invalid")
         if len(delta_list) == 0 or type(delta_list[0]) != DeltaItem:
-            raise KVMMemoryError("Need list of DeltaItem")
+            raise MemoryError("Need list of DeltaItem")
 
         fd = open(f_path, "wb")
         # Write MAGIC & VERSION
@@ -507,7 +487,7 @@ class DeltaList(object):
     @staticmethod
     def get_self_delta(delta_list):
         if len(delta_list) == 0 or type(delta_list[0]) != DeltaItem:
-            raise KVMMemoryError("Need list of DeltaItem")
+            raise MemoryError("Need list of DeltaItem")
 
         # delta_list : list of (start, end, ref_id, hash/data)
         delta_list.sort(key=itemgetter('hash_value', 'offset')) # sort by (hash/start offset)
@@ -530,9 +510,9 @@ class DeltaList(object):
         delta_list.sort(key=itemgetter('offset'))
 
     @staticmethod
-    def statistics(delta_list):
+    def statistics(delta_list, print_out=sys.stdout):
         if len(delta_list) == 0 or type(delta_list[0]) != DeltaItem:
-            raise KVMMemoryError("Need list of DeltaItem")
+            raise MemoryError("Need list of DeltaItem")
 
         from_self = 0
         from_raw = 0
@@ -557,14 +537,14 @@ class DeltaList(object):
             elif delta_item.ref_id == DeltaItem.REF_RAW:
                 from_raw += 1
 
-        print "[INFO] Total Modified page #\t:%ld" % len(delta_list)
-        print "[INFO] Saved as RAW\t\t:%ld" % from_raw
-        print "[INFO] Saved by xdelta3\t\t:%ld" % from_xdelta
-        print "[INFO] Shared within Self\t:%ld" % from_self
-        print "[INFO] Shared with Base Disk\t:%ld" % from_base_disk
-        print "[INFO] Shared with Base Mem\t:%ld" % from_base_mem
-        print "[INFO] Shared with Overlay Disk\t:%ld" % from_overlay_disk
-        print "[INFO] Shared with Overlay Mem\t:%ld" % from_overlay_mem
+        print_out.write("[INFO] Total Modified page #\t:%ld\n" % len(delta_list))
+        print_out.write("[INFO] Saved as RAW\t\t:%ld\n" % from_raw)
+        print_out.write("[INFO] Saved by xdelta3\t\t:%ld\n" % from_xdelta)
+        print_out.write("[INFO] Shared within Self\t:%ld\n" % from_self)
+        print_out.write("[INFO] Shared with Base Disk\t:%ld\n" % from_base_disk)
+        print_out.write("[INFO] Shared with Base Mem\t:%ld\n" % from_base_mem)
+        print_out.write("[INFO] Shared with Overlay Disk\t:%ld\n" % from_overlay_disk)
+        print_out.write("[INFO] Shared with Overlay Mem\t:%ld\n" % from_overlay_mem)
 
 
 def recover_modified_list(delta_list, raw_path):
@@ -588,18 +568,18 @@ def recover_modified_list(delta_list, raw_path):
                     break
                 index += 1
             if index >= len(delta_list):
-                raise KVMMemoryError("Cannot find self reference")
+                raise MemoryError("Cannot find self reference")
         elif delta_item.ref_id == DeltaItem.REF_XDELTA:
             patch_data = delta_item.data
             base_data = raw_mmap[delta_item.offset:delta_item.offset+Memory.RAM_PAGE_SIZE]
             recover_data = tool.merge_data(base_data, patch_data, len(base_data)*2)
         else:
-            raise KVMMemoryError("Cannot recover: invalid referce id %d" % delta_item.ref_id)
+            raise MemoryError("Cannot recover: invalid referce id %d" % delta_item.ref_id)
 
         if len(recover_data) != Memory.RAM_PAGE_SIZE:
             msg = "Recovered Size Error: %d, ref_id: %d, %ld, %ld" % \
                     (len(recover_data), delta_item.ref_id, delta_item.data_len, delta_item.data)
-            raise KVMMemoryError(msg)
+            raise MemoryError(msg)
         delta_item.ref_id = DeltaItem.REF_RAW
         delta_item.data = recover_data
 
@@ -612,7 +592,7 @@ def recover_memory(base_path, delta_list, header, footer):
     f_out = open(os.path.join(dir_path, "recover"), "wb")
     magic_number, version = struct.unpack(">II", f.read(4+4))
     if magic_number != Memory.RAM_MAGIC or version != Memory.RAM_VERSION:
-        #raise KVMMemoryError("Invalid memory image magic/version")
+        #raise MemoryError("Invalid memory image magic/version")
         pass
 
     # find header information about pc.ram
@@ -645,10 +625,10 @@ def recover_memory(base_path, delta_list, header, footer):
             is_matched = True
             #print "[%ld] header flag changes\n%s -->\n%s" % (offset, bin(header_flag), bin(new_header_flag))
             if not comp_flag & Memory.RAM_SAVE_FLAG_CONTINUE:
-                raise KVMMemoryError("Recover does not support modification at CONT flag")
+                raise MemoryError("Recover does not support modification at CONT flag")
             if len(delta_item.data) != Memory.RAM_PAGE_SIZE:
                 msg = "invalid recover size: %d" % len(delta_item.data)
-                raise KVMMemoryError(msg)
+                raise MemoryError(msg)
 
             def is_identical_page(data):
                 first = data[0]
@@ -692,7 +672,7 @@ def recover_memory(base_path, delta_list, header, footer):
         else:
             msg = "Invalid header compression flag: %d" % \
                     (comp_flag)
-            raise KVMMemoryError(msg)
+            raise MemoryError(msg)
 
         # read can be continued to pc.rom without EOS flag
         if offset+Memory.RAM_PAGE_SIZE == total_mem_size:
@@ -700,12 +680,25 @@ def recover_memory(base_path, delta_list, header, footer):
 
     #print "read_mem_size: %ld, %ld == %ld" % (offset, f.tell(), f_out.tell())
     if not (offset+Memory.RAM_PAGE_SIZE) == total_mem_size:
-        raise KVMMemoryError("Cannot recover mem because of sudden EOS")
+        raise MemoryError("Cannot recover mem because of sudden EOS")
     # save footer data
     f_out.write(footer)
 
     f.close()
     f_out.close()
+
+
+def hashing(filepath, out_path=None):
+    # Contstuct KVM Base Memory DS from KVM migrated memory
+    # filepath  : input KVM Memory Snapshot file path
+    # outpath   : make raw Memory file at a given path
+    memory = Memory()
+    memory.raw_file = open(out_path, "wb")
+    header_data, footer_data, hash_list = memory._load_file(filepath, decomp_stream=memory.raw_file)
+    memory.hash_list = hash_list
+    memory.header_data = header_data
+    memory.footer_data = footer_data
+    return memory
 
 
 def process_cmd(argv):
@@ -734,23 +727,56 @@ def process_cmd(argv):
     return settings, command
 
 
-if __name__ == "__main__":
+def create_memory_overlay(raw_meta, raw_mem, modified_mem, out_delta, print_out=sys.stdout):
+    # get memory delta
+    # raw_meta: meta data path of raw memory, e.g. hash_list+header+footer
+    # raw_mem: raw memory path
+    # modified_mem: modified memory path
+    # out_delta: output path of final delta
 
+    # Create Base Memory from meta file
+    base = Memory.import_from_metafile(raw_meta, raw_mem)
+
+    # 1.get modified page
+    print_out.write("[Debug] 1.get modified page list\n")
+    header_delta, footer_delta, original_delta_list = base.get_modified(modified_mem)
+    delta_list = []
+    for item in original_delta_list:
+        delta_item = DeltaItem(item.offset, item.offset_len,
+                hash_value=item.hash_value,
+                ref_id=item.ref_id,
+                data_len=item.data_len,
+                data=item.data)
+        delta_list.append(delta_item)
+
+    # 2.find shared with base memory 
+    print_out.write("[Debug] 2.get delta from base Memory\n")
+    base.get_delta(delta_list, ref_id=DeltaItem.REF_BASE_MEM)
+
+    # 3.find shared within self
+    print_out.write("[Debug] 3.get delta from itself\n")
+    DeltaList.get_self_delta(delta_list)
+
+    DeltaList.statistics(delta_list, print_out)
+    DeltaList.tofile(header_delta, footer_delta, delta_list, out_delta)
+
+
+if __name__ == "__main__":
     settings, command = process_cmd(sys.argv)
     if command == "hashing":
         if not settings.base_file:
             sys.stderr.write("Error, Cannot find migrated file. See help\n")
             sys.exit(1)
         infile = settings.base_file
-        base = Memory.load_from_kvm(infile, out_path=infile+EXT_RAW)
+        base = hashing(infile, out_path=infile+EXT_RAW)
         base.export_to_file(infile+EXT_META)
 
         # Check Integrity
         re_base = Memory.import_from_metafile(infile+".meta", infile+".raw")
         if base.header_data != re_base.header_data:
-            raise KVMMemoryError("header data is different")
+            raise MemoryError("header data is different")
         if base.footer_data != re_base.footer_data:
-            raise KVMMemoryError("footer data is different")
+            raise MemoryError("footer data is different")
         print "[SUCCESS] meta file information is matched with original"
     elif command == "delta":
         if (not settings.mig_file) or (not settings.base_file):

@@ -21,9 +21,10 @@ import sys
 import os
 import subprocess
 import KVMMemory
+import Disk
 import vmnetfs
 import vmnetx
-import delta
+import stat
 from xml.etree import ElementTree
 from uuid import uuid4
 from tempfile import mkstemp 
@@ -40,17 +41,34 @@ from tool import diff_files
 from tool import merge_files
 from tool import sha1_fromfile
 
+class Log(object):
+    out = sys.stdout
+    mute = open("/dev/null", "w+b")
 
 class Const(object):
-    BASE_DISK   = ".base-img"
-    BASE_MEM    = ".base-mem"
-    OVERLAY_DISK    = ".overlay-img"
-    OVERLAY_MEM     = ".overlay-mem"
-    OVERLAY_META    = ".overlay-meta"
+    BASE_DISK           = ".base-img"
+    BASE_MEM            = ".base-mem"
+    BASE_DISK_META      = ".base-img-meta"
+    BASE_MEM_META       = ".base-mem-meta"
+    BASE_MEM_RAW        = ".base-mem.raw"
+    OVERLAY_DISK        = ".overlay-img"
+    OVERLAY_DISKMETA    = ".overlay-img-meta"
+    OVERLAY_MEM         = ".overlay-mem"
 
     TEMPLATE_XML = "./config/VM_TEMPLATE.xml"
     VMNETFS_PATH = "/home/krha/cloudlet/src/vmnetx/vmnetfs/vmnetfs"
     CHUNK_SIZE=4096
+
+    @staticmethod
+    def get_basepath(base_disk_path):
+        image_name = os.path.splitext(base_disk_path)[0]
+        dir_path = os.path.dirname(base_disk_path)
+
+        diskmeta = os.path.join(dir_path, image_name+Const.BASE_DISK_META)
+        mempath = os.path.join(dir_path, image_name+Const.BASE_MEM)
+        memmeta = os.path.join(dir_path, image_name+Const.BASE_MEM_META)
+        memraw = os.path.join(dir_path, image_name+Const.BASE_MEM_RAW)
+        return diskmeta, mempath, memmeta, memraw
 
 
 class CloudletGenerationError(Exception):
@@ -98,9 +116,8 @@ def create_baseVM(disk_image_path):
     # :param disk_image_path : file path of the VM disk image
     # :returns: (generated base VM disk path, generated base VM memory path)
 
-    image_name = os.path.splitext(disk_image_path)[0]
-    dir_path = os.path.dirname(disk_image_path)
-    base_mempath = os.path.join(dir_path, image_name+Const.BASE_MEM)
+    (base_diskmeta, base_mempath, base_memmeta, base_memraw) = \
+            Const.get_basepath(disk_image_path)
 
     # check sanity
     if not os.path.exists(Const.TEMPLATE_XML):
@@ -123,33 +140,60 @@ def create_baseVM(disk_image_path):
     new_xml_string = convert_xml(xml, conn, disk_path=disk_image_path, uuid=str(uuid4()))
 
     # launch VM & wait for end of vnc
-    machine = run_vm(conn, new_xml_string, wait_vnc=True)
+    try:
+        machine = run_vm(conn, new_xml_string, wait_vnc=True)
 
-    # make memory snapshot
-    save_mem_snapshot(machine, base_mempath)
+        # make memory snapshot
+        # VM has to be paused first to perform stable disk hashing
+        save_mem_snapshot(machine, base_mempath)
+        base_mem = KVMMemory.hashing(base_mempath, base_memraw)
+        base_mem.export_to_file(base_memmeta)
 
-    # TODO: Get hashing meta
+        # generate disk hashing
+        # TODO: need more efficient implementation, e.g. bisect
+        Disk.hashing(disk_image_path, base_diskmeta, print_out=Log.out)
+    except KeyboardInterrupt as e:
+        raise Exception(str(e))
+        if machine:
+            machine.destroy()
+    except Exception as e:
+        sys.stderr.write(str(e))
+        if machine:
+            machine.destroy()
 
+    # write protection
+    os.chmod(disk_image_path, stat.S_IRUSR)
+    os.chmod(base_diskmeta, stat.S_IRUSR)
+    os.chmod(base_mempath, stat.S_IRUSR)
+    os.chmod(base_memmeta, stat.S_IRUSR)
+    os.chmod(base_memraw, stat.S_IRUSR)
     return disk_image_path, base_mempath
 
 
-def create_overlay(base_image, base_mem):
-    image_name = os.path.splitext(base_image)[0]
-    dir_path = os.path.dirname(base_mem)
+def create_overlay(base_image):
+    # create user customized overlay.
+    # First resume VM, then let user edit its VM
+    # Finally, return disk/memory binary as an overlay
+    # base_image: path to base disk
 
+    (base_diskmeta, base_mem, base_memmeta, base_memraw) = \
+            Const.get_basepath(base_image)
     #check sanity
-    if not os.path.exists(base_image):
-        message = "Cannot find base image at %s" % (base_image)
-        raise CloudletGenerationError(message)
-    if not os.path.exists(base_mem):
-        message = "Cannot find base memory at %s" % (base_mem)
-        raise CloudletGenerationError(message)
+    def _check_path(name, path):
+        if not os.path.exists(path):
+            message = "Cannot find name at %s" % (path)
+            raise CloudletGenerationError(message)
+    _check_path('base disk', base_image)
+    _check_path('base memory', base_mem)
+    _check_path('base disk-hash', base_diskmeta)
+    _check_path('base memory-hash', base_memmeta)
+    _check_path('base memory-raw', base_memraw)
     
     # filename for overlay VM
     image_name = os.path.basename(base_image).split(".")[0]
     dir_path = os.path.dirname(base_mem)
-    metafile_path = os.path.join(dir_path, image_name+Const.OVERLAY_META)
     overlay_diskpath = os.path.join(dir_path, image_name+Const.OVERLAY_DISK)
+    overlay_diskmeta = os.path.join(dir_path, image_name+Const.OVERLAY_DISKMETA)
     overlay_mempath = os.path.join(dir_path, image_name+Const.OVERLAY_MEM)
     
     # make FUSE disk & memory
@@ -168,20 +212,24 @@ def create_overlay(base_image, base_mem):
     # 1-1. resume & get modified disk
     conn = get_libvirt_connection()
     machine = run_snapshot(conn, modified_disk, base_mem, wait_vnc=True)
-
     # 1-2. get modified memory
+    # TODO: support stream of modified memory rather than tmp file
     save_mem_snapshot(machine, modified_mem.name)
 
-    # 2-1. get disk overlay
+    # 2-1. get memory overlay
+    KVMMemory.create_memory_overlay(base_memmeta, base_memraw, \
+            modified_mem.name, overlay_mempath, print_out=Log.out)
+
+    # 2-2. get disk overlay
     m_chunk_list = monitor.chunk_list
     m_chunk_list.sort()
-    delta.create_disk_overlay(overlay_diskpath, metafile_path, \
-            modified_disk, m_chunk_list, Const.CHUNK_SIZE)
+    Disk.create_disk_overlay(overlay_diskpath, overlay_diskmeta, \
+            modified_disk, m_chunk_list, Const.CHUNK_SIZE, print_out=Log.out)
 
-    # 2-2. get memory overlay
+    # 3. terminting
     monitor.terminate()
     monitor.join()
-    return (metafile_path, overlay_diskpath, overlay_mempath)
+    return (overlay_diskmeta, overlay_diskpath, overlay_mempath)
     '''
     output_list = []
     output_list.append((base_image, modified_disk, overlay_diskpath))
@@ -301,16 +349,6 @@ def recover_launchVM(meta, overlay_disk, overlay_mem, **kwargs):
     base_disk_path = meta_info['base_disk_path']
     base_mem_path = meta_info['base_mem_path']
 
-    # base-vm validation with sha1 finger-print
-    if not kwargs.get('skip_validation'):
-        base_disk_sha1 = sha1_fromfile(base_disk_path)
-        base_mem_sha1 = sha1_fromfile(base_mem_path)
-        if base_disk_sha1 != meta_info['base_disk_sha1'] or base_mem_sha1 != meta_info['base_mem_sha1']:
-            message = "sha1 does not match (%s!=%s) or (%s!=%s)" % \
-                    (base_disk_sha1, meta_info['base_disk_sha1'], \
-                    base_mem_sha1, meta_info['base_mem_sha1'])
-            raise CloudletGenerationError(message)
-
     # add recover files
     recover_inputs= []
     recover_outputs = []
@@ -416,10 +454,6 @@ def save_mem_snapshot(machine, fout_path, **kwargs):
         raise CloudletGenerationError(str(e))
     if ret != 0:
         raise CloudletGenerationError("libvirt: Cannot save memory state")
-
-    # Get memory metadata
-    base = KVMMemory.Memory.load_from_kvm(fout_path, out_path=fout_path+KVMMemory.EXT_RAW)
-    base.export_to_file(fout_path+KVMMemory.EXT_META)
 
 
 def run_snapshot(conn, disk_image, mem_snapshot, **kwargs):
@@ -560,18 +594,22 @@ def main(argv):
             sys.exit(1)
         # create overlay
         disk_path = args[1]
-        mem_path = os.path.splitext(disk_path)[0] + Const.BASE_MEM
-        overlay_files = create_overlay(disk_path, mem_path)
+        overlay_files = create_overlay(disk_path)
         print "[INFO] meta file: %s" % overlay_files[0]
         print "[INFO] disk overlay : %s" % overlay_files[1]
         print "[INFO] mem overlay : %s" % overlay_files[2]
     elif mode == MODE[2]:   #synthesis
-        if len(args) != 4:
-            parser.error("Synthesis requires 3 arguments\n1)meta-info path\n2)overlay disk path\n3)overlay memory path")
+        if len(args) != 5:
+            parser.error("Synthesis requires 4 arguments\n \
+                    1)base-disk path\n \
+                    2)overlay meta path\n \
+                    3)overlay disk path\n \
+                    4)overlay memory path")
             sys.exit(1)
-        meta = args[1]
-        overlay_disk = args[2] 
-        overlay_mem = args[3]
+        base_disk_path = args[1]
+        meta = args[2]
+        overlay_disk = args[3] 
+        overlay_mem = args[4]
         launch_disk, launch_mem = recover_launchVM(meta, overlay_disk, overlay_mem, skip_validation=True)
         conn = get_libvirt_connection()
         run_snapshot(conn, launch_disk, launch_mem, wait_vnc=True)
@@ -600,6 +638,10 @@ def main(argv):
         conn = get_libvirt_connection()
         hdr = vmnetx._QemuMemoryHeader(open(mem_path))
         rettach_nic(conn, hdr.xml)
+    else:
+        print "Invalid command"
+        parser.print_help()
+        sys.exit(1)
 
 
 if __name__ == "__main__":
