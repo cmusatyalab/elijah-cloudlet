@@ -27,19 +27,15 @@ import vmnetx
 import stat
 from xml.etree import ElementTree
 from uuid import uuid4
-from tempfile import mkstemp 
 from tempfile import NamedTemporaryFile
 from time import time
 from time import sleep
 from optparse import OptionParser
-from json import dumps
-from json import loads
 
 from tool import comp_lzma
 from tool import decomp_lzma
 from tool import diff_files
 from tool import merge_files
-from tool import sha1_fromfile
 
 class Log(object):
     out = sys.stdout
@@ -60,14 +56,27 @@ class Const(object):
     CHUNK_SIZE=4096
 
     @staticmethod
-    def get_basepath(base_disk_path):
+    def get_basepath(base_disk_path, check_exist=False):
+        def _check_path(name, path):
+            if not os.path.exists(path):
+                message = "Cannot find name at %s" % (path)
+                raise CloudletGenerationError(message)
+        _check_path('base disk', base_disk_path)
+
         image_name = os.path.splitext(base_disk_path)[0]
         dir_path = os.path.dirname(base_disk_path)
-
         diskmeta = os.path.join(dir_path, image_name+Const.BASE_DISK_META)
         mempath = os.path.join(dir_path, image_name+Const.BASE_MEM)
         memmeta = os.path.join(dir_path, image_name+Const.BASE_MEM_META)
         memraw = os.path.join(dir_path, image_name+Const.BASE_MEM_RAW)
+
+        #check sanity
+        if check_exist==True:
+            _check_path('base memory', mempath)
+            _check_path('base disk-hash', diskmeta)
+            _check_path('base memory-hash', memmeta)
+            _check_path('base memory-raw', memraw)
+
         return diskmeta, mempath, memmeta, memraw
 
 
@@ -130,9 +139,16 @@ def create_baseVM(disk_image_path):
         if str(ret).lower() != 'y':
             sys.exit(1)
 
-    ret = raw_input("Your disk image will be modified. Proceed? (y/N) ")
-    if str(ret).lower() != 'y':
-        sys.exit(1)
+    # allow write permission to base disk and delete all previous files
+    os.chmod(disk_image_path, stat.S_IRUSR | stat.S_IWUSR | stat.S_IXUSR)
+    if os.path.exists(base_diskmeta):
+        os.unlink(base_diskmeta)
+    if os.path.exists(base_mempath):
+        os.unlink(base_mempath)
+    if os.path.exists(base_memmeta):
+        os.unlink(base_memmeta)
+    if os.path.exists(base_memraw):
+        os.unlink(base_memraw)
 
     # edit default XML to use give disk image
     conn = get_libvirt_connection()
@@ -152,10 +168,6 @@ def create_baseVM(disk_image_path):
         # generate disk hashing
         # TODO: need more efficient implementation, e.g. bisect
         Disk.hashing(disk_image_path, base_diskmeta, print_out=Log.out)
-    except KeyboardInterrupt as e:
-        raise Exception(str(e))
-        if machine:
-            machine.destroy()
     except Exception as e:
         sys.stderr.write(str(e))
         if machine:
@@ -177,17 +189,7 @@ def create_overlay(base_image):
     # base_image: path to base disk
 
     (base_diskmeta, base_mem, base_memmeta, base_memraw) = \
-            Const.get_basepath(base_image)
-    #check sanity
-    def _check_path(name, path):
-        if not os.path.exists(path):
-            message = "Cannot find name at %s" % (path)
-            raise CloudletGenerationError(message)
-    _check_path('base disk', base_image)
-    _check_path('base memory', base_mem)
-    _check_path('base disk-hash', base_diskmeta)
-    _check_path('base memory-hash', base_memmeta)
-    _check_path('base memory-raw', base_memraw)
+            Const.get_basepath(base_image, check_exist=True)
     
     # filename for overlay VM
     image_name = os.path.basename(base_image).split(".")[0]
@@ -223,8 +225,9 @@ def create_overlay(base_image):
     # 2-2. get disk overlay
     m_chunk_list = monitor.chunk_list
     m_chunk_list.sort()
+    packed_chunk_list = dict((x,x) for x in m_chunk_list).values()
     Disk.create_disk_overlay(overlay_diskpath, overlay_diskmeta, \
-            modified_disk, m_chunk_list, Const.CHUNK_SIZE, print_out=Log.out)
+            modified_disk, packed_chunk_list, Const.CHUNK_SIZE, print_out=Log.out)
 
     # 3. terminting
     monitor.terminate()
@@ -279,8 +282,9 @@ def run_delta_compression(output_list, **kwargs):
     return ret_files
 
 
-def recover_launchVM_from_URL(base_disk_path, base_mem_path, overlay_disk_url, overlay_mem_url, **kwargs):
+def recover_launchVM(base_image, overlay_meta, overlay_disk, overlay_mem, **kwargs):
     # kwargs
+    # skip_validation   :   skip sha1 validation
     # LOG = log object for nova
     # nova_util = nova_util is executioin wrapper for nova framework
     #           You should use nova_util in OpenStack, or subprocess 
@@ -288,102 +292,26 @@ def recover_launchVM_from_URL(base_disk_path, base_mem_path, overlay_disk_url, o
     log = kwargs.get('log', None)
     nova_util = kwargs.get('nova_util', None)
 
-    def download(url, out_path):
-        import urllib2
-        url = urllib2.urlopen(url)
-        out_file = open(out_path, "wb")
-        while True:
-            data = url.read(1024*1024)
-            if not data:
-                break
-            out_file.write(data)
-        out_file.flush()
-        out_file.close()
+    (base_diskmeta, base_mem, base_memmeta, base_memraw) = \
+            Const.get_basepath(base_image, check_exist=True)
+    modified_mem = NamedTemporaryFile(prefix="cloudlet-recoverd-mem-", delete=False)
+    modified_img = NamedTemporaryFile(prefix="cloudlet-recoverd-img-", delete=False)
+    print modified_mem.name
+    print modified_img.name
 
-    # download overlay
-    basedir = os.path.dirname(base_mem_path)
-    #overlay_disk = os.path.join("/tmp", "overlay.disk")
-    #overlay_mem = os.path.join("/tmp", "overlay.mem")
-    overlay_disk = os.path.join(basedir, "overlay.disk")
-    overlay_mem = os.path.join(basedir, "overlay.mem")
-    download(overlay_disk_url, overlay_disk)
-    download(overlay_mem_url, overlay_mem)
+    # Recover Modified Memory
+    KVMMemory.recover_memory(base_mem, overlay_mem, base_memmeta, 
+            base_memraw, modified_mem.name)
 
-    if log:
-        log.debug("Download overlay disk : %d" % os.path.getsize(overlay_disk))
-        log.debug("Download overlay mem: %d" % os.path.getsize(overlay_mem))
-    else:
-        print "Download overlay disk : %d" % os.path.getsize(overlay_disk)
-        print "Download overlay mem: %d" % os.path.getsize(overlay_mem)
+    # Recover Modified Disk
+    overlay_map = Disk.recover_disk(overlay_disk, overlay_meta, 
+            modified_img.name, Const.CHUNK_SIZE)
 
-    # prepare meta data
-    meta = os.path.join(basedir, "overlay_meta")
-    metafile = open(meta, "w")
-    metafile.write(dumps({"base_disk_path":os.path.abspath(base_disk_path),"base_mem_path":os.path.abspath(base_mem_path)}))
-    metafile.close()
+    # make FUSE disk & memory
+    fuse = run_fuse(Const.VMNETFS_PATH, base_image, Const.CHUNK_SIZE,
+            resumed_disk=modified_img.name, overlay_map=overlay_map)
 
-    # recover launch VM
-    launch_disk, launch_mem = recover_launchVM(meta, overlay_disk, overlay_mem, \
-            skip_validation=True, log=log, nova_util=nova_util)
-
-    os.remove(overlay_disk)
-    os.remove(overlay_mem)
-    return launch_disk, launch_mem
-
-
-def recover_launchVM(meta, overlay_disk, overlay_mem, **kwargs):
-    # kwargs
-    # skip_validation   :   skipp sha1 validation
-    # LOG = log object for nova
-    # nova_util = nova_util is executioin wrapper for nova framework
-    #           You should use nova_util in OpenStack, or subprocess 
-    #           will be returned without finishing their work
-    log = kwargs.get('log', None)
-    nova_util = kwargs.get('nova_util', None)
-
-    # find base VM using meta
-    if not os.path.exists(meta):
-        message = "cannot find meta file at : %s" % os.path.abspath(meta)
-        raise IOError(message)
-    meta_info = loads(open(meta, "r").read()) # load json formatted meta info
-    base_disk_path = meta_info['base_disk_path']
-    base_mem_path = meta_info['base_mem_path']
-
-    # add recover files
-    recover_inputs= []
-    recover_outputs = []
-    recover_inputs.append((base_disk_path, overlay_disk))
-    recover_inputs.append((base_mem_path, overlay_mem))
-
-    for (base, comp) in recover_inputs:
-        # decompress
-        overlay = comp + '.decomp'
-        prev_time = time()
-        decomp_lzma(comp, overlay, nova_util=nova_util)
-        msg = '[Time] Decompression(%s) - %s' % (comp, str(time()-prev_time))
-        if log:
-            log.debug(msg)
-        else:
-            print msg
-
-        # merge with base image
-        from random import randint
-        #recover = os.path.join(os.path.dirname(base), 'recover_%04d.qcow2' % randint(0, 9999)); 
-        recover = comp + '.recover.qcow2'
-        prev_time = time()
-        merge_files(base, overlay, recover, log=log, nova_util=nova_util)
-        msg = '[Time] Recover(xdelta) image(%s) - %s' %(recover, str(time()-prev_time))
-        if log:
-            log.debug("base: %s, overlay: %s, recover: %s", base, overlay, recover)
-            log.debug(msg)
-        else:
-            print msg
-
-        #delete intermeidate files
-        os.remove(overlay)
-        recover_outputs.append(recover)
-        
-    return recover_outputs
+    return [modified_img.name, modified_mem.name, fuse]
 
 
 def run_fuse(bin_path, original_disk, chunk_size, resumed_disk=None, overlay_map=None):
@@ -420,10 +348,16 @@ def run_vm(conn, domain_xml, **kwargs):
     except AttributeError as e:
         sys.stderr.write("Warning, Possible VNC port error:%s\n" % str(e))
 
-    vnc_process = subprocess.Popen("gvncviewer localhost:%d" % vnc_port, shell=True)
+    _PIPE = subprocess.PIPE
+    vnc_process = subprocess.Popen("gvncviewer localhost:%d" % vnc_port, 
+            shell=True, stdin=_PIPE, stdout=_PIPE)
     if kwargs.get('wait_vnc'):
-        print "[INFO] waiting for finishing VNC interaction"
-        vnc_process.wait()
+        try:
+            vnc_process.wait()
+        except KeyboardInterrupt as e:
+            print "[INFO] keyboard interrupt while waiting VNC"
+            if machine:
+                machine.destroy()
     return machine
 
 
@@ -476,8 +410,6 @@ def run_snapshot(conn, disk_image, mem_snapshot, **kwargs):
     uuid_element = domxml.find('uuid')
     uuid = str(uuid_element.text)
     machine = conn.lookupByUUIDString(uuid)
-
-    # Run VNC and wait until user finishes working
     if kwargs.get('vnc_disable'):
         return machine
 
@@ -495,7 +427,11 @@ def run_snapshot(conn, disk_image, mem_snapshot, **kwargs):
     vnc_process = subprocess.Popen("gvncviewer localhost:%d" % vnc_port, shell=True)
     if kwargs.get('wait_vnc'):
         print "[INFO] waiting for finishing VNC interaction"
-        vnc_process.wait()
+        try:
+            vnc_process.wait()
+        except KeyboardInterrupt as e:
+            print "keyboard interrupt while waiting VNC"
+            vnc_process.terminate()
     return machine
 
 
@@ -610,9 +546,36 @@ def main(argv):
         meta = args[2]
         overlay_disk = args[3] 
         overlay_mem = args[4]
-        launch_disk, launch_mem = recover_launchVM(meta, overlay_disk, overlay_mem, skip_validation=True)
+        modified_img, launch_mem, fuse = recover_launchVM(base_disk_path, meta, 
+                overlay_disk, overlay_mem)
+
+        # monitor modified chunks
+        residue_img = os.path.join(fuse.mountpoint, 'disk', 'image')
+        stream_modified = os.path.join(fuse.mountpoint, 'disk', 'streams', 'chunks_modified')
+        stream_access = os.path.join(fuse.mountpoint, 'disk', 'streams', 'chunks_accessed')
+        monitor = vmnetfs.StreamMonitor()
+        monitor.add_path(stream_modified)
+        monitor.add_path(stream_access)
+        monitor.start()
+
+        #resume VM
         conn = get_libvirt_connection()
-        run_snapshot(conn, launch_disk, launch_mem, wait_vnc=True)
+        machine = None
+        try:
+            machine=run_snapshot(conn, residue_img, launch_mem, wait_vnc=True)
+        except Exception as e:
+            sys.stdout.write(str(e)+"\n")
+        if machine:
+            machine.destroy()
+        # terminate
+        fuse.terminate()
+        monitor.terminate()
+        monitor.join()
+        if os.path.exists(modified_img):
+            os.unlink(modified_img)
+        if os.path.exists(launch_mem):
+            os.unlink(launch_mem)
+            
     elif mode == 'test_overlay_download':    # To be delete
         base_disk_path = "/home/krha/cloudlet/image/nova/base_disk"
         base_mem_path = "/home/krha/cloudlet/image/nova/base_memory"

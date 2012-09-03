@@ -131,7 +131,7 @@ class StreamMonitor(threading.Thread):
         ctime = float(ctime)
         chunk = int(chunk)
         self.chunk_list.append(int(chunk))
-        #print "%s: %f, %d" % ("modification", ctime, chunk)
+        print "%s: %f, %d" % ("modification", ctime, chunk)
 
     def _handle_chunks_access(self, line):
         #print "access: " + line
