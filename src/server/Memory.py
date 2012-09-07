@@ -21,6 +21,8 @@ import sys
 import struct
 import tool
 import mmap
+import vmnetx
+from progressbar import AnimatedProgressBar
 from delta import DeltaItem
 from delta import DeltaList
 from hashlib import sha256
@@ -30,7 +32,6 @@ from optparse import OptionParser
 #GLOBAL
 EXT_RAW = ".raw"
 EXT_META = ".meta"
-
 
 class MemoryError(Exception):
     pass
@@ -82,7 +83,11 @@ class Memory(object):
     def _get_mem_hash(self, fin, start_offset, end_offset, hash_list, **kwargs):
         # kwargs
         #  diff: compare hash_list with self object
+        #  print_out: log/process output 
         diff = kwargs.get("diff", None)
+        print_out = kwargs.get("print_out", open("/dev/null", "w+b"))
+        print_out.write("[INFO] Get hash list of memory page\n")
+        prog_bar = AnimatedProgressBar(end=100, width=80, stdout=print_out)
 
         fin.seek(start_offset)
         total_size = end_offset-start_offset
@@ -96,7 +101,7 @@ class Memory(object):
                 self_hash_value = self.hash_list[ram_offset/self.RAM_PAGE_SIZE][2]
                 if self_hash_value != sha256(data).digest():
                     #get xdelta comparing self.raw
-                    source_data = self.get_raw_data(start_offset+ram_offset, self.RAM_PAGE_SIZE)
+                    source_data = self.get_raw_data(ram_offset, self.RAM_PAGE_SIZE)
                     #save xdelta as DeltaItem only when it gives smaller
                     try:
                         patch = tool.diff_data(source_data, data, 2*len(source_data))
@@ -121,8 +126,32 @@ class Memory(object):
                 if len(hash_list) > Memory.RAM_PAGE_SIZE*1000000: # 400MB for hashlist
                     raise MemoryError("possibly comparing with wrong base VM")
             ram_offset += len(data)
+            # print progress bar for every 100 page
+            if (ram_offset % (Memory.RAM_PAGE_SIZE*100)) == 0:
+                prog_bar.set_percent(100.0*ram_offset/total_size)
+                prog_bar.show_progress()
+        prog_bar.finish()
 
-    def _seek_to_end_of_ram(self, fin, total_mem_size, mem_list):
+    def _seek_to_end_of_ram(self, fin):
+        # get ram total length
+        position = self._seek_string(fin, self.RAM_ID_STRING)
+        memory_start_offset = position-(1+8)
+        fin.seek(memory_start_offset)
+        total_mem_size = long(struct.unpack(">Q", fin.read(8))[0])
+        if total_mem_size & Memory.RAM_SAVE_FLAG_MEM_SIZE == 0:
+            raise MemoryError("invalid header format: no total memory size")
+        total_mem_size = total_mem_size & ~0xfff
+
+        # get ram length information
+        read_ramlen_size = 0
+        ram_info = dict()
+        while total_mem_size > read_ramlen_size:
+            id_string_len = ord(struct.unpack(">s", fin.read(1))[0])
+            id_string, mem_size = struct.unpack(">%dsQ" % id_string_len,\
+                    fin.read(id_string_len+8))
+            ram_info[id_string] = {"length":mem_size}
+            read_ramlen_size += mem_size
+
         read_mem_size = 0
         while total_mem_size != read_mem_size:
             raw_ram_flag = struct.unpack(">Q", fin.read(8))[0]
@@ -139,7 +168,7 @@ class Memory(object):
             fin.read(padding_len)
 
             cur_offset = fin.tell()
-            block_info = mem_list.get(id_string)
+            block_info = ram_info.get(id_string)
             if not block_info:
                 raise MemoryError("Unknown memory block : %s", id_string)
             block_info['offset'] = cur_offset
@@ -147,13 +176,15 @@ class Memory(object):
             fin.seek(cur_offset + memory_size)
             read_mem_size += memory_size
 
+        return fin.tell(), ram_info
+
     def _load_file(self, filepath, **kwargs):
         # Load KVM Memory snapshot file and 
         # extract hashlist of each memory page while interpreting the format
         # filepath = file path of the loading file
         # kwargs
         #  diff_file: compare filepath(modified ram) with self hash
-        #  decomp_stream: write decompress memory to given path
+        #  print_out: log/process output 
         #
         ####
         # |----------------------------------------------|---------------|
@@ -161,51 +192,38 @@ class Memory(object):
         #            hashing memory                            footer
         ####
         diff = kwargs.get("diff", None)
+        print_out = kwargs.get("print_out", open("/dev/null", "w+b"))
         if diff and len(self.hash_list) == 0:
             raise MemoryError("Cannot compare give file this self.hashlist")
-
         footer_data = None
 
-        # Convert big-endian to little-endian
-        f = open(filepath, "rb")
-        magic_number, version = struct.unpack(">II", f.read(4+4))
-        if magic_number != Memory.RAM_MAGIC or version != Memory.RAM_VERSION:
-            raise MemoryError("Invalid memory image magic/version")
-
-        # get ram total length
-        position = self._seek_string(f, self.RAM_ID_STRING)
-        memory_start_offset = position-(1+8)
-        f.seek(memory_start_offset)
-        total_mem_size = long(struct.unpack(">Q", f.read(8))[0])
-        if total_mem_size & Memory.RAM_SAVE_FLAG_MEM_SIZE == 0:
-            raise MemoryError("invalid header format: no total memory size")
-        total_mem_size = total_mem_size & ~0xfff
-
-        # get ram length information
-        read_ramlen_size = 0
-        ram_info = dict()
-        while total_mem_size > read_ramlen_size:
-            id_string_len = ord(struct.unpack(">s", f.read(1))[0])
-            id_string, mem_size = struct.unpack(">%dsQ" % id_string_len,\
-                    f.read(id_string_len+8))
-            ram_info[id_string] = {"length":mem_size}
-            read_ramlen_size += mem_size
+        # Sanity check
+        fin = open(filepath, "rb")
+        libvirt_mem_hdr = vmnetx._QemuMemoryHeader(fin)
+        libvirt_mem_hdr.seek_body(fin)
+        libvirt_header_len = fin.tell()
+        if libvirt_header_len % Memory.RAM_PAGE_SIZE != 0:
+            # TODO: need to modify libvirt migration file header 
+            # in case it is not aligned with memory page size
+            raise MemoryError("libvirt memory header is not aligned with PAGE SIZE(%ld)" % libvirt_header_len)
 
         # get hash of memory area
+        fin.seek(libvirt_header_len)
         hash_list = []
-        self._seek_to_end_of_ram(f, total_mem_size, ram_info)
-        ram_end_offset = f.tell()
+        ram_end_offset, ram_info = self._seek_to_end_of_ram(fin)
         if ram_end_offset % Memory.RAM_PAGE_SIZE != 0:
             print "end offset: %ld" % (ram_end_offset)
             raise MemoryError("ram header+data is not aligned with page size")
-        self._get_mem_hash(f, 0, ram_end_offset, hash_list)
+        self._get_mem_hash(fin, 0, ram_end_offset, hash_list, print_out=print_out)
 
         # save footer data
-        cur_offset = f.tell()
-        f.seek(0, 2)
-        total = f.tell()
-        f.seek(cur_offset)
-        footer_data = f.read(total-cur_offset)
+        # cur_offset = fin.tell(); fin.seek(0, 2); total = fin.tell(); fin.seek(cur_offset)
+        footer_data = ''
+        while True:
+            read_data = fin.read(Memory.RAM_PAGE_SIZE)
+            if not read_data:
+                break
+            footer_data += read_data
 
         if diff:
             return hash_list, footer_data
@@ -214,7 +232,7 @@ class Memory(object):
 
     @staticmethod
     def import_from_metafile(meta_path, raw_path):
-        # Regenerate KVM Base Memory DS from previously generated meta file
+        # Regenerate KVM Base Memory DS from existing meta file
         if (not os.path.exists(raw_path)) or (not os.path.exists(meta_path)):
             msg = "Cannot import from hash file, No raw file at : %s" % raw_path
             raise MemoryError(msg)
@@ -224,7 +242,7 @@ class Memory(object):
         fd = open(meta_path, "rb")
 
         # MAGIC & VERSION
-        magic, version = struct.unpack("<qq", fd.read(8+8))
+        magic, version = struct.unpack("!qq", fd.read(8+8))
         if magic != Memory.HASH_FILE_MAGIC:
             msg = "Hash file magic number(%ld != %ld) does not match" % (magic, Memory.HASH_FILE_MAGIC)
             raise IOError(msg)
@@ -234,7 +252,7 @@ class Memory(object):
             raise IOError(msg)
 
         # Read Footer data
-        footer_data_len = struct.unpack("<q", fd.read(8))[0]
+        footer_data_len = struct.unpack("!q", fd.read(8))[0]
         memory.footer_data = fd.read(footer_data_len)
 
         # Read Hash Item List
@@ -242,7 +260,7 @@ class Memory(object):
             data = fd.read(8+4+32) # start_offset, length, hash
             if not data:
                 break
-            value = tuple(struct.unpack("<qI32s", data))
+            value = tuple(struct.unpack("!qI32s", data))
             memory.hash_list.append(value)
         fd.close()
         return memory
@@ -258,16 +276,16 @@ class Memory(object):
     def export_to_file(self, f_path):
         fd = open(f_path, "wb")
         # Write MAGIC & VERSION
-        fd.write(struct.pack("<q", Memory.HASH_FILE_MAGIC))
-        fd.write(struct.pack("<q", Memory.HASH_FILE_VERSION))
+        fd.write(struct.pack("!q", Memory.HASH_FILE_MAGIC))
+        fd.write(struct.pack("!q", Memory.HASH_FILE_VERSION))
 
         # Write Footer data
-        fd.write(struct.pack("<q", len(self.footer_data)))
+        fd.write(struct.pack("!q", len(self.footer_data)))
         fd.write(self.footer_data)
         # Write hash item list
         for (start_offset, length, data) in self.hash_list:
             # save it as little endian format
-            row = struct.pack("<qI32s", start_offset, length, data)
+            row = struct.pack("!qI32s", start_offset, length, data)
             fd.write(row)
         fd.close()
 
@@ -463,12 +481,11 @@ def _recover_memory(base_path, delta_list, footer, out_path):
     f_out.close()
 
 
-def hashing(filepath, out_path=None):
+def hashing(filepath):
     # Contstuct KVM Base Memory DS from KVM migrated memory
     # filepath  : input KVM Memory Snapshot file path
-    # outpath   : make raw Memory file at a given path
     memory = Memory()
-    hash_list, footer_data =  memory._load_file(filepath)
+    hash_list, footer_data =  memory._load_file(filepath, print_out=sys.stdout)
     memory.hash_list = hash_list
     memory.footer_data = footer_data
     return memory
@@ -558,11 +575,11 @@ if __name__ == "__main__":
             sys.stderr.write("Error, Cannot find migrated file. See help\n")
             sys.exit(1)
         infile = settings.base_file
-        base = hashing(infile, out_path=infile+EXT_RAW)
+        base = hashing(infile)
         base.export_to_file(infile+EXT_META)
 
         # Check Integrity
-        re_base = Memory.import_from_metafile(infile+".meta", infile+".raw")
+        re_base = Memory.import_from_metafile(infile+".meta", infile)
         if base.footer_data != re_base.footer_data:
             raise MemoryError("footer data is different")
         print "[SUCCESS] meta file information is matched with original"

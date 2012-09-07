@@ -150,7 +150,7 @@ def create_baseVM(disk_image_path):
     if os.path.exists(base_memraw):
         os.unlink(base_memraw)
 
-    # edit default XML to use give disk image
+    # edit default XML to have new disk path
     conn = get_libvirt_connection()
     xml = ElementTree.fromstring(open(Const.TEMPLATE_XML, "r").read())
     new_xml_string = convert_xml(xml, conn, disk_path=disk_image_path, uuid=str(uuid4()))
@@ -158,7 +158,6 @@ def create_baseVM(disk_image_path):
     # launch VM & wait for end of vnc
     try:
         machine = run_vm(conn, new_xml_string, wait_vnc=True)
-
         # make memory snapshot
         # VM has to be paused first to perform stable disk hashing
         save_mem_snapshot(machine, base_mempath)
