@@ -195,7 +195,6 @@ class Memory(object):
         print_out = kwargs.get("print_out", open("/dev/null", "w+b"))
         if diff and len(self.hash_list) == 0:
             raise MemoryError("Cannot compare give file this self.hashlist")
-        footer_data = None
 
         # Sanity check
         fin = open(filepath, "rb")
@@ -214,21 +213,21 @@ class Memory(object):
         if ram_end_offset % Memory.RAM_PAGE_SIZE != 0:
             print "end offset: %ld" % (ram_end_offset)
             raise MemoryError("ram header+data is not aligned with page size")
-        self._get_mem_hash(fin, 0, ram_end_offset, hash_list, print_out=print_out)
+        self._get_mem_hash(fin, 0, ram_end_offset, hash_list, diff=diff, print_out=print_out)
 
         # save footer data
         # cur_offset = fin.tell(); fin.seek(0, 2); total = fin.tell(); fin.seek(cur_offset)
-        footer_data = ''
+        self.footer_data = ''
         while True:
             read_data = fin.read(Memory.RAM_PAGE_SIZE)
             if not read_data:
                 break
-            footer_data += read_data
+            self.footer_data += read_data
 
         if diff:
-            return hash_list, footer_data
+            return hash_list, self.footer_data
         else:
-            return hash_list, footer_data
+            return hash_list, self.footer_data
 
     @staticmethod
     def import_from_metafile(meta_path, raw_path):
@@ -297,12 +296,15 @@ class Memory(object):
 
     def get_modified(self, new_kvm_file):
         # get modified pages, footer delta
-        modi_footer_data, hash_list = self._load_file(new_kvm_file, diff=True)
+        hash_list, modi_footer_data = self._load_file(new_kvm_file, diff=True, print_out=sys.stdout)
         try:
-            footer_delta = tool.diff_data(self.footer_data, modi_footer_data, 2*len(modi_footer_data))
+            print "footer info %ld %ld" % (len(modi_footer_data), len(self.footer_data))
+            print "footer info %s %s" % (type(modi_footer_data), type(self.footer_data))
+            footer_delta = tool.diff_data(self.footer_data, modi_footer_data, 2*len(self.footer_data))
         except IOError as e:
-            print "[INFO] xdelta failed, so save it as raw (%s)" % str(e)
-            sys.exit(1)
+            sys.stderr.write("[WARNING] xdelta failed, so save it as raw (%s)\n" % str(e))
+            footer_delta = modi_footer_data
+
         print "[INFO] footer size(%ld->%ld)" % \
                (len(modi_footer_data), len(footer_delta))
         return footer_delta, hash_list
@@ -587,36 +589,11 @@ if __name__ == "__main__":
         if (not settings.mig_file) or (not settings.base_file):
             sys.stderr.write("Error, Cannot find modified memory file. See help\n")
             sys.exit(1)
-        raw_path = settings.base_file + EXT_RAW
+        raw_path = settings.base_file
         meta_path = settings.base_file + EXT_META
         modi_mem_path = settings.mig_file
         out_path = settings.mig_file + ".delta"
-
-        # Create Base Memory from meta file
-        base = Memory.import_from_metafile(meta_path, raw_path)
-
-        # 1.get modified page
-        print "[Debug] get modified page list"
-        footer_delta, original_delta_list = base.get_modified(modi_mem_path)
-        delta_list = []
-        for item in original_delta_list:
-            delta_item = DeltaItem(item.offset, item.offset_len,
-                    hash_value=item.hash_value,
-                    ref_id=item.ref_id,
-                    data_len=item.data_len,
-                    data=item.data)
-            delta_list.append(delta_item)
-
-        # 2.find shared with base memory 
-        print "[Debug] get delta from base Memory"
-        base.get_delta(delta_list, ref_id=DeltaItem.REF_BASE_MEM)
-
-        # 3.find shared within self
-        print "[Debug] get delta from itself"
-        DeltaList.get_self_delta(delta_list)
-
-        DeltaList.statistics(delta_list)
-        DeltaList.tofile(header_delta, footer_delta, delta_list, out_path)
+        create_memory_overlay(meta_path, raw_path, modi_mem_path, out_path, print_out=sys.stdout)
 
     elif command == "recover":
         if (not settings.base_file) or (not settings.delta_file):

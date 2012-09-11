@@ -199,6 +199,40 @@ def object_local(watts_server, input_dir):
         sys.exit(1)
 
 
+def batch_speech(watts_server, input_dir):
+    if not input_dir:
+        input_dir = './SPEECH/input'
+
+    cloud_list = [("cloudlet.krha.kr", 10191, "s_hail", 2221), \
+            ("server.krha.kr", 10191, "s_cage", 2221), \
+            ("23.21.103.194", 10191, "s_east", 22), \
+            ("184.169.142.70", 10191, "s_west", 22), \
+            ("176.34.100.63", 10191, "s_eu", 22), \
+            ("46.137.209.173", 10191, "s_asia", 22)]
+    for cloud in cloud_list:
+        client_cmd = "java -jar SPEECH/SpeechrecDesktopControlClient.jar %s %d %s" % (cloud[0], cloud[1], input_dir)
+        print "RUNNING : %s" % (client_cmd)
+        ret = run_application(cloud[0], cloud[3], None, watts_server, client_cmd, cloud[2]+".power")
+        if not ret == 0:
+            print "Error at running %s" % (client_cmd)
+            sys.exit(1)
+        time.sleep(30)
+
+
+def speech_local(watts_server, input_dir):
+    if not input_dir:
+        input_dir = './SPEECH/input'
+
+    raw_input("Prepare local server and Enter. ")
+    cloud = ("localhost", 10191, "s_local", 22)
+    client_cmd = "java -jar SPEECH/SpeechrecDesktopControlClient.jar %s %d %s" % (cloud[0], cloud[1], input_dir)
+    print "RUNNING : %s" % (client_cmd)
+    ret = run_application(cloud[0], cloud[3], '', watts_server, client_cmd, cloud[2]+".power")
+    if not ret == 0:
+        print "Error at running %s" % (client_cmd)
+        sys.exit(1)
+
+
 def main(argv=None):
     settings, args = process_command_line(sys.argv[1:])
     if settings.app == "graphics":
@@ -209,6 +243,13 @@ def main(argv=None):
         batch_object_test(settings.watts_server, settings.input)
     elif settings.app == "object_local":
         object_local(settings.watts_server, settings.input)
+    elif settings.app == "speech":
+        batch_speech(settings.watts_server, settings.input)
+    elif settings.app == "speech_local":
+        speech_local(settings.watts_server, settings.input)
+    else:
+        sys.stderr("Not valid command\n")
+        sys.exit(0)
 
 
 if __name__ == "__main__":

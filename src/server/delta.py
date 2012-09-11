@@ -49,22 +49,22 @@ class DeltaItem(object):
         # offset        : unsigned long long
         # offset_length : unsigned int
         # ref_id        : unsigned char
-        data = struct.pack("<QIc", \
+        data = struct.pack("!QIc", \
                 self.offset,
                 self.offset_len,
                 chr(self.ref_id))
 
         if self.ref_id == DeltaItem.REF_RAW or \
                self.ref_id == DeltaItem.REF_XDELTA:
-            data += struct.pack("<Q", self.data_len)
-            data += struct.pack("<%ds" % self.data_len, self.data)
+            data += struct.pack("!Q", self.data_len)
+            data += struct.pack("!%ds" % self.data_len, self.data)
         elif self.ref_id == DeltaItem.REF_SELF:
-            data += struct.pack("<Q", self.data)
+            data += struct.pack("!Q", self.data)
         elif self.ref_id == DeltaItem.REF_BASE_DISK or \
                 self.ref_id == DeltaItem.REF_BASE_MEM or \
                 self.ref_id == DeltaItem.REF_OVERLAY_DISK or \
                 self.ref_id == DeltaItem.REF_OVERLAY_MEM:
-            data += struct.pack("<Q", self.data)
+            data += struct.pack("!Q", self.data)
         return data
 
     @staticmethod
@@ -75,19 +75,19 @@ class DeltaItem(object):
             return None
 
         (offset, offset_len, ref_id) = \
-                struct.unpack("<QIc", data)
+                struct.unpack("!QIc", data)
         ref_id = ord(ref_id)
         if ref_id == DeltaItem.REF_RAW or \
                 ref_id == DeltaItem.REF_XDELTA:
-            data_len = struct.unpack("<Q", stream.read(8))[0]
+            data_len = struct.unpack("!Q", stream.read(8))[0]
             data = stream.read(data_len)
         elif ref_id == DeltaItem.REF_SELF:
-            data = struct.unpack("<Q", stream.read(8))[0]
+            data = struct.unpack("!Q", stream.read(8))[0]
         elif ref_id == DeltaItem.REF_BASE_DISK or \
                 ref_id == DeltaItem.REF_BASE_MEM or \
                 ref_id == DeltaItem.REF_OVERLAY_DISK or \
                 ref_id == DeltaItem.REF_OVERLAY_MEM:
-            data = struct.unpack("<Q", stream.read(8))[0]
+            data = struct.unpack("!Q", stream.read(8))[0]
 
         # hash value does not exist when recovered
         item = DeltaItem(offset, offset_len, None, ref_id, data_len, data)
@@ -96,21 +96,19 @@ class DeltaItem(object):
 
 class DeltaList(object):
     @staticmethod
-    def tofile(header_delta, footer_delta, delta_list, f_path):
-        if (not header_delta)or (not footer_delta):
-            raise MemoryError("header/footer delta is invalid")
+    def tofile(footer_delta, delta_list, f_path):
+        if not footer_delta:
+            raise MemoryError("invalid footer delta")
         if len(delta_list) == 0 or type(delta_list[0]) != DeltaItem:
             raise MemoryError("Need list of DeltaItem")
 
         fd = open(f_path, "wb")
         # Write MAGIC & VERSION
-        fd.write(struct.pack("<q", DELTA_FILE_MAGIC))
-        fd.write(struct.pack("<q", DELTA_FILE_VERSION))
+        fd.write(struct.pack("!q", DELTA_FILE_MAGIC))
+        fd.write(struct.pack("!q", DELTA_FILE_VERSION))
 
         # Write Header & Footer delta
-        fd.write(struct.pack("<q", len(header_delta)))
-        fd.write(header_delta)
-        fd.write(struct.pack("<q", len(footer_delta)))
+        fd.write(struct.pack("!q", len(footer_delta)))
         fd.write(footer_delta)
 
         # Write list if delta item
@@ -124,17 +122,15 @@ class DeltaList(object):
         delta_list = []
         # MAGIC & VERSION
         fd = open(f_path, "rb")
-        magic, version = struct.unpack("<qq", fd.read(8+8))
+        magic, version = struct.unpack("!qq", fd.read(8+8))
         if magic != DELTA_FILE_MAGIC or version != DELTA_FILE_VERSION:
             msg = "delta magic number(%x != %x), version(%ld != %ld) does not match" \
                     % (DELTA_FILE_MAGIC, magic, \
                     DELTA_FILE_VERSION, version)
             raise IOError(msg)
 
-        # Read Header & Footer delta
-        header_len = struct.unpack("<q", fd.read(8))[0]
-        header_delta = fd.read(header_len)
-        footer_len = struct.unpack("<q", fd.read(8))[0]
+        # Read Footer delta
+        footer_len = struct.unpack("!q", fd.read(8))[0]
         footer_delta = fd.read(footer_len)
         while True:
             new_item = DeltaItem.unpack_stream(fd)
@@ -142,7 +138,7 @@ class DeltaList(object):
                 break
             delta_list.append(new_item)
         fd.close()
-        return header_delta, footer_delta, delta_list 
+        return footer_delta, delta_list 
 
     @staticmethod
     def get_self_delta(delta_list):
