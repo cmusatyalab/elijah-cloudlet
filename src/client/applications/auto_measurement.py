@@ -210,7 +210,7 @@ def batch_speech(watts_server, input_dir):
             ("176.34.100.63", 10191, "s_eu", 22), \
             ("46.137.209.173", 10191, "s_asia", 22)]
     for cloud in cloud_list:
-        client_cmd = "java -jar SPEECH/SpeechrecDesktopControlClient.jar %s %d %s" % (cloud[0], cloud[1], input_dir)
+        client_cmd = "java -jar SPEECH/SpeechrecDesktopControlClient.jar %s %d %s > %s" % (cloud[0], cloud[1], input_dir, cloud[2])
         print "RUNNING : %s" % (client_cmd)
         ret = run_application(cloud[0], cloud[3], None, watts_server, client_cmd, cloud[2]+".power")
         if not ret == 0:
@@ -225,7 +225,7 @@ def speech_local(watts_server, input_dir):
 
     raw_input("Prepare local server and Enter. ")
     cloud = ("localhost", 10191, "s_local", 22)
-    client_cmd = "java -jar SPEECH/SpeechrecDesktopControlClient.jar %s %d %s" % (cloud[0], cloud[1], input_dir)
+    client_cmd = "java -jar SPEECH/SpeechrecDesktopControlClient.jar %s %d %s > %s" % (cloud[0], cloud[1], input_dir, cloud[2])
     print "RUNNING : %s" % (client_cmd)
     ret = run_application(cloud[0], cloud[3], '', watts_server, client_cmd, cloud[2]+".power")
     if not ret == 0:
