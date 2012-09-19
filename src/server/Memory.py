@@ -132,9 +132,10 @@ class Memory(object):
                 prog_bar.show_progress()
         prog_bar.finish()
 
-    def _seek_to_end_of_ram(self, fin):
+    @staticmethod
+    def _seek_to_end_of_ram(fin):
         # get ram total length
-        position = self._seek_string(fin, self.RAM_ID_STRING)
+        position = Memory._seek_string(fin, Memory.RAM_ID_STRING)
         memory_start_offset = position-(1+8)
         fin.seek(memory_start_offset)
         total_mem_size = long(struct.unpack(">Q", fin.read(8))[0])
@@ -209,7 +210,7 @@ class Memory(object):
         # get hash of memory area
         fin.seek(libvirt_header_len)
         hash_list = []
-        ram_end_offset, ram_info = self._seek_to_end_of_ram(fin)
+        ram_end_offset, ram_info = Memory._seek_to_end_of_ram(fin)
         if ram_end_offset % Memory.RAM_PAGE_SIZE != 0:
             print "end offset: %ld" % (ram_end_offset)
             raise MemoryError("ram header+data is not aligned with page size")
@@ -346,9 +347,12 @@ class Memory(object):
 def _recover_modified_list(delta_list, raw_path):
     raw_file = open(raw_path, "rb")
     raw_mmap = mmap.mmap(raw_file.fileno(), 0, prot=mmap.PROT_READ)
+#    import pdb; pdb.set_trace()
     delta_list.sort(key=itemgetter('offset'))
     for index, delta_item in enumerate(delta_list):
-        #print "processing %d/%d, ref_id: %d, offset: %ld" % (index, len(delta_list), delta_item.ref_id, delta_item.offset)
+        print "processing %d/%d, ref_id: %d, offset: %ld" % \
+                (index, len(delta_list), delta_item.ref_id, \
+                delta_item.offset)
         if delta_item.ref_id == DeltaItem.REF_RAW:
             continue
         elif delta_item.ref_id == DeltaItem.REF_BASE_MEM:
@@ -383,104 +387,23 @@ def _recover_modified_list(delta_list, raw_path):
 
 
 def _recover_memory(base_path, delta_list, footer, out_path):
-    f = open(base_path, "rb")
-    f_out = open(out_path, "wb")
-    magic_number, version = struct.unpack(">II", f.read(4+4))
-    if magic_number != Memory.RAM_MAGIC or version != Memory.RAM_VERSION:
-        #raise MemoryError("Invalid memory image magic/version")
-        pass
+    fout = open(out_path, "w+b")
 
-    # find header information about pc.ram
-    Memory._seek_string(f, Memory.RAM_ID_STRING)
-    id_string, total_mem_size = struct.unpack(">%dsq" % Memory.RAM_ID_LENGTH,\
-            f.read(Memory.RAM_ID_LENGTH+8))
+    #sort delta list using offset
+    delta_list.sort(key=itemgetter('offset'))
 
-    # interpret details of pc.ram
-    position = Memory._seek_string(f, Memory.RAM_ID_STRING)
-    memory_start_offset = position-(1+8)# move back to start of the memory section header 
-    f.seek(memory_start_offset)
-    f_out.write(header)
-
-    delta_iter = iter(delta_list)
-    delta_item = delta_iter.next()
-    offset = 0
-    while True:
-        header_data = f.read(8)
-        header_flag = struct.unpack(">q", header_data)[0]
-        comp_flag = header_flag & 0x0fff
-        if comp_flag & Memory.RAM_SAVE_FLAG_EOS:
-            print "EOS Error, maynot recover memory properly"
-            break
-
-        offset = header_flag & ~0x0fff
-        is_matched = False
-        if offset == delta_item.offset:
-            # This page is modified and need to be recovered
-            # write header after changing to RAM_SAVE_FLAG_PAGE
-            is_matched = True
-            #print "[%ld] header flag changes\n%s -->\n%s" % (offset, bin(header_flag), bin(new_header_flag))
-            if not comp_flag & Memory.RAM_SAVE_FLAG_CONTINUE:
-                raise MemoryError("Recover does not support modification at CONT flag")
-            if len(delta_item.data) != Memory.RAM_PAGE_SIZE:
-                msg = "invalid recover size: %d" % len(delta_item.data)
-                raise MemoryError(msg)
-
-            def is_identical_page(data):
-                first = data[0]
-                for item in data:
-                    if not first == item:
-                        return False
-                return True
-
-            new_header_flag = (header_flag & ~0x0fff) | Memory.RAM_SAVE_FLAG_PAGE | Memory.RAM_SAVE_FLAG_CONTINUE
-            new_header_data = struct.pack(">q", new_header_flag)
-            f_out.write(new_header_data)
-            f_out.write(delta_item.data)
-
-            try:
-                delta_item = delta_iter.next()
-            except StopIteration:
-                delta_item.offset = -1
+    for delta_item in delta_list:
+        if len(delta_item.data) != Memory.RAM_PAGE_SIZE:
+            raise MemoryError("recovered size is not same as page size")
         
-        # write header
-        if not is_matched:
-            f_out.write(header_data)
-        # write data
-        if not comp_flag & Memory.RAM_SAVE_FLAG_CONTINUE:
-            data = f.read(1+Memory.RAM_ID_LENGTH)
-            if not is_matched:
-                f_out.write(data)
-            id_length, id_string = struct.unpack(">c%ds" % \
-                    Memory.RAM_ID_LENGTH, data)
-        if comp_flag & Memory.RAM_SAVE_FLAG_COMPRESS:
-            #print "processing (%ld)\tcompressed" % (offset)
-            data = f.read(1)
-            compressed_byte = data
-            if not is_matched:
-                f_out.write(data)
-            data = compressed_byte*Memory.RAM_PAGE_SIZE
-        elif comp_flag & Memory.RAM_SAVE_FLAG_PAGE:
-            #print "processing (%ld)\traw" % (offset)
-            data = f.read(Memory.RAM_PAGE_SIZE)
-            if not is_matched:
-                f_out.write(data)
-        else:
-            msg = "Invalid header compression flag: %d" % \
-                    (comp_flag)
-            raise MemoryError(msg)
+        fout.seek(delta_item.offset)
+        fout.write(delta_item.data)
 
-        # read can be continued to pc.rom without EOS flag
-        if offset+Memory.RAM_PAGE_SIZE == total_mem_size:
-            break;
-
-    #print "read_mem_size: %ld, %ld == %ld" % (offset, f.tell(), f_out.tell())
-    if not (offset+Memory.RAM_PAGE_SIZE) == total_mem_size:
-        raise MemoryError("Cannot recover mem because of sudden EOS")
-    # save footer data
-    f_out.write(footer)
-
-    f.close()
-    f_out.close()
+    base_file = open(base_path, "rb")
+    ram_end_offset, ram_info = Memory._seek_to_end_of_ram(base_file)
+    print "ram_end_offset: %ld" % ram_end_offset
+    fout.seek(ram_end_offset)
+    fout.write(footer)
 
 
 def hashing(filepath):
@@ -553,21 +476,22 @@ def create_memory_overlay(raw_meta, raw_mem, modified_mem, out_delta, print_out=
     DeltaList.tofile(footer_delta, delta_list, out_delta)
 
 
-def recover_memory(base_path, delta_path, raw_meta, raw_mem, out_path):
+def recover_memory(base_path, delta_path, raw_meta, out_path):
     # Recover modified memory snapshot
     # base_path: base memory snapshot, delta pages will be applied over it
     # delta_path: memory overlay
     # raw_meta: meta(footer/hash list) information of the raw memory
-    # raw_mem: raw memory of the base memory snapshot
     # out_path: path to recovered modified memory snapshot
 
     # Create Base Memory from meta file
-    base = Memory.import_from_metafile(raw_meta, raw_mem)
+    base = Memory.import_from_metafile(raw_meta, base_path)
     footer_delta, delta_list = DeltaList.fromfile(delta_path)
 
     footer = tool.merge_data(base.footer_data, footer_delta, 1024*1024*10)
-    _recover_modified_list(delta_list, raw_mem)
+    _recover_modified_list(delta_list, base_path)
     _recover_memory(base_path, delta_list, footer, out_path)
+
+    return delta_list
 
 
 if __name__ == "__main__":
@@ -601,16 +525,21 @@ if __name__ == "__main__":
             sys.exit(1)
         base_path = settings.base_file
         delta_path = settings.delta_file
-        raw_path = settings.base_file + EXT_RAW
-        meta_path = settings.base_file + EXT_META
-
-        # Create Base Memory from meta file
-        base = Memory.import_from_metafile(meta_path, raw_path)
-        header_delta, footer_delta, delta_list = DeltaList.fromfile(delta_path)
-
-        header = tool.merge_data(base.header_data, header_delta, 1024*1024)
-        footer = tool.merge_data(base.footer_data, footer_delta, 1024*1024*10)
-        _recover_modified_list(delta_list, raw_path)
+        raw_meta = settings.base_file + EXT_META
+        
         out_path = base_path+".recover"
-        _recover_memory(delta_list, header, footer, out_path)
+        delta_list = recover_memory(base_path, delta_path, raw_meta, out_path)
+
+        # varify with original
+        if settings.mig_file:
+            modi_mem = open(settings.mig_file, "rb")
+            for delta_item in delta_list:
+                offset = delta_item.offset
+                data = delta_item.data
+                modi_mem.seek(offset)
+                origin_data = modi_mem.read(len(data))
+                if data != origin_data:
+                    msg = "orignal data is not same at %ld" % offset
+                    raise MemoryError(msg)
+            print "Successfully recovered"
 
