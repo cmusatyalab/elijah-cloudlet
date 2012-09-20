@@ -20,7 +20,7 @@ import libvirt
 import sys
 import os
 import subprocess
-import KVMMemory
+import Memory
 import Disk
 import vmnetfs
 import vmnetx
@@ -68,16 +68,14 @@ class Const(object):
         diskmeta = os.path.join(dir_path, image_name+Const.BASE_DISK_META)
         mempath = os.path.join(dir_path, image_name+Const.BASE_MEM)
         memmeta = os.path.join(dir_path, image_name+Const.BASE_MEM_META)
-        memraw = os.path.join(dir_path, image_name+Const.BASE_MEM_RAW)
 
         #check sanity
         if check_exist==True:
             _check_path('base memory', mempath)
             _check_path('base disk-hash', diskmeta)
             _check_path('base memory-hash', memmeta)
-            _check_path('base memory-raw', memraw)
 
-        return diskmeta, mempath, memmeta, memraw
+        return diskmeta, mempath, memmeta
 
 
 class CloudletGenerationError(Exception):
@@ -125,7 +123,7 @@ def create_baseVM(disk_image_path):
     # :param disk_image_path : file path of the VM disk image
     # :returns: (generated base VM disk path, generated base VM memory path)
 
-    (base_diskmeta, base_mempath, base_memmeta, base_memraw) = \
+    (base_diskmeta, base_mempath, base_memmeta) = \
             Const.get_basepath(disk_image_path)
 
     # check sanity
@@ -147,8 +145,6 @@ def create_baseVM(disk_image_path):
         os.unlink(base_mempath)
     if os.path.exists(base_memmeta):
         os.unlink(base_memmeta)
-    if os.path.exists(base_memraw):
-        os.unlink(base_memraw)
 
     # edit default XML to have new disk path
     conn = get_libvirt_connection()
@@ -161,7 +157,7 @@ def create_baseVM(disk_image_path):
         # make memory snapshot
         # VM has to be paused first to perform stable disk hashing
         save_mem_snapshot(machine, base_mempath)
-        base_mem = KVMMemory.hashing(base_mempath, base_memraw)
+        base_mem = Memory.hashing(base_mempath)
         base_mem.export_to_file(base_memmeta)
 
         # generate disk hashing
@@ -177,7 +173,6 @@ def create_baseVM(disk_image_path):
     os.chmod(base_diskmeta, stat.S_IRUSR)
     os.chmod(base_mempath, stat.S_IRUSR)
     os.chmod(base_memmeta, stat.S_IRUSR)
-    os.chmod(base_memraw, stat.S_IRUSR)
     return disk_image_path, base_mempath
 
 
@@ -187,7 +182,7 @@ def create_overlay(base_image):
     # Finally, return disk/memory binary as an overlay
     # base_image: path to base disk
 
-    (base_diskmeta, base_mem, base_memmeta, base_memraw) = \
+    (base_diskmeta, base_mem, base_memmeta) = \
             Const.get_basepath(base_image, check_exist=True)
     
     # filename for overlay VM
@@ -218,7 +213,7 @@ def create_overlay(base_image):
     save_mem_snapshot(machine, modified_mem.name)
 
     # 2-1. get memory overlay
-    KVMMemory.create_memory_overlay(base_memmeta, base_memraw, \
+    Memory.create_memory_overlay(base_memmeta, base_mem, \
             modified_mem.name, overlay_mempath, print_out=Log.out)
 
     # 2-2. get disk overlay
@@ -291,16 +286,15 @@ def recover_launchVM(base_image, overlay_meta, overlay_disk, overlay_mem, **kwar
     log = kwargs.get('log', None)
     nova_util = kwargs.get('nova_util', None)
 
-    (base_diskmeta, base_mem, base_memmeta, base_memraw) = \
+    (base_diskmeta, base_mem, base_memmeta) = \
             Const.get_basepath(base_image, check_exist=True)
     modified_mem = NamedTemporaryFile(prefix="cloudlet-recoverd-mem-", delete=False)
     modified_img = NamedTemporaryFile(prefix="cloudlet-recoverd-img-", delete=False)
-    print modified_mem.name
-    print modified_img.name
+    print "[INFO] VM Disk is recoverd at %s" % modified_mem.name
+    print "[INFO] VM Memory is recovered at %s" % modified_img.name
 
     # Recover Modified Memory
-    KVMMemory.recover_memory(base_mem, overlay_mem, base_memmeta, 
-            base_memraw, modified_mem.name)
+    Memory.recover_memory(base_mem, overlay_mem, base_memmeta, modified_mem.name)
 
     # Recover Modified Disk
     overlay_map = Disk.recover_disk(overlay_disk, overlay_meta, 
@@ -315,13 +309,16 @@ def recover_launchVM(base_image, overlay_meta, overlay_disk, overlay_mem, **kwar
 
 def run_fuse(bin_path, original_disk, chunk_size, resumed_disk=None, overlay_map=None):
     # launch fuse
-    execute_args = ['', '', 'http://cloudlet.krha.kr/ubuntu-11/', \
+    execute_args = ['', '', \
+            # disk parameter
+            'http://cloudlet.krha.kr/ubuntu-11/', \
             "%s" % (os.path.abspath(original_disk)), \
             ("%s" % os.path.abspath(resumed_disk)) if resumed_disk else "", \
             ("%s" % overlay_map) if overlay_map else "", \
             '%d' % os.path.getsize(original_disk), \
             '0',\
-            "%d" % chunk_size]
+            "%d" % chunk_size \
+            ]
     fuse_process = vmnetfs.VMNetFS(bin_path, execute_args)
     fuse_process.start()
     return fuse_process
@@ -486,6 +483,7 @@ def restore_with_config(conn, mem_snapshot, xml):
         message = "%s\nXML: %s" % (str(e), xml)
         raise CloudletGenerationError(message)
 
+
 def copy_with_xml(in_path, out_path, xml):
     fin = open(in_path)
     fout = open(out_path, 'w+b')
@@ -500,6 +498,45 @@ def copy_with_xml(in_path, out_path, xml):
     hdr.seek_body(fin)
     fout.write(fin.read())
 
+
+def synthesis(base_disk, meta, overlay_disk, overlay_mem):
+    # VM Synthesis and run recoverd VM
+    # param base_disk : path to base disk
+    # param meta : path to meta file for overlay
+    # param overlay_disk : path to overlay disk file
+    # param overlay_mem : path to overlay memory file
+
+    # recover VM
+    modified_img, launch_mem, fuse = recover_launchVM(base_disk, meta, 
+            overlay_disk, overlay_mem)
+
+    # monitor modified chunks
+    residue_img = os.path.join(fuse.mountpoint, 'disk', 'image')
+    stream_modified = os.path.join(fuse.mountpoint, 'disk', 'streams', 'chunks_modified')
+    stream_access = os.path.join(fuse.mountpoint, 'disk', 'streams', 'chunks_accessed')
+    monitor = vmnetfs.StreamMonitor()
+    monitor.add_path(stream_modified)
+    monitor.add_path(stream_access)
+    monitor.start()
+
+    #resume VM
+    conn = get_libvirt_connection()
+    machine = None
+    try:
+        machine=run_snapshot(conn, residue_img, launch_mem, wait_vnc=True)
+    except Exception as e:
+        sys.stdout.write(str(e)+"\n")
+    if machine:
+        machine.destroy()
+    # terminate
+    fuse.terminate()
+    monitor.terminate()
+    monitor.join()
+    if os.path.exists(modified_img):
+        os.unlink(modified_img)
+    if os.path.exists(launch_mem):
+        os.unlink(launch_mem)
+            
 
 def main(argv):
     MODE = ('base', 'overlay', 'synthesis', "test")
@@ -545,36 +582,8 @@ def main(argv):
         meta = args[2]
         overlay_disk = args[3] 
         overlay_mem = args[4]
-        modified_img, launch_mem, fuse = recover_launchVM(base_disk_path, meta, 
-                overlay_disk, overlay_mem)
 
-        # monitor modified chunks
-        residue_img = os.path.join(fuse.mountpoint, 'disk', 'image')
-        stream_modified = os.path.join(fuse.mountpoint, 'disk', 'streams', 'chunks_modified')
-        stream_access = os.path.join(fuse.mountpoint, 'disk', 'streams', 'chunks_accessed')
-        monitor = vmnetfs.StreamMonitor()
-        monitor.add_path(stream_modified)
-        monitor.add_path(stream_access)
-        monitor.start()
-
-        #resume VM
-        conn = get_libvirt_connection()
-        machine = None
-        try:
-            machine=run_snapshot(conn, residue_img, launch_mem, wait_vnc=True)
-        except Exception as e:
-            sys.stdout.write(str(e)+"\n")
-        if machine:
-            machine.destroy()
-        # terminate
-        fuse.terminate()
-        monitor.terminate()
-        monitor.join()
-        if os.path.exists(modified_img):
-            os.unlink(modified_img)
-        if os.path.exists(launch_mem):
-            os.unlink(launch_mem)
-            
+        synthesis(base_disk_path, meta, overlay_disk, overlay_mem)
     elif mode == 'test_overlay_download':    # To be delete
         base_disk_path = "/home/krha/cloudlet/image/nova/base_disk"
         base_mem_path = "/home/krha/cloudlet/image/nova/base_memory"

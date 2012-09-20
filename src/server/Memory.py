@@ -97,7 +97,7 @@ class Memory(object):
             if not diff:
                 hash_list.append((ram_offset, self.RAM_PAGE_SIZE, sha256(data).digest()))
             else:
-                # compare input with self, save only when it is different
+                # compare input with hash or corresponding base memory, save only when it is different
                 self_hash_value = self.hash_list[ram_offset/self.RAM_PAGE_SIZE][2]
                 if self_hash_value != sha256(data).digest():
                     #get xdelta comparing self.raw
@@ -218,16 +218,17 @@ class Memory(object):
 
         # save footer data
         # cur_offset = fin.tell(); fin.seek(0, 2); total = fin.tell(); fin.seek(cur_offset)
-        self.footer_data = ''
+        footer_data = ''
         while True:
             read_data = fin.read(Memory.RAM_PAGE_SIZE)
             if not read_data:
                 break
-            self.footer_data += read_data
+            footer_data += read_data
 
         if diff:
-            return hash_list, self.footer_data
+            return hash_list, footer_data
         else:
+            self.footer_data = footer_data
             return hash_list, self.footer_data
 
     @staticmethod
@@ -347,12 +348,11 @@ class Memory(object):
 def _recover_modified_list(delta_list, raw_path):
     raw_file = open(raw_path, "rb")
     raw_mmap = mmap.mmap(raw_file.fileno(), 0, prot=mmap.PROT_READ)
-#    import pdb; pdb.set_trace()
     delta_list.sort(key=itemgetter('offset'))
     for index, delta_item in enumerate(delta_list):
-        print "processing %d/%d, ref_id: %d, offset: %ld" % \
-                (index, len(delta_list), delta_item.ref_id, \
-                delta_item.offset)
+        #print "processing %d/%d, ref_id: %d, offset: %ld" % \
+        #        (index, len(delta_list), delta_item.ref_id, \
+        #        delta_item.offset)
         if delta_item.ref_id == DeltaItem.REF_RAW:
             continue
         elif delta_item.ref_id == DeltaItem.REF_BASE_MEM:
@@ -392,17 +392,45 @@ def _recover_memory(base_path, delta_list, footer, out_path):
     #sort delta list using offset
     delta_list.sort(key=itemgetter('offset'))
 
+    '''
     for delta_item in delta_list:
         if len(delta_item.data) != Memory.RAM_PAGE_SIZE:
             raise MemoryError("recovered size is not same as page size")
         
         fout.seek(delta_item.offset)
         fout.write(delta_item.data)
-
     base_file = open(base_path, "rb")
     ram_end_offset, ram_info = Memory._seek_to_end_of_ram(base_file)
     print "ram_end_offset: %ld" % ram_end_offset
-    fout.seek(ram_end_offset)
+    '''
+    base_file = open(base_path, "rb")
+    delta_list_index = 0
+    ram_end_offset, ram_info = Memory._seek_to_end_of_ram(base_file)
+    base_file.seek(0)
+    while True:
+        offset = base_file.tell()
+        if len(delta_list) == delta_list_index:
+            break
+
+        base_data = base_file.read(Memory.RAM_PAGE_SIZE)
+        if len(base_data) != Memory.RAM_PAGE_SIZE:
+            raise MemoryError("read base size is not page size")
+        
+        #import pdb; pdb.set_trace()
+
+        if offset != delta_list[delta_list_index].offset:
+            #print "write base data: %d" % len(base_data)
+            fout.write(base_data)
+        else:
+            modi_data = delta_list[delta_list_index].data
+            #print "write modi data: %d at %ld" % (len(modi_data), delta_list[delta_list_index].offset)
+            fout.write(modi_data)
+            delta_list_index += 1
+
+    #print "Write rest part of the base after last modified memory page"
+    #print "from %ld to %ld " % (base_file.tell(), ram_end_offset)
+    rest_data = ram_end_offset - base_file.tell()
+    fout.write(base_file.read(rest_data))
     fout.write(footer)
 
 
@@ -488,10 +516,11 @@ def recover_memory(base_path, delta_path, raw_meta, out_path):
     footer_delta, delta_list = DeltaList.fromfile(delta_path)
 
     footer = tool.merge_data(base.footer_data, footer_delta, 1024*1024*10)
+    #print "footer size: %ld" % len(footer)
     _recover_modified_list(delta_list, base_path)
     _recover_memory(base_path, delta_list, footer, out_path)
 
-    return delta_list
+    return delta_list, footer
 
 
 if __name__ == "__main__":
@@ -527,8 +556,8 @@ if __name__ == "__main__":
         delta_path = settings.delta_file
         raw_meta = settings.base_file + EXT_META
         
-        out_path = base_path+".recover"
-        delta_list = recover_memory(base_path, delta_path, raw_meta, out_path)
+        out_path = base_path + ".recover"
+        delta_list, footer = recover_memory(base_path, delta_path, raw_meta, out_path)
 
         # varify with original
         if settings.mig_file:
@@ -541,5 +570,10 @@ if __name__ == "__main__":
                 if data != origin_data:
                     msg = "orignal data is not same at %ld" % offset
                     raise MemoryError(msg)
+            modi_mem.seek(os.path.getsize(settings.mig_file)-len(footer))
+            modi_footer = modi_mem.read(len(footer))
+            if modi_footer != footer:
+                msg = "footer is different %ld != %ld" % (len(modi_footer), len(footer))
+                raise MemoryError(msg)
             print "Successfully recovered"
 
