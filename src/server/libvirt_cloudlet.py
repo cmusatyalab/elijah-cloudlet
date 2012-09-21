@@ -193,21 +193,23 @@ def create_overlay(base_image):
     overlay_mempath = os.path.join(dir_path, image_name+Const.OVERLAY_MEM)
     
     # make FUSE disk & memory
-    fuse = run_fuse(Const.VMNETFS_PATH, base_image, Const.CHUNK_SIZE,
-            resumed_disk=None, overlay_map=None)
+    fuse = run_fuse(Const.VMNETFS_PATH, Const.CHUNK_SIZE, base_image, base_mem)
     modified_disk = os.path.join(fuse.mountpoint, 'disk', 'image')
-    modified_mem = NamedTemporaryFile(prefix="cloudlet-mem-")
+    base_mem_fuse = os.path.join(fuse.mountpoint, 'memory', 'image')
+    modified_mem = NamedTemporaryFile(prefix="cloudlet-mem-", delete=False)
     # monitor modified chunks
     stream_modified = os.path.join(fuse.mountpoint, 'disk', 'streams', 'chunks_modified')
     stream_access = os.path.join(fuse.mountpoint, 'disk', 'streams', 'chunks_accessed')
+    memory_access = os.path.join(fuse.mountpoint, 'memory', 'streams', 'chunks_accessed')
     monitor = vmnetfs.StreamMonitor()
-    monitor.add_path(stream_modified)
-    monitor.add_path(stream_access)
+    monitor.add_path(stream_modified, vmnetfs.StreamMonitor.DISK_MODIFY)
+    monitor.add_path(stream_access, vmnetfs.StreamMonitor.DISK_ACCESS)
+    monitor.add_path(memory_access, vmnetfs.StreamMonitor.MEMORY_ACCESS)
     monitor.start()
 
     # 1-1. resume & get modified disk
     conn = get_libvirt_connection()
-    machine = run_snapshot(conn, modified_disk, base_mem, wait_vnc=True)
+    machine = run_snapshot(conn, modified_disk, base_mem_fuse, wait_vnc=True)
     # 1-2. get modified memory
     # TODO: support stream of modified memory rather than tmp file
     save_mem_snapshot(machine, modified_mem.name)
@@ -290,35 +292,60 @@ def recover_launchVM(base_image, overlay_meta, overlay_disk, overlay_mem, **kwar
             Const.get_basepath(base_image, check_exist=True)
     modified_mem = NamedTemporaryFile(prefix="cloudlet-recoverd-mem-", delete=False)
     modified_img = NamedTemporaryFile(prefix="cloudlet-recoverd-img-", delete=False)
-    print "[INFO] VM Disk is recoverd at %s" % modified_mem.name
-    print "[INFO] VM Memory is recovered at %s" % modified_img.name
 
     # Recover Modified Memory
-    Memory.recover_memory(base_mem, overlay_mem, base_memmeta, modified_mem.name)
+    memory_overlay_map = Memory.recover_memory(base_mem, overlay_mem, \
+            base_memmeta, modified_mem.name)
 
     # Recover Modified Disk
-    overlay_map = Disk.recover_disk(overlay_disk, overlay_meta, 
+    disk_overlay_map = Disk.recover_disk(overlay_disk, overlay_meta, 
             modified_img.name, Const.CHUNK_SIZE)
 
+    print "[INFO] VM Disk is recovered at %s" % modified_img.name
+    print "[INFO] VM Memory is recoverd at %s" % modified_mem.name
     # make FUSE disk & memory
-    fuse = run_fuse(Const.VMNETFS_PATH, base_image, Const.CHUNK_SIZE,
-            resumed_disk=modified_img.name, overlay_map=overlay_map)
+    fuse = run_fuse(Const.VMNETFS_PATH, Const.CHUNK_SIZE, base_image, base_mem, 
+            resumed_disk=modified_img.name, disk_overlay_map=disk_overlay_map,
+            resumed_memory=modified_mem.name, memory_overlay_map=memory_overlay_map)
 
     return [modified_img.name, modified_mem.name, fuse]
 
 
-def run_fuse(bin_path, original_disk, chunk_size, resumed_disk=None, overlay_map=None):
+def run_fuse(bin_path, chunk_size, original_disk, original_memory,
+        resumed_disk=None, disk_overlay_map=None, 
+        resumed_memory=None, memory_overlay_map=None):
+    # run fuse file system
+
+    resumed_disk = os.path.abspath(resumed_disk) if resumed_disk else ""
+    resumed_memory = os.path.abspath(resumed_memory) if resumed_memory else ""
+    disk_overlay_map = str(disk_overlay_map) if disk_overlay_map else ""
+    memory_overlay_map = str(memory_overlay_map) if memory_overlay_map else ""
+
     # launch fuse
     execute_args = ['', '', \
             # disk parameter
-            'http://cloudlet.krha.kr/ubuntu-11/', \
-            "%s" % (os.path.abspath(original_disk)), \
-            ("%s" % os.path.abspath(resumed_disk)) if resumed_disk else "", \
-            ("%s" % overlay_map) if overlay_map else "", \
-            '%d' % os.path.getsize(original_disk), \
-            '0',\
-            "%d" % chunk_size \
-            ]
+            'http://dummy.url/', 
+            "%s" % os.path.abspath(original_disk),  # base path
+            "%s" % resumed_disk,                    # overlay path
+            "%s" % disk_overlay_map,                # overlay map
+            '%d' % os.path.getsize(original_disk),  # size of base
+            '0',                                    # segment size
+            "%d" % chunk_size]
+    if original_memory:
+        for parameter in [
+                # memory parameter
+                'http://dummy.url/', 
+                "%s" % os.path.abspath(original_memory), 
+                "%s" % resumed_memory, 
+                "%s" % memory_overlay_map, 
+                '%d' % os.path.getsize(original_memory), 
+                '0',\
+                "%d" % chunk_size
+                ]:
+            execute_args.append(parameter)
+
+    print "Fuse argument %s" % ",".join(execute_args)
+
     fuse_process = vmnetfs.VMNetFS(bin_path, execute_args)
     fuse_process.start()
     return fuse_process
@@ -395,11 +422,12 @@ def run_snapshot(conn, disk_image, mem_snapshot, **kwargs):
     hdr = vmnetx._QemuMemoryHeader(open(mem_snapshot))
     xml = ElementTree.fromstring(hdr.xml)
     new_xml_string = convert_xml(xml, conn, disk_path=disk_image, uuid=uuid4())
-    temp_mem = NamedTemporaryFile(prefix="cloudlet-mem-")
-    copy_with_xml(mem_snapshot, temp_mem.name, new_xml_string)
+    overwrite_xml(mem_snapshot, new_xml_string)
+    #temp_mem = NamedTemporaryFile(prefix="cloudlet-mem-")
+    #copy_with_xml(mem_snapshot, temp_mem.name, new_xml_string)
 
     # resume
-    restore_with_config(conn, temp_mem.name, new_xml_string)
+    restore_with_config(conn, mem_snapshot, new_xml_string)
 
     # get machine
     domxml = ElementTree.fromstring(new_xml_string)
@@ -484,6 +512,17 @@ def restore_with_config(conn, mem_snapshot, xml):
         raise CloudletGenerationError(message)
 
 
+def overwrite_xml(in_path, new_xml):
+    fin = open(in_path, "rb")
+    hdr = vmnetx._QemuMemoryHeader(fin)
+    fin.close()
+
+    # Write header
+    fin = open(in_path, "r+b")
+    hdr.overwrite(fin, new_xml)
+    fin.close()
+
+
 def copy_with_xml(in_path, out_path, xml):
     fin = open(in_path)
     fout = open(out_path, 'w+b')
@@ -513,12 +552,13 @@ def synthesis(base_disk, meta, overlay_disk, overlay_mem):
     # monitor modified chunks
     residue_img = os.path.join(fuse.mountpoint, 'disk', 'image')
     stream_modified = os.path.join(fuse.mountpoint, 'disk', 'streams', 'chunks_modified')
-    stream_access = os.path.join(fuse.mountpoint, 'disk', 'streams', 'chunks_accessed')
+    stream_disk_access = os.path.join(fuse.mountpoint, 'disk', 'streams', 'chunks_accessed')
+    stream_memory_access = os.path.join(fuse.mountpoint, 'memory', 'streams', 'chunks_accessed')
     monitor = vmnetfs.StreamMonitor()
-    monitor.add_path(stream_modified)
-    monitor.add_path(stream_access)
-    monitor.start()
-
+    monitor.add_path(stream_modified, vmnetfs.StreamMonitor.DISK_MODIFY)
+    monitor.add_path(stream_disk_access, vmnetfs.StreamMonitor.DISK_ACCESS)
+    monitor.add_path(stream_memory_access, vmnetfs.StreamMonitor.MEMORY_ACCESS)
+    monitor.start() 
     #resume VM
     conn = get_libvirt_connection()
     machine = None

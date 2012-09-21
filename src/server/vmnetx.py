@@ -86,6 +86,25 @@ class _QemuMemoryHeader(object):
         f.write(struct.pack('%ds' % self._xml_len, self.xml))
 # pylint: enable=C0103
 
+    def overwrite(self, f, new_xml):
+        # Calculate header
+        if len(new_xml) > self._xml_len - 1:
+            # If this becomes a problem, we could write out a larger xml_len,
+            # though this must be page-aligned.
+            raise MachineGenerationError('self.xml is too large')
+        header = [self.HEADER_MAGIC,
+                self.HEADER_VERSION,
+                self._xml_len,
+                self.was_running,
+                self.compressed]
+        header.extend([0] * self.HEADER_UNUSED_VALUES)
+
+        # Write data
+        f.seek(0)
+        f.write(struct.pack(self.HEADER_FORMAT, *header))
+        f.write(struct.pack('%ds' % self._xml_len, new_xml))
+# pylint: enable=C0103
+
 
 def copy_memory(in_path, out_path, xml=None):
     # Recompress if possible

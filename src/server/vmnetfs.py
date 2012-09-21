@@ -75,6 +75,10 @@ class VMNetFS(object):
 
 
 class StreamMonitor(threading.Thread):
+    DISK_MODIFY = "DISK_MODIFY"
+    DISK_ACCESS = "DISK_ACCESS"
+    MEMORY_ACCESS = "MEMORY_ACCESS"
+
     def __init__(self):
         self.epoll = select.epoll()
         self.stream_dict = dict()
@@ -83,11 +87,10 @@ class StreamMonitor(threading.Thread):
         self.chunk_list = list()
         threading.Thread.__init__(self, target=self.io_watch)
 
-    def add_path(self, path):
+    def add_path(self, path, name):
         # We need to set O_NONBLOCK in open() because FUSE doesn't pass
         # through fcntl()
         print "[INFO] start monitoring at %s" % path
-        name = os.path.basename(path)
         fd = os.open(path, os.O_RDONLY | os.O_NONBLOCK)
         self.stream_dict[fd] = {'name':name, 'buf':''}
         self.epoll.register(fd, select.EPOLLIN | select.EPOLLOUT | select.EPOLLPRI)
@@ -107,17 +110,25 @@ class StreamMonitor(threading.Thread):
 
     def _handle(self, fd, event):
         if event & select.EPOLLIN:
-            buf = os.read(fd, 1024)
+            #print "%d, %s" % (fd, self.stream_dict[fd]['name'])
+            try:
+                buf = os.read(fd, 1024)
+            except OSError as e:
+                # TODO: "Resource temporarily unavailable" Error
+                return
+
             # We got some output
             lines = (self.stream_dict[fd]['buf']+ buf).split('\n')
             # Save partial last line, if any
             self.stream_dict[fd]['buf'] = lines.pop()
             for line in lines:
                 stream_name = self.stream_dict[fd]['name']
-                if stream_name == "chunks_modified":
+                if stream_name == StreamMonitor.DISK_MODIFY:
                     self._handle_chunks_modification(line)
-                elif stream_name == "chunks_accessed":
-                    self._handle_chunks_access(line)
+                elif stream_name == StreamMonitor.DISK_ACCESS:
+                    self._handle_disk_access(line)
+                elif stream_name == StreamMonitor.MEMORY_ACCESS:
+                    self._handle_memory_access(line)
                 else:
                     raise IOError("Error, invalid stream")
                     break
@@ -131,10 +142,14 @@ class StreamMonitor(threading.Thread):
         ctime = float(ctime)
         chunk = int(chunk)
         self.chunk_list.append(int(chunk))
-        print "%s: %f, %d" % ("modification", ctime, chunk)
+        #print "%s: %f, %d" % ("modification", ctime, chunk)
 
-    def _handle_chunks_access(self, line):
+    def _handle_disk_access(self, line):
         #print "access: " + line
+        pass
+
+    def _handle_memory_access(self, line):
+        #print "memory access: " + line
         pass
 
     def terminate(self):
