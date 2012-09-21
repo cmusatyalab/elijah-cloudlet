@@ -26,6 +26,9 @@ DELTA_FILE_MAGIC = 0x1145511b
 DELTA_FILE_VERSION = 0x00000001
 
 
+class DeltaError(Exception):
+    pass
+
 class DeltaItem(object):
     REF_RAW = 0x00
     REF_XDELTA = 0x01
@@ -242,21 +245,62 @@ class DeltaList(object):
         print_out.write("[INFO] Shared with Overlay Mem\t:%ld\n" % from_overlay_mem)
 
 
-def recover_delta_list(delta_list, base_path, chunk_size):
+def diff_with_hashlist(base_hashlist, delta_list, ref_id):
+    if len(delta_list) == 0 or type(delta_list[0]) != DeltaItem:
+        raise DeltaError("Need list of DeltaItem")
 
+    base_hashlist.sort(key=itemgetter(2)) # sort by hash value
+    delta_list.sort(key=itemgetter('hash_value')) # sort by hash value
+
+    matching_count = 0
+    s_index = 0
+    index = 0
+    while index < len(base_hashlist) and s_index < len(delta_list):
+        delta = delta_list[s_index]
+        (start, length, hash_value) = base_hashlist[index]
+        if hash_value < delta.hash_value:
+            index += 1
+            continue
+
+        # compare
+        if delta.hash_value == hash_value and delta.ref_id == DeltaItem.REF_XDELTA:
+            matching_count += 1
+            #print "[Debug] page %ld is matching base %ld" % (s_start, start)
+            delta.ref_id = ref_id
+            delta.data_len = 8
+            delta.data = long(start)
+        s_index += 1
+
+    print "[Debug] matching (%d/%d) with base" % (matching_count, len(delta_list))
+    return delta_list
+
+
+def recover_delta_list(delta_list, base_disk, base_mem, chunk_size, parent=None):
     if len(delta_list) == 0 or type(delta_list[0]) != DeltaItem:
         raise MemoryError("Need list of DeltaItem")
 
-    raw_file = open(base_path, "rb")
-    raw_mmap = mmap.mmap(raw_file.fileno(), 0, prot=mmap.PROT_READ)
+    base_disk_fd = open(base_disk, "rb")
+    base_mem_fd = open(base_mem, "rb")
+    raw_disk = mmap.mmap(base_disk_fd.fileno(), 0, prot=mmap.PROT_READ)
+    raw_mem = mmap.mmap(base_mem_fd.fileno(), 0, prot=mmap.PROT_READ)
+    parent_raw = None
+    if parent == base_disk:
+        parent_raw = raw_disk
+    elif parent == base_mem:
+        parent_raw = raw_mem
+    else:
+        raise DeltaError("Parent should be either disk or memory")
     delta_list.sort(key=itemgetter('offset'))
+
     for index, delta_item in enumerate(delta_list):
         if delta_item.ref_id == DeltaItem.REF_RAW:
             continue
-        elif (delta_item.ref_id == DeltaItem.REF_BASE_MEM) or \
-                (delta_item.ref_id == DeltaItem.REF_BASE_DISK):
+        elif (delta_item.ref_id == DeltaItem.REF_BASE_MEM):
             offset = delta_item.data
-            recover_data = raw_mmap[offset:offset+chunk_size]
+            recover_data = raw_mem[offset:offset+chunk_size]
+        elif (delta_item.ref_id == DeltaItem.REF_BASE_DISK):
+            offset = delta_item.data
+            recover_data = raw_disk[offset:offset+chunk_size]
         elif delta_item.ref_id == DeltaItem.REF_SELF:
             ref_offset = delta_item.data
             index = 0
@@ -270,7 +314,7 @@ def recover_delta_list(delta_list, base_path, chunk_size):
                 raise MemoryError("Cannot find self reference")
         elif delta_item.ref_id == DeltaItem.REF_XDELTA:
             patch_data = delta_item.data
-            base_data = raw_mmap[delta_item.offset:delta_item.offset+chunk_size]
+            base_data = parent_raw[delta_item.offset:delta_item.offset+chunk_size]
             recover_data = tool.merge_data(base_data, patch_data, len(base_data)*2)
         else:
             raise MemoryError("Cannot recover: invalid referce id %d" % delta_item.ref_id)
@@ -282,5 +326,6 @@ def recover_delta_list(delta_list, base_path, chunk_size):
         delta_item.ref_id = DeltaItem.REF_RAW
         delta_item.data = recover_data
 
-    raw_file.close()
+    raw_disk.close()
+    raw_mem.close()
 

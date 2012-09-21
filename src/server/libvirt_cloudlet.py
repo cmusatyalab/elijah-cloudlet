@@ -212,18 +212,25 @@ def create_overlay(base_image):
     # 1-2. get modified memory
     # TODO: support stream of modified memory rather than tmp file
     save_mem_snapshot(machine, modified_mem.name)
+    # 1-3. get hashlist of base memory and disk
+    basemem_hashlist = Memory.base_hashlist(base_memmeta)
+    basedisk_hashlist = Disk.base_hashlist(base_diskmeta)
 
     # 2-1. get memory overlay
-    Memory.create_memory_overlay(base_memmeta, base_mem, \
-            modified_mem.name, overlay_mempath, print_out=Log.out)
+    Memory.create_memory_overlay(modified_mem.name, overlay_mempath,
+            basemem_meta=base_memmeta, basemem_path=base_mem,
+            basedisk_hashlist=basedisk_hashlist, basedisk_path=base_image,
+            print_out=Log.out)
 
     # 2-2. get disk overlay
     m_chunk_list = monitor.chunk_list
     m_chunk_list.sort()
     packed_chunk_list = dict((x,x) for x in m_chunk_list).values()
-    Disk.create_disk_overlay(base_diskmeta, base_image, \
-            modified_disk, packed_chunk_list, overlay_diskpath,
-            Const.CHUNK_SIZE, print_out=Log.out)
+    Disk.create_memory_overlay(modified_disk, overlay_diskpath, 
+            packed_chunk_list, Const.CHUNK_SIZE,
+            basedisk_hashlist=basedisk_hashlist, basedisk_path=base_image,
+            basemem_hashlist=basemem_hashlist, basemem_path=base_mem,
+            print_out=Log.out)
 
     # 3. terminting
     monitor.terminate()
@@ -294,11 +301,11 @@ def recover_launchVM(base_image, overlay_meta, overlay_disk, overlay_mem, **kwar
     modified_img = NamedTemporaryFile(prefix="cloudlet-recoverd-img-", delete=False)
 
     # Recover Modified Memory
-    memory_overlay_map = Memory.recover_memory(base_mem, overlay_mem, \
+    memory_overlay_map = Memory.recover_memory(base_image, base_mem, overlay_mem, \
             base_memmeta, modified_mem.name)
 
     # Recover Modified Disk
-    disk_overlay_map = Disk.recover_disk(base_image, overlay_disk, 
+    disk_overlay_map = Disk.recover_disk(base_image, base_mem, overlay_disk, 
              modified_img.name, Const.CHUNK_SIZE)
 
     print "[INFO] VM Disk is recovered at %s" % modified_img.name

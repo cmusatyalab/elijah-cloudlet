@@ -241,8 +241,14 @@ class Memory(object):
 
         memory = Memory()
         memory.raw_file = open(raw_path, "rb")
-        fd = open(meta_path, "rb")
+        footer, hashlist = Memory.import_hashlist(meta_path)
+        memory.footer_data = footer
+        memory.hash_list = hashlist
+        return memory
 
+    @staticmethod
+    def import_hashlist(meta_path):
+        fd = open(meta_path, "rb")
         # MAGIC & VERSION
         magic, version = struct.unpack("!qq", fd.read(8+8))
         if magic != Memory.HASH_FILE_MAGIC:
@@ -255,17 +261,18 @@ class Memory(object):
 
         # Read Footer data
         footer_data_len = struct.unpack("!q", fd.read(8))[0]
-        memory.footer_data = fd.read(footer_data_len)
+        footer_data = fd.read(footer_data_len)
 
         # Read Hash Item List
+        hash_list = list()
         while True:
             data = fd.read(8+4+32) # start_offset, length, hash
             if not data:
                 break
             value = tuple(struct.unpack("!qI32s", data))
-            memory.hash_list.append(value)
+            hash_list.append(value)
         fd.close()
-        return memory
+        return footer_data, hash_list
 
     @staticmethod
     def pack_hashlist(hash_list):
@@ -310,39 +317,6 @@ class Memory(object):
                (len(modi_footer_data), len(footer_delta))
         return footer_delta, hash_list
     
-    def get_delta(self, delta_list, ref_id):
-        if len(delta_list) == 0 or type(delta_list[0]) != DeltaItem:
-            raise MemoryError("Need list of DeltaItem")
-
-        # make self as a unique list for better comparison performance
-        # TODO: Avoid live packing
-        Memory.pack_hashlist(self.hash_list)
-        self.hash_list.sort(key=itemgetter(2)) # sort by hash value
-        delta_list.sort(key=itemgetter('hash_value')) # sort by hash value
-
-        matching_count = 0
-        s_index = 0
-        index = 0
-        while index < len(self.hash_list) and s_index < len(delta_list):
-            delta = delta_list[s_index]
-            (start, length, hash_value) = self.hash_list[index]
-            if hash_value < delta.hash_value:
-                index += 1
-                #print "[Debug] move to next : %d" % index
-                continue
-
-            # compare
-            if delta.hash_value == hash_value and delta.ref_id == DeltaItem.REF_XDELTA:
-                matching_count += 1
-                #print "[Debug] page %ld is matching base %ld" % (s_start, start)
-                delta.ref_id = ref_id
-                delta.data_len = 8
-                delta.data = long(start)
-            s_index += 1
-
-        #print "[Debug] matching %d out of %d total pages" % (matching_count, len(delta_list))
-        return delta_list
-
 
 def _recover_memory(base_path, delta_list, footer, out_path):
     fout = open(out_path, "w+b")
@@ -442,7 +416,10 @@ def process_cmd(argv):
     return settings, command
 
 
-def create_memory_overlay(raw_meta, raw_mem, modified_mem, out_delta, print_out=sys.stdout):
+def create_memory_overlay(modified_mempath, overlay_mempath,
+            basemem_meta=None, basemem_path=None,
+            basedisk_hashlist=None, basedisk_path=None,
+            print_out=None):
     # get memory delta
     # raw_meta: meta data path of raw memory, e.g. hash_list+footer
     # raw_mem: raw memory path
@@ -450,33 +427,27 @@ def create_memory_overlay(raw_meta, raw_mem, modified_mem, out_delta, print_out=
     # out_delta: output path of final delta
 
     # Create Base Memory from meta file
-    base = Memory.import_from_metafile(raw_meta, raw_mem)
+    base = Memory.import_from_metafile(basemem_meta, basemem_path)
 
     # 1.get modified page
     print_out.write("[Debug] 1.get modified page list\n")
-    footer_delta, original_delta_list = base.get_modified(modified_mem)
-    delta_list = []
-    for item in original_delta_list:
-        delta_item = DeltaItem(item.offset, item.offset_len,
-                hash_value=item.hash_value,
-                ref_id=item.ref_id,
-                data_len=item.data_len,
-                data=item.data)
-        delta_list.append(delta_item)
+    footer_delta, delta_list = base.get_modified(modified_mempath)
 
     # 2.find shared with base memory 
-    print_out.write("[Debug] 2.get delta from base Memory\n")
-    base.get_delta(delta_list, ref_id=DeltaItem.REF_BASE_MEM)
+    print_out.write("[Debug] 2-1.get delta from base Memory\n")
+    delta.diff_with_hashlist(base.hash_list, delta_list, ref_id=DeltaItem.REF_BASE_MEM)
+    print_out.write("[Debug] 2-2.get delta from base Disk\n")
+    delta.diff_with_hashlist(basedisk_hashlist, delta_list, ref_id=DeltaItem.REF_BASE_DISK)
 
     # 3.find shared within self
     print_out.write("[Debug] 3.get delta from itself\n")
     DeltaList.get_self_delta(delta_list)
 
     DeltaList.statistics(delta_list, print_out)
-    DeltaList.tofile_with_footer(footer_delta, delta_list, out_delta)
+    DeltaList.tofile_with_footer(footer_delta, delta_list, overlay_mempath)
 
 
-def recover_memory(base_path, delta_path, raw_meta, out_path, verify_with_original=None):
+def recover_memory(base_disk, base_mem, delta_path, raw_meta, out_path, verify_with_original=None):
     # Recover modified memory snapshot
     # base_path: base memory snapshot, delta pages will be applied over it
     # delta_path: memory overlay
@@ -485,14 +456,14 @@ def recover_memory(base_path, delta_path, raw_meta, out_path, verify_with_origin
     # verify_with_original: original modification file for recover verification
 
     # Create Base Memory from meta file
-    base = Memory.import_from_metafile(raw_meta, base_path)
+    base = Memory.import_from_metafile(raw_meta, base_mem)
     footer_delta, delta_list = DeltaList.fromfile_with_footer(delta_path)
 
     footer = tool.merge_data(base.footer_data, footer_delta, 1024*1024*10)
     #print "footer size: %ld" % len(footer)
     #_recover_modified_list(delta_list, base_path)
-    delta.recover_delta_list(delta_list, base_path, Memory.RAM_PAGE_SIZE)
-    overlay_map = _recover_memory(base_path, delta_list, footer, out_path)
+    delta.recover_delta_list(delta_list, base_disk, base_mem, Memory.RAM_PAGE_SIZE, parent=base_mem)
+    overlay_map = _recover_memory(base_mem, delta_list, footer, out_path)
 
     # varify with original
     if verify_with_original:
@@ -543,6 +514,11 @@ def recover_memory(base_path, delta_path, raw_meta, out_path, verify_with_origin
         print "Pass all varification - Successfully recovered"
 
     return overlay_map
+
+
+def base_hashlist(base_memmeta_path):
+    footer, hashlist = Memory.import_hashlist(base_memmeta_path)
+    return hashlist
 
 
 if __name__ == "__main__":
