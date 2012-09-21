@@ -189,7 +189,6 @@ def create_overlay(base_image):
     image_name = os.path.basename(base_image).split(".")[0]
     dir_path = os.path.dirname(base_mem)
     overlay_diskpath = os.path.join(dir_path, image_name+Const.OVERLAY_DISK)
-    overlay_diskmeta = os.path.join(dir_path, image_name+Const.OVERLAY_DISKMETA)
     overlay_mempath = os.path.join(dir_path, image_name+Const.OVERLAY_MEM)
     
     # make FUSE disk & memory
@@ -222,13 +221,14 @@ def create_overlay(base_image):
     m_chunk_list = monitor.chunk_list
     m_chunk_list.sort()
     packed_chunk_list = dict((x,x) for x in m_chunk_list).values()
-    Disk.create_disk_overlay(overlay_diskpath, overlay_diskmeta, \
-            modified_disk, packed_chunk_list, Const.CHUNK_SIZE, print_out=Log.out)
+    Disk.create_disk_overlay(base_diskmeta, base_image, \
+            modified_disk, packed_chunk_list, overlay_diskpath,
+            Const.CHUNK_SIZE, print_out=Log.out)
 
     # 3. terminting
     monitor.terminate()
     monitor.join()
-    return (overlay_diskmeta, overlay_diskpath, overlay_mempath)
+    return (overlay_diskpath, overlay_mempath)
     '''
     output_list = []
     output_list.append((base_image, modified_disk, overlay_diskpath))
@@ -298,8 +298,8 @@ def recover_launchVM(base_image, overlay_meta, overlay_disk, overlay_mem, **kwar
             base_memmeta, modified_mem.name)
 
     # Recover Modified Disk
-    disk_overlay_map = Disk.recover_disk(overlay_disk, overlay_meta, 
-            modified_img.name, Const.CHUNK_SIZE)
+    disk_overlay_map = Disk.recover_disk(base_image, overlay_disk, 
+             modified_img.name, Const.CHUNK_SIZE)
 
     print "[INFO] VM Disk is recovered at %s" % modified_img.name
     print "[INFO] VM Memory is recoverd at %s" % modified_mem.name
@@ -344,7 +344,7 @@ def run_fuse(bin_path, chunk_size, original_disk, original_memory,
                 ]:
             execute_args.append(parameter)
 
-    print "Fuse argument %s" % ",".join(execute_args)
+    #print "Fuse argument %s" % ",".join(execute_args)
 
     fuse_process = vmnetfs.VMNetFS(bin_path, execute_args)
     fuse_process.start()
@@ -373,7 +373,7 @@ def run_vm(conn, domain_xml, **kwargs):
 
     _PIPE = subprocess.PIPE
     vnc_process = subprocess.Popen("gvncviewer localhost:%d" % vnc_port, 
-            shell=True, stdin=_PIPE, stdout=_PIPE)
+            shell=True, stdin=_PIPE, stdout=_PIPE, stderr=_PIPE)
     if kwargs.get('wait_vnc'):
         try:
             vnc_process.wait()
@@ -559,6 +559,7 @@ def synthesis(base_disk, meta, overlay_disk, overlay_mem):
     monitor.add_path(stream_disk_access, vmnetfs.StreamMonitor.DISK_ACCESS)
     monitor.add_path(stream_memory_access, vmnetfs.StreamMonitor.MEMORY_ACCESS)
     monitor.start() 
+
     #resume VM
     conn = get_libvirt_connection()
     machine = None
@@ -607,21 +608,19 @@ def main(argv):
         # create overlay
         disk_path = args[1]
         overlay_files = create_overlay(disk_path)
-        print "[INFO] meta file: %s" % overlay_files[0]
-        print "[INFO] disk overlay : %s" % overlay_files[1]
-        print "[INFO] mem overlay : %s" % overlay_files[2]
+        print "[INFO] disk overlay : %s" % overlay_files[0]
+        print "[INFO] mem overlay : %s" % overlay_files[1]
     elif mode == MODE[2]:   #synthesis
-        if len(args) != 5:
+        if len(args) != 4:
             parser.error("Synthesis requires 4 arguments\n \
                     1)base-disk path\n \
-                    2)overlay meta path\n \
-                    3)overlay disk path\n \
-                    4)overlay memory path")
+                    2)overlay disk path\n \
+                    3)overlay memory path")
             sys.exit(1)
         base_disk_path = args[1]
-        meta = args[2]
-        overlay_disk = args[3] 
-        overlay_mem = args[4]
+        meta = None
+        overlay_disk = args[2] 
+        overlay_mem = args[3]
 
         synthesis(base_disk_path, meta, overlay_disk, overlay_mem)
     elif mode == 'test_overlay_download':    # To be delete

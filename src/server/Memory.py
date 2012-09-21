@@ -23,6 +23,7 @@ import tool
 import mmap
 import vmnetx
 from progressbar import AnimatedProgressBar
+import delta
 from delta import DeltaItem
 from delta import DeltaList
 from hashlib import sha256
@@ -300,8 +301,6 @@ class Memory(object):
         # get modified pages, footer delta
         hash_list, modi_footer_data = self._load_file(new_kvm_file, diff=True, print_out=sys.stdout)
         try:
-            print "footer info %ld %ld" % (len(modi_footer_data), len(self.footer_data))
-            print "footer info %s %s" % (type(modi_footer_data), type(self.footer_data))
             footer_delta = tool.diff_data(self.footer_data, modi_footer_data, 2*len(self.footer_data))
         except IOError as e:
             sys.stderr.write("[WARNING] xdelta failed, so save it as raw (%s)\n" % str(e))
@@ -343,47 +342,6 @@ class Memory(object):
 
         #print "[Debug] matching %d out of %d total pages" % (matching_count, len(delta_list))
         return delta_list
-
-
-def _recover_modified_list(delta_list, raw_path):
-    raw_file = open(raw_path, "rb")
-    raw_mmap = mmap.mmap(raw_file.fileno(), 0, prot=mmap.PROT_READ)
-    delta_list.sort(key=itemgetter('offset'))
-    for index, delta_item in enumerate(delta_list):
-        #print "processing %d/%d, ref_id: %d, offset: %ld" % \
-        #        (index, len(delta_list), delta_item.ref_id, \
-        #        delta_item.offset)
-        if delta_item.ref_id == DeltaItem.REF_RAW:
-            continue
-        elif delta_item.ref_id == DeltaItem.REF_BASE_MEM:
-            offset = delta_item.data
-            recover_data = raw_mmap[offset:offset+Memory.RAM_PAGE_SIZE]
-        elif delta_item.ref_id == DeltaItem.REF_SELF:
-            ref_offset = delta_item.data
-            index = 0
-            while index < len(delta_list):
-                #print "self referencing : %ld == %ld" % (delta_list[index].offset, ref_offset)
-                if delta_list[index].offset == ref_offset:
-                    recover_data = delta_list[index].data
-                    break
-                index += 1
-            if index >= len(delta_list):
-                raise MemoryError("Cannot find self reference")
-        elif delta_item.ref_id == DeltaItem.REF_XDELTA:
-            patch_data = delta_item.data
-            base_data = raw_mmap[delta_item.offset:delta_item.offset+Memory.RAM_PAGE_SIZE]
-            recover_data = tool.merge_data(base_data, patch_data, len(base_data)*2)
-        else:
-            raise MemoryError("Cannot recover: invalid referce id %d" % delta_item.ref_id)
-
-        if len(recover_data) != Memory.RAM_PAGE_SIZE:
-            msg = "Recovered Size Error: %d, ref_id: %d, %ld, %ld" % \
-                    (len(recover_data), delta_item.ref_id, delta_item.data_len, delta_item.data)
-            raise MemoryError(msg)
-        delta_item.ref_id = DeltaItem.REF_RAW
-        delta_item.data = recover_data
-
-    raw_file.close()
 
 
 def _recover_memory(base_path, delta_list, footer, out_path):
@@ -515,7 +473,7 @@ def create_memory_overlay(raw_meta, raw_mem, modified_mem, out_delta, print_out=
     DeltaList.get_self_delta(delta_list)
 
     DeltaList.statistics(delta_list, print_out)
-    DeltaList.tofile(footer_delta, delta_list, out_delta)
+    DeltaList.tofile_with_footer(footer_delta, delta_list, out_delta)
 
 
 def recover_memory(base_path, delta_path, raw_meta, out_path, verify_with_original=None):
@@ -528,11 +486,12 @@ def recover_memory(base_path, delta_path, raw_meta, out_path, verify_with_origin
 
     # Create Base Memory from meta file
     base = Memory.import_from_metafile(raw_meta, base_path)
-    footer_delta, delta_list = DeltaList.fromfile(delta_path)
+    footer_delta, delta_list = DeltaList.fromfile_with_footer(delta_path)
 
     footer = tool.merge_data(base.footer_data, footer_delta, 1024*1024*10)
     #print "footer size: %ld" % len(footer)
-    _recover_modified_list(delta_list, base_path)
+    #_recover_modified_list(delta_list, base_path)
+    delta.recover_delta_list(delta_list, base_path, Memory.RAM_PAGE_SIZE)
     overlay_map = _recover_memory(base_path, delta_list, footer, out_path)
 
     # varify with original

@@ -575,7 +575,7 @@ def create_memory_overlay(raw_meta, raw_mem, modified_mem, out_delta, print_out=
     DeltaList.get_self_delta(delta_list)
 
     DeltaList.statistics(delta_list, print_out)
-    DeltaList.tofile(header_delta, footer_delta, delta_list, out_delta)
+    DeltaList.tofile_with_footer(header_delta, footer_delta, delta_list, out_delta)
 
 
 def recover_memory(base_path, delta_path, raw_meta, raw_mem, out_path):
@@ -588,7 +588,7 @@ def recover_memory(base_path, delta_path, raw_meta, raw_mem, out_path):
 
     # Create Base Memory from meta file
     base = Memory.import_from_metafile(raw_meta, raw_mem)
-    header_delta, footer_delta, delta_list = DeltaList.fromfile(delta_path)
+    header_delta, footer_delta, delta_list = DeltaList.fromfile_with_footer(delta_path)
 
     header = tool.merge_data(base.header_data, header_delta, 1024*1024)
     footer = tool.merge_data(base.footer_data, footer_delta, 1024*1024*10)
@@ -646,7 +646,7 @@ if __name__ == "__main__":
         DeltaList.get_self_delta(delta_list)
 
         DeltaList.statistics(delta_list)
-        DeltaList.tofile(header_delta, footer_delta, delta_list, out_path)
+        DeltaList.tofile_with_footer(header_delta, footer_delta, delta_list, out_path)
 
     elif command == "recover":
         if (not settings.base_file) or (not settings.delta_file):
@@ -659,7 +659,7 @@ if __name__ == "__main__":
 
         # Create Base Memory from meta file
         base = Memory.import_from_metafile(meta_path, raw_path)
-        header_delta, footer_delta, delta_list = DeltaList.fromfile(delta_path)
+        header_delta, footer_delta, delta_list = DeltaList.fromfile_with_footer(delta_path)
 
         header = tool.merge_data(base.header_data, header_delta, 1024*1024)
         footer = tool.merge_data(base.footer_data, footer_delta, 1024*1024*10)

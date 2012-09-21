@@ -17,6 +17,8 @@
 
 import sys
 import struct
+import mmap
+import tool
 from operator import itemgetter
 
 
@@ -96,7 +98,44 @@ class DeltaItem(object):
 
 class DeltaList(object):
     @staticmethod
-    def tofile(footer_delta, delta_list, f_path):
+    def tofile(delta_list, f_path):
+        if len(delta_list) == 0 or type(delta_list[0]) != DeltaItem:
+            raise MemoryError("Need list of DeltaItem")
+
+        fd = open(f_path, "wb")
+        # Write MAGIC & VERSION
+        fd.write(struct.pack("!q", DELTA_FILE_MAGIC))
+        fd.write(struct.pack("!q", DELTA_FILE_VERSION))
+
+        # Write list if delta item
+        for item in delta_list:
+            # save it as little endian format
+            fd.write(item.get_serialized())
+        fd.close()
+
+    @staticmethod
+    def fromfile(f_path):
+        delta_list = []
+        # MAGIC & VERSION
+        fd = open(f_path, "rb")
+        magic, version = struct.unpack("!qq", fd.read(8+8))
+        if magic != DELTA_FILE_MAGIC or version != DELTA_FILE_VERSION:
+            msg = "delta magic number(%x != %x), version(%ld != %ld) does not match" \
+                    % (DELTA_FILE_MAGIC, magic, \
+                    DELTA_FILE_VERSION, version)
+            raise IOError(msg)
+
+        while True:
+            new_item = DeltaItem.unpack_stream(fd)
+            if not new_item:
+                break
+            delta_list.append(new_item)
+        fd.close()
+        return delta_list 
+
+
+    @staticmethod
+    def tofile_with_footer(footer_delta, delta_list, f_path):
         if not footer_delta:
             raise MemoryError("invalid footer delta")
         if len(delta_list) == 0 or type(delta_list[0]) != DeltaItem:
@@ -118,7 +157,7 @@ class DeltaList(object):
         fd.close()
 
     @staticmethod
-    def fromfile(f_path):
+    def fromfile_with_footer(f_path):
         delta_list = []
         # MAGIC & VERSION
         fd = open(f_path, "rb")
@@ -202,4 +241,46 @@ class DeltaList(object):
         print_out.write("[INFO] Shared with Overlay Disk\t:%ld\n" % from_overlay_disk)
         print_out.write("[INFO] Shared with Overlay Mem\t:%ld\n" % from_overlay_mem)
 
+
+def recover_delta_list(delta_list, base_path, chunk_size):
+
+    if len(delta_list) == 0 or type(delta_list[0]) != DeltaItem:
+        raise MemoryError("Need list of DeltaItem")
+
+    raw_file = open(base_path, "rb")
+    raw_mmap = mmap.mmap(raw_file.fileno(), 0, prot=mmap.PROT_READ)
+    delta_list.sort(key=itemgetter('offset'))
+    for index, delta_item in enumerate(delta_list):
+        if delta_item.ref_id == DeltaItem.REF_RAW:
+            continue
+        elif (delta_item.ref_id == DeltaItem.REF_BASE_MEM) or \
+                (delta_item.ref_id == DeltaItem.REF_BASE_DISK):
+            offset = delta_item.data
+            recover_data = raw_mmap[offset:offset+chunk_size]
+        elif delta_item.ref_id == DeltaItem.REF_SELF:
+            ref_offset = delta_item.data
+            index = 0
+            while index < len(delta_list):
+                #print "self referencing : %ld == %ld" % (delta_list[index].offset, ref_offset)
+                if delta_list[index].offset == ref_offset:
+                    recover_data = delta_list[index].data
+                    break
+                index += 1
+            if index >= len(delta_list):
+                raise MemoryError("Cannot find self reference")
+        elif delta_item.ref_id == DeltaItem.REF_XDELTA:
+            patch_data = delta_item.data
+            base_data = raw_mmap[delta_item.offset:delta_item.offset+chunk_size]
+            recover_data = tool.merge_data(base_data, patch_data, len(base_data)*2)
+        else:
+            raise MemoryError("Cannot recover: invalid referce id %d" % delta_item.ref_id)
+
+        if len(recover_data) != chunk_size:
+            msg = "Recovered Size Error: %d, ref_id: %d, %ld, %ld" % \
+                    (len(recover_data), delta_item.ref_id, delta_item.data_len, delta_item.data)
+            raise MemoryError(msg)
+        delta_item.ref_id = DeltaItem.REF_RAW
+        delta_item.data = recover_data
+
+    raw_file.close()
 
