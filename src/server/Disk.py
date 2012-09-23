@@ -132,9 +132,13 @@ def create_memory_overlay(modified_disk, overlay_diskpath,
         delta_list.append(delta_item)
 
     # 2.find shared with base memory 
-    print_out.write("[Debug] 2-1.get delta from base Disk \n")
+    print_out.write("[Debug] 2-1.Find zero page\n")
+    zero_hash = sha256(struct.pack("!s", chr(0x00))*chunk_size).digest()
+    zero_hash_list = [(-1, chunk_size, zero_hash)]
+    delta.diff_with_hashlist(zero_hash_list, delta_list, ref_id=DeltaItem.REF_ZEROS)
+    print_out.write("[Debug] 2-2.get delta from base Disk \n")
     delta.diff_with_hashlist(basedisk_hashlist, delta_list, ref_id=DeltaItem.REF_BASE_DISK)
-    print_out.write("[Debug] 2-2.get delta from base memory\n")
+    print_out.write("[Debug] 2-3.get delta from base memory\n")
     delta.diff_with_hashlist(basemem_hashlist, delta_list, ref_id=DeltaItem.REF_BASE_MEM)
 
     # 3.find shared within self
@@ -142,6 +146,7 @@ def create_memory_overlay(modified_disk, overlay_diskpath,
     DeltaList.get_self_delta(delta_list)
 
     # 4. statistics
+    print_out.write("[Debug] Statistics for Disk overlay\n")
     DeltaList.statistics(delta_list, print_out)
     DeltaList.tofile(delta_list, overlay_diskpath)
 

@@ -434,15 +434,20 @@ def create_memory_overlay(modified_mempath, overlay_mempath,
     footer_delta, delta_list = base.get_modified(modified_mempath)
 
     # 2.find shared with base memory 
-    print_out.write("[Debug] 2-1.get delta from base Memory\n")
+    print_out.write("[Debug] 2-1.Find zero page\n")
+    zero_hash = sha256(struct.pack("!s", chr(0x00))*Memory.RAM_PAGE_SIZE).digest()
+    zero_hash_list = [(-1, Memory.RAM_PAGE_SIZE, zero_hash)]
+    delta.diff_with_hashlist(zero_hash_list, delta_list, ref_id=DeltaItem.REF_ZEROS)
+    print_out.write("[Debug] 2-2.get delta from base Memory\n")
     delta.diff_with_hashlist(base.hash_list, delta_list, ref_id=DeltaItem.REF_BASE_MEM)
-    print_out.write("[Debug] 2-2.get delta from base Disk\n")
+    print_out.write("[Debug] 2-3.get delta from base Disk\n")
     delta.diff_with_hashlist(basedisk_hashlist, delta_list, ref_id=DeltaItem.REF_BASE_DISK)
 
     # 3.find shared within self
     print_out.write("[Debug] 3.get delta from itself\n")
     DeltaList.get_self_delta(delta_list)
 
+    print_out.write("[Debug] Statistics for Memory overlay\n")
     DeltaList.statistics(delta_list, print_out)
     DeltaList.tofile_with_footer(footer_delta, delta_list, overlay_mempath)
 

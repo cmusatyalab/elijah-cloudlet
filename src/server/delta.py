@@ -36,7 +36,8 @@ class DeltaItem(object):
     REF_BASE_DISK = 0x03
     REF_BASE_MEM = 0x04
     REF_OVERLAY_DISK = 0x05
-    REF_OVERLAY_MEM =0x06
+    REF_OVERLAY_MEM = 0x06
+    REF_ZEROS = 0x07
 
     # data exist only when ref_id is not xdelta
     def __init__(self, offset, offset_len, hash_value, ref_id, data_len=0, data=None):
@@ -213,6 +214,7 @@ class DeltaList(object):
             raise MemoryError("Need list of DeltaItem")
 
         from_self = 0
+        from_zeros = 0
         from_raw = 0
         from_base_disk = 0
         from_base_mem = 0
@@ -222,6 +224,8 @@ class DeltaList(object):
         for delta_item in delta_list:
             if delta_item.ref_id == DeltaItem.REF_SELF:
                 from_self += 1
+            elif delta_item.ref_id == DeltaItem.REF_ZEROS:
+                from_zeros += 1
             elif delta_item.ref_id == DeltaItem.REF_BASE_DISK:
                 from_base_disk += 1
             elif delta_item.ref_id == DeltaItem.REF_BASE_MEM:
@@ -234,15 +238,17 @@ class DeltaList(object):
                 from_xdelta += 1
             elif delta_item.ref_id == DeltaItem.REF_RAW:
                 from_raw += 1
-
+        print_out.write("-"*80 + "\n")
         print_out.write("[INFO] Total Modified page #\t:%ld\n" % len(delta_list))
-        print_out.write("[INFO] Saved as RAW\t\t:%ld\n" % from_raw)
-        print_out.write("[INFO] Saved by xdelta3\t\t:%ld\n" % from_xdelta)
-        print_out.write("[INFO] Shared within Self\t:%ld\n" % from_self)
+        print_out.write("[INFO] Zero pages\t\t:%ld\n" % from_zeros)
         print_out.write("[INFO] Shared with Base Disk\t:%ld\n" % from_base_disk)
         print_out.write("[INFO] Shared with Base Mem\t:%ld\n" % from_base_mem)
+        print_out.write("[INFO] Shared within Self\t:%ld\n" % from_self)
         print_out.write("[INFO] Shared with Overlay Disk\t:%ld\n" % from_overlay_disk)
         print_out.write("[INFO] Shared with Overlay Mem\t:%ld\n" % from_overlay_mem)
+        print_out.write("[INFO] No Reference\t\t:%ld(RAW:%ld, xdelta3:%ld)\n" % \
+                ((from_raw+from_xdelta), from_raw, from_xdelta))
+        print_out.write("-"*80 + "\n")
 
 
 def diff_with_hashlist(base_hashlist, delta_list, ref_id):
@@ -263,7 +269,8 @@ def diff_with_hashlist(base_hashlist, delta_list, ref_id):
             continue
 
         # compare
-        if delta.hash_value == hash_value and delta.ref_id == DeltaItem.REF_XDELTA:
+        if delta.hash_value == hash_value and \
+                ((delta.ref_id == DeltaItem.REF_XDELTA) or (delta.ref_id == DeltaItem.REF_RAW)):
             matching_count += 1
             #print "[Debug] page %ld is matching base %ld" % (s_start, start)
             delta.ref_id = ref_id
@@ -292,9 +299,12 @@ def recover_delta_list(delta_list, base_disk, base_mem, chunk_size, parent=None)
         raise DeltaError("Parent should be either disk or memory")
     delta_list.sort(key=itemgetter('offset'))
 
+    zero_data = struct.pack("!s", chr(0x00)) * chunk_size
     for index, delta_item in enumerate(delta_list):
         if delta_item.ref_id == DeltaItem.REF_RAW:
             continue
+        elif (delta_item.ref_id == DeltaItem.REF_ZEROS):
+            recover_data = zero_data
         elif (delta_item.ref_id == DeltaItem.REF_BASE_MEM):
             offset = delta_item.data
             recover_data = raw_mem[offset:offset+chunk_size]
@@ -323,6 +333,8 @@ def recover_delta_list(delta_list, base_disk, base_mem, chunk_size, parent=None)
             msg = "Recovered Size Error: %d, ref_id: %d, %ld, %ld" % \
                     (len(recover_data), delta_item.ref_id, delta_item.data_len, delta_item.data)
             raise MemoryError(msg)
+
+        # recover
         delta_item.ref_id = DeltaItem.REF_RAW
         delta_item.data = recover_data
 
