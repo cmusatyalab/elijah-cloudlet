@@ -88,7 +88,7 @@ def _pack_hashlist(hash_list):
             (original_length, len(hash_list), 1.0*len(hash_list)/original_length)
 
 
-def create_memory_overlay(modified_disk, overlay_diskpath, 
+def create_disk_overlay(modified_disk, 
             modified_chunk_list, chunk_size,
             basedisk_hashlist=None, basedisk_path=None,
             basemem_hashlist=None, basemem_path=None,
@@ -145,18 +145,16 @@ def create_memory_overlay(modified_disk, overlay_diskpath,
     print_out.write("[Debug] 3.get delta from itself\n")
     DeltaList.get_self_delta(delta_list)
 
-    # 4. statistics
-    print_out.write("[Debug] Statistics for Disk overlay\n")
-    DeltaList.statistics(delta_list, print_out)
-    DeltaList.tofile(delta_list, overlay_diskpath)
+    return delta_list
 
 
-def recover_disk(base_disk, base_mem, overlay_disk, recover_path, chunk_size):
+def recover_disk(base_disk, base_mem, overlay_mem, overlay_disk, recover_path, chunk_size):
     recover_fd = open(recover_path, "wb")
 
     # get delta list from file and recover it to origin
     delta_list = DeltaList.fromfile(overlay_disk)
-    delta.recover_delta_list(delta_list, base_disk, base_mem, chunk_size, parent=base_disk)
+    delta.recover_delta_list(delta_list, base_disk, base_mem, chunk_size, parent=base_disk,
+            overlay_memory=overlay_mem)
 
     # overlay map
     chunk_list = []

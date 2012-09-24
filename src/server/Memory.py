@@ -416,7 +416,7 @@ def process_cmd(argv):
     return settings, command
 
 
-def create_memory_overlay(modified_mempath, overlay_mempath,
+def create_memory_overlay(modified_mempath,
             basemem_meta=None, basemem_path=None,
             basedisk_hashlist=None, basedisk_path=None,
             print_out=None):
@@ -447,9 +447,7 @@ def create_memory_overlay(modified_mempath, overlay_mempath,
     print_out.write("[Debug] 3.get delta from itself\n")
     DeltaList.get_self_delta(delta_list)
 
-    print_out.write("[Debug] Statistics for Memory overlay\n")
-    DeltaList.statistics(delta_list, print_out)
-    DeltaList.tofile_with_footer(footer_delta, delta_list, overlay_mempath)
+    return footer_delta, delta_list
 
 
 def recover_memory(base_disk, base_mem, delta_path, raw_meta, out_path, verify_with_original=None):

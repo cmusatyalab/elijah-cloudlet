@@ -25,6 +25,9 @@ import Disk
 import vmnetfs
 import vmnetx
 import stat
+import delta
+from delta import DeltaList
+from delta import DeltaItem
 from xml.etree import ElementTree
 from uuid import uuid4
 from tempfile import NamedTemporaryFile
@@ -217,20 +220,32 @@ def create_overlay(base_image):
     basedisk_hashlist = Disk.base_hashlist(base_diskmeta)
 
     # 2-1. get memory overlay
-    Memory.create_memory_overlay(modified_mem.name, overlay_mempath,
+    mem_footer, mem_deltalist= Memory.create_memory_overlay(modified_mem.name, 
             basemem_meta=base_memmeta, basemem_path=base_mem,
             basedisk_hashlist=basedisk_hashlist, basedisk_path=base_image,
             print_out=Log.out)
+
+    Log.out.write("[Debug] Statistics for Memory overlay\n")
+    DeltaList.statistics(mem_deltalist, print_out=Log.out)
+    DeltaList.tofile_with_footer(mem_footer, mem_deltalist, overlay_mempath)
 
     # 2-2. get disk overlay
     m_chunk_list = monitor.chunk_list
     m_chunk_list.sort()
     packed_chunk_list = dict((x,x) for x in m_chunk_list).values()
-    Disk.create_memory_overlay(modified_disk, overlay_diskpath, 
+    disk_deltalist = Disk.create_disk_overlay(modified_disk,
             packed_chunk_list, Const.CHUNK_SIZE,
             basedisk_hashlist=basedisk_hashlist, basedisk_path=base_image,
             basemem_hashlist=basemem_hashlist, basemem_path=base_mem,
             print_out=Log.out)
+
+    # 2-3. disk-memory de-duplication
+    # update disk delta list using memory delta list
+    delta.diff_with_deltalist(disk_deltalist, mem_deltalist, DeltaItem.REF_OVERLAY_MEM)
+    Log.out.write("[Debug] Statistics for Disk overlay\n")
+    DeltaList.statistics(disk_deltalist, print_out=Log.out)
+    DeltaList.tofile(disk_deltalist, overlay_diskpath)
+
 
     # 3. terminting
     monitor.terminate()
@@ -305,8 +320,9 @@ def recover_launchVM(base_image, overlay_meta, overlay_disk, overlay_mem, **kwar
             base_memmeta, modified_mem.name)
 
     # Recover Modified Disk
-    disk_overlay_map = Disk.recover_disk(base_image, base_mem, overlay_disk, 
-             modified_img.name, Const.CHUNK_SIZE)
+    disk_overlay_map = Disk.recover_disk(base_image, base_mem, modified_mem.name,
+            overlay_disk, modified_img.name, Const.CHUNK_SIZE)
+
 
     print "[INFO] VM Disk is recovered at %s" % modified_img.name
     print "[INFO] VM Memory is recoverd at %s" % modified_mem.name

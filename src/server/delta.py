@@ -251,7 +251,46 @@ class DeltaList(object):
         print_out.write("-"*80 + "\n")
 
 
+def diff_with_deltalist(source_deltalist, const_deltalist, ref_id):
+    # update source_deltalist using const_deltalist
+    # Example) source_deltalist: disk delta list,
+    #       const_deltalist: memory delta list
+    if len(source_deltalist) == 0 or type(source_deltalist[0]) != DeltaItem:
+        raise DeltaError("Need list of DeltaItem for source")
+    if len(const_deltalist) == 0 or type(const_deltalist[0]) != DeltaItem:
+        raise DeltaError("Need list of DeltaItem for const")
+
+    source_deltalist.sort(key=itemgetter('hash_value')) # sort by hash value
+    const_deltalist.sort(key=itemgetter('hash_value')) # sort by hash value
+
+    matching_count = 0
+    s_index = 0
+    index = 0
+    while index < len(source_deltalist) and s_index < len(const_deltalist):
+        source_delta = source_deltalist[s_index]
+        const_delta = const_deltalist[index]
+        if const_delta.hash_value < source_delta.hash_value:
+            index += 1
+            continue
+
+        # compare
+        if source_delta.hash_value == const_delta.hash_value and \
+                ((source_delta.ref_id == DeltaItem.REF_XDELTA) or (source_delta.ref_id == DeltaItem.REF_RAW)):
+            if source_delta.offset_len != const_delta.offset_len:
+                message = "Hash is same but length is different %d != %d" % \
+                        (source_delta.offset_len, const_delta.offset_len)
+                raise DeltaError(message)
+            matching_count += 1
+            source_delta.ref_id = ref_id
+            source_delta.data_len = 8
+            source_delta.data = long(const_delta.offset)
+        s_index += 1
+    return source_deltalist
+
+
 def diff_with_hashlist(base_hashlist, delta_list, ref_id):
+    # update delta_list using base_hashlist
+
     if len(delta_list) == 0 or type(delta_list[0]) != DeltaItem:
         raise DeltaError("Need list of DeltaItem")
 
@@ -282,23 +321,33 @@ def diff_with_hashlist(base_hashlist, delta_list, ref_id):
     return delta_list
 
 
-def recover_delta_list(delta_list, base_disk, base_mem, chunk_size, parent=None):
+def recover_delta_list(delta_list, base_disk, base_mem, chunk_size, 
+        parent=None, overlay_memory=None):
+    # recover delta list using base disk/memory
+    # You have to specify parent to indicate whether you're recover memory or disk 
+    # optionally you can use overlay_memory to recover overlay disk which is
+    # de-duplicated with overlay memory
     if len(delta_list) == 0 or type(delta_list[0]) != DeltaItem:
         raise MemoryError("Need list of DeltaItem")
 
+    # initialize reference data to use mmap
     base_disk_fd = open(base_disk, "rb")
     base_mem_fd = open(base_mem, "rb")
     raw_disk = mmap.mmap(base_disk_fd.fileno(), 0, prot=mmap.PROT_READ)
     raw_mem = mmap.mmap(base_mem_fd.fileno(), 0, prot=mmap.PROT_READ)
-    parent_raw = None
     if parent == base_disk:
         parent_raw = raw_disk
     elif parent == base_mem:
         parent_raw = raw_mem
     else:
         raise DeltaError("Parent should be either disk or memory")
-    delta_list.sort(key=itemgetter('offset'))
+    if overlay_memory:
+        overlay_mem_fd = open(overlay_memory, "rb")
+        raw_mem_overlay = mmap.mmap(overlay_mem_fd.fileno(), 0, prot=mmap.PROT_READ)
+    else:
+        raw_mem_overlay = None
 
+    delta_list.sort(key=itemgetter('offset'))
     zero_data = struct.pack("!s", chr(0x00)) * chunk_size
     for index, delta_item in enumerate(delta_list):
         if delta_item.ref_id == DeltaItem.REF_RAW:
@@ -311,6 +360,12 @@ def recover_delta_list(delta_list, base_disk, base_mem, chunk_size, parent=None)
         elif (delta_item.ref_id == DeltaItem.REF_BASE_DISK):
             offset = delta_item.data
             recover_data = raw_disk[offset:offset+chunk_size]
+        elif (delta_item.ref_id == DeltaItem.REF_OVERLAY_MEM):
+            if not raw_mem_overlay:
+                msg = "Need overlay memory if overlay disk is de-duplicated with it"
+                raise DeltaError(msg)
+            offset = delta_item.data
+            recover_data = raw_mem_overlay[offset:offset+chunk_size]
         elif delta_item.ref_id == DeltaItem.REF_SELF:
             ref_offset = delta_item.data
             index = 0
