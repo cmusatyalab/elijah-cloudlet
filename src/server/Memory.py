@@ -158,10 +158,10 @@ class Memory(object):
         while total_mem_size != read_mem_size:
             raw_ram_flag = struct.unpack(">Q", fin.read(8))[0]
             if raw_ram_flag & Memory.RAM_SAVE_FLAG_EOS:
-                raise MemoryError("Not Fully load yet")
+                raise MemoryError("Error, Not Fully load yet")
                 break
             if raw_ram_flag & Memory.RAM_SAVE_FLAG_RAW == 0:
-                raise MemoryError("invalid ram save flag raw")
+                raise MemoryError("Error, invalid ram save flag raw\n")
 
             id_string_len = ord(struct.unpack(">s", fin.read(1))[0])
             id_string = struct.unpack(">%ds" % id_string_len, fin.read(id_string_len))[0]

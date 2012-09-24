@@ -238,17 +238,29 @@ class DeltaList(object):
                 from_xdelta += 1
             elif delta_item.ref_id == DeltaItem.REF_RAW:
                 from_raw += 1
-        print_out.write("-"*80 + "\n")
-        print_out.write("[INFO] Total Modified page #\t:%ld\n" % len(delta_list))
-        print_out.write("[INFO] Zero pages\t\t:%ld\n" % from_zeros)
-        print_out.write("[INFO] Shared with Base Disk\t:%ld\n" % from_base_disk)
-        print_out.write("[INFO] Shared with Base Mem\t:%ld\n" % from_base_mem)
-        print_out.write("[INFO] Shared within Self\t:%ld\n" % from_self)
-        print_out.write("[INFO] Shared with Overlay Disk\t:%ld\n" % from_overlay_disk)
-        print_out.write("[INFO] Shared with Overlay Mem\t:%ld\n" % from_overlay_mem)
-        print_out.write("[INFO] No Reference\t\t:%ld(RAW:%ld, xdelta3:%ld)\n" % \
-                ((from_raw+from_xdelta), from_raw, from_xdelta))
-        print_out.write("-"*80 + "\n")
+
+        chunk_size = delta_list[0].offset_len
+        size_MB = chunk_size/1024.0
+
+        print_out.write("-"*50 + "\n")
+        print_out.write("[INFO] Total Modified page #\t:%ld (%.0f KB)\n" % 
+                (len(delta_list), len(delta_list)*size_MB))
+        print_out.write("[INFO] Zero pages\t\t:%ld (%.0f KB)\n" % 
+                (from_zeros, from_zeros*size_MB))
+        print_out.write("[INFO] Shared with Base Disk\t:%ld (%.0f KB)\n" % 
+                (from_base_disk, from_base_disk*size_MB))
+        print_out.write("[INFO] Shared with Base Mem\t:%ld (%.0f KB)\n" % 
+                (from_base_mem, from_base_mem*size_MB))
+        print_out.write("[INFO] Shared within Self\t:%ld (%.0f KB)\n" % 
+                (from_self, from_self*size_MB))
+        print_out.write("[INFO] Shared with Overlay Disk\t:%ld (%.0f KB)\n" % 
+                (from_overlay_disk, from_overlay_disk*size_MB))
+        print_out.write("[INFO] Shared with Overlay Mem\t:%ld (%.0f KB)\n" % 
+                (from_overlay_mem, from_overlay_mem*size_MB))
+        print_out.write("[INFO] No Reference\t\t:%ld (%.0f KB) - RAW:%ld (%.0f KB), xdelta3:%ld (%.0f KB)\n" % 
+                ((from_raw+from_xdelta), (from_raw+from_xdelta)*size_MB, 
+                from_raw, from_raw*size_MB, from_xdelta, from_xdelta*size_MB))
+        print_out.write("-"*50 + "\n")
 
 
 def diff_with_deltalist(source_deltalist, const_deltalist, ref_id):

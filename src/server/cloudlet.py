@@ -29,10 +29,10 @@ import telnetlib
 import socket
 import pylzma
 
-#VM_MEMORY = 4096
-#VCPU_NUMBER = 4
-VM_MEMORY = 2048
-VCPU_NUMBER = 2
+VM_MEMORY = 4096
+VCPU_NUMBER = 4
+#VM_MEMORY = 2048
+#VCPU_NUMBER = 2
 #BALLOON_MEM_SIZE = VM_MEMORY
 
 #KVM = '../kvm-qemu/x86_64-softmmu/qemu-system-x86_64'

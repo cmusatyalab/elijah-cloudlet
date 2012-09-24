@@ -96,9 +96,9 @@ class StreamMonitor(threading.Thread):
         self.epoll.register(fd, select.EPOLLIN | select.EPOLLOUT | select.EPOLLPRI)
 
     def io_watch(self):
-        while(not self.stop.wait(0.1)):
+        while(not self.stop.wait(0.0001)):
             self._running = True
-            events = self.epoll.poll(0.1)
+            events = self.epoll.poll(0.0001)
             for fileno, event in events:
                 self._handle(fileno, event)
         
