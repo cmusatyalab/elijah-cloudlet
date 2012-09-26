@@ -246,10 +246,11 @@ def create_overlay(base_image):
     DeltaList.statistics(disk_deltalist, print_out=Log.out)
     DeltaList.tofile(disk_deltalist, overlay_diskpath)
 
-
     # 3. terminting
     monitor.terminate()
     monitor.join()
+    os.unlink(modified_mem.name)
+
     return (overlay_diskpath, overlay_mempath)
     '''
     output_list = []

@@ -29,6 +29,7 @@ DELTA_FILE_VERSION = 0x00000001
 class DeltaError(Exception):
     pass
 
+
 class DeltaItem(object):
     REF_RAW = 0x00
     REF_XDELTA = 0x01
@@ -221,6 +222,8 @@ class DeltaList(object):
         from_xdelta = 0
         from_overlay_disk = 0
         from_overlay_mem = 0
+        xdelta_size = 0
+        raw_size = 0
         for delta_item in delta_list:
             if delta_item.ref_id == DeltaItem.REF_SELF:
                 from_self += 1
@@ -236,68 +239,72 @@ class DeltaList(object):
                 from_overlay_mem += 1
             elif delta_item.ref_id == DeltaItem.REF_XDELTA:
                 from_xdelta += 1
+                xdelta_size += len(delta_item.data)
             elif delta_item.ref_id == DeltaItem.REF_RAW:
                 from_raw += 1
+                raw_size += len(delta_item.data)
 
         chunk_size = delta_list[0].offset_len
         size_MB = chunk_size/1024.0
+        total_count= len(delta_list)/100.0
 
         print_out.write("-"*50 + "\n")
-        print_out.write("[INFO] Total Modified page #\t:%ld (%.0f KB)\n" % 
-                (len(delta_list), len(delta_list)*size_MB))
-        print_out.write("[INFO] Zero pages\t\t:%ld (%.0f KB)\n" % 
-                (from_zeros, from_zeros*size_MB))
-        print_out.write("[INFO] Shared with Base Disk\t:%ld (%.0f KB)\n" % 
-                (from_base_disk, from_base_disk*size_MB))
-        print_out.write("[INFO] Shared with Base Mem\t:%ld (%.0f KB)\n" % 
-                (from_base_mem, from_base_mem*size_MB))
-        print_out.write("[INFO] Shared within Self\t:%ld (%.0f KB)\n" % 
-                (from_self, from_self*size_MB))
-        print_out.write("[INFO] Shared with Overlay Disk\t:%ld (%.0f KB)\n" % 
-                (from_overlay_disk, from_overlay_disk*size_MB))
-        print_out.write("[INFO] Shared with Overlay Mem\t:%ld (%.0f KB)\n" % 
-                (from_overlay_mem, from_overlay_mem*size_MB))
-        print_out.write("[INFO] No Reference\t\t:%ld (%.0f KB) - RAW:%ld (%.0f KB), xdelta3:%ld (%.0f KB)\n" % 
-                ((from_raw+from_xdelta), (from_raw+from_xdelta)*size_MB, 
-                from_raw, from_raw*size_MB, from_xdelta, from_xdelta*size_MB))
+        print_out.write("[INFO] Total Modified page #\t:%ld\t(100 %%)\n" % 
+                (len(delta_list)))
+        print_out.write("[INFO] Zero pages\t\t:%ld\t(%f %%)\n" % 
+                (from_zeros, from_zeros/total_count))
+        print_out.write("[INFO] Shared with Base Disk\t:%ld\t(%f %%)\n" % 
+                (from_base_disk, from_base_disk/total_count))
+        print_out.write("[INFO] Shared with Base Mem\t:%ld\t(%f %%)\n" % 
+                (from_base_mem, from_base_mem/total_count))
+        print_out.write("[INFO] Shared within Self\t:%ld\t(%f %%)\n" % 
+                (from_self, from_self/total_count))
+        print_out.write("[INFO] Shared with Overlay Disk\t:%ld\t(%f %%)\n" % 
+                (from_overlay_disk, from_overlay_disk/total_count))
+        print_out.write("[INFO] Shared with Overlay Mem\t:%ld\t(%f %%)\n" % 
+                (from_overlay_mem, from_overlay_mem/total_count))
+        print_out.write("[INFO] xdelta\t\t\t:%ld\t(%f %%, real_size: %.0f KB)\n" %
+                (from_xdelta, from_xdelta/total_count, xdelta_size))
+        print_out.write("[INFO] raw\t\t\t:%ld\t(%f %%, real_size: %.0f KB)\n" % 
+                (from_raw, from_raw/total_count, raw_size))
         print_out.write("-"*50 + "\n")
 
 
-def diff_with_deltalist(source_deltalist, const_deltalist, ref_id):
+def diff_with_deltalist(delta_list, const_deltalist, ref_id):
     # update source_deltalist using const_deltalist
     # Example) source_deltalist: disk delta list,
     #       const_deltalist: memory delta list
-    if len(source_deltalist) == 0 or type(source_deltalist[0]) != DeltaItem:
+    if len(delta_list) == 0 or type(delta_list[0]) != DeltaItem:
         raise DeltaError("Need list of DeltaItem for source")
     if len(const_deltalist) == 0 or type(const_deltalist[0]) != DeltaItem:
         raise DeltaError("Need list of DeltaItem for const")
 
-    source_deltalist.sort(key=itemgetter('hash_value')) # sort by hash value
+    delta_list.sort(key=itemgetter('hash_value')) # sort by hash value
     const_deltalist.sort(key=itemgetter('hash_value')) # sort by hash value
 
     matching_count = 0
     s_index = 0
     index = 0
-    while index < len(source_deltalist) and s_index < len(const_deltalist):
-        source_delta = source_deltalist[s_index]
+    while index < len(const_deltalist) and s_index < len(delta_list):
+        delta = delta_list[s_index]
         const_delta = const_deltalist[index]
-        if const_delta.hash_value < source_delta.hash_value:
+        if const_delta.hash_value < delta.hash_value:
             index += 1
             continue
 
         # compare
-        if source_delta.hash_value == const_delta.hash_value and \
-                ((source_delta.ref_id == DeltaItem.REF_XDELTA) or (source_delta.ref_id == DeltaItem.REF_RAW)):
-            if source_delta.offset_len != const_delta.offset_len:
+        if delta.hash_value == const_delta.hash_value and \
+                ((delta.ref_id == DeltaItem.REF_XDELTA) or (delta.ref_id == DeltaItem.REF_RAW)):
+            if delta.offset_len != const_delta.offset_len:
                 message = "Hash is same but length is different %d != %d" % \
-                        (source_delta.offset_len, const_delta.offset_len)
+                        (delta.offset_len, const_delta.offset_len)
                 raise DeltaError(message)
             matching_count += 1
-            source_delta.ref_id = ref_id
-            source_delta.data_len = 8
-            source_delta.data = long(const_delta.offset)
+            delta.ref_id = ref_id
+            delta.data_len = 8
+            delta.data = long(const_delta.offset)
         s_index += 1
-    return source_deltalist
+    return delta_list 
 
 
 def diff_with_hashlist(base_hashlist, delta_list, ref_id):
