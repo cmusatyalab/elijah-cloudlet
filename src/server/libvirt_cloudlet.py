@@ -119,9 +119,13 @@ def convert_xml(xml, conn, vm_name=None, disk_path=None, uuid=None, logfile=None
         qemu_xmlns="http://libvirt.org/schemas/domain/qemu/1.0"
         qemu_element = xml.find("{%s}commandline" % qemu_xmlns)
         if qemu_element == None:
-            raise CloudletGenerationError("qemu_xmlns is NULL, Malfomed XML input: %s", Const.TEMPLATE_XML)
-        qemu_element.append(Element("{%s}arg" % qemu_element, {'value':'-cloudlet'}))
-        qemu_element.append(Element("{%s}arg" % qemu_element, {'value':"logfile=%s" % logfile}))
+            qemu_element = Element("{%s}commandline" % qemu_xmlns)
+            xml.append(qemu_element)
+            #msg = "qemu_xmlns is NULL, Malfomed XML input: %s\n%s" % \
+            #        (Const.TEMPLATE_XML, ElementTree.tostring(xml))
+            #raise CloudletGenerationError(msg)
+        qemu_element.append(Element("{%s}arg" % qemu_xmlns, {'value':'-cloudlet'}))
+        qemu_element.append(Element("{%s}arg" % qemu_xmlns, {'value':"logfile=%s" % logfile}))
 
     return ElementTree.tostring(xml)
 
@@ -165,6 +169,7 @@ def create_baseVM(disk_image_path):
     new_xml_string = convert_xml(xml, conn, disk_path=disk_image_path, uuid=str(uuid4()))
 
     # launch VM & wait for end of vnc
+    machine = None
     try:
         machine = run_vm(conn, new_xml_string, wait_vnc=True)
         # make memory snapshot
@@ -177,9 +182,10 @@ def create_baseVM(disk_image_path):
         # TODO: need more efficient implementation, e.g. bisect
         Disk.hashing(disk_image_path, base_diskmeta, print_out=Log.out)
     except Exception as e:
-        sys.stderr.write(str(e))
+        sys.stderr.write(str(e)+"\n")
         if machine:
             machine.destroy()
+        sys.exit(1)
 
     # write protection
     os.chmod(disk_image_path, stat.S_IRUSR)
@@ -199,6 +205,7 @@ def create_overlay(base_image):
             Const.get_basepath(base_image, check_exist=True)
     
     # filename for overlay VM
+    qemu_logfile = NamedTemporaryFile(prefix="cloudlet-qemu-log-", delete=False)
     image_name = os.path.basename(base_image).split(".")[0]
     dir_path = os.path.dirname(base_mem)
     overlay_diskpath = os.path.join(dir_path, image_name+Const.OVERLAY_DISK)
@@ -218,10 +225,13 @@ def create_overlay(base_image):
     monitor.add_path(stream_access, vmnetfs.StreamMonitor.DISK_ACCESS)
     monitor.add_path(memory_access, vmnetfs.StreamMonitor.MEMORY_ACCESS)
     monitor.start()
+    qemu_monitor = vmnetfs.FileMonitor(qemu_logfile.name, vmnetfs.FileMonitor.QEMU_LOG)
+    qemu_monitor.start()
 
     # 1-1. resume & get modified disk
     conn = get_libvirt_connection()
-    machine = run_snapshot(conn, modified_disk, base_mem_fuse, wait_vnc=True)
+    machine = run_snapshot(conn, modified_disk, base_mem_fuse, 
+            wait_vnc=True, qemu_logfile=qemu_logfile.name)
     # 1-2. get modified memory
     # TODO: support stream of modified memory rather than tmp file
     save_mem_snapshot(machine, modified_mem.name)
@@ -258,8 +268,12 @@ def create_overlay(base_image):
 
     # 3. terminting
     monitor.terminate()
+    qemu_monitor.terminate()
     monitor.join()
+    qemu_monitor.join()
     os.unlink(modified_mem.name)
+    if os.path.exists(qemu_logfile.name):
+        os.unlink(qemu_logfile.name)
 
     return (overlay_diskpath, overlay_mempath)
     '''
@@ -583,6 +597,7 @@ def synthesis(base_disk, meta, overlay_disk, overlay_mem):
     # param overlay_mem : path to overlay memory file
 
     # recover VM
+    qemu_logfile = NamedTemporaryFile(prefix="cloudlet-qemu-log-", delete=False)
     modified_img, launch_mem, fuse = recover_launchVM(base_disk, meta, 
             overlay_disk, overlay_mem)
 
@@ -595,15 +610,15 @@ def synthesis(base_disk, meta, overlay_disk, overlay_mem):
     monitor.add_path(stream_modified, vmnetfs.StreamMonitor.DISK_MODIFY)
     monitor.add_path(stream_disk_access, vmnetfs.StreamMonitor.DISK_ACCESS)
     monitor.add_path(stream_memory_access, vmnetfs.StreamMonitor.MEMORY_ACCESS)
+    monitor.add_path(qemu_logfile.name, vmnetfs.StreamMonitor.QEMU_LOG)
     monitor.start() 
 
     #resume VM
-    qemu_logfile = NamedTemporaryFile(prefix="cloudlet-qemu-log-", delete=False)
     conn = get_libvirt_connection()
     machine = None
     try:
         machine=run_snapshot(conn, residue_img, launch_mem, wait_vnc=True, 
-                qemu_logfile=qemu_logfile)
+                qemu_logfile=qemu_logfile.name)
     except Exception as e:
         sys.stdout.write(str(e)+"\n")
     if machine:
@@ -619,8 +634,8 @@ def synthesis(base_disk, meta, overlay_disk, overlay_mem):
         os.unlink(modified_img)
     if os.path.exists(launch_mem):
         os.unlink(launch_mem)
-    if os.path.exists(qemu_logfile):
-        os.unlink(qemu_logfile)
+    if os.path.exists(qemu_logfile.name):
+        os.unlink(qemu_logfile.name)
 
 
 def main(argv):

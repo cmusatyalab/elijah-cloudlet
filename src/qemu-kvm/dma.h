@@ -15,8 +15,8 @@
 #include "block.h"
 
 
-#define KRHA_PAGE_SIZE 4096
-#define KRHA_SECTOR_SIZE 512
+#define KRHA_PAGE_SIZE (4096)
+#define KRHA_SECTOR_SIZE (512)
 
 typedef struct ScatterGatherEntry ScatterGatherEntry;
 

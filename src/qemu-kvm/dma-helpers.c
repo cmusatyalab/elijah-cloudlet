@@ -143,7 +143,8 @@ static void dma_bdrv_cb(void *opaque, int ret)
         uint64_t cur_mem_offset = 0;
         for(cur_mem_offset = 0; cur_mem_offset < cur_len; cur_mem_offset += KRHA_PAGE_SIZE){
         	uint64_t snum = cur_sector_number + cur_mem_offset/KRHA_SECTOR_SIZE;
-        	printlog("dma, memory_addr:%ld, disk_sector:%ld, length:%ld, from_disk:%d, disk_access_aligned:%d\n", (cur_addr + cur_mem_offset), snum, KRHA_PAGE_SIZE, dbs->dir, snum%8);
+        	printlog("dma, memory_addr:%ld, disk_sector:%ld, length:%d, from_disk:%d, disk_access_aligned:%ld\n", \
+        			(cur_addr + cur_mem_offset), snum, KRHA_PAGE_SIZE, dbs->dir, snum%8);
         }
         cur_sector_number += (cur_len/KRHA_SECTOR_SIZE);
 

@@ -1,16 +1,21 @@
-#include "qemu-cloudlet.h"
-#include "stddef.h"
-
 #include <stdio.h>
 #include <stdarg.h>
+#include <sys/time.h>
+
+#include "qemu-cloudlet.h"
+#include "stddef.h"
 
 static FILE *cloudlet_logfile = NULL;
 
 int printlog(const char* format, ...){
+
+	struct timeval tv;
+	gettimeofday(&tv, NULL);
+    fprintf(cloudlet_logfile, "time:%ld.%ld, ", tv.tv_sec, tv.tv_usec);
 	if(cloudlet_logfile){
 		va_list argptr;
 		va_start(argptr, format);
-		fprintf(cloudlet_logfile, format, argptr);
+		vfprintf(cloudlet_logfile, format, argptr);
 		va_end(argptr);
 		return 1;
 	}

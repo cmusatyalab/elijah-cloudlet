@@ -20,6 +20,8 @@ import subprocess
 import select
 import io
 import threading
+import time
+import sys
 
 # system.py is built at install time, so pylint may fail to import it.
 # Also avoid warning on variable name.
@@ -151,6 +153,48 @@ class StreamMonitor(threading.Thread):
     def _handle_memory_access(self, line):
         #print "memory access: " + line
         pass
+
+    def terminate(self):
+        self.stop.set()
+
+
+class FileMonitor(threading.Thread):
+    QEMU_LOG    = "QEMU_LOG"
+
+    def __init__(self, path, name):
+        self.stream_dict = dict()
+        self._running = False
+        self.stop = threading.Event()
+        self.fd = os.open(path, os.O_RDONLY | os.O_NONBLOCK)
+        self.buf = ''
+        threading.Thread.__init__(self, target=self.io_watch)
+        print "[INFO] start monitoring at %s" % path
+
+    def io_watch(self):
+        while(not self.stop.wait(0.0001)):
+            self._running = True
+            line = os.read(self.fd, 1024)
+            lines = (self.buf+line).split('\n')
+            self.buf = lines.pop()
+            for line in lines:
+                self._handle_qemu_log(line)
+            else:
+                time.sleep(0.001)
+        self._running = False
+        print "[INFO] close monitoring thread"
+
+    def _handle_qemu_log(self, line):
+        splits = line.split(",", 2)
+        event_time = splits[0].strip()
+        header = splits[1].strip()
+        data = splits[2].strip()
+        if header == 'dma':
+            #sys.stdout.write("(%s)\n" % line)
+            pass
+        elif header == 'bdrv_discard':
+            sys.stdout.write("discard:(%s, %s)\n" % (event_time, data))
+        else:
+            sys.stdout.write("invalid log: (%s)(%s)(%s)\n" % (event_time, header, data))
 
     def terminate(self):
         self.stop.set()

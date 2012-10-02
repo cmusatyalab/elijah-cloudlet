@@ -1,8 +1,8 @@
 <domain type='kvm' xmlns:qemu='http://libvirt.org/schemas/domain/qemu/1.0'>
 	<name>cloudlet</name>
 	<uuid>c7a5fdbd-cdaf-9455-926a-d65c16db1801</uuid>
-	<memory>4194304</memory>
-	<currentMemory>4194304</currentMemory>
+	<memory>1048576</memory>
+	<currentMemory>1048576</currentMemory>
 	<vcpu>4</vcpu>
 	<cpu>
 		<topology sockets='1' cores='4' threads='1'/>
@@ -25,11 +25,6 @@
 		<acpi/>
 	</features>
 	<qemu:commandline>
-		<qemu:arg value='-cloudlet'/>
-		<qemu:arg value='tcp:2221::22' />
-	<!--
-		<qemu:arg value='-redir'/>
-		<qemu:arg value='tcp:2221::22' />
-	-->
+		<qemu:arg value='-usb'/>
 	</qemu:commandline>
 </domain>
