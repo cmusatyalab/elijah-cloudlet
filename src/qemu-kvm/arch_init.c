@@ -318,13 +318,7 @@ void ram_save_raw(QEMUFile *f, void *opaque) {
 
 		DPRINTF("ram_save_raw(): block id - %s, length - %llu, addr - %p\n",
 				block->idstr, (unsigned long long) block->length, block->host);
-		if(cloudlet_logfile){
-			fprintf(cloudlet_logfile, "ram_save_raw(): block id - %s, length - %llu, addr - %p\n",
-					block->idstr, (unsigned long long) block->length, block->host);
-		}else{
-			fprintf(stderr, "ram_save_raw(): block id - %s, length - %llu, addr - %p\n",
-					block->idstr, (unsigned long long) block->length, block->host);
-		}
+
 	}
 
 	/* flush all blocks */
