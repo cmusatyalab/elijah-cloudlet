@@ -29,6 +29,7 @@ import delta
 from delta import DeltaList
 from delta import DeltaItem
 from xml.etree import ElementTree
+from xml.etree.ElementTree import Element
 from uuid import uuid4
 from tempfile import NamedTemporaryFile
 from time import time
@@ -94,7 +95,7 @@ def copy_disk(in_path, out_path):
         raise IOError("Copy failed: from %s to %s " % (in_path, out_path))
 
 
-def convert_xml(xml, conn, vm_name=None, disk_path=None, uuid=None):
+def convert_xml(xml, conn, vm_name=None, disk_path=None, uuid=None, logfile=None):
     if vm_name:
         name_element = xml.find('name')
         if not name_element:
@@ -111,8 +112,17 @@ def convert_xml(xml, conn, vm_name=None, disk_path=None, uuid=None):
     disk_element = xml.find('devices/disk/source')
     if disk_element == None:
         raise CloudletGenerationError("Malfomed XML input: %s", Const.TEMPLATE_XML)
-
     disk_element.set("file", os.path.abspath(disk_path))
+
+    # append QEMU-argument
+    if logfile:
+        qemu_xmlns="http://libvirt.org/schemas/domain/qemu/1.0"
+        qemu_element = xml.find("{%s}commandline" % qemu_xmlns)
+        if qemu_element == None:
+            raise CloudletGenerationError("qemu_xmlns is NULL, Malfomed XML input: %s", Const.TEMPLATE_XML)
+        qemu_element.append(Element("{%s}arg" % qemu_element, {'value':'-cloudlet'}))
+        qemu_element.append(Element("{%s}arg" % qemu_element, {'value':"logfile=%s" % logfile}))
+
     return ElementTree.tostring(xml)
 
 
@@ -441,11 +451,14 @@ def run_snapshot(conn, disk_image, mem_snapshot, **kwargs):
     # kwargs
     # vnc_disable       :   show vnc console
     # wait_vnc          :   wait until vnc finishes if vnc_enabled
+    # qemu_logfile      :   log file for QEMU-KVM
 
     # read embedded XML at memory snapshot to change disk path
     hdr = vmnetx._QemuMemoryHeader(open(mem_snapshot))
     xml = ElementTree.fromstring(hdr.xml)
-    new_xml_string = convert_xml(xml, conn, disk_path=disk_image, uuid=uuid4())
+    logfile = kwargs.get('qemu_logfile', None)
+    new_xml_string = convert_xml(xml, conn, disk_path=disk_image, 
+            uuid=uuid4(), logfile=logfile)
     overwrite_xml(mem_snapshot, new_xml_string)
     #temp_mem = NamedTemporaryFile(prefix="cloudlet-mem-")
     #copy_with_xml(mem_snapshot, temp_mem.name, new_xml_string)
@@ -585,23 +598,30 @@ def synthesis(base_disk, meta, overlay_disk, overlay_mem):
     monitor.start() 
 
     #resume VM
+    qemu_logfile = NamedTemporaryFile(prefix="cloudlet-qemu-log-", delete=False)
     conn = get_libvirt_connection()
     machine = None
     try:
-        machine=run_snapshot(conn, residue_img, launch_mem, wait_vnc=True)
+        machine=run_snapshot(conn, residue_img, launch_mem, wait_vnc=True, 
+                qemu_logfile=qemu_logfile)
     except Exception as e:
         sys.stdout.write(str(e)+"\n")
     if machine:
         machine.destroy()
+
     # terminate
     fuse.terminate()
     monitor.terminate()
     monitor.join()
+    
+    # delete all temporary file
     if os.path.exists(modified_img):
         os.unlink(modified_img)
     if os.path.exists(launch_mem):
         os.unlink(launch_mem)
-            
+    if os.path.exists(qemu_logfile):
+        os.unlink(qemu_logfile)
+
 
 def main(argv):
     MODE = ('base', 'overlay', 'synthesis', "test")

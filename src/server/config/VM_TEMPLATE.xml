@@ -24,10 +24,12 @@
 	<features>
 		<acpi/>
 	</features>
-	<!--
 	<qemu:commandline>
+		<qemu:arg value='-cloudlet'/>
+		<qemu:arg value='tcp:2221::22' />
+	<!--
 		<qemu:arg value='-redir'/>
 		<qemu:arg value='tcp:2221::22' />
-	</qemu:commandline>
 	-->
+	</qemu:commandline>
 </domain>
