@@ -9,10 +9,11 @@ static FILE *cloudlet_logfile = NULL;
 
 int printlog(const char* format, ...){
 
-	struct timeval tv;
-	gettimeofday(&tv, NULL);
-    fprintf(cloudlet_logfile, "time:%ld.%ld, ", tv.tv_sec, tv.tv_usec);
 	if(cloudlet_logfile){
+		struct timeval tv;
+		gettimeofday(&tv, NULL);
+		fprintf(cloudlet_logfile, "time:%ld.%ld, ", tv.tv_sec, tv.tv_usec);
+
 		va_list argptr;
 		va_start(argptr, format);
 		vfprintf(cloudlet_logfile, format, argptr);
