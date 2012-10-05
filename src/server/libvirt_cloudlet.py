@@ -403,7 +403,9 @@ def run_vm(conn, domain_xml, **kwargs):
     # kwargs
     # vnc_disable       :   do not show vnc console
     # wait_vnc          :   wait until vnc finishes if vnc_enabled
+    print "run vm start"
     machine = conn.createXML(domain_xml, 0)
+    print "run vm stop"
 
     # Run VNC and wait until user finishes working
     if kwargs.get('vnc_disable'):

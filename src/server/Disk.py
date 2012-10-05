@@ -140,8 +140,10 @@ def _parse_qemu_log(qemu_logfile, chunk_size):
             print "%ld %s" % (discard_chunk, dma_dict.get(discard_chunk))
             discard_not_in_dma += 1
 
-    print "[DEBUG] net DMA ratio : %ld/%ld = %f %%" % (len(dma_dict), dma_counter, 100.0*len(dma_dict)/dma_counter)
-    print "[DEBUG] net discard ratio : %ld/%ld = %f %%" % (len(discard_dict), discard_counter, 100.0*len(discard_dict)/discard_counter)
+    if dma_counter != 0 :
+        print "[DEBUG] net DMA ratio : %ld/%ld = %f %%" % (len(dma_dict), dma_counter, 100.0*len(dma_dict)/dma_counter)
+    if discard_counter != 0:
+        print "[DEBUG] net discard ratio : %ld/%ld = %f %%" % (len(discard_dict), discard_counter, 100.0*len(discard_dict)/discard_counter)
     print "[DEBUG] discard chunk that is not in DMA : %ld/%ld = %f %%" % \
             (discard_not_in_dma, len(discard_dict), 100.0*discard_not_in_dma/len(discard_dict))
     return dma_dict, discard_dict

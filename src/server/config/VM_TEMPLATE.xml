@@ -15,7 +15,7 @@
 		<disk type='file' device='disk'>
 			<driver name='qemu' type='raw'/>
 			<source file='/home/krha/cloudlet/image/ubuntu-11.10-x86_64-server/ubuntu-11.raw' />
-			<target dev='hda'/>
+			<target dev='hda' bus='ide' />
 		</disk>
         <graphics type='vnc' port='-1' autoport='yes' keymap='en-us' listen='127.0.0.1'/>
 		<interface type='user'>
