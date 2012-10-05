@@ -369,6 +369,7 @@ def recover_delta_list(delta_list, base_disk, base_mem, chunk_size,
     delta_list.sort(key=itemgetter('offset'))
     zero_data = struct.pack("!s", chr(0x00)) * chunk_size
     for index, delta_item in enumerate(delta_list):
+        print "recovering %ld/%ld" % (index, len(delta_list))
         if delta_item.ref_id == DeltaItem.REF_RAW:
             continue
         elif (delta_item.ref_id == DeltaItem.REF_ZEROS):
@@ -387,14 +388,16 @@ def recover_delta_list(delta_list, base_disk, base_mem, chunk_size,
             recover_data = raw_mem_overlay[offset:offset+chunk_size]
         elif delta_item.ref_id == DeltaItem.REF_SELF:
             ref_offset = delta_item.data
-            index = 0
-            while index < len(delta_list):
-                #print "self referencing : %ld == %ld" % (delta_list[index].offset, ref_offset)
-                if delta_list[index].offset == ref_offset:
-                    recover_data = delta_list[index].data
+            traverse_index = index-1
+            # TODO: need optimization for better comparison
+            while traverse_index >= 0:
+                #if parent == base_disk:
+                    #print "%ld/%ld, self referencing : %ld == %ld" % (index, len(delta_list), delta_list[index].offset, ref_offset)
+                if delta_list[traverse_index].offset == ref_offset:
+                    recover_data = delta_list[traverse_index].data
                     break
-                index += 1
-            if index >= len(delta_list):
+                traverse_index -= 1
+            if traverse_index < 0:
                 raise MemoryError("Cannot find self reference")
         elif delta_item.ref_id == DeltaItem.REF_XDELTA:
             patch_data = delta_item.data

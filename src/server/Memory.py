@@ -22,6 +22,7 @@ import struct
 import tool
 import mmap
 import vmnetx
+import subprocess
 from progressbar import AnimatedProgressBar
 import delta
 from delta import DeltaItem
@@ -36,7 +37,6 @@ EXT_META = ".meta"
 
 class MemoryError(Exception):
     pass
-
 
 class Memory(object):
     HASH_FILE_MAGIC = 0x1145511a
@@ -390,7 +390,7 @@ def hashing(filepath):
     return memory
 
 
-def process_cmd(argv):
+def _process_cmd(argv):
     COMMANDS = ['hashing', 'delta', 'recover']
     USAGE = "Usage: %prog " + "[%s] [option]" % '|'.join(COMMANDS)
     VERSION = '%prog ' + str(1.0)
@@ -520,12 +520,29 @@ def recover_memory(base_disk, base_mem, delta_path, raw_meta, out_path, verify_w
 
 
 def base_hashlist(base_memmeta_path):
+    # get the hash list from the meta file
     footer, hashlist = Memory.import_hashlist(base_memmeta_path)
     return hashlist
 
 
+def get_free_memory(snapshot_path, pglist_addr, pgn0_addr, mem_size_gb):
+    # get list of free memory page number
+    BIN_PATH = "/home/krha/workspace/yoshi/free_page_scan_krha/free_page_scan"
+    cmd = "%s %s %s %s %d" % (BIN_PATH, snapshot_path, hex(pglist_addr), hex(pgn0_addr), mem_size_gb)
+    _PIPE = subprocess.PIPE
+    proc = subprocess.Popen(cmd, shell=True, stdin=_PIPE, stdout=_PIPE, stderr=_PIPE)
+    out, err = proc.communicate()
+    if err:
+        print "Error: " + err
+    if out:
+        print out
+
+
 if __name__ == "__main__":
-    settings, command = process_cmd(sys.argv)
+    get_free_memory("a", 0x11, 0x11, 4)
+    sys.exit(1)
+
+    settings, command = _process_cmd(sys.argv)
     if command == "hashing":
         if not settings.base_file:
             sys.stderr.write("Error, Cannot find migrated file. See help\n")

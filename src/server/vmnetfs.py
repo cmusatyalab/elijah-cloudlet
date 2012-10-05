@@ -143,7 +143,7 @@ class StreamMonitor(threading.Thread):
         ctime, chunk = line.split("\t")
         ctime = float(ctime)
         chunk = int(chunk)
-        self.chunk_list.append(int(chunk))
+        self.chunk_list.append((ctime, chunk))
         #print "%s: %f, %d" % ("modification", ctime, chunk)
 
     def _handle_disk_access(self, line):

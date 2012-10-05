@@ -244,7 +244,6 @@ def create_overlay(base_image):
             basemem_meta=base_memmeta, basemem_path=base_mem,
             basedisk_hashlist=basedisk_hashlist, basedisk_path=base_image,
             print_out=Log.out)
-
     Log.out.write("[Debug] Statistics for Memory overlay\n")
     DeltaList.statistics(mem_deltalist, print_out=Log.out)
     DeltaList.tofile_with_footer(mem_footer, mem_deltalist, overlay_mempath)
@@ -257,6 +256,7 @@ def create_overlay(base_image):
             packed_chunk_list, Const.CHUNK_SIZE,
             basedisk_hashlist=basedisk_hashlist, basedisk_path=base_image,
             basemem_hashlist=basemem_hashlist, basemem_path=base_mem,
+            qemu_logfile=qemu_logfile.name,
             print_out=Log.out)
 
     # 2-3. disk-memory de-duplication
@@ -272,8 +272,8 @@ def create_overlay(base_image):
     monitor.join()
     qemu_monitor.join()
     os.unlink(modified_mem.name)
-    if os.path.exists(qemu_logfile.name):
-        os.unlink(qemu_logfile.name)
+    #if os.path.exists(qemu_logfile.name):
+    #    os.unlink(qemu_logfile.name)
 
     return (overlay_diskpath, overlay_mempath)
     '''
@@ -332,7 +332,7 @@ def recover_launchVM(base_image, overlay_meta, overlay_disk, overlay_mem, **kwar
     # nova_util = nova_util is executioin wrapper for nova framework
     #           You should use nova_util in OpenStack, or subprocess 
     #           will be returned without finishing their work
-    log = kwargs.get('log', None)
+    log = kwargs.get('log', open("/dev/null", "w+b"))
     nova_util = kwargs.get('nova_util', None)
 
     (base_diskmeta, base_mem, base_memmeta) = \
@@ -438,7 +438,7 @@ def save_mem_snapshot(machine, fout_path, **kwargs):
     #nova_util = nova_util is executioin wrapper for nova framework
     #           You should use nova_util in OpenStack, or subprocess 
     #           will be returned without finishing their work
-    log = kwargs.get('log', None)
+    log = kwargs.get('log', )
     nova_util = kwargs.get('nova_util', None)
 
     #Set migration speed
@@ -595,11 +595,13 @@ def synthesis(base_disk, meta, overlay_disk, overlay_mem):
     # param meta : path to meta file for overlay
     # param overlay_disk : path to overlay disk file
     # param overlay_mem : path to overlay memory file
+    print_out = sys.stdout
 
     # recover VM
     qemu_logfile = NamedTemporaryFile(prefix="cloudlet-qemu-log-", delete=False)
+    print_out.write("1. recover launch VM")
     modified_img, launch_mem, fuse = recover_launchVM(base_disk, meta, 
-            overlay_disk, overlay_mem)
+            overlay_disk, overlay_mem, log=print_out)
 
     # monitor modified chunks
     residue_img = os.path.join(fuse.mountpoint, 'disk', 'image')
@@ -610,8 +612,9 @@ def synthesis(base_disk, meta, overlay_disk, overlay_mem):
     monitor.add_path(stream_modified, vmnetfs.StreamMonitor.DISK_MODIFY)
     monitor.add_path(stream_disk_access, vmnetfs.StreamMonitor.DISK_ACCESS)
     monitor.add_path(stream_memory_access, vmnetfs.StreamMonitor.MEMORY_ACCESS)
-    monitor.add_path(qemu_logfile.name, vmnetfs.StreamMonitor.QEMU_LOG)
     monitor.start() 
+    qemu_monitor = vmnetfs.FileMonitor(qemu_logfile.name, vmnetfs.FileMonitor.QEMU_LOG)
+    qemu_monitor.start()
 
     #resume VM
     conn = get_libvirt_connection()
@@ -627,7 +630,9 @@ def synthesis(base_disk, meta, overlay_disk, overlay_mem):
     # terminate
     fuse.terminate()
     monitor.terminate()
+    qemu_monitor.terminate()
     monitor.join()
+    qemu_monitor.join()
     
     # delete all temporary file
     if os.path.exists(modified_img):
