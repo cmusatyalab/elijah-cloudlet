@@ -421,10 +421,13 @@ def create_memory_overlay(modified_mempath,
             basedisk_hashlist=None, basedisk_path=None,
             print_out=None):
     # get memory delta
-    # raw_meta: meta data path of raw memory, e.g. hash_list+footer
-    # raw_mem: raw memory path
-    # modified_mem: modified memory path
-    # out_delta: output path of final delta
+    # modified_mempath : file path for modified memory
+    # basemem_meta : hashlist file for base mem
+    # basemem_path : raw base memory path
+    # basedisk_hashlist : haslist of base disk
+    # basedisk_path : raw base disk path
+    # print_out : log stream
+
 
     # Create Base Memory from meta file
     base = Memory.import_from_metafile(basemem_meta, basemem_path)
@@ -432,6 +435,7 @@ def create_memory_overlay(modified_mempath,
     # 1.get modified page
     print_out.write("[Debug] 1.get modified page list\n")
     footer_delta, delta_list = base.get_modified(modified_mempath)
+
 
     # 2.find shared with base memory 
     print_out.write("[Debug] 2-1.Find zero page\n")

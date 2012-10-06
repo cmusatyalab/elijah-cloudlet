@@ -89,7 +89,7 @@ def _pack_hashlist(hash_list):
             (original_length, len(hash_list), 1.0*len(hash_list)/original_length)
 
 
-def _parse_qemu_log(qemu_logfile, chunk_size):
+def parse_qemu_log(qemu_logfile, chunk_size):
     # return dma_dict, discard_dict
     # element of dictionary has (chunk_%:discarded_time) format
     if (qemu_logfile == None) or (not os.path.exists(qemu_logfile)):
@@ -108,14 +108,17 @@ def _parse_qemu_log(qemu_logfile, chunk_size):
         header = splits[1].strip()
         data = splits[2:]
         if header == 'dma':
+            mem_addr = long(data[0].split(":")[-1])
             sec_num = long(data[1].split(":")[-1])
             sec_len = long(data[2].split(":")[-1])
-            chunk_number = sec_num/8.0
+            from_disk = long(data[3].split(":")[-1])
+            mem_chunk = mem_addr/chunk_size
+            disk_chunk = sec_num*512.0/chunk_size
             if sec_len != chunk_size:
                 msg = "DMA sector length(%d) is not same as chunk size(%d)" % (sec_len, chunk_size)
                 raise DiskError(msg)
             if sec_num%8 == 0:
-                dma_dict[chunk_number] = event_time
+                dma_dict[disk_chunk] = {'time':event_time, 'mem_chunk':mem_chunk, 'read':(True if from_disk else False)}
                 dma_counter += 1
             else:
                 pass
@@ -134,47 +137,41 @@ def _parse_qemu_log(qemu_logfile, chunk_size):
                 discard_dict[chunk_num] = event_time
                 discard_counter += 1
 
-    discard_not_in_dma = 0
-    for discard_chunk in discard_dict.keys():
-        if not dma_dict.get(discard_chunk):
-            print "%ld %s" % (discard_chunk, dma_dict.get(discard_chunk))
-            discard_not_in_dma += 1
-
     if dma_counter != 0 :
         print "[DEBUG] net DMA ratio : %ld/%ld = %f %%" % (len(dma_dict), dma_counter, 100.0*len(dma_dict)/dma_counter)
     if discard_counter != 0:
         print "[DEBUG] net discard ratio : %ld/%ld = %f %%" % (len(discard_dict), discard_counter, 100.0*len(discard_dict)/discard_counter)
-    print "[DEBUG] discard chunk that is not in DMA : %ld/%ld = %f %%" % \
-            (discard_not_in_dma, len(discard_dict), 100.0*discard_not_in_dma/len(discard_dict))
     return dma_dict, discard_dict
 
 
 def create_disk_overlay(modified_disk, 
-            modified_chunk_list, chunk_size,
+            modified_chunk_dict, chunk_size,
             basedisk_hashlist=None, basedisk_path=None,
             basemem_hashlist=None, basemem_path=None,
-            qemu_logfile=None,
+            trim_dict=None, dma_dict=None,
             print_out=None):
     # get disk delta
     # base_diskmeta : hash list of base disk
     # base_disk: path to base VM disk
     # modified_disk_path : path to modified VM disk
-    # modified_chunk_list : chunk list of modified
+    # modified_chunk_dict : chunk dict of modified
     # overlay_path : path to destination of overlay disk
+    # dma_dict : dma information, 
+    #           dma_dict[disk_chunk] = {'time':time, 'memory_chunk':memory chunk number, 'read': True if read from disk'}
     base_fd = open(basedisk_path, "rb")
     base_mmap = mmap.mmap(base_fd.fileno(), 0, prot=mmap.PROT_READ)
     modified_fd = open(modified_disk, "rb")
 
     # 0. get info from qemu log file
     # dictionary : (chunk_%, discarded_time)
-    dma_dict, trim_dict = _parse_qemu_log(qemu_logfile, chunk_size)
     trim_counter = 0
 
     # 1. get modified page
     print_out.write("[Debug] 1.get modified disk page\n")
     delta_list = list()
-    for index, (ctime, chunk) in enumerate(modified_chunk_list):
+    for index, chunk in enumerate(modified_chunk_dict.keys()):
         offset = chunk * chunk_size
+        ctime = modified_chunk_dict[chunk]
 
         # check TRIM discard
         trim_time = trim_dict.get(chunk, None)
@@ -191,7 +188,6 @@ def create_disk_overlay(modified_disk,
         modified_fd.seek(offset)
         data = modified_fd.read(chunk_size)
         source_data = base_mmap[offset:offset+chunk_size]
-
         try:
             patch = tool.diff_data(source_data, data, 2*len(source_data))
             if len(patch) < len(data):
@@ -210,8 +206,19 @@ def create_disk_overlay(modified_disk,
                     data_len=len(data),
                     data=data)
         delta_list.append(delta_item)
-
     print_out.write("[Debug][TRIM] %d chunk is discarded by trim info\n" % (trim_counter))
+
+    # 1-1.check modified page with DMA info
+    dma_exist_counter = 0
+    delta_list.sort(key=itemgetter('hash_value')) # sort by hash value
+    for delta_item in delta_list:
+        delta_chunk = delta_item.offset/chunk_size
+        if dma_dict.get(delta_chunk) != None:
+            #item = dma_dict.get(delta_chunk)
+            #print "delta_chunk:%ld --> %s" % (delta_chunk, str(item))
+            dma_exist_counter += 1
+    print_out.write("DMA EXIST COUNTER(%ld) = %ld / %ld = %f\n" % \
+            (len(dma_dict), dma_exist_counter, len(delta_list), 100.0*dma_exist_counter/len(delta_list)))
 
     # 2.find shared with base memory 
     print_out.write("[Debug] 2-1.Find zero page\n")
@@ -267,4 +274,4 @@ def base_hashlist(base_meta):
 
 
 if __name__ == "__main__":
-    _parse_qemu_log("log", 4096)
+    parse_qemu_log("log", 4096)

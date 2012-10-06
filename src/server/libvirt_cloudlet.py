@@ -238,6 +238,8 @@ def create_overlay(base_image):
     # 1-3. get hashlist of base memory and disk
     basemem_hashlist = Memory.base_hashlist(base_memmeta)
     basedisk_hashlist = Disk.base_hashlist(base_diskmeta)
+    # 1-4. get dma & discard information
+    dma_dict, trim_dict = Disk.parse_qemu_log(qemu_logfile.name, Const.CHUNK_SIZE)
 
     # 2-1. get memory overlay
     mem_footer, mem_deltalist= Memory.create_memory_overlay(modified_mem.name, 
@@ -249,14 +251,13 @@ def create_overlay(base_image):
     DeltaList.tofile_with_footer(mem_footer, mem_deltalist, overlay_mempath)
 
     # 2-2. get disk overlay
-    m_chunk_list = monitor.chunk_list
-    m_chunk_list.sort()
-    packed_chunk_list = dict((x,x) for x in m_chunk_list).values()
+    m_chunk_dict = monitor.chunk_dict
     disk_deltalist = Disk.create_disk_overlay(modified_disk,
-            packed_chunk_list, Const.CHUNK_SIZE,
+            m_chunk_dict, Const.CHUNK_SIZE,
             basedisk_hashlist=basedisk_hashlist, basedisk_path=base_image,
             basemem_hashlist=basemem_hashlist, basemem_path=base_mem,
-            qemu_logfile=qemu_logfile.name,
+            trim_dict=trim_dict,
+            dma_dict=dma_dict,
             print_out=Log.out)
 
     # 2-3. disk-memory de-duplication
@@ -403,9 +404,7 @@ def run_vm(conn, domain_xml, **kwargs):
     # kwargs
     # vnc_disable       :   do not show vnc console
     # wait_vnc          :   wait until vnc finishes if vnc_enabled
-    print "run vm start"
     machine = conn.createXML(domain_xml, 0)
-    print "run vm stop"
 
     # Run VNC and wait until user finishes working
     if kwargs.get('vnc_disable'):
