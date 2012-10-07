@@ -92,6 +92,9 @@ def _pack_hashlist(hash_list):
 def parse_qemu_log(qemu_logfile, chunk_size):
     # return dma_dict, discard_dict
     # element of dictionary has (chunk_%:discarded_time) format
+    # CAVEAT: DMA Memory Address should be sift 4096*2 bytes because 
+    # of libvirt(4096) and KVM(4096) header offset
+    MEM_SIFT_OFFSET = 4096+4096
     if (qemu_logfile == None) or (not os.path.exists(qemu_logfile)):
         return dict(), dict()
 
@@ -112,7 +115,7 @@ def parse_qemu_log(qemu_logfile, chunk_size):
             sec_num = long(data[1].split(":")[-1])
             sec_len = long(data[2].split(":")[-1])
             from_disk = long(data[3].split(":")[-1])
-            mem_chunk = mem_addr/chunk_size
+            mem_chunk = (mem_addr+MEM_SIFT_OFFSET)/chunk_size
             disk_chunk = sec_num*512.0/chunk_size
             if sec_len != chunk_size:
                 msg = "DMA sector length(%d) is not same as chunk size(%d)" % (sec_len, chunk_size)
@@ -121,8 +124,8 @@ def parse_qemu_log(qemu_logfile, chunk_size):
                 dma_dict[disk_chunk] = {'time':event_time, 'mem_chunk':mem_chunk, 'read':(True if from_disk else False)}
                 dma_counter += 1
             else:
-                pass
-                #print "Warning, invalid sector(%ld, ==%ld)" % (sec_num, chunk_number)
+                if sec_num != -1:
+                    print "Warning, mal-alignedsector(%ld %% 8 == %ld)" % (sec_num, sec_num%8)
         elif header == 'bdrv_discard':
             start_sec_num = long(data[0].split(":")[-1])
             total_sec_len = long(data[1].split(":")[-1])
@@ -207,18 +210,6 @@ def create_disk_overlay(modified_disk,
                     data=data)
         delta_list.append(delta_item)
     print_out.write("[Debug][TRIM] %d chunk is discarded by trim info\n" % (trim_counter))
-
-    # 1-1.check modified page with DMA info
-    dma_exist_counter = 0
-    delta_list.sort(key=itemgetter('hash_value')) # sort by hash value
-    for delta_item in delta_list:
-        delta_chunk = delta_item.offset/chunk_size
-        if dma_dict.get(delta_chunk) != None:
-            #item = dma_dict.get(delta_chunk)
-            #print "delta_chunk:%ld --> %s" % (delta_chunk, str(item))
-            dma_exist_counter += 1
-    print_out.write("DMA EXIST COUNTER(%ld) = %ld / %ld = %f\n" % \
-            (len(dma_dict), dma_exist_counter, len(delta_list), 100.0*dma_exist_counter/len(delta_list)))
 
     # 2.find shared with base memory 
     print_out.write("[Debug] 2-1.Find zero page\n")

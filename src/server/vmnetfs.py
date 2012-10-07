@@ -192,7 +192,8 @@ class FileMonitor(threading.Thread):
             #sys.stdout.write("(%s)\n" % line)
             pass
         elif header == 'bdrv_discard':
-            sys.stdout.write("discard:(%s, %s)\n" % (event_time, data))
+            #sys.stdout.write("discard:(%s, %s)\n" % (event_time, data))
+            pass
         else:
             sys.stdout.write("invalid log: (%s)(%s)(%s)\n" % (event_time, header, data))
 

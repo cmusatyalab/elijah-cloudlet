@@ -186,8 +186,12 @@ class DeltaList(object):
 
     @staticmethod
     def get_self_delta(delta_list):
-        if len(delta_list) == 0 or type(delta_list[0]) != DeltaItem:
-            raise MemoryError("Need list of DeltaItem")
+        if len(delta_list) == 0:
+            print "[Debug] Nothing to compare. Length is 0"
+            delta_list.sort(key=itemgetter('offset'))
+            return
+        if type(delta_list[0]) != DeltaItem:
+            raise DeltaError("Need list of DeltaItem")
 
         # delta_list : list of (start, end, ref_id, hash/data)
         delta_list.sort(key=itemgetter('hash_value', 'offset')) # sort by (hash/start offset)
@@ -210,9 +214,13 @@ class DeltaList(object):
         delta_list.sort(key=itemgetter('offset'))
 
     @staticmethod
-    def statistics(delta_list, print_out=sys.stdout):
-        if len(delta_list) == 0 or type(delta_list[0]) != DeltaItem:
-            raise MemoryError("Need list of DeltaItem")
+    def statistics(delta_list, print_out=sys.stdout, discarded_num=0):
+        if len(delta_list) == 0:
+            print "[Debug] Nothing to compare. Length is 0"
+            delta_list.sort(key=itemgetter('offset'))
+            return
+        if type(delta_list[0]) != DeltaItem:
+            raise DeltaError("Need list of DeltaItem")
 
         from_self = 0
         from_zeros = 0
@@ -222,6 +230,7 @@ class DeltaList(object):
         from_xdelta = 0
         from_overlay_disk = 0
         from_overlay_mem = 0
+        from_discarded = discarded_num
         xdelta_size = 0
         raw_size = 0
         for delta_item in delta_list:
@@ -246,11 +255,13 @@ class DeltaList(object):
 
         chunk_size = delta_list[0].offset_len
         size_MB = chunk_size/1024.0
-        total_count= len(delta_list)/100.0
+        total_count= (len(delta_list)+discarded_num)/100.0
 
         print_out.write("-"*50 + "\n")
         print_out.write("[INFO] Total Modified page #\t:%ld\t(100 %%)\n" % 
                 (len(delta_list)))
+        print_out.write("[INFO] TRIM discard\t\t:%ld\t(%f %%)\n" % 
+                (from_discarded, from_discarded/total_count))
         print_out.write("[INFO] Zero pages\t\t:%ld\t(%f %%)\n" % 
                 (from_zeros, from_zeros/total_count))
         print_out.write("[INFO] Shared with Base Disk\t:%ld\t(%f %%)\n" % 
@@ -274,8 +285,10 @@ def diff_with_deltalist(delta_list, const_deltalist, ref_id):
     # update source_deltalist using const_deltalist
     # Example) source_deltalist: disk delta list,
     #       const_deltalist: memory delta list
-    if len(delta_list) == 0 or type(delta_list[0]) != DeltaItem:
-        raise DeltaError("Need list of DeltaItem for source")
+    if len(delta_list) == 0:
+        return delta_list
+    if type(delta_list[0]) != DeltaItem:
+        raise DeltaError("Need list of DeltaItem")
     if len(const_deltalist) == 0 or type(const_deltalist[0]) != DeltaItem:
         raise DeltaError("Need list of DeltaItem for const")
 
@@ -309,8 +322,9 @@ def diff_with_deltalist(delta_list, const_deltalist, ref_id):
 
 def diff_with_hashlist(base_hashlist, delta_list, ref_id):
     # update delta_list using base_hashlist
-
-    if len(delta_list) == 0 or type(delta_list[0]) != DeltaItem:
+    if len(delta_list) == 0:
+        return delta_list
+    if type(delta_list[0]) != DeltaItem:
         raise DeltaError("Need list of DeltaItem")
 
     base_hashlist.sort(key=itemgetter(2)) # sort by hash value

@@ -264,8 +264,12 @@ def create_overlay(base_image):
     # update disk delta list using memory delta list
     delta.diff_with_deltalist(disk_deltalist, mem_deltalist, DeltaItem.REF_OVERLAY_MEM)
     Log.out.write("[Debug] Statistics for Disk overlay\n")
-    DeltaList.statistics(disk_deltalist, print_out=Log.out)
+    DeltaList.statistics(disk_deltalist, print_out=Log.out, discarded_num=len(trim_dict))
     DeltaList.tofile(disk_deltalist, overlay_diskpath)
+
+    # TO BE DELETE
+    # DMA performance checking
+    _test_dma_accuracy(dma_dict, disk_deltalist, mem_deltalist)
 
     # 3. terminting
     monitor.terminate()
@@ -289,6 +293,67 @@ def create_overlay(base_image):
     overlay_files.append(ret_files[1])
     return overlay_files
     '''
+
+def _test_dma_accuracy(dma_dict, disk_deltalist, mem_deltalist, Log=sys.stdout):
+    dma_start_time = time()
+    dma_read_counter = 0
+    dma_write_counter = 0
+    dma_read_overlay_dedup = 0
+    dma_write_overlay_dedup = 0
+    dma_read_base_dedup = 0
+    dma_write_base_dedup = 0
+    disk_delta_dict = dict([(delta.offset/Const.CHUNK_SIZE, delta) for delta in disk_deltalist])
+    mem_delta_dict = dict([(delta.offset/Const.CHUNK_SIZE, delta) for delta in mem_deltalist])
+    for dma_disk_chunk in dma_dict.keys():
+        item = dma_dict.get(dma_disk_chunk)
+        is_dma_read = item['read']
+        dma_mem_chunk = item['mem_chunk']
+        if is_dma_read:
+            dma_read_counter += 1
+        else:
+            dma_write_counter += 1
+
+        disk_delta = disk_delta_dict.get(dma_disk_chunk, None)
+        if disk_delta:
+            # first search at overlay disk
+            if disk_delta.ref_id != DeltaItem.REF_OVERLAY_MEM:
+#                print "dma disk chunk is same, but is it not deduped with overlay mem(%d)" \
+#                        % (disk_delta.ref_id)
+                continue
+            delta_mem_chunk = disk_delta.data/Const.CHUNK_SIZE
+            if delta_mem_chunk == dma_mem_chunk:
+                if is_dma_read:
+                    dma_read_overlay_dedup += 1
+                else:
+                    dma_write_overlay_dedup += 1
+        else:
+            # search at overlay mem
+            mem_delta = mem_delta_dict.get(dma_mem_chunk, None)
+            if mem_delta:
+                if mem_delta.ref_id != DeltaItem.REF_BASE_DISK:
+#                    print "dma memory chunk is same, but is it not deduped with base disk(%d)" \
+#                            % (mem_delta.ref_id)
+                    continue
+                delta_disk_chunk = mem_delta.data/Const.CHUNK_SIZE
+                if delta_disk_chunk == dma_disk_chunk:
+                    if is_dma_read:
+                        dma_read_base_dedup += 1
+                    else:
+                        dma_write_base_dedup += 1
+
+    dma_end_time = time()
+    Log.write("[DEBUG][DMA] Total DMA: %ld\n " % (len(dma_dict)))
+    Log.write("[DEBUG][DMA] Total DMA READ: %ld, WRITE: %ld\n " % (dma_read_counter, dma_write_counter))
+    Log.write("[DEBUG][DMA] WASTED TIME: %f\n " % (dma_end_time-dma_start_time))
+    Log.write("[DEBUG][DMA] 1) DMA READ Overlay Deduplication: %ld(%f %%)\n " % \
+            (dma_read_overlay_dedup, 100.0*dma_read_overlay_dedup/dma_read_counter))
+    Log.write("[DEBUG][DMA]    DMA READ Base Deduplication: %ld(%f %%)\n " % \
+            (dma_read_base_dedup, 100.0*dma_read_base_dedup/dma_read_counter))
+    Log.write("[DEBUG][DMA] 2) DMA WRITE Overlay Deduplication: %ld(%f %%)\n " % \
+            (dma_write_overlay_dedup, 100.0*dma_write_overlay_dedup/dma_write_counter))
+    Log.write("[DEBUG][DMA]    DMA WRITE Base Deduplication: %ld(%f %%)\n " % \
+            (dma_write_base_dedup, 100.0*dma_write_base_dedup/dma_write_counter))
+
 
 def run_delta_compression(output_list, **kwargs):
     # kwargs
