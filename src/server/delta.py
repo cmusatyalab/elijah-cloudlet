@@ -258,25 +258,25 @@ class DeltaList(object):
         total_count= (len(delta_list)+discarded_num)/100.0
 
         print_out.write("-"*50 + "\n")
-        print_out.write("[INFO] Total Modified page #\t:%ld\t(100 %%)\n" % 
-                (len(delta_list)))
-        print_out.write("[INFO] TRIM discard\t\t:%ld\t(%f %%)\n" % 
+        print_out.write("[INFO] Total Modified page #\t: %ld\t( 100 %% )\n" % 
+                (len(delta_list)+discarded_num))
+        print_out.write("[INFO] TRIM/FREE discard\t: %ld\t( %f %% )\n" % 
                 (from_discarded, from_discarded/total_count))
-        print_out.write("[INFO] Zero pages\t\t:%ld\t(%f %%)\n" % 
+        print_out.write("[INFO] Zero pages\t\t: %ld\t( %f %% )\n" % 
                 (from_zeros, from_zeros/total_count))
-        print_out.write("[INFO] Shared with Base Disk\t:%ld\t(%f %%)\n" % 
+        print_out.write("[INFO] Shared with Base Disk\t: %ld\t( %f %% )\n" % 
                 (from_base_disk, from_base_disk/total_count))
-        print_out.write("[INFO] Shared with Base Mem\t:%ld\t(%f %%)\n" % 
+        print_out.write("[INFO] Shared with Base Mem\t: %ld\t( %f %% )\n" % 
                 (from_base_mem, from_base_mem/total_count))
-        print_out.write("[INFO] Shared within Self\t:%ld\t(%f %%)\n" % 
+        print_out.write("[INFO] Shared within Self\t: %ld\t( %f %% )\n" % 
                 (from_self, from_self/total_count))
-        print_out.write("[INFO] Shared with Overlay Disk\t:%ld\t(%f %%)\n" % 
+        print_out.write("[INFO] Shared with Overlay Disk\t: %ld\t( %f %% )\n" % 
                 (from_overlay_disk, from_overlay_disk/total_count))
-        print_out.write("[INFO] Shared with Overlay Mem\t:%ld\t(%f %%)\n" % 
+        print_out.write("[INFO] Shared with Overlay Mem\t: %ld\t( %f %% )\n" % 
                 (from_overlay_mem, from_overlay_mem/total_count))
-        print_out.write("[INFO] xdelta\t\t\t:%ld\t(%f %%, real_size: %.0f KB)\n" %
+        print_out.write("[INFO] xdelta\t\t\t: %ld\t( %f %%, real_size: %.0f KB )\n" %
                 (from_xdelta, from_xdelta/total_count, xdelta_size))
-        print_out.write("[INFO] raw\t\t\t:%ld\t(%f %%, real_size: %.0f KB)\n" % 
+        print_out.write("[INFO] raw\t\t\t: %ld\t( %f %%, real_size: %.0f KB )\n" % 
                 (from_raw, from_raw/total_count, raw_size))
         print_out.write("-"*50 + "\n")
 
@@ -383,7 +383,7 @@ def recover_delta_list(delta_list, base_disk, base_mem, chunk_size,
     delta_list.sort(key=itemgetter('offset'))
     zero_data = struct.pack("!s", chr(0x00)) * chunk_size
     for index, delta_item in enumerate(delta_list):
-        print "recovering %ld/%ld" % (index, len(delta_list))
+        #print "recovering %ld/%ld" % (index, len(delta_list))
         if delta_item.ref_id == DeltaItem.REF_RAW:
             continue
         elif (delta_item.ref_id == DeltaItem.REF_ZEROS):

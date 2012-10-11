@@ -232,6 +232,7 @@ def create_overlay(base_image):
     conn = get_libvirt_connection()
     machine = run_snapshot(conn, modified_disk, base_mem_fuse, 
             wait_vnc=True, qemu_logfile=qemu_logfile.name)
+    memory_size_mb = machine.maxMemory()/1024
     # 1-2. get modified memory
     # TODO: support stream of modified memory rather than tmp file
     save_mem_snapshot(machine, modified_mem.name)
@@ -242,12 +243,15 @@ def create_overlay(base_image):
     dma_dict, trim_dict = Disk.parse_qemu_log(qemu_logfile.name, Const.CHUNK_SIZE)
 
     # 2-1. get memory overlay
+    freed_counter_ret = dict()
     mem_footer, mem_deltalist= Memory.create_memory_overlay(modified_mem.name, 
             basemem_meta=base_memmeta, basemem_path=base_mem,
             basedisk_hashlist=basedisk_hashlist, basedisk_path=base_image,
+            freed_counter_ret = freed_counter_ret,
             print_out=Log.out)
     Log.out.write("[Debug] Statistics for Memory overlay\n")
-    DeltaList.statistics(mem_deltalist, print_out=Log.out)
+    free_pfn_counter = long(freed_counter_ret.get("freed_counter", 0))
+    DeltaList.statistics(mem_deltalist, print_out=Log.out, discarded_num=free_pfn_counter)
     DeltaList.tofile_with_footer(mem_footer, mem_deltalist, overlay_mempath)
 
     # 2-2. get disk overlay
@@ -267,9 +271,8 @@ def create_overlay(base_image):
     DeltaList.statistics(disk_deltalist, print_out=Log.out, discarded_num=len(trim_dict))
     DeltaList.tofile(disk_deltalist, overlay_diskpath)
 
-    # TO BE DELETE
-    # DMA performance checking
-    _test_dma_accuracy(dma_dict, disk_deltalist, mem_deltalist)
+    # TO BE DELETE: DMA performance checking
+    # _test_dma_accuracy(dma_dict, disk_deltalist, mem_deltalist)
 
     # 3. terminting
     monitor.terminate()

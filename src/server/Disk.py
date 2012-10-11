@@ -180,13 +180,8 @@ def create_disk_overlay(modified_disk,
         trim_time = trim_dict.get(chunk, None)
         if trim_time:
             if (trim_time > ctime):
-                #print_out.write("[Debug][TRIM] %ld is discarded by TRIM info\n" % (chunk))
                 trim_counter += 1
                 continue
-            else:
-                pass
-                #print_out.write("[Debug][TRIM] %ld is overwritten(%f<%f) after TRIM\n" % \
-                #        (chunk, float(trim_time), float(ctime)))
 
         modified_fd.seek(offset)
         data = modified_fd.read(chunk_size)
