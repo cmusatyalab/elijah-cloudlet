@@ -575,7 +575,7 @@ def get_free_pfn_dict(snapshot_path, mem_size, mem_offset_infile):
 
 def _get_free_pfn_list(snapshot_path, pglist_addr, pgn0_addr, mem_size_gb):
     # get list of free memory page number
-    BIN_PATH = "/home/krha/workspace/yoshi/free_page_scan_krha/free_page_scan"
+    BIN_PATH = "./free_mem_scan/free_page_scan"
     cmd = "%s %s %s %s %d" % (BIN_PATH, snapshot_path, pglist_addr, pgn0_addr, mem_size_gb)
     _PIPE = subprocess.PIPE
     proc = subprocess.Popen(cmd, shell=True, stdin=_PIPE, stdout=_PIPE, stderr=_PIPE)
