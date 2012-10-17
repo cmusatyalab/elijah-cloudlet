@@ -29,7 +29,7 @@ import telnetlib
 import socket
 import pylzma
 
-VM_MEMORY = 4096
+VM_MEMORY = 1024
 VCPU_NUMBER = 4
 #VM_MEMORY = 2048
 #VCPU_NUMBER = 2

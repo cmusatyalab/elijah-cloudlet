@@ -224,7 +224,7 @@ class Memory(object):
         ram_end_offset, ram_info = Memory._seek_to_end_of_ram(fin)
 
         # get free memory list
-        if diff:
+        if diff and (freed_counter_ret != None):
             mem_size_mb = ram_info.get('pc.ram').get('length')/1024/1024
             mem_offset_infile = ram_info.get('pc.ram').get('offset')
             free_pfn_dict = get_free_pfn_dict(filepath, mem_size_mb, mem_offset_infile)

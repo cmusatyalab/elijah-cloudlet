@@ -26,6 +26,7 @@ import vmnetfs
 import vmnetx
 import stat
 import delta
+import xray
 from delta import DeltaList
 from delta import DeltaItem
 from xml.etree import ElementTree
@@ -46,6 +47,10 @@ class Log(object):
     mute = open("/dev/null", "w+b")
 
 class Const(object):
+    TRIM_SUPPORT        = True
+    FREE_SUPPORT        = True
+    XRAY_SUPPORT        = True
+
     BASE_DISK           = ".base-img"
     BASE_MEM            = ".base-mem"
     BASE_DISK_META      = ".base-img-meta"
@@ -240,17 +245,27 @@ def create_overlay(base_image):
     basemem_hashlist = Memory.base_hashlist(base_memmeta)
     basedisk_hashlist = Disk.base_hashlist(base_diskmeta)
     # 1-4. get dma & discard information
-    dma_dict, trim_dict = Disk.parse_qemu_log(qemu_logfile.name, Const.CHUNK_SIZE)
+    if Const.TRIM_SUPPORT:
+        dma_dict, trim_dict = Disk.parse_qemu_log(qemu_logfile.name, Const.CHUNK_SIZE)
+    else:
+        dma_dict = dict()
+        trim_dict = dict()
+    if Const.FREE_SUPPORT:
+        freed_counter_ret = dict()
+    else:
+        freed_counter_ret = None
+
 
     # 2-1. get memory overlay
-    freed_counter_ret = dict()
     mem_footer, mem_deltalist= Memory.create_memory_overlay(modified_mem.name, 
             basemem_meta=base_memmeta, basemem_path=base_mem,
             basedisk_hashlist=basedisk_hashlist, basedisk_path=base_image,
             freed_counter_ret = freed_counter_ret,
             print_out=Log.out)
     Log.out.write("[Debug] Statistics for Memory overlay\n")
-    free_pfn_counter = long(freed_counter_ret.get("freed_counter", 0))
+    free_pfn_counter = 0
+    if Const.FREE_SUPPORT:
+        free_pfn_counter = long(freed_counter_ret.get("freed_counter", 0))
     DeltaList.statistics(mem_deltalist, print_out=Log.out, discarded_num=free_pfn_counter)
     DeltaList.tofile_with_footer(mem_footer, mem_deltalist, overlay_mempath)
 
@@ -274,7 +289,12 @@ def create_overlay(base_image):
     # TO BE DELETE: DMA performance checking
     # _test_dma_accuracy(dma_dict, disk_deltalist, mem_deltalist)
 
-    # 3. terminting
+    # 3. list-up all the files that is associated with overlay sectors
+    sectors = [item.offset/512 for item in disk_deltalist]
+    sec_file_dict = xray.get_files_from_sectors(modified_disk, sectors)
+    print sec_file_dict
+
+    # 4. terminting
     monitor.terminate()
     qemu_monitor.terminate()
     monitor.join()
