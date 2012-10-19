@@ -254,7 +254,10 @@ def create_overlay(base_image):
         freed_counter_ret = dict()
     else:
         freed_counter_ret = None
-
+    # 1-5. get used sector information from x-ray
+    used_sectors_dict = None
+    if Const.XRAY_SUPPORT:
+        used_sectors_dict = xray.get_used_sectors(modified_disk)
 
     # 2-1. get memory overlay
     mem_footer, mem_deltalist= Memory.create_memory_overlay(modified_mem.name, 
@@ -271,28 +274,43 @@ def create_overlay(base_image):
 
     # 2-2. get disk overlay
     m_chunk_dict = monitor.chunk_dict
+    disk_statistics = dict()
     disk_deltalist = Disk.create_disk_overlay(modified_disk,
             m_chunk_dict, Const.CHUNK_SIZE,
             basedisk_hashlist=basedisk_hashlist, basedisk_path=base_image,
             basemem_hashlist=basemem_hashlist, basemem_path=base_mem,
             trim_dict=trim_dict,
             dma_dict=dma_dict,
+            used_sectors_dict=used_sectors_dict,
+            ret_statistics=disk_statistics,
             print_out=Log.out)
 
     # 2-3. disk-memory de-duplication
     # update disk delta list using memory delta list
     delta.diff_with_deltalist(disk_deltalist, mem_deltalist, DeltaItem.REF_OVERLAY_MEM)
     Log.out.write("[Debug] Statistics for Disk overlay\n")
-    DeltaList.statistics(disk_deltalist, print_out=Log.out, discarded_num=len(trim_dict))
+    DeltaList.statistics(disk_deltalist, print_out=Log.out, 
+            discarded_num=disk_statistics.get('trimed', 0))
     DeltaList.tofile(disk_deltalist, overlay_diskpath)
 
     # TO BE DELETE: DMA performance checking
     # _test_dma_accuracy(dma_dict, disk_deltalist, mem_deltalist)
 
-    # 3. list-up all the files that is associated with overlay sectors
+    # 3-1. list-up all the files that is associated with overlay sectors
+    xray_log = open("./xray_log", "w+b")
+    import pprint
     sectors = [item.offset/512 for item in disk_deltalist]
     sec_file_dict = xray.get_files_from_sectors(modified_disk, sectors)
-    print sec_file_dict
+    pprint.pprint(sec_file_dict, xray_log)
+
+    # 3-2. To be deleted
+    xray_log.write("-------TRIM VS XRAY\n")
+    trim_set = set(disk_statistics.get('trimed_list', list()))
+    xray_set = set(disk_statistics.get('xrayed_list', list()))
+    xray_log.write("trimed - xray:\n%s\n" % str(trim_set-xray_set))
+    xray_log.write("xray - trimed:\n%s\n" % str(xray_set-trim_set))
+    xray_log.write("trim(%ld) == xray(%ld)\n" % (disk_statistics.get('trimed', 0), disk_statistics.get('xrayed', 0)))
+    xray_log.write("-------END\n")
 
     # 4. terminting
     monitor.terminate()

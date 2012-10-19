@@ -152,6 +152,8 @@ def create_disk_overlay(modified_disk,
             basedisk_hashlist=None, basedisk_path=None,
             basemem_hashlist=None, basemem_path=None,
             trim_dict=None, dma_dict=None,
+            used_sectors_dict=None,
+            ret_statistics=None,
             print_out=None):
     # get disk delta
     # base_diskmeta : hash list of base disk
@@ -168,6 +170,11 @@ def create_disk_overlay(modified_disk,
     # 0. get info from qemu log file
     # dictionary : (chunk_%, discarded_time)
     trim_counter = 0
+    xray_counter = 0
+
+    # TO BE DELETED
+    trimed_list = []
+    xrayed_list = []
 
     # 1. get modified page
     print_out.write("[Debug] 1.get modified disk page\n")
@@ -177,12 +184,32 @@ def create_disk_overlay(modified_disk,
         ctime = modified_chunk_dict[chunk]
 
         # check TRIM discard
-        trim_time = trim_dict.get(chunk, None)
-        if trim_time:
-            if (trim_time > ctime):
-                trim_counter += 1
-                continue
+        is_discarded = False
+        if trim_dict:
+            trim_time = trim_dict.get(chunk, None)
+            if trim_time:
+                if (trim_time > ctime):
+                    trimed_list.append(chunk)
+                    trim_counter += 1
+                    is_discarded = True
+        # check xray discard
+        if used_sectors_dict:
+            count = chunk_size/512
+            chunk_sectors = range(offset/512, offset/512+count)
+            is_allchunks_free = True
+            for one_sector in chunk_sectors:
+                if used_sectors_dict.get(one_sector) == True:
+                    is_allchunks_free = False
+                    break
+            if is_allchunks_free:
+                xrayed_list.append(chunk)
+                xray_counter +=1
+                is_discarded = True
 
+        if is_discarded == True:
+            continue
+
+        # check file system 
         modified_fd.seek(offset)
         data = modified_fd.read(chunk_size)
         source_data = base_mmap[offset:offset+chunk_size]
@@ -204,9 +231,14 @@ def create_disk_overlay(modified_disk,
                     data_len=len(data),
                     data=data)
         delta_list.append(delta_item)
-    print_out.write("[Debug][TRIM] %d chunk is discarded by trim info\n" % (trim_counter))
+    if ret_statistics != None:
+        ret_statistics['trimed'] = trim_counter
+        ret_statistics['xrayed'] = xray_counter
+        ret_statistics['trimed_list'] = trimed_list
+        ret_statistics['xrayed_list'] = xrayed_list
 
     # 2.find shared with base memory 
+    print_out.write("[Debug] 1-1. Trim(%d), Xray(%d)\n" % (trim_counter, xray_counter))
     print_out.write("[Debug] 2-1.Find zero page\n")
     zero_hash = sha256(struct.pack("!s", chr(0x00))*chunk_size).digest()
     zero_hash_list = [(-1, chunk_size, zero_hash)]
