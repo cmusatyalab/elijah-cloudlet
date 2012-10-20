@@ -452,7 +452,7 @@ def recover_memory(base_disk, base_mem, delta_path, raw_meta, out_path, verify_w
     # varify with original
     if verify_with_original:
         modi_mem = open(verify_with_original, "rb")
-        base_file = open(base_path, "rb")
+        base_file = open(base_mem, "rb")
         delta_list_index = 0
         while True:
             offset = base_file.tell()
@@ -575,5 +575,5 @@ if __name__ == "__main__":
         
         out_path = base_mem + ".recover"
         memory_overlay_map = recover_memory(None, base_mem, overlay_mem, \
-                base_memmeta, out_path)
+                base_memmeta, out_path, verify_with_original="./tmp/modi")
 
