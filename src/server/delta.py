@@ -21,14 +21,8 @@ import mmap
 import tool
 from operator import itemgetter
 
-
-DELTA_FILE_MAGIC = 0x1145511b
-DELTA_FILE_VERSION = 0x00000001
-
-
 class DeltaError(Exception):
     pass
-
 
 class DeltaItem(object):
     REF_RAW = 0x00
@@ -108,10 +102,6 @@ class DeltaList(object):
             raise MemoryError("Need list of DeltaItem")
 
         fd = open(f_path, "wb")
-        # Write MAGIC & VERSION
-        fd.write(struct.pack("!q", DELTA_FILE_MAGIC))
-        fd.write(struct.pack("!q", DELTA_FILE_VERSION))
-
         # Write list if delta item
         for item in delta_list:
             # save it as little endian format
@@ -121,15 +111,7 @@ class DeltaList(object):
     @staticmethod
     def fromfile(f_path):
         delta_list = []
-        # MAGIC & VERSION
         fd = open(f_path, "rb")
-        magic, version = struct.unpack("!qq", fd.read(8+8))
-        if magic != DELTA_FILE_MAGIC or version != DELTA_FILE_VERSION:
-            msg = "delta magic number(%x != %x), version(%ld != %ld) does not match" \
-                    % (DELTA_FILE_MAGIC, magic, \
-                    DELTA_FILE_VERSION, version)
-            raise IOError(msg)
-
         while True:
             new_item = DeltaItem.unpack_stream(fd)
             if not new_item:
@@ -147,9 +129,6 @@ class DeltaList(object):
             raise MemoryError("Need list of DeltaItem")
 
         fd = open(f_path, "wb")
-        # Write MAGIC & VERSION
-        fd.write(struct.pack("!q", DELTA_FILE_MAGIC))
-        fd.write(struct.pack("!q", DELTA_FILE_VERSION))
 
         # Write Header & Footer delta
         fd.write(struct.pack("!q", len(footer_delta)))
@@ -160,29 +139,6 @@ class DeltaList(object):
             # save it as little endian format
             fd.write(item.get_serialized())
         fd.close()
-
-    @staticmethod
-    def fromfile_with_footer(f_path):
-        delta_list = []
-        # MAGIC & VERSION
-        fd = open(f_path, "rb")
-        magic, version = struct.unpack("!qq", fd.read(8+8))
-        if magic != DELTA_FILE_MAGIC or version != DELTA_FILE_VERSION:
-            msg = "delta magic number(%x != %x), version(%ld != %ld) does not match" \
-                    % (DELTA_FILE_MAGIC, magic, \
-                    DELTA_FILE_VERSION, version)
-            raise IOError(msg)
-
-        # Read Footer delta
-        footer_len = struct.unpack("!q", fd.read(8))[0]
-        footer_delta = fd.read(footer_len)
-        while True:
-            new_item = DeltaItem.unpack_stream(fd)
-            if not new_item:
-                break
-            delta_list.append(new_item)
-        fd.close()
-        return footer_delta, delta_list 
 
     @staticmethod
     def get_self_delta(delta_list):
@@ -362,12 +318,21 @@ def recover_delta_list(delta_list, base_disk, base_mem, chunk_size,
     # de-duplicated with overlay memory
     if len(delta_list) == 0 or type(delta_list[0]) != DeltaItem:
         raise MemoryError("Need list of DeltaItem")
+    if base_disk == None and base_mem == None:
+        raise MemoryError("Need either base_disk or base_memory")
 
     # initialize reference data to use mmap
-    base_disk_fd = open(base_disk, "rb")
-    base_mem_fd = open(base_mem, "rb")
-    raw_disk = mmap.mmap(base_disk_fd.fileno(), 0, prot=mmap.PROT_READ)
-    raw_mem = mmap.mmap(base_mem_fd.fileno(), 0, prot=mmap.PROT_READ)
+    base_disk_fd = None
+    raw_disk = None
+    base_mem_fd = None
+    raw_mem = None
+    
+    if base_disk:
+        base_disk_fd = open(base_disk, "rb")
+        raw_disk = mmap.mmap(base_disk_fd.fileno(), 0, prot=mmap.PROT_READ)
+    if base_mem:
+        base_mem_fd = open(base_mem, "rb")
+        raw_mem = mmap.mmap(base_mem_fd.fileno(), 0, prot=mmap.PROT_READ)
     if parent == base_disk:
         parent_raw = raw_disk
     elif parent == base_mem:
@@ -415,12 +380,13 @@ def recover_delta_list(delta_list, base_disk, base_mem, chunk_size,
                 raise MemoryError("Cannot find self reference")
         elif delta_item.ref_id == DeltaItem.REF_XDELTA:
             patch_data = delta_item.data
-            base_data = parent_raw[delta_item.offset:delta_item.offset+chunk_size]
+            patch_original_size = delta_item.offset_len
+            base_data = parent_raw[delta_item.offset:delta_item.offset+patch_original_size]
             recover_data = tool.merge_data(base_data, patch_data, len(base_data)*2)
         else:
             raise MemoryError("Cannot recover: invalid referce id %d" % delta_item.ref_id)
 
-        if len(recover_data) != chunk_size:
+        if len(recover_data) != delta_item.offset_len:
             msg = "Recovered Size Error: %d, ref_id: %d, %ld, %ld" % \
                     (len(recover_data), delta_item.ref_id, delta_item.data_len, delta_item.data)
             raise MemoryError(msg)
@@ -429,6 +395,12 @@ def recover_delta_list(delta_list, base_disk, base_mem, chunk_size,
         delta_item.ref_id = DeltaItem.REF_RAW
         delta_item.data = recover_data
 
-    raw_disk.close()
-    raw_mem.close()
+    if base_disk_fd:
+        base_disk_fd.close()
+    if base_mem_fd:
+        base_mem_fd.close()
+    if raw_disk:
+        raw_disk.close()
+    if raw_mem:
+        raw_mem.close()
 

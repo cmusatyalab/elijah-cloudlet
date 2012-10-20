@@ -260,7 +260,7 @@ def create_overlay(base_image):
         used_sectors_dict = xray.get_used_sectors(modified_disk)
 
     # 2-1. get memory overlay
-    mem_footer, mem_deltalist= Memory.create_memory_overlay(modified_mem.name, 
+    mem_deltalist= Memory.create_memory_overlay(modified_mem.name, 
             basemem_meta=base_memmeta, basemem_path=base_mem,
             basedisk_hashlist=basedisk_hashlist, basedisk_path=base_image,
             freed_counter_ret = freed_counter_ret,
@@ -270,7 +270,7 @@ def create_overlay(base_image):
     if Const.FREE_SUPPORT:
         free_pfn_counter = long(freed_counter_ret.get("freed_counter", 0))
     DeltaList.statistics(mem_deltalist, print_out=Log.out, discarded_num=free_pfn_counter)
-    DeltaList.tofile_with_footer(mem_footer, mem_deltalist, overlay_mempath)
+    DeltaList.tofile(mem_deltalist, overlay_mempath)
 
     # 2-2. get disk overlay
     m_chunk_dict = monitor.chunk_dict

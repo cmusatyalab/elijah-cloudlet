@@ -212,11 +212,11 @@ def create_disk_overlay(modified_disk,
         # check file system 
         modified_fd.seek(offset)
         data = modified_fd.read(chunk_size)
-        source_data = base_mmap[offset:offset+chunk_size]
+        source_data = base_mmap[offset:offset+len(data)]
         try:
             patch = tool.diff_data(source_data, data, 2*len(source_data))
             if len(patch) < len(data):
-                delta_item = DeltaItem(offset, chunk_size, 
+                delta_item = DeltaItem(offset, len(data),
                         hash_value=sha256(data).digest(),
                         ref_id=DeltaItem.REF_XDELTA,
                         data_len=len(patch),
@@ -225,7 +225,7 @@ def create_disk_overlay(modified_disk,
                 raise IOError("xdelta3 patch is bigger than origianl")
         except IOError as e:
             #print "[INFO] xdelta failed, so save it as raw (%s)" % str(e)
-            delta_item = DeltaItem(offset, chunk_size, 
+            delta_item = DeltaItem(offset, len(data),
                     hash_value=sha256(data).digest(),
                     ref_id=DeltaItem.REF_RAW,
                     data_len=len(data),
