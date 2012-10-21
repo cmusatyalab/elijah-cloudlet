@@ -237,7 +237,6 @@ def create_overlay(base_image):
     conn = get_libvirt_connection()
     machine = run_snapshot(conn, modified_disk, base_mem_fuse, 
             wait_vnc=True, qemu_logfile=qemu_logfile.name)
-    memory_size_mb = machine.maxMemory()/1024
     # 1-2. get modified memory
     # TODO: support stream of modified memory rather than tmp file
     save_mem_snapshot(machine, modified_mem.name)

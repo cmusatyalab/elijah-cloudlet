@@ -495,7 +495,7 @@ def recover_memory(base_disk, base_mem, delta_path, raw_meta, out_path, verify_w
 
 def base_hashlist(base_memmeta_path):
     # get the hash list from the meta file
-    footer, hashlist = Memory.import_hashlist(base_memmeta_path)
+    hashlist = Memory.import_hashlist(base_memmeta_path)
     return hashlist
 
 
