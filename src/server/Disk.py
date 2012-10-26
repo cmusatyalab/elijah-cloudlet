@@ -152,7 +152,7 @@ def create_disk_overlay(modified_disk,
             basedisk_hashlist=None, basedisk_path=None,
             basemem_hashlist=None, basemem_path=None,
             trim_dict=None, dma_dict=None,
-            used_sectors_dict=None,
+            used_blocks_dict=None,
             ret_statistics=None,
             print_out=None):
     # get disk delta
@@ -193,15 +193,9 @@ def create_disk_overlay(modified_disk,
                     trim_counter += 1
                     is_discarded = True
         # check xray discard
-        if used_sectors_dict:
-            count = chunk_size/512
-            chunk_sectors = range(offset/512, offset/512+count)
-            is_allchunks_free = True
-            for one_sector in chunk_sectors:
-                if used_sectors_dict.get(one_sector) == True:
-                    is_allchunks_free = False
-                    break
-            if is_allchunks_free:
+        if used_blocks_dict:
+            start_sector = offset/512
+            if used_blocks_dict.get(start_sector) != True:
                 xrayed_list.append(chunk)
                 xray_counter +=1
                 is_discarded = True

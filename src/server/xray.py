@@ -70,7 +70,7 @@ class _iNode(object):
 
 
 #public method
-def get_used_sectors(raw_path):
+def get_used_blocks(raw_path):
     # get used sector dictionary using xray
     bson_file = NamedTemporaryFile(prefix="xray-bson", delete=False)
     _analyze_fs(raw_path, bson_file.name)
@@ -79,7 +79,8 @@ def get_used_sectors(raw_path):
     if document['type'] and document['type'] == 'used_sectors':
         used_sectors = document['sectors']
         for sec in used_sectors:
-            ret_dict[sec] = True
+            if sec%8 == 0:
+                ret_dict[sec] = True
     else:
         raise xrayError("cannot find document at last element")
     return ret_dict
@@ -132,7 +133,7 @@ if __name__ == '__main__':
         sectors = [330224, 268976, 544632, 1]
         import time
         start_time = time.time()
-        used_dict = get_used_sectors(disk_path)
+        used_dict = get_used_blocks(disk_path)
         for sector in sectors:
             if used_dict.get(sector, 0) == True:
                 print "%d is used" % sector
@@ -140,6 +141,16 @@ if __name__ == '__main__':
                 print "%d is not used" % sector
         end_time = time.time()
         print "computation time: %d" % (end_time-start_time)
+    elif command == "verify":
+        used_sec_dic = get_used_blocks(disk_path)
+        sectors = list(used_sec_dic)
+        sec_file_dict = get_files_from_sectors(disk_path, sectors)
+        log_file = open("xray_verify", "w+b")
+        import pprint
+        pprint.pprint(sec_file_dict, log_file)
+        log_file.close()
+
+
     else:
         print "Cannot found command : %s" % command
 
