@@ -22,7 +22,7 @@ from optparse import OptionParser
 from datetime import datetime
 from multiprocessing import Process, Queue, Pipe, JoinableQueue
 from tempfile import NamedTemporaryFile
-import subprocess
+import time
 import json
 import tempfile
 import struct
@@ -54,11 +54,13 @@ class Const(object):
 class RapidSynthesisError(Exception):
     pass
 
+
 def network_worker(data, queue, time_queue, chunk_size, data_size=sys.maxint):
     start_time= datetime.now()
     total_read_size = 0
     counter = 0
     while total_read_size < data_size:
+        time.sleep(0.001)
         read_size = min(data_size-total_read_size, chunk_size)
         counter = counter + 1
         chunk = data.read(read_size)
@@ -83,25 +85,28 @@ def network_worker(data, queue, time_queue, chunk_size, data_size=sys.maxint):
                 str(end_time-start_time), counter, total_read_size)
 
 
-def decomp_worker(in_queue, out_queue, time_queue):
+def decomp_worker(in_queue, pipe_filepath, time_queue):
     start_time = datetime.now()
     data_size = 0
     counter = 0
     decompressor = LZMADecompressor()
+    pipe = open(pipe_filepath, "w")
+
     while True:
         chunk = in_queue.get()
         if chunk == Const.END_OF_FILE:
             break
         data_size = data_size + len(chunk)
         decomp_chunk = decompressor.decompress(chunk)
-        #print "in decomp : %d %d" % (data_size, len(decomp_chunk))
 
         in_queue.task_done()
-        out_queue.put(decomp_chunk)
+        pipe.write(decomp_chunk)
         counter = counter + 1
 
     decomp_chunk = decompressor.flush()
-    out_queue.put(Const.END_OF_FILE)
+    pipe.write(decomp_chunk)
+    pipe.close()
+
     end_time = datetime.now()
     time_queue.put({'start_time':start_time, 'end_time':end_time})
     print "[Decomp] : (%s)-(%s)=(%s) (%d loop, %d bytes)" % \
@@ -109,10 +114,36 @@ def decomp_worker(in_queue, out_queue, time_queue):
             str(end_time-start_time), counter, data_size)
 
 
-class RecoverThread(threading.Thread):
-    RECOVER_MEMORY  = 1
-    RECOVER_DISK    = 2
+def delta_worker(time_queue, output_queue, options):
+    start_time = datetime.now()
+    delta_type = options["type"]
+    base_image = options["base_path"]
+    piping_file = options["input_file"]
+    output_path = options["output_file"]
 
+    (base_diskmeta, base_mem, base_memmeta) = \
+            cloudlet.Const.get_basepath(base_image, check_exist=True)
+    if delta_type == Const.DELTA_MEMORY:
+        overlay_map = Memory.recover_memory(base_image, \
+                base_mem, piping_file, \
+                base_memmeta, output_path)
+    elif delta_type == Const.DELTA_DISK:
+        overlay_memory = options["overlay_memory"]
+        overlay_map = Disk.recover_disk(base_image, base_mem, \
+                overlay_memory, piping_file, output_path, \
+                cloudlet.Const.CHUNK_SIZE)
+    else:
+        raise RapidSynthesisError("Invalid delta type : %d" % delta_type)
+
+    output_queue.put(overlay_map)
+    end_time = datetime.now()
+    time_queue.put({'start_time':start_time, 'end_time':end_time})
+    print "[Delta] : (%s)-(%s)=(%s)" % \
+            (start_time.strftime('%X'), end_time.strftime('%X'), \
+            str(end_time-start_time))
+
+
+class RecoverThread(threading.Thread):
     def __init__(self, recover_type, base_image, piping_file, output_path, 
             overlay_memory=None):
         self.base_image = base_image
@@ -120,9 +151,9 @@ class RecoverThread(threading.Thread):
         self.output_path = output_path
         self.stop = threading.Event()
         self._running = True
-        if recover_type == RecoverThread.RECOVER_MEMORY:
+        if recover_type == Const.DELTA_MEMORY:
             threading.Thread.__init__(self, target=self.recover_memory)
-        elif recover_type == RecoverThread.RECOVER_DISK:
+        elif recover_type == Const.DELTA_DISK:
             self.overlay_memory = overlay_memory
             threading.Thread.__init__(self, target=self.recover_disk)
 
@@ -146,32 +177,6 @@ class RecoverThread(threading.Thread):
 
     def terminate(self):
         self.stop.set()
-
-
-def delta_worker(in_queue, time_queue, pipe_filepath):
-    start_time = datetime.now()
-    data_size = 0
-    counter = 0
-    pipe = open(pipe_filepath, "w")
-    while True:
-        chunk = in_queue.get()
-        if chunk == Const.END_OF_FILE:
-            break;
-        data_size = data_size + len(chunk)
-        #print "in delta : %d, %d, %d %s" \
-                #%(counter, len(chunk), data_size, out_filename)
-        pipe.write(chunk)
-        in_queue.task_done()
-        counter = counter + 1
-
-    pipe.close()
-    end_time = datetime.now()
-    time_queue.put({'start_time':start_time, 'end_time':end_time})
-
-    print "[Delta] : (%s)-(%s)=(%s) (%d loop, %d bytes)" % \
-            (start_time.strftime('%X'), end_time.strftime('%X'), \
-            str(end_time-start_time), counter, data_size)
-    return True
 
 
 def process_command_line(argv):
@@ -304,17 +309,15 @@ class SynthesisTCPHandler(SocketServer.StreamRequestHandler):
         memory_pipe = os.path.join(tmp_dir, 'memory_pipe')
         os.mkfifo(memory_pipe)
 
-        # creat recovery thread feeding pipe
-        memory_thread = RecoverThread(RecoverThread.RECOVER_MEMORY, base_path,
-                memory_pipe, modified_mem.name)
-        memory_thread.start()
         #import pdb; pdb.set_trace()
-
         # Memory overlay
         mem_download_queue = JoinableQueue()
-        mem_decomp_queue = JoinableQueue()
+        mem_output_queue = JoinableQueue()
+        memory_overlay_map = list()
         (mem_download_pipe_in, mem_download_pipe_out) = Pipe()
         (mem_decomp_pipe_in, mem_decomp_pipe_out) = Pipe()
+        mem_options = {"type":Const.DELTA_MEMORY, "base_path":base_path,
+                "input_file":memory_pipe, "output_file":modified_mem.name}
         mem_download_process = Process(target=network_worker, 
                 args=(
                     self.rfile, mem_download_queue, time_transfer, Const.TRANSFER_SIZE, mem_size
@@ -322,26 +325,28 @@ class SynthesisTCPHandler(SocketServer.StreamRequestHandler):
                 )
         mem_decomp_process = Process(target=decomp_worker,
                 args=(
-                    mem_download_queue, mem_decomp_queue, time_decomp
+                    mem_download_queue, memory_pipe, time_decomp
                     )
                 )
         mem_delta_process = Process(target=delta_worker, \
                 args=(
-                    mem_decomp_queue, time_delta, memory_pipe
+                    time_delta, mem_output_queue, mem_options
                     )
                 )
 
         # Disk overlay
         time_transfer = Queue(); time_decomp = Queue(); time_delta = Queue()
         disk_download_queue = JoinableQueue()
-        disk_decomp_queue = JoinableQueue()
+        disk_output_queue = JoinableQueue()
         (disk_download_pipe_in, disk_download_pipe_out) = Pipe()
         (disk_decomp_pipe_in, disk_decomp_pipe_out) = Pipe()
+        disk_overlay_map = list()
 
         disk_pipe = os.path.join(tmp_dir, 'disk_pipe')
         os.mkfifo(disk_pipe)
-        disk_thread = RecoverThread(RecoverThread.RECOVER_DISK, base_path, 
-                disk_pipe, modified_img.name, overlay_memory=modified_mem.name)
+        disk_options = {"type":Const.DELTA_DISK, "base_path":base_path,
+                "input_file":disk_pipe, "output_file":modified_img.name,
+                "overlay_memory":modified_mem.name}
 
         disk_download_process = Process(target=network_worker, \
                 args=(
@@ -350,12 +355,12 @@ class SynthesisTCPHandler(SocketServer.StreamRequestHandler):
                 )
         disk_decomp_process = Process(target=decomp_worker, \
                 args=(
-                    disk_download_queue, disk_decomp_queue, time_decomp
+                    disk_download_queue, disk_pipe, time_decomp
                     )
                 )
         disk_delta_process = Process(target=delta_worker, \
                 args=(
-                    disk_decomp_queue, time_delta, disk_pipe
+                    time_delta, disk_output_queue, disk_options
                     )
                 )
 
@@ -364,36 +369,36 @@ class SynthesisTCPHandler(SocketServer.StreamRequestHandler):
         mem_download_process.start()
         mem_decomp_process.start()
         mem_delta_process.start()
+        memory_overlay_map = mem_output_queue.get()
+        mem_output_queue.task_done()
         mem_delta_process.join()
-        memory_thread.join()
 
         # Once memory is ready, start disk download
         # disk thread cannot start before finish memory
-        disk_thread.start() 
         disk_download_process.start()
         disk_decomp_process.start()
         disk_delta_process.start()
+        disk_overlay_map = disk_output_queue.get()
+        disk_output_queue.task_done()
         disk_delta_process.join()
 
         # make FUSE disk & memory
-        '''
-        fuse = cloudlet.run_fuse(Const.VMNETFS_PATH, Const.CHUNK_SIZE, base_image, base_mem, 
-                resumed_disk=modified_img.name, disk_overlay_map=disk_overlay_map,
-                resumed_memory=modified_mem.name, memory_overlay_map=memory_overlay_map)
-        '''
+        (base_diskmeta, base_mem, base_memmeta) = \
+                cloudlet.Const.get_basepath(base_path, check_exist=True)
+        fuse = cloudlet.run_fuse(cloudlet.Const.VMNETFS_PATH, 
+                cloudlet.Const.CHUNK_SIZE, 
+                base_path, base_mem, resumed_disk=modified_img.name, 
+                disk_overlay_map=disk_overlay_map,
+                resumed_memory=modified_mem.name, 
+                memory_overlay_map=memory_overlay_map)
+        cloudlet.resume_VM(modified_img.name, modified_mem.name, fuse)
 
         # terminate
-        disk_thread.terminate()
         if os.path.exists(memory_pipe):
             os.unlink(memory_pipe)
         if os.path.exists(disk_pipe):
             os.unlink(disk_pipe)
         shutil.rmtree(tmp_dir)
-        memory_overlay_map = memory_thread.overlay_map 
-        disk_overlay_map = memory_thread.overlay_map 
-
-        #print memory_overlay_map
-        #print disk_overlay_map
 
         self.ret_success()
 

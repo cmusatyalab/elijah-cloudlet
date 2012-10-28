@@ -728,14 +728,19 @@ def synthesis(base_disk, meta, comp_overlay_disk, comp_overlay_mem):
 
     # recover VM
     Log.out.write("[Debug] recover launch VM\n")
-    modified_img, launch_mem, fuse = recover_launchVM(base_disk, meta, 
+    modified_img, modified_mem, fuse = recover_launchVM(base_disk, meta, 
             overlay_disk.name, overlay_mem.name, log=Log.out)
 
     # resume VM
-    resume_VM(modified_img, launch_mem, fuse)
+    resume_VM(modified_img, modified_mem, fuse)
 
 
-def resume_VM(modified_img, launch_mem, fuse):
+def resume_VM(modified_img, launch_mem, fuse, **kwargs):
+    # kwargs
+    # vnc_disable       :   show vnc console
+    # wait_vnc          :   wait until vnc finishes if vnc_enabled
+    # qemu_logfile      :   log file for QEMU-KVM
+
     qemu_logfile = NamedTemporaryFile(prefix="cloudlet-qemu-log-", delete=False)
     # monitor modified chunks
     residue_img = os.path.join(fuse.mountpoint, 'disk', 'image')
