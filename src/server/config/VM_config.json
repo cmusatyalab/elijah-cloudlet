@@ -1,21 +1,19 @@
 {
-   "python-script":"/home/krha/cloudlet/src/server/cloudlet.py",
+   "python-script":"/home/krha/cloudlet/src/server/rapid.py",
    "VM":[
       {
-         "name":"ubuntu11.10-server",
+         "name":"Ubuntu12.04.01-server-i386",
          "type":"baseVM",
          "OS":"Linux",
-         "OS-version":"Ubuntu11.10-server-amd64",
-         "diskimg_path":"/home/krha/cloudlet/image/ubuntu-11.10-x86_64-server/ubuntu-11.base.img",
-         "memorysnapshot_path":"/home/krha/cloudlet/image/ubuntu-11.10-x86_64-server/ubuntu-11.base.mem"
+         "OS-version":"Ubuntu12.04-server-i386",
+         "path":"/home/krha/cloudlet/image/ubuntu-12.04.1-server-i386/precise.raw"
       },
       {
          "name":"window7",
          "type":"baseVM",
          "OS":"Window",
          "OS-version":"Window7-enterprise-x86",
-         "diskimg_path":"/home/krha/cloudlet/image/window7-enterprise-x86/window7-enterprise-i386.base.img",
-         "memorysnapshot_path":"/home/krha/cloudlet/image/window7-enterprise-x86/window7-enterprise-i386.base.mem"
+         "path":"/home/krha/cloudlet/image/window7-enterprise-x86/window7.raw"
       }
    ]
 }

@@ -25,6 +25,7 @@ import delta
 from math import ceil
 from delta import DeltaItem
 from delta import DeltaList
+from delta import Recovered_delta
 from progressbar import AnimatedProgressBar
 from hashlib import sha256
 from operator import itemgetter
@@ -253,9 +254,12 @@ def recover_disk(base_disk, base_mem, overlay_mem, overlay_disk, recover_path, c
     recover_fd = open(recover_path, "wb")
 
     # get delta list from file and recover it to origin
-    delta_list = DeltaList.fromfile(overlay_disk)
-    delta.recover_delta_list(delta_list, base_disk, base_mem, chunk_size, parent=base_disk,
-            overlay_memory=overlay_mem)
+    delta_stream = open(overlay_disk, "r")
+    recovered_memory = Recovered_delta(base_disk, base_mem, chunk_size, \
+            parent=base_disk, overlay_memory=overlay_mem)
+    for delta_item in DeltaList.from_stream(delta_stream):
+        recovered_memory.recover_item(delta_item)
+    delta_list = recovered_memory.delta_list
 
     # overlay map
     chunk_list = []

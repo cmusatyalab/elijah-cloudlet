@@ -49,7 +49,7 @@ class Log(object):
 class Const(object):
     TRIM_SUPPORT        = True
     FREE_SUPPORT        = True
-    XRAY_SUPPORT        = True
+    XRAY_SUPPORT        = False
 
     BASE_DISK           = ".base-img"
     BASE_MEM            = ".base-mem"
@@ -295,28 +295,37 @@ def create_overlay(base_image):
     # TO BE DELETE: DMA performance checking
     # _test_dma_accuracy(dma_dict, disk_deltalist, mem_deltalist)
 
-    # 3-1. list-up all the files that is associated with overlay sectors
-    xray_start_time = time()
-    xray_log = open("./xray_log", "w+b")
-    import pprint
-    sectors = [item.offset/512 for item in disk_deltalist]
-    sec_file_dict = xray.get_files_from_sectors(modified_disk, sectors)
-    pprint.pprint(sec_file_dict, xray_log)
+    if Const.XRAY_SUPPORT == True:
+        # 3-1. list-up all the files that is associated with overlay sectors
+        xray_start_time = time()
+        xray_log = open("./xray_log", "w+b")
+        import pprint
+        sectors = [item.offset/512 for item in disk_deltalist]
+        sec_file_dict = xray.get_files_from_sectors(modified_disk, sectors)
+        pprint.pprint(sec_file_dict, xray_log)
 
-    # 3-2. To be deleted
-    xray_log.write("-------TRIM VS XRAY\n")
-    trim_chunk_set = set(disk_statistics.get('trimed_list', list()))
-    xray_chunk_set = set(disk_statistics.get('xrayed_list', list()))
-    xray_log.write("trimed - xray:\n%s\n" % str(trim_chunk_set-xray_chunk_set))
-    xray_log.write("xray - trimed:\n%s\n" % str(xray_chunk_set-trim_chunk_set))
-    diff_list = list(xray_chunk_set-trim_chunk_set)
-    diff_sectors = [item/8 for item in diff_list]
-    sec_file_dict = xray.get_files_from_sectors(modified_disk, diff_sectors)
-    pprint.pprint(sec_file_dict, xray_log)
-    xray_log.write("trim(%ld) == xray(%ld)\n" % (disk_statistics.get('trimed', 0), disk_statistics.get('xrayed', 0)))
-    xray_log.write("-------END\n")
-    xray_end_time = time()
-    Log.out.write("[Debug] WASTED TIME FOR XRAY LOGGING: %f\n" % (xray_end_time-xray_start_time))
+        # 3-2. To be deleted
+        xray_log.write("-------TRIM VS XRAY\n")
+        trim_chunk_set = set(disk_statistics.get('trimed_list', list()))
+        xray_chunk_set = set(disk_statistics.get('xrayed_list', list()))
+        xray_log.write("trimed - xray:\n%s\n" % str(trim_chunk_set-xray_chunk_set))
+        xray_log.write("xray - trimed:\n%s\n" % str(xray_chunk_set-trim_chunk_set))
+        diff_list = list(xray_chunk_set-trim_chunk_set)
+        diff_sectors = [item/8 for item in diff_list]
+        sec_file_dict = xray.get_files_from_sectors(modified_disk, diff_sectors)
+        pprint.pprint(sec_file_dict, xray_log)
+        xray_log.write("trim(%ld) == xray(%ld)\n" % (disk_statistics.get('trimed', 0), disk_statistics.get('xrayed', 0)))
+        xray_log.write("-------END\n")
+        xray_end_time = time()
+        Log.out.write("[Debug] WASTED TIME FOR XRAY LOGGING: %f\n" % (xray_end_time-xray_start_time))
+
+    # 3. Compression
+    comp_overlay_diskpath = overlay_diskpath + ".lzma"
+    comp_overlay_mempath = overlay_mempath + ".lzma"
+    comp_disk_file, time1 = comp_lzma(overlay_diskpath, comp_overlay_diskpath)
+    Log.out.write("[Debug] Overlay-disk Compression time: %s\n" % (time1))
+    comp_mem_file, time2 = comp_lzma(overlay_mempath, comp_overlay_mempath)
+    Log.out.write("[Debug] Overlay-mem Compression time: %s\n" % (time2))
 
     # 4. terminting
     monitor.terminate()
@@ -327,7 +336,7 @@ def create_overlay(base_image):
     #if os.path.exists(qemu_logfile.name):
     #    os.unlink(qemu_logfile.name)
 
-    return (overlay_diskpath, overlay_mempath)
+    return (comp_overlay_diskpath, comp_overlay_mempath)
     '''
     output_list = []
     output_list.append((base_image, modified_disk, overlay_diskpath))
@@ -454,7 +463,7 @@ def recover_launchVM(base_image, overlay_meta, overlay_disk, overlay_mem, **kwar
     modified_img = NamedTemporaryFile(prefix="cloudlet-recoverd-img-", delete=False)
 
     # Recover Modified Memory
-    memory_overlay_map = Memory.recover_memory(base_image, base_mem, overlay_mem, \
+    memory_overlay_map = Memory.recover_memory(base_image, base_mem, overlay_mem, 
             base_memmeta, modified_mem.name)
 
     # Recover Modified Disk
@@ -702,20 +711,32 @@ def copy_with_xml(in_path, out_path, xml):
     fout.write(fin.read())
 
 
-def synthesis(base_disk, meta, overlay_disk, overlay_mem):
+def synthesis(base_disk, meta, comp_overlay_disk, comp_overlay_mem):
     # VM Synthesis and run recoverd VM
     # param base_disk : path to base disk
     # param meta : path to meta file for overlay
     # param overlay_disk : path to overlay disk file
     # param overlay_mem : path to overlay memory file
-    print_out = sys.stdout
+
+    # decomp
+    overlay_disk = NamedTemporaryFile(prefix="cloudlet-synthesis-disk-")
+    overlay_mem = NamedTemporaryFile(prefix="cloudlet-synthesis-mem-")
+    outpath, time = decomp_lzma(comp_overlay_disk, overlay_disk.name)
+    Log.out.write("[Debug] Overlay-disk decomp time: %s\n" % (time))
+    outpath, time = decomp_lzma(comp_overlay_mem, overlay_mem.name)
+    Log.out.write("[Debug] Overlay-mem decomp time: %s\n" % (time))
 
     # recover VM
-    qemu_logfile = NamedTemporaryFile(prefix="cloudlet-qemu-log-", delete=False)
-    print_out.write("1. recover launch VM")
+    Log.out.write("[Debug] recover launch VM\n")
     modified_img, launch_mem, fuse = recover_launchVM(base_disk, meta, 
-            overlay_disk, overlay_mem, log=print_out)
+            overlay_disk.name, overlay_mem.name, log=Log.out)
 
+    # resume VM
+    resume_VM(modified_img, launch_mem, fuse)
+
+
+def resume_VM(modified_img, launch_mem, fuse):
+    qemu_logfile = NamedTemporaryFile(prefix="cloudlet-qemu-log-", delete=False)
     # monitor modified chunks
     residue_img = os.path.join(fuse.mountpoint, 'disk', 'image')
     stream_modified = os.path.join(fuse.mountpoint, 'disk', 'streams', 'chunks_modified')

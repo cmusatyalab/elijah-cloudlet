@@ -120,6 +120,21 @@ class DeltaList(object):
         fd.close()
         return delta_list 
 
+    @staticmethod
+    def from_stream(stream):
+        while True:
+            new_item = DeltaItem.unpack_stream(stream)
+            if new_item == None:
+                raise StopIteration()
+            yield new_item
+
+    @staticmethod
+    def from_chunk(in_queue):
+        while True:
+            new_item = DeltaItem.unpack_stream(stream)
+            if new_item == None:
+                raise StopIteration()
+            yield new_item
 
     @staticmethod
     def tofile_with_footer(footer_delta, delta_list, f_path):
@@ -308,6 +323,112 @@ def diff_with_hashlist(base_hashlist, delta_list, ref_id):
 
     print "[Debug] matching (%d/%d) with base" % (matching_count, len(delta_list))
     return delta_list
+
+
+class Recovered_delta(object):
+    def __init__(self, base_disk, base_mem, chunk_size, 
+            parent=None, overlay_memory=None):
+        # recover delta list using base disk/memory
+        # You have to specify parent to indicate whether you're recover memory or disk 
+        # optionally you can use overlay_memory to recover overlay disk which is
+        # de-duplicated with overlay memory
+        if base_disk == None and base_mem == None:
+            raise MemoryError("Need either base_disk or base_memory")
+
+        self.base_disk_fd = None
+        self.base_mem_fd = None
+        self.raw_disk = None
+        self.raw_mem = None
+        self.parent_raw = None
+        self.raw_mem_overlay = None
+        self.chunk_size = chunk_size
+        self.zero_data = struct.pack("!s", chr(0x00)) * chunk_size
+        self.recovered_delta_dict = dict()
+        self.delta_list = list()
+        
+        # initialize reference data to use mmap
+        if base_disk:
+            self.base_disk_fd = open(base_disk, "rb")
+            self.raw_disk = mmap.mmap(self.base_disk_fd.fileno(), 0, prot=mmap.PROT_READ)
+        if base_mem:
+            self.base_mem_fd = open(base_mem, "rb")
+            self.raw_mem = mmap.mmap(self.base_mem_fd.fileno(), 0, prot=mmap.PROT_READ)
+
+        if parent == base_disk:
+            self.parent_raw = self.raw_disk
+        elif parent == base_mem:
+            self.parent_raw = self.raw_mem
+        else:
+            raise DeltaError("Parent should be either disk or memory")
+        if overlay_memory:
+            overlay_mem_fd = open(overlay_memory, "rb")
+            self.raw_mem_overlay = mmap.mmap(overlay_mem_fd.fileno(), 0, prot=mmap.PROT_READ)
+        else:
+            self.raw_mem_overlay = None
+
+    def recover_item(self, delta_item):
+        if type(delta_item) != DeltaItem:
+            raise MemoryError("Need list of DeltaItem")
+
+        #print "recovering %ld/%ld" % (index, len(delta_list))
+        if (delta_item.ref_id == DeltaItem.REF_RAW):
+            recover_data = delta_item.data
+            pass
+        elif (delta_item.ref_id == DeltaItem.REF_ZEROS):
+            recover_data = self.zero_data
+        elif (delta_item.ref_id == DeltaItem.REF_BASE_MEM):
+            offset = delta_item.data
+            recover_data = self.raw_mem[offset:offset+self.chunk_size]
+        elif (delta_item.ref_id == DeltaItem.REF_BASE_DISK):
+            offset = delta_item.data
+            recover_data = self.raw_disk[offset:offset+self.chunk_size]
+        elif (delta_item.ref_id == DeltaItem.REF_OVERLAY_MEM):
+            if not self.raw_mem_overlay:
+                msg = "Need overlay memory if overlay disk is de-duplicated with it"
+                raise DeltaError(msg)
+            offset = delta_item.data
+            recover_data = self.raw_mem_overlay[offset:offset+self.chunk_size]
+        elif delta_item.ref_id == DeltaItem.REF_SELF:
+            ref_offset = delta_item.data
+            self_ref_delta_item = self.recovered_delta_dict.get(ref_offset, None)
+            if self_ref_delta_item == None:
+                raise MemoryError("Cannot find self reference")
+            recover_data = self_ref_delta_item.data
+        elif delta_item.ref_id == DeltaItem.REF_XDELTA:
+            patch_data = delta_item.data
+            patch_original_size = delta_item.offset_len
+            base_data = self.parent_raw[delta_item.offset:delta_item.offset+patch_original_size]
+            recover_data = tool.merge_data(base_data, patch_data, len(base_data)*2)
+        else:
+            raise MemoryError("Cannot recover: invalid referce id %d" % delta_item.ref_id)
+
+        if len(recover_data) != delta_item.offset_len:
+            msg = "Recovered Size Error: %d, ref_id: %d, %ld, %ld" % \
+                    (len(recover_data), delta_item.ref_id, delta_item.data_len, delta_item.data)
+            raise MemoryError(msg)
+
+        # recover
+        delta_item.ref_id = DeltaItem.REF_RAW
+        delta_item.data = recover_data
+
+        # save it to dictionary
+        self.recovered_delta_dict[delta_item.offset] = delta_item
+        self.delta_list.append(delta_item)
+
+    def get_deltlist(self):
+        return self.recovered_delta_dict.values()
+
+    def finish(self):
+        if self.base_disk_fd:
+            self.base_disk_fd.close()
+        if self.base_mem_fd:
+            self.base_mem_fd.close()
+        if self.raw_disk:
+            self.raw_disk.close()
+        if self.raw_mem:
+            self.raw_mem.close()
+        if self.raw_mem_overlay:
+            self.raw_mem_overlay.close()
 
 
 def recover_delta_list(delta_list, base_disk, base_mem, chunk_size, 

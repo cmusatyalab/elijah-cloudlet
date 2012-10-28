@@ -26,11 +26,14 @@ from hashlib import sha256
 import mmap
 import struct
 import tempfile
+from lzma import LZMACompressor
+from lzma import LZMADecompressor
 
 #global
 HASHFILE_MAGIC = 0x1145511a
 HASHFILE_VERSION = 0x00000001
 HASH_CHUNKING_SIZE = 4012
+LZMA_OPTION = {'format':'xz', 'level':9}
 
 def diff_files(source_file, target_file, output_file, **kwargs):
     # kwargs
@@ -154,23 +157,6 @@ def merge_data(source_data, overlay_data, buf_len):
     if result != 0:
         raise IOError("Error while xdelta3 : %d" % result)
     return recover 
-    '''
-    s_fd, s_path = tempfile.mkstemp(prefix="xdelta-")
-    o_fd, o_path = tempfile.mkstemp(prefix="xdelta-")
-    r_fd, r_path = tempfile.mkstemp(prefix="xdelta-")
-    os.write(s_fd, source_data)
-    os.write(o_fd, overlay_data)
-    merge_files(s_path, o_path, r_path)
-    recovered = open(r_path, "rb").read()
-    os.close(s_fd)
-    os.close(o_fd)
-    os.close(r_fd)
-    os.remove(s_path)
-    os.remove(o_path)
-    os.remove(r_path)
-    return recovered
-
-    '''
 
 
 def compare_same(filename1, filename2):
@@ -209,14 +195,6 @@ def comp_lzma(inputname, outputname, **kwargs):
     fout.close()
     time_diff = str(time()-prev_time)
     return outputname, str(time_diff)
-
-
-def comp_lzma_memory(in_data):
-    _PIPE = subprocess.PIPE
-    process = subprocess.Popen(['xz', '-9cv'], shell=True, stdin=_PIPE, stdout=_PIPE)
-    out_data = process.communicate(in_data)
-    process.wait()
-    return out_data
 
 
 # lzma decompression
@@ -459,14 +437,32 @@ def deltalist_from_file(in_path):
 if __name__ == "__main__":
     import random
     import string
-    base = ''.join(random.choice(string.ascii_uppercase + string.digits) for x in range(4096))
-    modi = "~"*4096
-    patch = diff_data(base, modi, len(base))
-    recover = merge_data(base, patch, len(base))
-   
-    if sha256(modi).digest() == sha256(recover).digest():
-        print "SUCCESS"
-        print len(patch)
-    else:
-        print "Failed %d == %d" % (len(modi), len(recover))
+
+    if sys.argv[1] == "comp":
+        base = ''.join(random.choice(string.ascii_uppercase + string.digits) for x in range(2096))
+        compressor = LZMACompressor(LZMA_OPTION)
+        comp = compressor.compress(base)
+        comp += compressor.flush()
+
+        decompressor = LZMADecompressor()
+        decomp = decompressor.decompress(comp)
+        decomp += decompressor.flush()
+
+        if base != decomp:
+            print "result is wrong"
+            print "%d == %d" % (len(base), len(decomp))
+            sys.exit(1)
+        print "success"
+
+    elif sys.argv[1] == "xdelta":
+        base = ''.join(random.choice(string.ascii_uppercase + string.digits) for x in range(4096))
+        modi = "~"*4096
+        patch = diff_data(base, modi, len(base))
+        recover = merge_data(base, patch, len(base))
+    
+        if sha256(modi).digest() == sha256(recover).digest():
+            print "SUCCESS"
+            print len(patch)
+        else:
+            print "Failed %d == %d" % (len(modi), len(recover))
 

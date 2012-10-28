@@ -32,6 +32,7 @@ from hashlib import sha256
 from operator import itemgetter
 from optparse import OptionParser
 from delta import DeltaList
+from delta import Recovered_delta
 
 #GLOBAL
 EXT_RAW = ".raw"
@@ -338,11 +339,10 @@ def _recover_memory(base_path, delta_list, out_path):
             break
 
         base_data = base_file.read(Memory.RAM_PAGE_SIZE)
-        
-        #import pdb; pdb.set_trace()
         if offset != delta_list[delta_list_index].offset:
             #print "write base data: %d" % len(base_data)
             fout.write(base_data)
+            #fout.write('0'*len(base_data))
         else:
             modi_data = delta_list[delta_list_index].data
             #print "write modi data: %d at %ld" % (len(modi_data), delta_list[delta_list_index].offset)
@@ -426,16 +426,6 @@ def create_memory_overlay(modified_mempath,
 
     return delta_list
 
-class RecoveredMemory(object):
-    def __init__(self, base_disk, base_mem, delta_path, raw_meta, out_path, verify_with_original=None):
-        # Recover modified memory snapshot
-        # base_path: base memory snapshot, delta pages will be applied over it
-        # delta_path: memory overlay
-        # raw_meta: meta(footer/hash list) information of the raw memory
-        # out_path: path to recovered modified memory snapshot
-        # verify_with_original: original modification file for recover verification
-        pass
-
 
 def recover_memory(base_disk, base_mem, delta_path, raw_meta, out_path, verify_with_original=None):
     # Recover modified memory snapshot
@@ -445,8 +435,11 @@ def recover_memory(base_disk, base_mem, delta_path, raw_meta, out_path, verify_w
     # out_path: path to recovered modified memory snapshot
     # verify_with_original: original modification file for recover verification
 
-    delta_list = DeltaList.fromfile(delta_path)
-    delta.recover_delta_list(delta_list, base_disk, base_mem, Memory.RAM_PAGE_SIZE, parent=base_mem)
+    delta_stream = open(delta_path, "r")
+    recovered_memory = Recovered_delta(base_disk, base_mem, Memory.RAM_PAGE_SIZE, parent=base_mem)
+    for delta_item in DeltaList.from_stream(delta_stream):
+        recovered_memory.recover_item(delta_item)
+    delta_list = recovered_memory.delta_list
     overlay_map = _recover_memory(base_mem, delta_list, out_path)
 
     # varify with original
