@@ -384,7 +384,7 @@ class Recovered_delta(object):
             recover_data = self.raw_disk[offset:offset+self.chunk_size]
         elif (delta_item.ref_id == DeltaItem.REF_OVERLAY_MEM):
             if not self.raw_mem_overlay:
-                msg = "Need overlay memory if overlay disk is de-duplicated with it"
+                msg = "Need overlay memory if overlay disk is de-duped with it"
                 raise DeltaError(msg)
             offset = delta_item.data
             recover_data = self.raw_mem_overlay[offset:offset+self.chunk_size]
@@ -404,7 +404,8 @@ class Recovered_delta(object):
 
         if len(recover_data) != delta_item.offset_len:
             msg = "Recovered Size Error: %d, ref_id: %d, %ld, %ld" % \
-                    (len(recover_data), delta_item.ref_id, delta_item.data_len, delta_item.data)
+                    (len(recover_data), delta_item.ref_id, \
+                    delta_item.data_len, delta_item.data)
             raise MemoryError(msg)
 
         # recover

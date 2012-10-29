@@ -60,7 +60,6 @@ def network_worker(data, queue, time_queue, chunk_size, data_size=sys.maxint):
     total_read_size = 0
     counter = 0
     while total_read_size < data_size:
-        time.sleep(0.001)
         read_size = min(data_size-total_read_size, chunk_size)
         counter = counter + 1
         chunk = data.read(read_size)

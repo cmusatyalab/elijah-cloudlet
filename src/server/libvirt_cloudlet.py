@@ -498,7 +498,7 @@ def run_fuse(bin_path, chunk_size, original_disk, original_memory,
             "%s" % os.path.abspath(original_disk),  # base path
             "%s" % resumed_disk,                    # overlay path
             "%s" % disk_overlay_map,                # overlay map
-            '%d' % os.path.getsize(original_disk),  # size of base
+            '%d' % os.path.getsize(resumed_disk),  # size of base
             '0',                                    # segment size
             "%d" % chunk_size]
     if original_memory:
@@ -508,7 +508,7 @@ def run_fuse(bin_path, chunk_size, original_disk, original_memory,
                 "%s" % os.path.abspath(original_memory), 
                 "%s" % resumed_memory, 
                 "%s" % memory_overlay_map, 
-                '%d' % os.path.getsize(original_memory), 
+                '%d' % os.path.getsize(resumed_memory), 
                 '0',\
                 "%d" % chunk_size
                 ]:
@@ -735,7 +735,7 @@ def synthesis(base_disk, meta, comp_overlay_disk, comp_overlay_mem):
     resume_VM(modified_img, modified_mem, fuse)
 
 
-def resume_VM(modified_img, launch_mem, fuse, **kwargs):
+def resume_VM(modified_img, modified_mem, fuse, **kwargs):
     # kwargs
     # vnc_disable       :   show vnc console
     # wait_vnc          :   wait until vnc finishes if vnc_enabled
@@ -744,6 +744,7 @@ def resume_VM(modified_img, launch_mem, fuse, **kwargs):
     qemu_logfile = NamedTemporaryFile(prefix="cloudlet-qemu-log-", delete=False)
     # monitor modified chunks
     residue_img = os.path.join(fuse.mountpoint, 'disk', 'image')
+    residue_mem = os.path.join(fuse.mountpoint, 'memory', 'image')
     stream_modified = os.path.join(fuse.mountpoint, 'disk', 'streams', 'chunks_modified')
     stream_disk_access = os.path.join(fuse.mountpoint, 'disk', 'streams', 'chunks_accessed')
     stream_memory_access = os.path.join(fuse.mountpoint, 'memory', 'streams', 'chunks_accessed')
@@ -759,7 +760,7 @@ def resume_VM(modified_img, launch_mem, fuse, **kwargs):
     conn = get_libvirt_connection()
     machine = None
     try:
-        machine=run_snapshot(conn, residue_img, launch_mem, wait_vnc=True, 
+        machine=run_snapshot(conn, residue_img, residue_mem, wait_vnc=True, 
                 qemu_logfile=qemu_logfile.name)
     except Exception as e:
         sys.stdout.write(str(e)+"\n")
@@ -776,8 +777,8 @@ def resume_VM(modified_img, launch_mem, fuse, **kwargs):
     # delete all temporary file
     if os.path.exists(modified_img):
         os.unlink(modified_img)
-    if os.path.exists(launch_mem):
-        os.unlink(launch_mem)
+    if os.path.exists(modified_mem):
+        os.unlink(modified_mem)
     if os.path.exists(qemu_logfile.name):
         os.unlink(qemu_logfile.name)
 

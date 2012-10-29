@@ -36,7 +36,7 @@ from delta import Recovered_delta
 
 #GLOBAL
 EXT_RAW = ".raw"
-EXT_META = ".meta"
+EXT_META = "-meta"
 
 class MemoryError(Exception):
     pass
@@ -331,8 +331,6 @@ def _recover_memory(base_path, delta_list, out_path):
     '''
     base_file = open(base_path, "rb")
     delta_list_index = 0
-    ram_end_offset, ram_info = Memory._seek_to_end_of_ram(base_file)
-    base_file.seek(0)
     while True:
         offset = base_file.tell()
         if len(delta_list) == delta_list_index:
@@ -341,8 +339,8 @@ def _recover_memory(base_path, delta_list, out_path):
         base_data = base_file.read(Memory.RAM_PAGE_SIZE)
         if offset != delta_list[delta_list_index].offset:
             #print "write base data: %d" % len(base_data)
-            fout.write(base_data)
-            #fout.write('0'*len(base_data))
+            #fout.write(base_data)
+            fout.seek(len(base_data), os.SEEK_CUR)
         else:
             modi_data = delta_list[delta_list_index].data
             #print "write modi data: %d at %ld" % (len(modi_data), delta_list[delta_list_index].offset)
