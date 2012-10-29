@@ -38,7 +38,7 @@ BaseVM_list = []
 
 class Const(object):
     # No pipelining test
-    NO_PIPELINING   = True
+    NO_PIPELINING   = False
     # Delta type
     DELTA_MEMORY    = 1
     DELTA_DISK      = 2
