@@ -271,6 +271,16 @@ def recover_disk(base_disk, base_mem, overlay_mem, overlay_disk, recover_path, c
         chunk_list.append("%ld:1" % (delta_item.offset/chunk_size))
         recover_fd.seek(delta_item.offset)
         recover_fd.write(delta_item.data)
+        last_write_offset = delta_item.offset + len(delta_item.data)
+
+    # fill zero to the end of the modified file
+    if last_write_offset:
+        diff_offset = os.path.getsize(base_disk) - last_write_offset
+        if diff_offset > 0:
+            print "filled with zero disk: %ld" % (diff_offset)
+            recover_fd.seek(diff_offset-1, os.SEEK_CUR)
+            recover_fd.write('0')
+    recover_fd.close()
 
     # overlay chunk format: chunk_1:1,chunk_2:1,...
     return ','.join(chunk_list)

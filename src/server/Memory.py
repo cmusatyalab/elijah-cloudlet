@@ -438,7 +438,30 @@ def recover_memory(base_disk, base_mem, delta_path, raw_meta, out_path, verify_w
     for delta_item in DeltaList.from_stream(delta_stream):
         recovered_memory.recover_item(delta_item)
     delta_list = recovered_memory.delta_list
-    overlay_map = _recover_memory(base_mem, delta_list, out_path)
+    #overlay_map = _recover_memory(base_mem, delta_list, out_path)
+
+    # overlay map
+    recover_fd = open(out_path, "w+b")
+    chunk_list = []
+    # sort delta list using offset
+    delta_list.sort(key=itemgetter('offset'))
+    for delta_item in delta_list:
+        if len(delta_item.data) != delta_item.offset_len:
+            raise MemoryError("recovered size is not same as page size")
+        chunk_list.append("%ld:1" % (delta_item.offset/Memory.RAM_PAGE_SIZE))
+        recover_fd.seek(delta_item.offset)
+        recover_fd.write(delta_item.data)
+        last_write_offset = delta_item.offset + len(delta_item.data)
+
+    # fill zero to the end of the modified file
+    if last_write_offset:
+        diff_offset = os.path.getsize(base_mem) - last_write_offset
+        if diff_offset > 0:
+            print "filled with zero mem: %ld" % (diff_offset)
+            recover_fd.seek(diff_offset-1, os.SEEK_CUR) 
+            recover_fd.write('0')
+    recover_fd.close()
+
 
     # varify with original
     if verify_with_original:
@@ -481,7 +504,7 @@ def recover_memory(base_disk, base_mem, delta_path, raw_meta, out_path, verify_w
                 raise MemoryError(msg)
         print "Pass all varification - Successfully recovered"
 
-    return overlay_map
+    return ','.join(chunk_list)
 
 
 def base_hashlist(base_memmeta_path):
