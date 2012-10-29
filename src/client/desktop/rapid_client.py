@@ -36,6 +36,9 @@ def process_command_line(argv):
     parser.add_option(
             '-a', '--app', action='store', type='string', dest='application',
             help="Set base VM name")
+    parser.add_option(
+            '-s', '--server', action='store', type='string', dest='server_ip',
+            help="Set cloudlet server's IP address")
     settings, args = parser.parse_args(argv)
     if not len(args) == 0:
         parser.error('program takes no command-line arguments; "%s" ignored.' % (args,))
@@ -118,8 +121,10 @@ def synthesis(address, port, base_name, application):
 
 def main(argv=None):
     settings, args = process_command_line(sys.argv[1:])
-
-    cloudlet_server_ip = "cloudlet.krha.kr"
+    if settings.server_ip:
+        cloudlet_server_ip = settings.server_ip
+    else:
+        cloudlet_server_ip = "cloudlet.krha.kr"
     cloudlet_server_port = 8021
     synthesis(cloudlet_server_ip, cloudlet_server_port, settings.base, settings.application)
 
