@@ -1,5 +1,4 @@
-#!/usr/bin/env python
-
+#!/usr/bin/env python 
 #
 # Elijah: Cloudlet Infrastructure for Mobile Computing
 # Copyright (C) 2011-2012 Carnegie Mellon University
@@ -27,6 +26,7 @@ import vmnetx
 import stat
 import delta
 import xray
+import bson
 from delta import DeltaList
 from delta import DeltaItem
 from xml.etree import ElementTree
@@ -56,8 +56,8 @@ class Const(object):
     BASE_DISK_META      = ".base-img-meta"
     BASE_MEM_META       = ".base-mem-meta"
     BASE_MEM_RAW        = ".base-mem.raw"
+    OVERLAY_META        = ".overlay-meta"
     OVERLAY_DISK        = ".overlay-img"
-    OVERLAY_DISKMETA    = ".overlay-img-meta"
     OVERLAY_MEM         = ".overlay-mem"
 
     TEMPLATE_XML = "./config/VM_TEMPLATE.xml"
@@ -327,6 +327,11 @@ def create_overlay(base_image):
     comp_mem_file, time2 = comp_lzma(overlay_mempath, comp_overlay_mempath)
     Log.out.write("[Debug] Overlay-mem Compression time: %s\n" % (time2))
 
+    # 4. create metadata
+    overlay_metafile = os.path.join(dir_path, image_name+Const.OVERLAY_META)
+    _create_overlay_meta(overlay_metafile, modified_disk, modified_mem.name,
+            disk_deltalist, mem_deltalist)
+
     # 4. terminting
     monitor.terminate()
     qemu_monitor.terminate()
@@ -336,7 +341,7 @@ def create_overlay(base_image):
     #if os.path.exists(qemu_logfile.name):
     #    os.unlink(qemu_logfile.name)
 
-    return (comp_overlay_diskpath, comp_overlay_mempath)
+    return (overlay_metafile, comp_overlay_diskpath, comp_overlay_mempath)
     '''
     output_list = []
     output_list.append((base_image, modified_disk, overlay_diskpath))
@@ -349,6 +354,35 @@ def create_overlay(base_image):
     overlay_files.append(ret_files[1])
     return overlay_files
     '''
+
+def _create_overlay_meta(overlay_metafile, modified_disk, modified_mem, disk_deltalist, mem_deltalist):
+    fout = open(overlay_metafile, "w+b")
+
+    disk_offsetlist = list()
+    mem_offsetlist = list()
+    for item in disk_deltalist:
+        chunk_number = int(item.offset/Const.CHUNK_SIZE)
+        disk_offsetlist.append(chunk_number)
+        if long(item.offset/Const.CHUNK_SIZE) != chunk_number:
+            msg = "Overflow in chunk while generating meta file %ld != %ld" \
+                    % (chunk_number, item.offset/Const.CHUNK_SIZE)
+            raise CloudletGenerationError(msg)
+    for item in mem_deltalist:
+        chunk_number = int(item.offset/Memory.Memory.RAM_PAGE_SIZE)
+        mem_offsetlist.append(chunk_number)
+        if long(item.offset/Memory.Memory.RAM_PAGE_SIZE) != chunk_number:
+            msg = "Overflow in chunk while generating meta file %ld != %ld" \
+                    % (chunk_number, item.offset/Memory.Memory.RAM_PAGE_SIZE)
+            raise CloudletGenerationError(msg)
+
+    meta_dict = dict()
+    meta_dict['modified_disk_chunk'] = disk_offsetlist
+    meta_dict['modified_memory_chunk'] = mem_offsetlist
+    bson_serialized = bson.dumps(meta_dict)
+    fout.write(bson_serialized)
+
+    fout.close()
+
 
 def _test_dma_accuracy(dma_dict, disk_deltalist, mem_deltalist, Log=sys.stdout):
     dma_start_time = time()
@@ -490,6 +524,9 @@ def run_fuse(bin_path, chunk_size, original_disk, original_memory,
     resumed_memory = os.path.abspath(resumed_memory) if resumed_memory else ""
     disk_overlay_map = str(disk_overlay_map) if disk_overlay_map else ""
     memory_overlay_map = str(memory_overlay_map) if memory_overlay_map else ""
+    
+    disk_size = os.path.getsize(resumed_disk) if resumed_disk else os.path.getsize(original_disk)
+    memory_size = os.path.getsize(resumed_memory) if resumed_memory else os.path.getsize(original_memory)
 
     # launch fuse
     execute_args = ['', '', \
@@ -498,7 +535,7 @@ def run_fuse(bin_path, chunk_size, original_disk, original_memory,
             "%s" % os.path.abspath(original_disk),  # base path
             "%s" % resumed_disk,                    # overlay path
             "%s" % disk_overlay_map,                # overlay map
-            '%d' % os.path.getsize(resumed_disk),  # size of base
+            '%d' % disk_size,                       # size of base
             '0',                                    # segment size
             "%d" % chunk_size]
     if original_memory:
@@ -508,7 +545,7 @@ def run_fuse(bin_path, chunk_size, original_disk, original_memory,
                 "%s" % os.path.abspath(original_memory), 
                 "%s" % resumed_memory, 
                 "%s" % memory_overlay_map, 
-                '%d' % os.path.getsize(resumed_memory), 
+                '%d' % memory_size,
                 '0',\
                 "%d" % chunk_size
                 ]:
@@ -812,8 +849,9 @@ def main(argv):
         # create overlay
         disk_path = args[1]
         overlay_files = create_overlay(disk_path)
-        print "[INFO] disk overlay : %s" % overlay_files[0]
-        print "[INFO] mem overlay : %s" % overlay_files[1]
+        print "[INFO] overlay metafile : %s" % overlay_files[0]
+        print "[INFO] disk overlay : %s" % overlay_files[1]
+        print "[INFO] memory overlay : %s" % overlay_files[2]
     elif mode == MODE[2]:   #synthesis
         if len(args) != 4:
             parser.error("Synthesis requires 4 arguments\n \
