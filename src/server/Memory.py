@@ -457,7 +457,6 @@ def recover_memory(base_disk, base_mem, delta_path, raw_meta, out_path, verify_w
     if last_write_offset:
         diff_offset = os.path.getsize(base_mem) - last_write_offset
         if diff_offset > 0:
-            print "filled with zero mem: %ld" % (diff_offset)
             recover_fd.seek(diff_offset-1, os.SEEK_CUR) 
             recover_fd.write('0')
     recover_fd.close()

@@ -277,7 +277,6 @@ def recover_disk(base_disk, base_mem, overlay_mem, overlay_disk, recover_path, c
     if last_write_offset:
         diff_offset = os.path.getsize(base_disk) - last_write_offset
         if diff_offset > 0:
-            print "filled with zero disk: %ld" % (diff_offset)
             recover_fd.seek(diff_offset-1, os.SEEK_CUR)
             recover_fd.write('0')
     recover_fd.close()

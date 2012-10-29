@@ -16,13 +16,12 @@
 #
 import os
 import sys
+import time
 import SocketServer
 import socket
 from optparse import OptionParser
-from datetime import datetime
 from multiprocessing import Process, Queue, Pipe, JoinableQueue
 from tempfile import NamedTemporaryFile
-import time
 import json
 import tempfile
 import struct
@@ -38,6 +37,8 @@ import threading
 BaseVM_list = []
 
 class Const(object):
+    # No pipelining test
+    NO_PIPELINING   = True
     # Delta type
     DELTA_MEMORY    = 1
     DELTA_DISK      = 2
@@ -56,7 +57,7 @@ class RapidSynthesisError(Exception):
 
 
 def network_worker(data, queue, time_queue, chunk_size, data_size=sys.maxint):
-    start_time= datetime.now()
+    start_time= time.time()
     total_read_size = 0
     counter = 0
     while total_read_size < data_size:
@@ -70,22 +71,22 @@ def network_worker(data, queue, time_queue, chunk_size, data_size=sys.maxint):
             break
 
     queue.put(Const.END_OF_FILE)
-    end_time = datetime.now()
+    end_time = time.time()
     time_delta= end_time-start_time
     time_queue.put({'start_time':start_time, 'end_time':end_time})
     try:
-        print "[Transfer] : (%s)-(%s)=(%s) (%d loop, %d bytes, %lf Mbps)" % \
-                (start_time.strftime('%X'), end_time.strftime('%X'), \
-                str(end_time-start_time), counter, total_read_size, \
-                total_read_size*8.0/time_delta.seconds/1024/1024)
+        print "[Transfer] : (%s)~(%s)=(%s) (%d loop, %d bytes, %lf Mbps)" % \
+                (start_time, end_time, (time_delta),\
+                counter, total_read_size, \
+                total_read_size*8.0/time_delta/1024/1024)
     except ZeroDivisionError:
-        print "[Transfer] : (%s)-(%s)=(%s) (%d, %d)" % \
-                (start_time.strftime('%X'), end_time.strftime('%X'), \
-                str(end_time-start_time), counter, total_read_size)
+        print "[Transfer] : (%s)~(%s)=(%s) (%d, %d)" % \
+                (start_time, end_time, (time_delta),\
+                counter, total_read_size)
 
 
 def decomp_worker(in_queue, pipe_filepath, time_queue):
-    start_time = datetime.now()
+    start_time = time.time()
     data_size = 0
     counter = 0
     decompressor = LZMADecompressor()
@@ -106,15 +107,15 @@ def decomp_worker(in_queue, pipe_filepath, time_queue):
     pipe.write(decomp_chunk)
     pipe.close()
 
-    end_time = datetime.now()
+    end_time = time.time()
     time_queue.put({'start_time':start_time, 'end_time':end_time})
     print "[Decomp] : (%s)-(%s)=(%s) (%d loop, %d bytes)" % \
-            (start_time.strftime('%X'), end_time.strftime('%X'), \
-            str(end_time-start_time), counter, data_size)
+            (start_time, end_time, (end_time-start_time), 
+            counter, data_size)
 
 
 def delta_worker(time_queue, output_queue, options):
-    start_time = datetime.now()
+    start_time = time.time()
     delta_type = options["type"]
     base_image = options["base_path"]
     piping_file = options["input_file"]
@@ -135,11 +136,10 @@ def delta_worker(time_queue, output_queue, options):
         raise RapidSynthesisError("Invalid delta type : %d" % delta_type)
 
     output_queue.put(overlay_map)
-    end_time = datetime.now()
+    end_time = time.time()
     time_queue.put({'start_time':start_time, 'end_time':end_time})
     print "[Delta] : (%s)-(%s)=(%s)" % \
-            (start_time.strftime('%X'), end_time.strftime('%X'), \
-            str(end_time-start_time))
+            (start_time, end_time, (end_time-start_time))
 
 
 class RecoverThread(threading.Thread):
@@ -288,6 +288,7 @@ class SynthesisTCPHandler(SocketServer.StreamRequestHandler):
 
     def handle(self):
         # check_base VM
+        start_time = time.time()
         ret_info = self._check_validity(self.request)
         if ret_info == None:
             message = "Failed, No such base VM exist : %s" % (ret_info[0])
@@ -303,7 +304,7 @@ class SynthesisTCPHandler(SocketServer.StreamRequestHandler):
 
         # read overlay files
         # create named pipe to convert queue to stream
-        time_transfer = Queue(); time_decomp = Queue(); time_delta = Queue()
+        time_transfer_mem = Queue(); time_decomp_mem = Queue(); time_delta_mem = Queue()
         tmp_dir = tempfile.mkdtemp()
         memory_pipe = os.path.join(tmp_dir, 'memory_pipe')
         os.mkfifo(memory_pipe)
@@ -319,22 +320,22 @@ class SynthesisTCPHandler(SocketServer.StreamRequestHandler):
                 "input_file":memory_pipe, "output_file":modified_mem.name}
         mem_download_process = Process(target=network_worker, 
                 args=(
-                    self.rfile, mem_download_queue, time_transfer, Const.TRANSFER_SIZE, mem_size
+                    self.rfile, mem_download_queue, time_transfer_mem, Const.TRANSFER_SIZE, mem_size
                     )
                 )
         mem_decomp_process = Process(target=decomp_worker,
                 args=(
-                    mem_download_queue, memory_pipe, time_decomp
+                    mem_download_queue, memory_pipe, time_decomp_mem
                     )
                 )
         mem_delta_process = Process(target=delta_worker, \
                 args=(
-                    time_delta, mem_output_queue, mem_options
+                    time_delta_mem, mem_output_queue, mem_options
                     )
                 )
 
         # Disk overlay
-        time_transfer = Queue(); time_decomp = Queue(); time_delta = Queue()
+        time_transfer_disk = Queue(); time_decomp_disk = Queue(); time_delta_disk = Queue()
         disk_download_queue = JoinableQueue()
         disk_output_queue = JoinableQueue()
         (disk_download_pipe_in, disk_download_pipe_out) = Pipe()
@@ -349,37 +350,56 @@ class SynthesisTCPHandler(SocketServer.StreamRequestHandler):
 
         disk_download_process = Process(target=network_worker, \
                 args=(
-                    self.rfile, disk_download_queue, time_transfer, Const.TRANSFER_SIZE, disk_size
+                    self.rfile, disk_download_queue, time_transfer_disk, Const.TRANSFER_SIZE, disk_size
                     )
                 )
         disk_decomp_process = Process(target=decomp_worker, \
                 args=(
-                    disk_download_queue, disk_pipe, time_decomp
+                    disk_download_queue, disk_pipe, time_decomp_disk
                     )
                 )
         disk_delta_process = Process(target=delta_worker, \
                 args=(
-                    time_delta, disk_output_queue, disk_options
+                    time_delta_disk, disk_output_queue, disk_options
                     )
                 )
 
         # start processes
         # Memory snapshot will be completed by pipelining
-        mem_download_process.start()
-        mem_decomp_process.start()
-        mem_delta_process.start()
-        memory_overlay_map = mem_output_queue.get()
-        mem_output_queue.task_done()
-        mem_delta_process.join()
+        if Const.NO_PIPELINING:
+            mem_download_process.start()
+            mem_download_process.join()
+            mem_decomp_process.start()
+            mem_decomp_process.join()
+            mem_delta_process.start()
+            memory_overlay_map = mem_output_queue.get()
+            mem_output_queue.task_done()
+            mem_delta_process.join()
 
-        # Once memory is ready, start disk download
-        # disk thread cannot start before finish memory
-        disk_download_process.start()
-        disk_decomp_process.start()
-        disk_delta_process.start()
-        disk_overlay_map = disk_output_queue.get()
-        disk_output_queue.task_done()
-        disk_delta_process.join()
+            disk_download_process.start()
+            disk_download_process.join()
+            disk_decomp_process.start()
+            disk_decomp_process.join()
+            disk_delta_process.start()
+            disk_overlay_map = disk_output_queue.get()
+            disk_output_queue.task_done()
+            disk_delta_process.join()
+        else:
+            mem_download_process.start()
+            mem_decomp_process.start()
+            mem_delta_process.start()
+            memory_overlay_map = mem_output_queue.get()
+            mem_output_queue.task_done()
+            mem_delta_process.join()
+
+            # Once memory is ready, start disk download
+            # disk thread cannot start before finish memory
+            disk_download_process.start()
+            disk_decomp_process.start()
+            disk_delta_process.start()
+            disk_overlay_map = disk_output_queue.get()
+            disk_output_queue.task_done()
+            disk_delta_process.join()
 
         # make FUSE disk & memory
         (base_diskmeta, base_mem, base_memmeta) = \
@@ -390,7 +410,18 @@ class SynthesisTCPHandler(SocketServer.StreamRequestHandler):
                 disk_overlay_map=disk_overlay_map,
                 resumed_memory=modified_mem.name, 
                 memory_overlay_map=memory_overlay_map)
-        cloudlet.resume_VM(modified_img.name, modified_mem.name, fuse)
+        end_time = time.time()
+
+        # resume VM
+        resumed_VM = cloudlet.ResumedVM(modified_img.name, modified_mem.name, fuse)
+        resume_time = resumed_VM.resume()
+        resumed_VM.terminate()
+        total_time = (end_time-start_time) + resume_time
+
+        # printout result
+        SynthesisTCPHandler.print_statistics(total_time, resume_time, \
+                time_transfer_mem, time_decomp_mem, time_delta_mem, \
+                time_transfer_disk, time_decomp_disk, time_delta_disk)
 
         # terminate
         if os.path.exists(memory_pipe):
@@ -400,6 +431,47 @@ class SynthesisTCPHandler(SocketServer.StreamRequestHandler):
         shutil.rmtree(tmp_dir)
 
         self.ret_success()
+
+
+    @staticmethod
+    def print_statistics(total_time, resume_time, \
+            time_transfer_mem, time_decomp_mem, time_delta_mem, \
+            time_transfer_disk, time_decomp_disk, time_delta_disk):
+        # Print out Time Measurement
+        disk_transfer_time = time_transfer_disk.get()
+        disk_decomp_time = time_decomp_disk.get()
+        disk_delta_time = time_delta_disk.get()
+        mem_transfer_time = time_transfer_mem.get()
+        mem_decomp_time = time_decomp_mem.get()
+        mem_delta_time = time_delta_mem.get()
+        disk_transfer_start_time = disk_transfer_time['start_time']
+        disk_transfer_end_time = disk_transfer_time['end_time']
+        disk_decomp_start_time = disk_decomp_time['start_time']
+        disk_decomp_end_time = disk_decomp_time['end_time']
+        disk_delta_start_time = disk_delta_time['start_time']
+        disk_delta_end_time = disk_delta_time['end_time']
+        mem_transfer_start_time = mem_transfer_time['start_time']
+        mem_transfer_end_time = mem_transfer_time['end_time']
+        mem_decomp_start_time = mem_decomp_time['start_time']
+        mem_decomp_end_time = mem_decomp_time['end_time']
+        mem_delta_start_time = mem_delta_time['start_time']
+        mem_delta_end_time = mem_delta_time['end_time']
+
+        transfer_diff = (disk_transfer_end_time-disk_transfer_start_time) + \
+                (mem_transfer_end_time-mem_transfer_start_time)
+        decomp_diff = (disk_decomp_end_time-disk_transfer_end_time) + \
+                (mem_decomp_end_time-mem_transfer_end_time)
+        delta_diff = (disk_delta_end_time-disk_decomp_end_time) + \
+                (mem_delta_end_time-mem_decomp_end_time)
+        message = "\n"
+        message += 'Transfer\tDecomp\tDelta\tBoot\tResume\tTotal\n'
+        message += "%011.06f\t" % (transfer_diff)
+        message += "%011.06f\t" % (decomp_diff)
+        message += "%011.06f\t" % (delta_diff)
+        message += "%011.06f\t" % (resume_time)
+        message += "%011.06f\t" % (total_time)
+        message += "\n"
+        print message
 
 
 def get_local_ipaddress():

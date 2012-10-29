@@ -625,11 +625,15 @@ def run_snapshot(conn, disk_image, mem_snapshot, **kwargs):
     # vnc_disable       :   show vnc console
     # wait_vnc          :   wait until vnc finishes if vnc_enabled
     # qemu_logfile      :   log file for QEMU-KVM
+    # resume_time       :   write back the resumed_time
+    resume_time = kwargs.get('resume_time', None)
+    logfile = kwargs.get('qemu_logfile', None)
+    if resume_time != None:
+        start_resume_time = time()
 
     # read embedded XML at memory snapshot to change disk path
     hdr = vmnetx._QemuMemoryHeader(open(mem_snapshot))
     xml = ElementTree.fromstring(hdr.xml)
-    logfile = kwargs.get('qemu_logfile', None)
     new_xml_string = convert_xml(xml, conn, disk_path=disk_image, 
             uuid=uuid4(), logfile=logfile)
     overwrite_xml(mem_snapshot, new_xml_string)
@@ -638,6 +642,10 @@ def run_snapshot(conn, disk_image, mem_snapshot, **kwargs):
 
     # resume
     restore_with_config(conn, mem_snapshot, new_xml_string)
+    if resume_time != None:
+        resume_time_sec = time() - start_resume_time
+        print "resume time : %f" % resume_time_sec
+        resume_time['time'] = resume_time_sec
 
     # get machine
     domxml = ElementTree.fromstring(new_xml_string)
@@ -666,6 +674,7 @@ def run_snapshot(conn, disk_image, mem_snapshot, **kwargs):
         except KeyboardInterrupt as e:
             print "keyboard interrupt while waiting VNC"
             vnc_process.terminate()
+
     return machine
 
 
@@ -769,55 +778,67 @@ def synthesis(base_disk, meta, comp_overlay_disk, comp_overlay_mem):
             overlay_disk.name, overlay_mem.name, log=Log.out)
 
     # resume VM
-    resume_VM(modified_img, modified_mem, fuse)
+    resumed_VM = ResumedVM(modified_img, modified_mem, fuse)
+    resumed_VM.resume()
+    resumed_VM.terminate()
 
 
-def resume_VM(modified_img, modified_mem, fuse, **kwargs):
-    # kwargs
-    # vnc_disable       :   show vnc console
-    # wait_vnc          :   wait until vnc finishes if vnc_enabled
-    # qemu_logfile      :   log file for QEMU-KVM
+class ResumedVM(object):
+    def __init__(self, modified_img, modified_mem, fuse, **kwargs):
+        # kwargs
+        # vnc_disable       :   show vnc console
+        # wait_vnc          :   wait until vnc finishes if vnc_enabled
+        # qemu_logfile      :   log file for QEMU-KVM
+        self.wait_vnc = kwargs.get('wait_vnc', True)
 
-    qemu_logfile = NamedTemporaryFile(prefix="cloudlet-qemu-log-", delete=False)
-    # monitor modified chunks
-    residue_img = os.path.join(fuse.mountpoint, 'disk', 'image')
-    residue_mem = os.path.join(fuse.mountpoint, 'memory', 'image')
-    stream_modified = os.path.join(fuse.mountpoint, 'disk', 'streams', 'chunks_modified')
-    stream_disk_access = os.path.join(fuse.mountpoint, 'disk', 'streams', 'chunks_accessed')
-    stream_memory_access = os.path.join(fuse.mountpoint, 'memory', 'streams', 'chunks_accessed')
-    monitor = vmnetfs.StreamMonitor()
-    monitor.add_path(stream_modified, vmnetfs.StreamMonitor.DISK_MODIFY)
-    monitor.add_path(stream_disk_access, vmnetfs.StreamMonitor.DISK_ACCESS)
-    monitor.add_path(stream_memory_access, vmnetfs.StreamMonitor.MEMORY_ACCESS)
-    monitor.start() 
-    qemu_monitor = vmnetfs.FileMonitor(qemu_logfile.name, vmnetfs.FileMonitor.QEMU_LOG)
-    qemu_monitor.start()
+        # monitor modified chunks
+        self.machine = None
+        self.fuse = fuse
+        self.modified_img = modified_img
+        self.modified_mem = modified_mem
+        self.qemu_logfile = NamedTemporaryFile(prefix="cloudlet-qemu-log-", delete=False)
+        self.residue_img = os.path.join(fuse.mountpoint, 'disk', 'image')
+        self.residue_mem = os.path.join(fuse.mountpoint, 'memory', 'image')
+        stream_modified = os.path.join(fuse.mountpoint, 'disk', 'streams', 'chunks_modified')
+        stream_disk_access = os.path.join(fuse.mountpoint, 'disk', 'streams', 'chunks_accessed')
+        stream_memory_access = os.path.join(fuse.mountpoint, 'memory', 'streams', 'chunks_accessed')
+        self.monitor = vmnetfs.StreamMonitor()
+        self.monitor.add_path(stream_modified, vmnetfs.StreamMonitor.DISK_MODIFY)
+        self.monitor.add_path(stream_disk_access, vmnetfs.StreamMonitor.DISK_ACCESS)
+        self.monitor.add_path(stream_memory_access, vmnetfs.StreamMonitor.MEMORY_ACCESS)
+        self.monitor.start() 
+        self.qemu_monitor = vmnetfs.FileMonitor(self.qemu_logfile.name, vmnetfs.FileMonitor.QEMU_LOG)
+        self.qemu_monitor.start()
 
-    #resume VM
-    conn = get_libvirt_connection()
-    machine = None
-    try:
-        machine=run_snapshot(conn, residue_img, residue_mem, wait_vnc=True, 
-                qemu_logfile=qemu_logfile.name)
-    except Exception as e:
-        sys.stdout.write(str(e)+"\n")
-    if machine:
-        machine.destroy()
+    def resume(self):
+        #resume VM
+        conn = get_libvirt_connection()
+        resume_time = {'time':-100}
+        try:
+            self.machine=run_snapshot(conn, self.residue_img, self.residue_mem, wait_vnc=self.wait_vnc, 
+                    qemu_logfile=self.qemu_logfile.name, resume_time=resume_time)
+        except Exception as e:
+            sys.stdout.write(str(e)+"\n")
+        return resume_time['time']
 
-    # terminate
-    fuse.terminate()
-    monitor.terminate()
-    qemu_monitor.terminate()
-    monitor.join()
-    qemu_monitor.join()
-    
-    # delete all temporary file
-    if os.path.exists(modified_img):
-        os.unlink(modified_img)
-    if os.path.exists(modified_mem):
-        os.unlink(modified_mem)
-    if os.path.exists(qemu_logfile.name):
-        os.unlink(qemu_logfile.name)
+    def terminate(self):
+        if self.machine:
+            self.machine.destroy()
+
+        # terminate
+        self.fuse.terminate()
+        self.monitor.terminate()
+        self.qemu_monitor.terminate()
+        self.monitor.join()
+        self.qemu_monitor.join()
+        
+        # delete all temporary file
+        if os.path.exists(self.modified_img):
+            os.unlink(self.modified_img)
+        if os.path.exists(self.modified_mem):
+            os.unlink(self.modified_mem)
+        if os.path.exists(self.qemu_logfile.name):
+            os.unlink(self.qemu_logfile.name)
 
 
 def main(argv):
