@@ -49,6 +49,7 @@ def run_application(cloud_ip, cloud_port, server_cmd, watts_ip, client_cmd, powe
     # Start WattsUP through SSH
     ssh = paramiko.SSHClient()
     ssh.set_missing_host_key_policy(paramiko.AutoAddPolicy())
+    print "connecting to %s for watt measurement" % (watts_ip)
     ssh.connect(watts_ip, username='krha')
     command = "%s /dev/ttyUSB0" % WATTS_BIN
     print command
@@ -104,7 +105,7 @@ def process_command_line(argv):
             '-a', '--app', action='store', type='string', dest='app', default="graphics",
             help='Client Type Between moped and graphics')
     parser.add_option(
-            '-s', '--server', action='store', type='string', dest='watts_server', default="server.krha.kr",
+            '-s', '--server', action='store', type='string', dest='watts_server', default="dagama.isr.cs.cmu.edu",
             help='Server IP that has connected to WattsUp Gear')
     settings, args = parser.parse_args(argv)
 
@@ -203,8 +204,8 @@ def batch_speech(watts_server, input_dir):
     if not input_dir:
         input_dir = './SPEECH/input'
 
-    cloud_list = [("cloudlet.krha.kr", 10191, "s_hail", 2221), \
-            ("server.krha.kr", 10191, "s_cage", 2221), \
+    cloud_list = [#("cloudlet.krha.kr", 10191, "s_hail", 2221)]#, \
+#            ("server.krha.kr", 10191, "s_cage", 2221), \
             ("23.21.103.194", 10191, "s_east", 22), \
             ("184.169.142.70", 10191, "s_west", 22), \
             ("176.34.100.63", 10191, "s_eu", 22), \
