@@ -16,6 +16,7 @@
 #
 
 import sys
+import time
 import struct
 import mmap
 import os
@@ -330,8 +331,9 @@ def diff_with_hashlist(base_hashlist, delta_list, ref_id):
 class Recovered_delta(multiprocessing.Process):
     END_OF_STREAM = "!!END_OF_STREAM_FOR_CLOUDLET!!"
 
-    def __init__(self, base_disk, base_mem, delta_path, output_path, chunk_size, out_queue,
-            parent=None, overlay_memory=None):
+    def __init__(self, base_disk, base_mem, delta_path, output_path, chunk_size, 
+            parent=None, overlay_memory=None,
+            out_stream_queue=None, time_queue=None, overlay_map_queue=None):
         # recover delta list using base disk/memory
         # You have to specify parent to indicate whether you're recover memory or disk 
         # optionally you can use overlay_memory to recover overlay disk which is
@@ -343,7 +345,12 @@ class Recovered_delta(multiprocessing.Process):
 
         self.delta_path = delta_path
         self.output_path = output_path
-        self.output_queue = out_queue
+        self.out_stream_queue = out_stream_queue
+        self.time_queue = time_queue
+        self.overlay_memory = overlay_memory
+        self.base_disk = base_disk
+        self.base_mem = base_mem
+        self.overlay_map_queue = overlay_map_queue
 
         self.base_disk_fd = None
         self.base_mem_fd = None
@@ -369,17 +376,22 @@ class Recovered_delta(multiprocessing.Process):
             self.parent_raw = self.raw_mem
         else:
             raise DeltaError("Parent should be either disk or memory")
-        if overlay_memory:
-            overlay_mem_fd = open(overlay_memory, "rb")
-            self.raw_mem_overlay = mmap.mmap(overlay_mem_fd.fileno(), 0, prot=mmap.PROT_READ)
-            self.recover_base_size = os.path.getsize(base_disk)
-        else:
-            self.raw_mem_overlay = None
-            self.recover_base_size = os.path.getsize(base_mem)
 
     def run(self):
+        start_time = time.time()
         recover_fd = open(self.output_path, "wb")
         delta_stream = open(self.delta_path, "r")
+
+        # make mmap for overlay memory recover at this point beacuse 
+        # memory may not recovered when we create this object
+        if self.overlay_memory:
+            overlay_mem_fd = open(self.overlay_memory, "rb")
+            self.raw_mem_overlay = mmap.mmap(overlay_mem_fd.fileno(), 0, prot=mmap.PROT_READ)
+            self.recover_base_size = os.path.getsize(self.base_disk)
+        else:
+            self.raw_mem_overlay = None
+            self.recover_base_size = os.path.getsize(self.base_mem)
+
         for delta_item in DeltaList.from_stream(delta_stream):
             self.recover_item(delta_item)
             if len(delta_item.data) != delta_item.offset_len:
@@ -387,7 +399,7 @@ class Recovered_delta(multiprocessing.Process):
                         (len(delta_item.data), self.chunk_size)
                 raise DeltaError(msg)
 
-            # save it to dictionary
+            # save it to dictionary to find self_reference easily
             self.recovered_delta_dict[delta_item.offset] = delta_item
             self.delta_list.append(delta_item)
             # write to output file 
@@ -395,7 +407,8 @@ class Recovered_delta(multiprocessing.Process):
             recover_fd.write(delta_item.data)
             last_write_offset = delta_item.offset + len(delta_item.data)
             overlay_chunk_id = long(delta_item.offset/self.chunk_size)
-            self.output_queue.put(str(overlay_chunk_id))
+            if self.out_stream_queue != None:
+                self.out_stream_queue.put(str(overlay_chunk_id))
 
         # fill zero to the end of the modified file
         if last_write_offset:
@@ -404,7 +417,18 @@ class Recovered_delta(multiprocessing.Process):
                 recover_fd.seek(diff_offset-1, os.SEEK_CUR)
                 recover_fd.write('0')
         recover_fd.close()
-        self.output_queue.put(Recovered_delta.END_OF_STREAM)
+        if self.out_stream_queue != None:
+            self.out_stream_queue.put(Recovered_delta.END_OF_STREAM)
+        if self.overlay_map_queue != None:
+            offset_list = self.recovered_delta_dict.keys()
+            chunk_list = [("%ld:1" % (offset/self.chunk_size)) for offset in offset_list]
+            self.overlay_map_queue.put(",".join(chunk_list))
+
+        end_time = time.time()
+        if self.time_queue != None: 
+            self.time_queue.put({'start_time':start_time, 'end_time':end_time})
+        print "[Delta] : (%s)-(%s)=(%s)" % \
+                (start_time, end_time, (end_time-start_time))
 
     def recover_item(self, delta_item):
         if type(delta_item) != DeltaItem:
@@ -453,9 +477,6 @@ class Recovered_delta(multiprocessing.Process):
         delta_item.data = recover_data
 
         return delta_item
-
-    def get_deltlist(self):
-        return self.recovered_delta_dict.values()
 
     def finish(self):
         if self.base_disk_fd:

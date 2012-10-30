@@ -502,7 +502,7 @@ def recover_launchVM(base_image, overlay_meta, overlay_disk, overlay_mem, **kwar
     memory_chunk_list = []
     recovered_memory = delta.Recovered_delta(base_image, base_mem, overlay_mem, \
             modified_mem.name, Memory.Memory.RAM_PAGE_SIZE, 
-            memory_chunk_queue, parent=base_mem)
+            out_stream_queue=memory_chunk_queue, parent=base_mem)
     recovered_memory.start()
     while True:
         chunk = memory_chunk_queue.get()
@@ -515,7 +515,7 @@ def recover_launchVM(base_image, overlay_meta, overlay_disk, overlay_mem, **kwar
     disk_chunk_queue = JoinableQueue()
     disk_chunk_list = []
     recovered_disk = delta.Recovered_delta(base_image, base_mem, overlay_disk, \
-            modified_img.name, Const.CHUNK_SIZE, disk_chunk_queue,
+            modified_img.name, Const.CHUNK_SIZE, out_stream_queue=disk_chunk_queue,
             parent=base_image, overlay_memory=modified_mem.name)
     recovered_disk.start()
     while True:

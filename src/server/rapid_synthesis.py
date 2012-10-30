@@ -19,8 +19,11 @@ import sys
 import time
 import SocketServer
 import socket
+import subprocess
+import tool
+
 from optparse import OptionParser
-from multiprocessing import Process, Queue, Pipe, JoinableQueue
+from multiprocessing import Process, JoinableQueue, Queue
 from tempfile import NamedTemporaryFile
 import json
 import tempfile
@@ -28,12 +31,11 @@ import struct
 import libvirt_cloudlet as cloudlet
 from lzma import LZMADecompressor
 import Memory
-import Disk
 import shutil
-import threading
+import delta
 
 
-
+application = ['moped', 'face']
 BaseVM_list = []
 
 class Const(object):
@@ -112,70 +114,6 @@ def decomp_worker(in_queue, pipe_filepath, time_queue):
             counter, data_size)
 
 
-def delta_worker(time_queue, output_queue, options):
-    start_time = time.time()
-    delta_type = options["type"]
-    base_image = options["base_path"]
-    piping_file = options["input_file"]
-    output_path = options["output_file"]
-
-    (base_diskmeta, base_mem, base_memmeta) = \
-            cloudlet.Const.get_basepath(base_image, check_exist=True)
-    if delta_type == Const.DELTA_MEMORY:
-        overlay_map = Memory.recover_memory(base_image, \
-                base_mem, piping_file, \
-                base_memmeta, output_path)
-    elif delta_type == Const.DELTA_DISK:
-        overlay_memory = options["overlay_memory"]
-        overlay_map = Disk.recover_disk(base_image, base_mem, \
-                overlay_memory, piping_file, output_path, \
-                cloudlet.Const.CHUNK_SIZE)
-    else:
-        raise RapidSynthesisError("Invalid delta type : %d" % delta_type)
-
-    output_queue.put(overlay_map)
-    end_time = time.time()
-    time_queue.put({'start_time':start_time, 'end_time':end_time})
-    print "[Delta] : (%s)-(%s)=(%s)" % \
-            (start_time, end_time, (end_time-start_time))
-
-
-class RecoverThread(threading.Thread):
-    def __init__(self, recover_type, base_image, piping_file, output_path, 
-            overlay_memory=None):
-        self.base_image = base_image
-        self.piping_file = piping_file
-        self.output_path = output_path
-        self.stop = threading.Event()
-        self._running = True
-        if recover_type == Const.DELTA_MEMORY:
-            threading.Thread.__init__(self, target=self.recover_memory)
-        elif recover_type == Const.DELTA_DISK:
-            self.overlay_memory = overlay_memory
-            threading.Thread.__init__(self, target=self.recover_disk)
-
-    def recover_memory(self):
-        (base_diskmeta, base_mem, base_memmeta) = \
-                cloudlet.Const.get_basepath(self.base_image, check_exist=True)
-        self.overlay_map = Memory.recover_memory(self.base_image, \
-                base_mem, self.piping_file, \
-                base_memmeta, self.output_path)
-        self._running = False
-        print "[INFO] close memory recover thread"
-
-    def recover_disk(self):
-        (base_diskmeta, base_mem, base_memmeta) = \
-                cloudlet.Const.get_basepath(self.base_image, check_exist=True)
-        self.overlay_map = Disk.recover_disk(self.base_image, base_mem, \
-                self.overlay_memory, self.piping_file, self.output_path, \
-                cloudlet.Const.CHUNK_SIZE)
-        self._running = False
-        print "[INFO] close disk recover thread"
-
-    def terminate(self):
-        self.stop.set()
-
-
 def process_command_line(argv):
     global operation_mode
 
@@ -183,10 +121,18 @@ def process_command_line(argv):
             version="Rapid VM Synthesis(piping) 0.1")
     parser.add_option(
             '-c', '--config', action='store', type='string', dest='config_filename',
-            help='[run mode] Set configuration file, which has base VM information, to work as a server mode.')
+            help='Set configuration file, which has base VM information, to work as a server mode.')
+    parser.add_option(
+            '-s', '--sequential', action='store_true', dest='sequential',
+            help='test no-piplining for speedup measurement')
+    parser.add_option(
+            '-a', '--app', action='store', type='string', dest='application',
+            help="Set testing application name")
     settings, args = parser.parse_args(argv)
-    if settings.config_filename == None:
+    if (settings.config_filename == None) and (not settings.sequential):
         parser.error('program need configuration file for running mode')
+    if settings.sequential and (not settings.application):
+        parser.error("Need application among [%s]" % ('|'.join(application)))
 
     return settings, args
 
@@ -298,6 +244,8 @@ class SynthesisTCPHandler(SocketServer.StreamRequestHandler):
             self.ret_fail()
             return
         base_path, disk_size, mem_size = ret_info
+        (base_diskmeta, base_mem, base_memmeta) = \
+                cloudlet.Const.get_basepath(base_path, check_exist=True)
         modified_mem = NamedTemporaryFile(prefix="cloudlet-recoverd-mem-", 
                 delete=False)
         modified_img = NamedTemporaryFile(prefix="cloudlet-recoverd-img-", 
@@ -312,10 +260,7 @@ class SynthesisTCPHandler(SocketServer.StreamRequestHandler):
 
         # Memory overlay
         mem_download_queue = JoinableQueue()
-        mem_output_queue = JoinableQueue()
-        memory_overlay_map = list()
-        mem_options = {"type":Const.DELTA_MEMORY, "base_path":base_path,
-                "input_file":memory_pipe, "output_file":modified_mem.name}
+        mem_overlay_map_queue = JoinableQueue()
         mem_download_process = Process(target=network_worker, 
                 args=(
                     self.rfile, mem_download_queue, time_transfer_mem, Const.TRANSFER_SIZE, mem_size
@@ -326,24 +271,18 @@ class SynthesisTCPHandler(SocketServer.StreamRequestHandler):
                     mem_download_queue, memory_pipe, time_decomp_mem
                     )
                 )
-        mem_delta_process = Process(target=delta_worker, \
-                args=(
-                    time_delta_mem, mem_output_queue, mem_options
-                    )
-                )
+        mem_delta_process = delta.Recovered_delta(base_path, base_mem, memory_pipe, \
+                modified_mem.name, Memory.Memory.RAM_PAGE_SIZE, 
+                parent=base_mem, time_queue=time_delta_mem, 
+                overlay_map_queue=mem_overlay_map_queue)
 
         # Disk overlay
         time_transfer_disk = Queue(); time_decomp_disk = Queue(); time_delta_disk = Queue()
         disk_download_queue = JoinableQueue()
-        disk_output_queue = JoinableQueue()
-        disk_overlay_map = list()
+        disk_overlay_map_queue = JoinableQueue()
 
         disk_pipe = os.path.join(tmp_dir, 'disk_pipe')
         os.mkfifo(disk_pipe)
-        disk_options = {"type":Const.DELTA_DISK, "base_path":base_path,
-                "input_file":disk_pipe, "output_file":modified_img.name,
-                "overlay_memory":modified_mem.name}
-
         disk_download_process = Process(target=network_worker, \
                 args=(
                     self.rfile, disk_download_queue, time_transfer_disk, Const.TRANSFER_SIZE, disk_size
@@ -354,20 +293,19 @@ class SynthesisTCPHandler(SocketServer.StreamRequestHandler):
                     disk_download_queue, disk_pipe, time_decomp_disk
                     )
                 )
-        disk_delta_process = Process(target=delta_worker, \
-                args=(
-                    time_delta_disk, disk_output_queue, disk_options
-                    )
-                )
-
+        disk_delta_process = delta.Recovered_delta(base_path, base_mem, disk_pipe, \
+                modified_img.name, cloudlet.Const.CHUNK_SIZE, 
+                parent=base_path, overlay_memory=modified_mem.name, 
+                time_queue=time_delta_disk,
+                overlay_map_queue=disk_overlay_map_queue)
         setup_end_time = time.time()
+
         # start processes
-        # Memory snapshot will be completed by pipelining
         mem_download_process.start()
         mem_decomp_process.start()
         mem_delta_process.start()
-        memory_overlay_map = mem_output_queue.get()
-        mem_output_queue.task_done()
+        memory_overlay_map = mem_overlay_map_queue.get()
+        mem_overlay_map_queue.task_done()
         mem_delta_process.join()
 
         # Once memory is ready, start disk download
@@ -375,8 +313,8 @@ class SynthesisTCPHandler(SocketServer.StreamRequestHandler):
         disk_download_process.start()
         disk_decomp_process.start()
         disk_delta_process.start()
-        disk_overlay_map = disk_output_queue.get()
-        disk_output_queue.task_done()
+        disk_overlay_map = disk_overlay_map_queue.get()
+        disk_overlay_map_queue.task_done()
         disk_delta_process.join()
 
         # make FUSE disk & memory
@@ -404,10 +342,12 @@ class SynthesisTCPHandler(SocketServer.StreamRequestHandler):
                 time_transfer_disk, time_decomp_disk, time_delta_disk)
         # additional statistics to be deleted
         print "header handling time\t:%011.6f" % (header_end_time-header_start_time)
-        print "header handling time\t:%011.6f" % (setup_end_time-setup_start_time)
-        print "header handling time\t:%011.6f" % (fuse_end_time-fuse_start_time)
+        print "setup time\t:%011.6f" % (setup_end_time-setup_start_time)
+        print "fuse creation time\t:%011.6f" % (fuse_end_time-fuse_start_time)
 
         # terminate
+        mem_delta_process.finish()
+        disk_delta_process.finish()
         if os.path.exists(memory_pipe):
             os.unlink(memory_pipe)
         if os.path.exists(disk_pipe):
@@ -447,10 +387,10 @@ class SynthesisTCPHandler(SocketServer.StreamRequestHandler):
                 (mem_decomp_end_time-mem_transfer_end_time)
         delta_diff = (disk_delta_end_time-disk_decomp_end_time) + \
                 (mem_delta_end_time-mem_decomp_end_time)
-                        
+
         message = "\n"
         message += "Pipelined measurement\n"
-        message += 'Transfer\tDecomp\tDelta\tResume\tTotal\n'
+        message += 'Transfer\tDecomp\t\tDelta\tResume\t\tTotal\n'
         message += "%011.06f\t" % (transfer_diff)
         message += "%011.06f\t" % (decomp_diff)
         message += "%011.06f\t" % (delta_diff)
@@ -470,27 +410,91 @@ def get_local_ipaddress():
 
 def main(argv=None):
     settings, args = process_command_line(sys.argv[1:])
-    config_file, error_msg = parse_configfile(settings.config_filename)
-    if error_msg:
-        print error_msg
-        sys.exit(2)
-
     # Open port for both Internet and private network
-    Const.LOCAL_IPADDRESS = "0.0.0.0" # get_local_ipaddress()
-    server_address = (Const.LOCAL_IPADDRESS, Const.SERVER_PORT_NUMBER)
-    print "Open TCP Server (%s)\n" % (str(server_address))
-    SocketServer.TCPServer.allow_reuse_address = True
-    server = SocketServer.TCPServer(server_address, SynthesisTCPHandler)
-    server.socket.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+    if settings.sequential:
+        start_time = time.time()
+        base_disk, download_disk, download_mem = download_app(settings.application)
+        meta = None
 
-    try:
-        server.serve_forever()
-    except KeyboardInterrupt:
-        server.socket.close()
-        sys.exit(0)
+        overlay_disk = NamedTemporaryFile(prefix="cloudlet-synthesis-disk-")
+        overlay_mem = NamedTemporaryFile(prefix="cloudlet-synthesis-mem-")
+        outpath, decomp_time = tool.decomp_lzma(download_disk, overlay_disk.name)
+        sys.stdout.write("[Debug] Overlay-disk decomp time: %s\n" % (decomp_time))
+        outpath, decomp_time = tool.decomp_lzma(download_mem, overlay_mem.name)
+        sys.stdout.write("[Debug] Overlay-mem decomp time: %s\n" % (decomp_time))
+
+        # recover VM
+        modified_img, modified_mem, fuse = cloudlet.recover_launchVM(base_disk, meta, 
+                overlay_disk.name, overlay_mem.name, log=sys.stdout)
+
+        # resume VM
+        end_time = time.time()
+        resumed_VM = cloudlet.ResumedVM(modified_img, modified_mem, fuse)
+        resume_time = resumed_VM.resume()
+        resumed_VM.terminate()
+        total_time = (end_time-start_time) + resume_time
+
+        os.unlink(download_disk)
+        os.unlink(download_mem)
+
+        print "Total Synthesis time : %011.06f" % (total_time)
+    else:
+        config_file, error_msg = parse_configfile(settings.config_filename)
+        if error_msg:
+            print error_msg
+            sys.exit(2)
+
+        Const.LOCAL_IPADDRESS = "0.0.0.0" # get_local_ipaddress()
+        server_address = (Const.LOCAL_IPADDRESS, Const.SERVER_PORT_NUMBER)
+        print "Open TCP Server (%s)\n" % (str(server_address))
+        SocketServer.TCPServer.allow_reuse_address = True
+        server = SocketServer.TCPServer(server_address, SynthesisTCPHandler)
+        server.socket.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+
+        try:
+            server.serve_forever()
+        except KeyboardInterrupt:
+            server.socket.close()
+            sys.exit(0)
 
     return 0
 
+def download_app(application):
+    WEB_SERVER_URL = 'http://192.168.2.4'
+    overlay_disk = NamedTemporaryFile(prefix="cloudlet-download-disk-", delete=False)
+    overlay_mem = NamedTemporaryFile(prefix="cloudlet-download-mem-", delete=False)
+    base_path = ''
+    if application == 'moped':
+        disk_url = WEB_SERVER_URL + '/overlay/ubuntu/moped/precise.overlay-img.lzma'
+        memory_url = WEB_SERVER_URL + '/overlay/ubuntu/moped/precise.overlay-mem.lzma'
+        base_path = "/home/krha/cloudlet/image/ubuntu-12.04.1-server-i386/precise.raw"
+    elif application == 'face':
+        disk_url = WEB_SERVER_URL + '/overlay/window/face/window7.overlay-img.lzma'
+        memory_url = WEB_SERVER_URL + '/overlay/window/face/window7.overlay-mem.lzma'
+        base_path = "/home/krha/cloudlet/image/window7-enterprise-x86/window7.raw"
+    else:
+        raise RapidSynthesisError("No such application : %s" % (application))
+
+    #memory download
+    cmd = "wget %s -O %s" % (memory_url, overlay_mem.name)
+    print cmd
+    memory_start_time = time.time()
+    proc = subprocess.Popen(cmd, shell=True)
+    proc.wait()
+    memory_end_time = time.time()
+
+    #disk download
+    cmd = "wget %s -O %s" % (disk_url, overlay_disk.name)
+    print cmd
+    disk_start_time = time.time()
+    proc = subprocess.Popen(cmd, shell=True)
+    proc.wait()
+    disk_end_time = time.time()
+
+    print "Memory download time : %010.04f" % (memory_end_time-memory_start_time)
+    print "Disk download time : %010.04f" % (disk_end_time-disk_start_time)
+
+    return base_path, overlay_disk.name, overlay_mem.name
 
 if __name__ == "__main__":
     status = main()
