@@ -377,11 +377,10 @@ def create_memory_overlay(modified_mempath,
     return delta_list
 
 
-def recover_memory(base_disk, base_mem, delta_path, raw_meta, out_path, verify_with_original=None):
+def recover_memory(base_disk, base_mem, delta_path, out_path, verify_with_original=None):
     # Recover modified memory snapshot
     # base_path: base memory snapshot, delta pages will be applied over it
     # delta_path: memory overlay
-    # raw_meta: meta(footer/hash list) information of the raw memory
     # out_path: path to recovered modified memory snapshot
     # verify_with_original: original modification file for recover verification
 
