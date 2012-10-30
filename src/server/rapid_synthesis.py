@@ -37,8 +37,6 @@ import threading
 BaseVM_list = []
 
 class Const(object):
-    # No pipelining test
-    NO_PIPELINING   = False
     # Delta type
     DELTA_MEMORY    = 1
     DELTA_DISK      = 2
@@ -289,7 +287,10 @@ class SynthesisTCPHandler(SocketServer.StreamRequestHandler):
     def handle(self):
         # check_base VM
         start_time = time.time()
+        header_start_time = time.time()
         ret_info = self._check_validity(self.request)
+        header_end_time = time.time()
+        setup_start_time = time.time()
         if ret_info == None:
             message = "Failed, No such base VM exist : %s" % (ret_info[0])
             print message
@@ -309,7 +310,6 @@ class SynthesisTCPHandler(SocketServer.StreamRequestHandler):
         memory_pipe = os.path.join(tmp_dir, 'memory_pipe')
         os.mkfifo(memory_pipe)
 
-        #import pdb; pdb.set_trace()
         # Memory overlay
         mem_download_queue = JoinableQueue()
         mem_output_queue = JoinableQueue()
@@ -364,44 +364,27 @@ class SynthesisTCPHandler(SocketServer.StreamRequestHandler):
                     )
                 )
 
+        setup_end_time = time.time()
         # start processes
         # Memory snapshot will be completed by pipelining
-        if Const.NO_PIPELINING:
-            mem_download_process.start()
-            mem_download_process.join()
-            mem_decomp_process.start()
-            mem_decomp_process.join()
-            mem_delta_process.start()
-            memory_overlay_map = mem_output_queue.get()
-            mem_output_queue.task_done()
-            mem_delta_process.join()
+        mem_download_process.start()
+        mem_decomp_process.start()
+        mem_delta_process.start()
+        memory_overlay_map = mem_output_queue.get()
+        mem_output_queue.task_done()
+        mem_delta_process.join()
 
-            disk_download_process.start()
-            disk_download_process.join()
-            disk_decomp_process.start()
-            disk_decomp_process.join()
-            disk_delta_process.start()
-            disk_overlay_map = disk_output_queue.get()
-            disk_output_queue.task_done()
-            disk_delta_process.join()
-        else:
-            mem_download_process.start()
-            mem_decomp_process.start()
-            mem_delta_process.start()
-            memory_overlay_map = mem_output_queue.get()
-            mem_output_queue.task_done()
-            mem_delta_process.join()
-
-            # Once memory is ready, start disk download
-            # disk thread cannot start before finish memory
-            disk_download_process.start()
-            disk_decomp_process.start()
-            disk_delta_process.start()
-            disk_overlay_map = disk_output_queue.get()
-            disk_output_queue.task_done()
-            disk_delta_process.join()
+        # Once memory is ready, start disk download
+        # disk thread cannot start before finish memory
+        disk_download_process.start()
+        disk_decomp_process.start()
+        disk_delta_process.start()
+        disk_overlay_map = disk_output_queue.get()
+        disk_output_queue.task_done()
+        disk_delta_process.join()
 
         # make FUSE disk & memory
+        fuse_start_time = time.time()
         (base_diskmeta, base_mem, base_memmeta) = \
                 cloudlet.Const.get_basepath(base_path, check_exist=True)
         fuse = cloudlet.run_fuse(cloudlet.Const.VMNETFS_PATH, 
@@ -410,6 +393,7 @@ class SynthesisTCPHandler(SocketServer.StreamRequestHandler):
                 disk_overlay_map=disk_overlay_map,
                 resumed_memory=modified_mem.name, 
                 memory_overlay_map=memory_overlay_map)
+        fuse_end_time = time.time()
         end_time = time.time()
 
         # resume VM
@@ -422,6 +406,10 @@ class SynthesisTCPHandler(SocketServer.StreamRequestHandler):
         SynthesisTCPHandler.print_statistics(total_time, resume_time, \
                 time_transfer_mem, time_decomp_mem, time_delta_mem, \
                 time_transfer_disk, time_decomp_disk, time_delta_disk)
+        # additional statistics to be deleted
+        print "header handling time\t:%011.6f" % (header_end_time-header_start_time)
+        print "header handling time\t:%011.6f" % (setup_end_time-setup_start_time)
+        print "header handling time\t:%011.6f" % (fuse_end_time-fuse_start_time)
 
         # terminate
         if os.path.exists(memory_pipe):
@@ -463,8 +451,10 @@ class SynthesisTCPHandler(SocketServer.StreamRequestHandler):
                 (mem_decomp_end_time-mem_transfer_end_time)
         delta_diff = (disk_delta_end_time-disk_decomp_end_time) + \
                 (mem_delta_end_time-mem_decomp_end_time)
+                        
         message = "\n"
-        message += 'Transfer\tDecomp\tDelta\tBoot\tResume\tTotal\n'
+        message += "Pipelined measurement\n"
+        message += 'Transfer\tDecomp\tDelta\tResume\tTotal\n'
         message += "%011.06f\t" % (transfer_diff)
         message += "%011.06f\t" % (decomp_diff)
         message += "%011.06f\t" % (delta_diff)
@@ -489,7 +479,8 @@ def main(argv=None):
         print error_msg
         sys.exit(2)
 
-    Const.LOCAL_IPADDRESS = get_local_ipaddress()
+    # Open port for both Internet and private network
+    Const.LOCAL_IPADDRESS = "0.0.0.0" # get_local_ipaddress()
     server_address = (Const.LOCAL_IPADDRESS, Const.SERVER_PORT_NUMBER)
     print "Open TCP Server (%s)\n" % (str(server_address))
     SocketServer.TCPServer.allow_reuse_address = True
