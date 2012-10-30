@@ -36,6 +36,7 @@ from tempfile import NamedTemporaryFile
 from time import time
 from time import sleep
 from optparse import OptionParser
+from multiprocessing import JoinableQueue
 
 from tool import comp_lzma
 from tool import decomp_lzma
@@ -497,16 +498,37 @@ def recover_launchVM(base_image, overlay_meta, overlay_disk, overlay_mem, **kwar
     modified_img = NamedTemporaryFile(prefix="cloudlet-recoverd-img-", delete=False)
 
     # Recover Modified Memory
-    memory_overlay_map = Memory.recover_memory(base_image, base_mem, overlay_mem, 
-            base_memmeta, modified_mem.name)
+    memory_chunk_queue = JoinableQueue()
+    memory_chunk_list = []
+    recovered_memory = delta.Recovered_delta(base_image, base_mem, overlay_mem, \
+            modified_mem.name, Memory.Memory.RAM_PAGE_SIZE, 
+            memory_chunk_queue, parent=base_mem)
+    recovered_memory.start()
+    while True:
+        chunk = memory_chunk_queue.get()
+        if chunk == delta.Recovered_delta.END_OF_STREAM:
+            break;
+        memory_chunk_list.append("%s:1" % chunk)
+    recovered_memory.finish()
 
     # Recover Modified Disk
-    disk_overlay_map = Disk.recover_disk(base_image, base_mem, modified_mem.name,
-            overlay_disk, modified_img.name, Const.CHUNK_SIZE)
-
+    disk_chunk_queue = JoinableQueue()
+    disk_chunk_list = []
+    recovered_disk = delta.Recovered_delta(base_image, base_mem, overlay_disk, \
+            modified_img.name, Const.CHUNK_SIZE, disk_chunk_queue,
+            parent=base_image, overlay_memory=modified_mem.name)
+    recovered_disk.start()
+    while True:
+        chunk = disk_chunk_queue.get()
+        if chunk == delta.Recovered_delta.END_OF_STREAM:
+            break;
+        disk_chunk_list.append("%s:1" % chunk)
+    recovered_disk.finish()
 
     print "[INFO] VM Disk is recovered at %s" % modified_img.name
     print "[INFO] VM Memory is recoverd at %s" % modified_mem.name
+    disk_overlay_map = ','.join(disk_chunk_list)
+    memory_overlay_map = ','.join(memory_chunk_list)
     # make FUSE disk & memory
     fuse = run_fuse(Const.VMNETFS_PATH, Const.CHUNK_SIZE, base_image, base_mem, 
             resumed_disk=modified_img.name, disk_overlay_map=disk_overlay_map,

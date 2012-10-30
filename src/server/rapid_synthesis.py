@@ -314,8 +314,6 @@ class SynthesisTCPHandler(SocketServer.StreamRequestHandler):
         mem_download_queue = JoinableQueue()
         mem_output_queue = JoinableQueue()
         memory_overlay_map = list()
-        (mem_download_pipe_in, mem_download_pipe_out) = Pipe()
-        (mem_decomp_pipe_in, mem_decomp_pipe_out) = Pipe()
         mem_options = {"type":Const.DELTA_MEMORY, "base_path":base_path,
                 "input_file":memory_pipe, "output_file":modified_mem.name}
         mem_download_process = Process(target=network_worker, 
@@ -338,8 +336,6 @@ class SynthesisTCPHandler(SocketServer.StreamRequestHandler):
         time_transfer_disk = Queue(); time_decomp_disk = Queue(); time_delta_disk = Queue()
         disk_download_queue = JoinableQueue()
         disk_output_queue = JoinableQueue()
-        (disk_download_pipe_in, disk_download_pipe_out) = Pipe()
-        (disk_decomp_pipe_in, disk_decomp_pipe_out) = Pipe()
         disk_overlay_map = list()
 
         disk_pipe = os.path.join(tmp_dir, 'disk_pipe')

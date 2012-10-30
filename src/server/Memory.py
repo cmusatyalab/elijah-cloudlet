@@ -302,54 +302,6 @@ class Memory(object):
 
         return hash_list
     
-def _recover_memory(base_path, delta_list, out_path):
-    fout = open(out_path, "w+b")
-
-    # overlay map
-    overlay_list = []
-    #sort delta list using offset
-    delta_list.sort(key=itemgetter('offset'))
-
-    '''
-    for delta_item in delta_list:
-        if len(delta_item.data) != Memory.RAM_PAGE_SIZE:
-            raise MemoryError("recovered size is not same as page size")
-        overlay_list.append("%ld:1" % (delta_item.offset/Memory.RAM_PAGE_SIZE))
-        fout.seek(delta_item.offset)
-        #print "write at %ld, %ld of %s" % (delta_item.offset, fout.tell(), out_path)
-        fout.write(delta_item.data)
-    base_file = open(base_path, "rb")
-    ram_end_offset, ram_info = Memory._seek_to_end_of_ram(base_file)
-    print "ram end : %ld, len(footer): %ld" % (ram_end_offset, len(footer))
-    fout.seek(ram_end_offset)
-    fout.write(footer)
-
-    for index in xrange(ram_end_offset, ram_end_offset+len(footer), Memory.RAM_PAGE_SIZE):
-        overlay_list.append("%ld:1" % (index/Memory.RAM_PAGE_SIZE))
-    return ",".join(overlay_list)
-
-    '''
-    base_file = open(base_path, "rb")
-    delta_list_index = 0
-    while True:
-        offset = base_file.tell()
-        if len(delta_list) == delta_list_index:
-            break
-
-        base_data = base_file.read(Memory.RAM_PAGE_SIZE)
-        if offset != delta_list[delta_list_index].offset:
-            #print "write base data: %d" % len(base_data)
-            #fout.write(base_data)
-            fout.seek(len(base_data), os.SEEK_CUR)
-        else:
-            modi_data = delta_list[delta_list_index].data
-            #print "write modi data: %d at %ld" % (len(modi_data), delta_list[delta_list_index].offset)
-            fout.write(modi_data)
-            delta_list_index += 1
-            overlay_list.append("%ld:1" % (offset/Memory.RAM_PAGE_SIZE))
-
-    return ",".join(overlay_list)
-
 
 def hashing(filepath):
     # Contstuct KVM Base Memory DS from KVM migrated memory
@@ -433,34 +385,13 @@ def recover_memory(base_disk, base_mem, delta_path, raw_meta, out_path, verify_w
     # out_path: path to recovered modified memory snapshot
     # verify_with_original: original modification file for recover verification
 
-    delta_stream = open(delta_path, "r")
-    recovered_memory = Recovered_delta(base_disk, base_mem, Memory.RAM_PAGE_SIZE, parent=base_mem)
-    for delta_item in DeltaList.from_stream(delta_stream):
-        recovered_memory.recover_item(delta_item)
-    delta_list = recovered_memory.delta_list
-    #overlay_map = _recover_memory(base_mem, delta_list, out_path)
+    recovered_memory = Recovered_delta(base_disk, base_mem, delta_path, out_path, \
+            Memory.RAM_PAGE_SIZE, parent=base_mem)
 
-    # overlay map
-    recover_fd = open(out_path, "w+b")
     chunk_list = []
-    # sort delta list using offset
-    delta_list.sort(key=itemgetter('offset'))
-    for delta_item in delta_list:
-        if len(delta_item.data) != delta_item.offset_len:
-            raise MemoryError("recovered size is not same as page size")
-        chunk_list.append("%ld:1" % (delta_item.offset/Memory.RAM_PAGE_SIZE))
-        recover_fd.seek(delta_item.offset)
-        recover_fd.write(delta_item.data)
-        last_write_offset = delta_item.offset + len(delta_item.data)
-
-    # fill zero to the end of the modified file
-    if last_write_offset:
-        diff_offset = os.path.getsize(base_mem) - last_write_offset
-        if diff_offset > 0:
-            recover_fd.seek(diff_offset-1, os.SEEK_CUR) 
-            recover_fd.write('0')
-    recover_fd.close()
-
+    for chunk_number in recovered_memory.recover_chunks():
+        chunk_list.append("%ld:1" % chunk_number)
+    recovered_memory.finish()
 
     # varify with original
     if verify_with_original:

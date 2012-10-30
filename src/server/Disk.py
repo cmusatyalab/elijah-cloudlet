@@ -250,41 +250,6 @@ def create_disk_overlay(modified_disk,
     return delta_list
 
 
-def recover_disk(base_disk, base_mem, overlay_mem, overlay_disk, recover_path, chunk_size):
-    recover_fd = open(recover_path, "wb")
-
-    # get delta list from file and recover it to origin
-    delta_stream = open(overlay_disk, "r")
-    recovered_memory = Recovered_delta(base_disk, base_mem, chunk_size, \
-            parent=base_disk, overlay_memory=overlay_mem)
-    for delta_item in DeltaList.from_stream(delta_stream):
-        recovered_memory.recover_item(delta_item)
-    delta_list = recovered_memory.delta_list
-
-    # overlay map
-    chunk_list = []
-    # sort delta list using offset
-    delta_list.sort(key=itemgetter('offset'))
-    for delta_item in delta_list:
-        if len(delta_item.data) != chunk_size:
-            raise DiskError("recovered size is not same as page size")
-        chunk_list.append("%ld:1" % (delta_item.offset/chunk_size))
-        recover_fd.seek(delta_item.offset)
-        recover_fd.write(delta_item.data)
-        last_write_offset = delta_item.offset + len(delta_item.data)
-
-    # fill zero to the end of the modified file
-    if last_write_offset:
-        diff_offset = os.path.getsize(base_disk) - last_write_offset
-        if diff_offset > 0:
-            recover_fd.seek(diff_offset-1, os.SEEK_CUR)
-            recover_fd.write('0')
-    recover_fd.close()
-
-    # overlay chunk format: chunk_1:1,chunk_2:1,...
-    return ','.join(chunk_list)
-
-
 def base_hashlist(base_meta):
     hash_list = list()
     fd = open(base_meta, "rb")
