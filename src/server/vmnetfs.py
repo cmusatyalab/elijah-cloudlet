@@ -65,9 +65,6 @@ class VMNetFS(threading.Thread):
             self._pipe = os.fdopen(write, 'w')
             self._pipe.write(self._args)
             self._pipe.flush()
-            print "--"
-            print self._args
-            print "--"
             out = self.proc.stdout.readline()
 
             self.mountpoint = out.strip()
