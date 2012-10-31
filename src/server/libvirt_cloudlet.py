@@ -334,6 +334,7 @@ def create_overlay(base_image):
             disk_deltalist, mem_deltalist)
 
     # 4. terminting
+    fuse.terminate()
     monitor.terminate()
     qemu_monitor.terminate()
     monitor.join()
@@ -534,6 +535,9 @@ def recover_launchVM(base_image, overlay_meta, overlay_disk, overlay_mem, **kwar
             resumed_disk=modified_img.name, disk_overlay_map=disk_overlay_map,
             resumed_memory=modified_mem.name, memory_overlay_map=memory_overlay_map)
 
+    fuse.fuse_write("aaa")
+    fuse.fuse_write("bbb")
+
     return [modified_img.name, modified_mem.name, fuse]
 
 
@@ -553,7 +557,7 @@ def run_fuse(bin_path, chunk_size, original_disk, original_memory,
     # launch fuse
     execute_args = ['', '', \
             # disk parameter
-            'http://dummy.url/', 
+            'disk',
             "%s" % os.path.abspath(original_disk),  # base path
             "%s" % resumed_disk,                    # overlay path
             "%s" % disk_overlay_map,                # overlay map
@@ -563,7 +567,7 @@ def run_fuse(bin_path, chunk_size, original_disk, original_memory,
     if original_memory:
         for parameter in [
                 # memory parameter
-                'http://dummy.url/', 
+                'memory',
                 "%s" % os.path.abspath(original_memory), 
                 "%s" % resumed_memory, 
                 "%s" % memory_overlay_map, 
@@ -576,6 +580,7 @@ def run_fuse(bin_path, chunk_size, original_disk, original_memory,
     #print "Fuse argument %s" % ",".join(execute_args)
 
     fuse_process = vmnetfs.VMNetFS(bin_path, execute_args)
+    fuse_process.launch()
     fuse_process.start()
     return fuse_process
 
@@ -802,7 +807,10 @@ def synthesis(base_disk, meta, comp_overlay_disk, comp_overlay_mem):
     # resume VM
     resumed_VM = ResumedVM(modified_img, modified_mem, fuse)
     resumed_VM.resume()
+
+    # terminate
     resumed_VM.terminate()
+    fuse.terminate()
 
 
 class ResumedVM(object):

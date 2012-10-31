@@ -32,32 +32,44 @@ class VMNetFSError(Exception):
     pass
 
 
-class VMNetFS(object):
+class VMNetFS(threading.Thread):
     def __init__(self, bin_path, args):
         self.vmnetfs_path = bin_path
         self._args = '%d\n%s\n' % (len(args),
                 '\n'.join(a.replace('\n', '') for a in args))
         self._pipe = None
         self.mountpoint = None
+        self.stop = threading.Event()
+        threading.Thread.__init__(self, target=self.fuse_read)
+
+    def fuse_read(self):
+        while(not self.stop.wait(0.0001)):
+            self._running = True
+            oneline = self.proc.stdout.readline()
+            if len(oneline.strip()) > 0:
+                sys.stdout.write(oneline)
+        self._running = False
+        print "[INFO] close monitoring thread"
+
+    def fuse_write(self, data):
+        self._pipe.write(data + "\n")
 
     # pylint is confused by the values returned from Popen.communicate()
     # pylint: disable=E1103
-    def start(self):
+    def launch(self):
         read, write = os.pipe()
         try:
-            proc = subprocess.Popen([self.vmnetfs_path], stdin=read,
+            self.proc = subprocess.Popen([self.vmnetfs_path], stdin=read,
                     stdout=subprocess.PIPE, stderr=subprocess.PIPE,
                     close_fds=True)
             self._pipe = os.fdopen(write, 'w')
             self._pipe.write(self._args)
             self._pipe.flush()
-            out, err = proc.communicate()
-            if len(err) > 0:
-                print "Error: " + str(err)
-                raise VMNetFSError(err.strip())
-            elif proc.returncode > 0:
-                raise VMNetFSError('vmnetfs returned status %d' %
-                        proc.returncode)
+            print "--"
+            print self._args
+            print "--"
+            out = self.proc.stdout.readline()
+
             self.mountpoint = out.strip()
         except:
             if self._pipe is not None:
@@ -71,6 +83,7 @@ class VMNetFS(object):
     # pylint: enable=E1103
 
     def terminate(self):
+        self.stop.set()
         if self._pipe is not None:
             self._pipe.close()
             self._pipe = None

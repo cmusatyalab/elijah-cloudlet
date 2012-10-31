@@ -462,7 +462,7 @@ class Recovered_delta(multiprocessing.Process):
             patch_data = delta_item.data
             patch_original_size = delta_item.offset_len
             base_data = self.parent_raw[delta_item.offset:delta_item.offset+patch_original_size]
-            recover_data = tool.merge_data(base_data, patch_data, len(base_data)*2)
+            recover_data = tool.merge_data(base_data, patch_data, len(base_data)*5)
         else:
             raise MemoryError("Cannot recover: invalid referce id %d" % delta_item.ref_id)
 
