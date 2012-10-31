@@ -61,6 +61,13 @@ class Const(object):
     OVERLAY_DISK        = ".overlay-img"
     OVERLAY_MEM         = ".overlay-mem"
 
+    META_VM_DISK_SIZE           = "resumed_vm_disk_size"
+    META_VM_MEMORY_SIZE         = "resumed_vm_memory_size"
+    META_OVERLAY_DISK_SIZE      = "overlay_disk_size"
+    META_OVERLAY_MEMORY_SIZE    = "overlay_memory_size"
+    META_MODIFIED_DISK_CHUNKS   = "modified_disk_chunk"
+    META_MODIFIED_MEMORY_CHUNKS = "modified_memory_chunk"
+
     TEMPLATE_XML = "./config/VM_TEMPLATE.xml"
     VMNETFS_PATH = "/home/krha/cloudlet/src/vmnetx/vmnetfs/vmnetfs"
     CHUNK_SIZE=4096
@@ -218,7 +225,9 @@ def create_overlay(base_image):
     overlay_mempath = os.path.join(dir_path, image_name+Const.OVERLAY_MEM)
     
     # make FUSE disk & memory
-    fuse = run_fuse(Const.VMNETFS_PATH, Const.CHUNK_SIZE, base_image, base_mem)
+    fuse = run_fuse(Const.VMNETFS_PATH, Const.CHUNK_SIZE, 
+            base_image, os.path.getsize(base_image),
+            base_mem, os.path.getsize(base_mem))
     modified_disk = os.path.join(fuse.mountpoint, 'disk', 'image')
     base_mem_fuse = os.path.join(fuse.mountpoint, 'memory', 'image')
     modified_mem = NamedTemporaryFile(prefix="cloudlet-mem-", delete=False)
@@ -331,6 +340,7 @@ def create_overlay(base_image):
     # 4. create metadata
     overlay_metafile = os.path.join(dir_path, image_name+Const.OVERLAY_META)
     _create_overlay_meta(overlay_metafile, modified_disk, modified_mem.name,
+            comp_overlay_diskpath, comp_overlay_mempath,
             disk_deltalist, mem_deltalist)
 
     # 4. terminting
@@ -357,7 +367,9 @@ def create_overlay(base_image):
     return overlay_files
     '''
 
-def _create_overlay_meta(overlay_metafile, modified_disk, modified_mem, disk_deltalist, mem_deltalist):
+def _create_overlay_meta(overlay_metafile, modified_disk, modified_mem, 
+        comp_overlay_diskpath, comp_overlay_mempath,
+        disk_deltalist, mem_deltalist):
     fout = open(overlay_metafile, "w+b")
 
     disk_offsetlist = list()
@@ -378,11 +390,15 @@ def _create_overlay_meta(overlay_metafile, modified_disk, modified_mem, disk_del
             raise CloudletGenerationError(msg)
 
     meta_dict = dict()
-    meta_dict['modified_disk_chunk'] = disk_offsetlist
-    meta_dict['modified_memory_chunk'] = mem_offsetlist
+    meta_dict[Const.META_VM_DISK_SIZE] = os.path.getsize(modified_disk)
+    meta_dict[Const.META_VM_MEMORY_SIZE] = os.path.getsize(modified_mem)
+    meta_dict[Const.META_OVERLAY_DISK_SIZE] = os.path.getsize(comp_overlay_diskpath)
+    meta_dict[Const.META_OVERLAY_MEMORY_SIZE] = os.path.getsize(comp_overlay_mempath)
+    meta_dict[Const.META_MODIFIED_DISK_CHUNKS] = disk_offsetlist
+    meta_dict[Const.META_OVERLAY_MEMORY_SIZE] = mem_offsetlist
+
     bson_serialized = bson.dumps(meta_dict)
     fout.write(bson_serialized)
-
     fout.close()
 
 
@@ -498,9 +514,24 @@ def recover_launchVM(base_image, overlay_meta, overlay_disk, overlay_mem, **kwar
     modified_mem = NamedTemporaryFile(prefix="cloudlet-recoverd-mem-", delete=False)
     modified_img = NamedTemporaryFile(prefix="cloudlet-recoverd-img-", delete=False)
 
+    # Get modified list from overlay_meta
+    meta_info = bson.loads(open(overlay_meta, "r").read())
+    vm_disk_size = meta_info[Const.META_VM_DISK_SIZE]
+    vm_memory_size = meta_info[Const.META_VM_MEMORY_SIZE]
+    memory_chunk_list = ["%ld:0" % item for item in meta_info[Const.META_MODIFIED_MEMORY_CHUNKS]]
+    disk_chunk_list = ["%ld:0" % item for item in meta_info[Const.META_MODIFIED_MEMORY_CHUNKS]]
+    disk_overlay_map = ','.join(disk_chunk_list)
+    memory_overlay_map = ','.join(memory_chunk_list)
+
+    # make FUSE disk & memory
+    fuse = run_fuse(Const.VMNETFS_PATH, Const.CHUNK_SIZE, 
+            base_image, vm_disk_size, base_mem, vm_memory_size,
+            resumed_disk=modified_img.name, resumed_memory=modified_mem.name, 
+            disk_overlay_map=disk_overlay_map, memory_overlay_map=memory_overlay_map)
+    print "[INFO] Start FUSE"
+
     # Recover Modified Memory
     memory_chunk_queue = JoinableQueue()
-    memory_chunk_list = []
     recovered_memory = delta.Recovered_delta(base_image, base_mem, overlay_mem, \
             modified_mem.name, Memory.Memory.RAM_PAGE_SIZE, 
             out_stream_queue=memory_chunk_queue, parent=base_mem)
@@ -509,7 +540,8 @@ def recover_launchVM(base_image, overlay_meta, overlay_disk, overlay_mem, **kwar
         chunk = memory_chunk_queue.get()
         if chunk == delta.Recovered_delta.END_OF_STREAM:
             break;
-        memory_chunk_list.append("%s:1" % chunk)
+        # for Memory (2: chunk id number)
+        fuse.fuse_write("2:%s" % chunk)
     recovered_memory.finish()
 
     # Recover Modified Disk
@@ -523,36 +555,30 @@ def recover_launchVM(base_image, overlay_meta, overlay_disk, overlay_mem, **kwar
         chunk = disk_chunk_queue.get()
         if chunk == delta.Recovered_delta.END_OF_STREAM:
             break;
-        disk_chunk_list.append("%s:1" % chunk)
+        # for Memory (2: chunk id number)
+        fuse.fuse_write("1:%s" % chunk)
     recovered_disk.finish()
 
-    print "[INFO] VM Disk is recovered at %s" % modified_img.name
-    print "[INFO] VM Memory is recoverd at %s" % modified_mem.name
-    disk_overlay_map = ','.join(disk_chunk_list)
-    memory_overlay_map = ','.join(memory_chunk_list)
-    # make FUSE disk & memory
-    fuse = run_fuse(Const.VMNETFS_PATH, Const.CHUNK_SIZE, base_image, base_mem, 
-            resumed_disk=modified_img.name, disk_overlay_map=disk_overlay_map,
-            resumed_memory=modified_mem.name, memory_overlay_map=memory_overlay_map)
-
-    fuse.fuse_write("aaa")
-    fuse.fuse_write("bbb")
+    print "[INFO] VM Disk is Fully recovered at %s" % modified_img.name
+    print "[INFO] VM Memory is Fully recoverd at %s" % modified_mem.name
 
     return [modified_img.name, modified_mem.name, fuse]
 
 
-def run_fuse(bin_path, chunk_size, original_disk, original_memory,
-        resumed_disk=None, disk_overlay_map=None, 
+def run_fuse(bin_path, chunk_size, original_disk, fuse_disk_size,
+        original_memory, fuse_memory_size,
+        resumed_disk=None, disk_overlay_map=None,
         resumed_memory=None, memory_overlay_map=None):
-    # run fuse file system
+    if fuse_disk_size <= 0:
+        raise CloudletGenerationError("FUSE disk size should be bigger than 0")
+    if original_memory != None and fuse_memory_size <= 0:
+        raise CloudletGenerationError("FUSE memory size should be bigger than 0")
 
+    # run fuse file system
     resumed_disk = os.path.abspath(resumed_disk) if resumed_disk else ""
     resumed_memory = os.path.abspath(resumed_memory) if resumed_memory else ""
     disk_overlay_map = str(disk_overlay_map) if disk_overlay_map else ""
     memory_overlay_map = str(memory_overlay_map) if memory_overlay_map else ""
-    
-    disk_size = os.path.getsize(resumed_disk) if resumed_disk else os.path.getsize(original_disk)
-    memory_size = os.path.getsize(resumed_memory) if resumed_memory else os.path.getsize(original_memory)
 
     # launch fuse
     execute_args = ['', '', \
@@ -561,7 +587,7 @@ def run_fuse(bin_path, chunk_size, original_disk, original_memory,
             "%s" % os.path.abspath(original_disk),  # base path
             "%s" % resumed_disk,                    # overlay path
             "%s" % disk_overlay_map,                # overlay map
-            '%d' % disk_size,                       # size of base
+            '%d' % fuse_disk_size,                       # size of base
             '0',                                    # segment size
             "%d" % chunk_size]
     if original_memory:
@@ -571,7 +597,7 @@ def run_fuse(bin_path, chunk_size, original_disk, original_memory,
                 "%s" % os.path.abspath(original_memory), 
                 "%s" % resumed_memory, 
                 "%s" % memory_overlay_map, 
-                '%d' % memory_size,
+                '%d' % fuse_memory_size,
                 '0',\
                 "%d" % chunk_size
                 ]:
@@ -904,17 +930,17 @@ def main(argv):
         print "[INFO] disk overlay : %s" % overlay_files[1]
         print "[INFO] memory overlay : %s" % overlay_files[2]
     elif mode == MODE[2]:   #synthesis
-        if len(args) != 4:
+        if len(args) != 5:
             parser.error("Synthesis requires 4 arguments\n \
                     1)base-disk path\n \
+                    2)overlay meta path\n \
                     2)overlay disk path\n \
                     3)overlay memory path")
             sys.exit(1)
         base_disk_path = args[1]
-        meta = None
-        overlay_disk = args[2] 
-        overlay_mem = args[3]
-
+        meta = args[2]
+        overlay_disk = args[3]
+        overlay_mem = args[4]
         synthesis(base_disk_path, meta, overlay_disk, overlay_mem)
     elif mode == 'test_overlay_download':    # To be delete
         base_disk_path = "/home/krha/cloudlet/image/nova/base_disk"

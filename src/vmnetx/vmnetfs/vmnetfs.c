@@ -28,7 +28,7 @@
 
 #define IMAGE_ARG_COUNT 7
 
-#define DEBUG_STAND_ALONE 1
+//#define DEBUG_STAND_ALONE 1
 
 static void _image_free(struct vmnetfs_image *img)
 {
@@ -216,14 +216,42 @@ static void *glib_loop_thread(void *data)
     return NULL;
 }
 
-static void handle_stdin(struct vmnetfs *fs, const char *oneline){
-	int is_disk = -1;
-	long long chunk_number = -1;
+static void handle_stdin(struct vmnetfs *fs, const char *oneline, GError **err){
+	// valid format : (image_index: chunk_number),
+	// ex) 1:10251
+    struct vmnetfs_image *img;
+	u_int image_index = -1;
+	guint64 chunk_number = -1;
 
-//    _vmnetfs_bit_set(img->total_overlay_map, chunk_number);
+	gchar *end;
+	gchar **overlay_info = g_strsplit(oneline, ":", 0);
+	// 1 for disk, 2 for memory
+	image_index = (int) g_ascii_strtoull(*(overlay_info), &end, 10);
+	if (*overlay_info == end) {
+		g_set_error(err, G_FILE_ERROR, g_file_error_from_errno(errno),
+				"Invalid overlay format at image index %s", *(overlay_info + 1));
+	}
 
-    struct vmnetfs_image *img = fs->disk;
-    _vmnetfs_bit_set(img->total_overlay_map, chunk_number);
+	chunk_number = g_ascii_strtoull(*(overlay_info+1), &end, 10);
+	if (*overlay_info == end) {
+		g_set_error(err, G_FILE_ERROR, g_file_error_from_errno(errno),
+				"Invalid overlay format at chunk number %s", *overlay_info);
+	}
+
+
+	if(image_index == 1){
+		img = fs->disk;
+	}else if(image_index == 2){
+		img = fs->memory;
+	}else{
+		g_set_error(err, G_FILE_ERROR, g_file_error_from_errno(errno),
+				"Invalid index number %d", image_index);
+		return;
+	}
+
+	// Set bit for total_overlay_map
+    _vmnetfs_bit_set(img->current_overlay_map, chunk_number);
+    printf("update overlay at chunk(%d : %lu)\n", image_index,  chunk_number);
 
 }
 
@@ -231,36 +259,37 @@ static gboolean read_stdin(GIOChannel *source,
         GIOCondition cond G_GNUC_UNUSED, void *data)
 {
     struct vmnetfs *fs = data;
-    char *str;
-    char buf[256] = {0, };
-    ssize_t ret;
-    FILE* stdread= fopen("./fuse_read.log", "wb");
+    char *buf;
+    gsize terminator;
     GError *err = NULL;
 
     /* See if stdin has been closed. */
     do {
+    	switch (g_io_channel_read_line(source, &buf, NULL, &terminator, &err)) {
+    	    case G_IO_STATUS_ERROR:
+    	        return TRUE;
+    	    case G_IO_STATUS_NORMAL:
+    	        buf[terminator] = 0;
+    	        break;
+    	    case G_IO_STATUS_EOF:
+    	        g_set_error(err, G_IO_CHANNEL_ERROR, G_IO_CHANNEL_ERROR_IO,
+    	                "Unexpected EOF");
+    	        terminator = 0;
+    	        break;
+    	    case G_IO_STATUS_AGAIN:
+    	        g_set_error(err, G_IO_CHANNEL_ERROR, G_IO_CHANNEL_ERROR_IO,
+    	                "Unexpected EAGAIN");
+    	        return TRUE;
+    	    default:
+    	        g_assert_not_reached();
+    	        break;
+    	    }
 
-        str = read_line(source, &err);
-        if (str == NULL){
-        	if (err->code == G_IO_CHANNEL_ERROR_IO){
-        		return TRUE;
-        	}
+        handle_stdin(fs, buf, &err);
+        if (buf){
+        	free(buf);
         }
-        ret = strlen(str);
-        printf("readline : %s\n", str);
-        handle_stdin(fs, str);
-//        fwrite(str, strlen(str), 1, stdread);
-        /*
-        ret = read(0, buf, sizeof(buf));
-        if (ret == -1 && (errno == EAGAIN || errno == EINTR)) {
-            return TRUE;
-        }
-        fwrite(buf, ret, 1, stdread);
-        fflush(stdread);
-        printf("stdin: %s\n", buf);
-        */
-    } while (ret > 0);
-    fclose(stdread);
+    } while (terminator > 0);
 
     /* Stop allowing blocking reads on streams (to prevent unmount from
        blocking forever) and lazy-unmount the filesystem.  For complete
@@ -456,11 +485,12 @@ int main(int argc G_GNUC_UNUSED, char **argv G_GNUC_UNUSED)
         return 1;
     }
 
-#ifdef DEBUG_STAND_ALONE
+	// Do not close communication between parent
+	// We'll use this communication to update status of overlay
     child(stdout);
     return 0;
 
-#else
+    /*
     pid = fork();
     if (pid) {
         // Parent
@@ -504,25 +534,22 @@ int main(int argc G_GNUC_UNUSED, char **argv G_GNUC_UNUSED)
             fprintf(stderr, "Error reading mountpoint from vmnetfs\n");
             return 1;
         }
-        printf("%s", buf);
+//        printf("%s", buf);
         return 0;
 
     } else {
-    	// Do not close communication between grandparent
-    	// We'll use this communication to update status of overlay
-    	child(stdout);
 
         // Child
-//        pipe_fh = fdopen(pipes[1], "w");
-//        close(pipes[0]);
+        pipe_fh = fdopen(pipes[1], "w");
+        close(pipes[0]);
 
         // Ensure the grandparent doesn't block reading our output
-//        close(1);
-//        close(2);
-//        open("/dev/null", O_WRONLY);
-//        open("/dev/null", O_WRONLY);
-//        child(pipe_fh);
-//        return 0;
+        close(1);
+        close(2);
+        open("/dev/null", O_WRONLY);
+        open("/dev/null", O_WRONLY);
+        child(pipe_fh);
+        return 0;
     }
-#endif
+    */
 }

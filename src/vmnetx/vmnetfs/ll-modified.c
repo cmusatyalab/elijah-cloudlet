@@ -65,7 +65,8 @@ bool _vmnetfs_ll_modified_write_chunk(struct vmnetfs_image *img,
         uint64_t image_size, const void *data, uint64_t chunk,
         uint32_t offset, uint32_t length, GError **err)
 {
-
+	printf("krha, _vmnetfs_ll_modified_write_chunk, start(%ld), length(%ld)\n", \
+			chunk * img->chunk_size + offset, length);
     g_assert(_vmnetfs_bit_test(img->modified_map, chunk) ||
             (offset == 0 && length == MIN(img->chunk_size,
             img->initial_size - chunk * img->chunk_size)));

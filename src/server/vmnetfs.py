@@ -49,7 +49,7 @@ class VMNetFS(threading.Thread):
             if len(oneline.strip()) > 0:
                 sys.stdout.write(oneline)
         self._running = False
-        print "[INFO] close monitoring thread"
+        print "[INFO] close Fuse monitoring thread"
 
     def fuse_write(self, data):
         self._pipe.write(data + "\n")
@@ -66,6 +66,7 @@ class VMNetFS(threading.Thread):
             self._pipe.write(self._args)
             self._pipe.flush()
             out = self.proc.stdout.readline()
+            print "!! %s" % out
 
             self.mountpoint = out.strip()
         except:
@@ -118,7 +119,7 @@ class StreamMonitor(threading.Thread):
             self.epoll.unregister(fileno)
             os.close(fileno)
         self._running = False
-        print "[INFO] close monitoring thread"
+        print "[INFO] close Stream monitoring thread"
 
     def _handle(self, fd, event):
         if event & select.EPOLLIN:
@@ -191,7 +192,7 @@ class FileMonitor(threading.Thread):
             else:
                 time.sleep(0.001)
         self._running = False
-        print "[INFO] close monitoring thread"
+        print "[INFO] close File monitoring thread"
 
     def _handle_qemu_log(self, line):
         splits = line.split(",", 2)

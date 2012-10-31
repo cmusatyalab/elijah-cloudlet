@@ -323,8 +323,6 @@ static uint64_t read_chunk_unlocked(struct vmnetfs_image *img,
 					return 0;
 				}
 			} else {
-				// TODO: to be implemented
-
 				while (1) {
 					// stall
 					if (strcmp(img->url, "disk") == 0) {
