@@ -329,11 +329,11 @@ def diff_with_hashlist(base_hashlist, delta_list, ref_id):
 
 
 class Recovered_delta(multiprocessing.Process):
-    END_OF_STREAM = "!!END_OF_STREAM_FOR_CLOUDLET!!"
+    END_OF_STREAM = -123457816
 
     def __init__(self, base_disk, base_mem, delta_path, output_path, chunk_size, 
             parent=None, overlay_memory=None,
-            out_stream_queue=None, time_queue=None, overlay_map_queue=None):
+            out_pipe=None, time_queue=None, overlay_map_queue=None):
         # recover delta list using base disk/memory
         # You have to specify parent to indicate whether you're recover memory or disk 
         # optionally you can use overlay_memory to recover overlay disk which is
@@ -344,7 +344,7 @@ class Recovered_delta(multiprocessing.Process):
 
         self.delta_path = delta_path
         self.output_path = output_path
-        self.out_stream_queue = out_stream_queue
+        self.out_pipe = out_pipe
         self.time_queue = time_queue
         self.overlay_memory = overlay_memory
         self.base_disk = base_disk
@@ -407,8 +407,8 @@ class Recovered_delta(multiprocessing.Process):
             recover_fd.write(delta_item.data)
             last_write_offset = delta_item.offset + len(delta_item.data)
             overlay_chunk_id = long(delta_item.offset/self.chunk_size)
-            if self.out_stream_queue != None:
-                self.out_stream_queue.put(str(overlay_chunk_id))
+            if self.out_pipe != None:
+                self.out_pipe.send(overlay_chunk_id)
 
         # fill zero to the end of the modified file
         if last_write_offset:
@@ -417,8 +417,8 @@ class Recovered_delta(multiprocessing.Process):
                 recover_fd.seek(diff_offset-1, os.SEEK_CUR)
                 recover_fd.write('0')
         recover_fd.close()
-        if self.out_stream_queue != None:
-            self.out_stream_queue.put(Recovered_delta.END_OF_STREAM)
+        if self.out_pipe != None:
+            self.pipe.send(Recovered_delta.END_OF_STREAM)
         if self.overlay_map_queue != None:
             offset_list = self.recovered_delta_dict.keys()
             chunk_list = [("%ld:1" % (offset/self.chunk_size)) for offset in offset_list]

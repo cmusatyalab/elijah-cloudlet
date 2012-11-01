@@ -36,7 +36,7 @@ from tempfile import NamedTemporaryFile
 from time import time
 from time import sleep
 from optparse import OptionParser
-from multiprocessing import JoinableQueue
+from multiprocessing import Pipe
 
 from tool import comp_lzma
 from tool import decomp_lzma
@@ -533,29 +533,29 @@ def recover_launchVM(base_image, overlay_meta, overlay_disk, overlay_mem, **kwar
 
     # Recover Modified Memory
     start_time = time()
-    memory_chunk_queue = JoinableQueue()
+    mem_pipe_parent, mem_pipe_child = Pipe()
     recovered_memory = delta.Recovered_delta(base_image, base_mem, overlay_mem, \
             modified_mem.name, Memory.Memory.RAM_PAGE_SIZE, 
-            out_stream_queue=memory_chunk_queue, parent=base_mem)
+            out_pipe=mem_pipe_child, parent=base_mem)
     recovered_memory.start()
     recover_memory_fuse = vmnetfs.FuseFeedingThread(fuse, 
             vmnetfs.FuseFeedingThread.FUSE_IMAGE_INDEX_MEMORY,
-            memory_chunk_queue, delta.Recovered_delta.END_OF_STREAM)
+            mem_pipe_parent, delta.Recovered_delta.END_OF_STREAM)
     recover_memory_fuse.start()
     recovered_memory.join()
     print "time for memory feeding: %f" % (time()-start_time)
 
     # Recover Modified Disk
     start_time = time()
-    disk_chunk_queue = JoinableQueue()
+    disk_pipe_parent, disk_pipe_child = Pipe()
     disk_chunk_list = []
     recovered_disk = delta.Recovered_delta(base_image, base_mem, overlay_disk, \
-            modified_img.name, Const.CHUNK_SIZE, out_stream_queue=disk_chunk_queue,
+            modified_img.name, Const.CHUNK_SIZE, out_pipe=disk_pipe_child,
             parent=base_image, overlay_memory=modified_mem.name)
     recovered_disk.start()
     recover_disk_fuse = vmnetfs.FuseFeedingThread(fuse, 
             vmnetfs.FuseFeedingThread.FUSE_IMAGE_INDEX_DISK,
-            disk_chunk_queue, delta.Recovered_delta.END_OF_STREAM)
+            disk_pipe_parent, delta.Recovered_delta.END_OF_STREAM)
     recover_disk_fuse.start()
     recovered_disk.join()
     print "time for disk feeding: %f" % (time()-start_time)

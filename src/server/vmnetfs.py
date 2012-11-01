@@ -216,10 +216,10 @@ class FuseFeedingThread(threading.Thread):
     FUSE_IMAGE_INDEX_DISK = 1
     FUSE_IMAGE_INDEX_MEMORY = 2
 
-    def __init__(self, fuse, fuse_index, recovered_chunk_queue, END_OF_STREAM):
+    def __init__(self, fuse, fuse_index, input_pipe, END_OF_STREAM):
         self.fuse = fuse
         self.index = fuse_index
-        self.recovered_chunk_queue = recovered_chunk_queue
+        self.input_pipe = input_pipe
         self.stop = threading.Event()
         self.END_OF_STREAM = END_OF_STREAM
         threading.Thread.__init__(self, target=self.feeding_thread)
@@ -227,10 +227,10 @@ class FuseFeedingThread(threading.Thread):
     def feeding_thread(self):
         while(not self.stop.wait(0.00001)):
             self._running = True
-            chunk = self.recovered_chunk_queue.get()
+            chunk = self.input_pipe.recv()
             if chunk == self.END_OF_STREAM:
                 break;
-            msg = "%d:%s" % (self.index, chunk)
+            msg = "%d:%ld" % (self.index, chunk)
             self.fuse.fuse_write(msg)
         self._running = False
 
