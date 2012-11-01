@@ -329,8 +329,6 @@ def diff_with_hashlist(base_hashlist, delta_list, ref_id):
 
 
 class Recovered_delta(multiprocessing.Process):
-    END_OF_STREAM = -123457816
-
     def __init__(self, base_disk, base_mem, delta_path, output_path, chunk_size, 
             parent=None, overlay_memory=None,
             out_pipe=None, time_queue=None, overlay_map_queue=None):
@@ -392,6 +390,7 @@ class Recovered_delta(multiprocessing.Process):
             self.raw_mem_overlay = None
             self.recover_base_size = os.path.getsize(self.base_mem)
 
+        overlay_chunk_ids = []
         for delta_item in DeltaList.from_stream(delta_stream):
             self.recover_item(delta_item)
             if len(delta_item.data) != delta_item.offset_len:
@@ -407,9 +406,13 @@ class Recovered_delta(multiprocessing.Process):
             recover_fd.write(delta_item.data)
             last_write_offset = delta_item.offset + len(delta_item.data)
             overlay_chunk_id = long(delta_item.offset/self.chunk_size)
-            if self.out_pipe != None:
-                self.out_pipe.send(overlay_chunk_id)
+            overlay_chunk_ids.append(overlay_chunk_id)
+            if len(overlay_chunk_ids) % 100 == 0:
+                self.out_pipe.send(overlay_chunk_ids)
+                overlay_chunk_ids[:] = []
 
+        if len(overlay_chunk_ids) > 0:
+            self.out_pipe.send(overlay_chunk_ids)
         # fill zero to the end of the modified file
         if last_write_offset:
             diff_offset = self.recover_base_size - last_write_offset
@@ -417,8 +420,6 @@ class Recovered_delta(multiprocessing.Process):
                 recover_fd.seek(diff_offset-1, os.SEEK_CUR)
                 recover_fd.write('0')
         recover_fd.close()
-        if self.out_pipe != None:
-            self.pipe.send(Recovered_delta.END_OF_STREAM)
         if self.overlay_map_queue != None:
             offset_list = self.recovered_delta_dict.keys()
             chunk_list = [("%ld:1" % (offset/self.chunk_size)) for offset in offset_list]

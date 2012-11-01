@@ -216,23 +216,26 @@ class FuseFeedingThread(threading.Thread):
     FUSE_IMAGE_INDEX_DISK = 1
     FUSE_IMAGE_INDEX_MEMORY = 2
 
-    def __init__(self, fuse, fuse_index, input_pipe, END_OF_STREAM):
+    def __init__(self, fuse, fuse_index, input_pipe):
         self.fuse = fuse
         self.index = fuse_index
         self.input_pipe = input_pipe
         self.stop = threading.Event()
-        self.END_OF_STREAM = END_OF_STREAM
         threading.Thread.__init__(self, target=self.feeding_thread)
 
     def feeding_thread(self):
-        while(not self.stop.wait(0.00001)):
+        count = 0
+        while(not self.stop.wait(0.0000001)):
             self._running = True
-            chunk = self.input_pipe.recv()
-            if chunk == self.END_OF_STREAM:
-                break;
-            msg = "%d:%ld" % (self.index, chunk)
+            try:
+                chunks = self.input_pipe.recv()
+            except EOFError:
+                break
+            msg = ','.join(["%d:%ld" % (self.index, chunk) for chunk in chunks])
             self.fuse.fuse_write(msg)
+            count += 1
         self._running = False
+        print "total loop : %d" % count
 
     def fuse_write(self, data):
         self._pipe.write(data + "\n")

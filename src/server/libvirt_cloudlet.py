@@ -540,7 +540,7 @@ def recover_launchVM(base_image, overlay_meta, overlay_disk, overlay_mem, **kwar
     recovered_memory.start()
     recover_memory_fuse = vmnetfs.FuseFeedingThread(fuse, 
             vmnetfs.FuseFeedingThread.FUSE_IMAGE_INDEX_MEMORY,
-            mem_pipe_parent, delta.Recovered_delta.END_OF_STREAM)
+            mem_pipe_parent)
     recover_memory_fuse.start()
     recovered_memory.join()
     print "time for memory feeding: %f" % (time()-start_time)
@@ -555,7 +555,7 @@ def recover_launchVM(base_image, overlay_meta, overlay_disk, overlay_mem, **kwar
     recovered_disk.start()
     recover_disk_fuse = vmnetfs.FuseFeedingThread(fuse, 
             vmnetfs.FuseFeedingThread.FUSE_IMAGE_INDEX_DISK,
-            disk_pipe_parent, delta.Recovered_delta.END_OF_STREAM)
+            disk_pipe_parent)
     recover_disk_fuse.start()
     recovered_disk.join()
     print "time for disk feeding: %f" % (time()-start_time)
