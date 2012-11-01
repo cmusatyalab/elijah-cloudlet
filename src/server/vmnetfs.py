@@ -23,6 +23,7 @@ import threading
 import time
 import sys
 
+
 # system.py is built at install time, so pylint may fail to import it.
 # Also avoid warning on variable name.
 # pylint: disable=F0401,C0103
@@ -206,6 +207,59 @@ class FileMonitor(threading.Thread):
             pass
         else:
             sys.stdout.write("invalid log: (%s)(%s)(%s)\n" % (event_time, header, data))
+
+    def terminate(self):
+        self.stop.set()
+
+
+class FuseFeedingThread(threading.Thread):
+    FUSE_IMAGE_INDEX_DISK = 1
+    FUSE_IMAGE_INDEX_MEMORY = 2
+
+    def __init__(self, fuse, fuse_index, recovered_chunk_queue, END_OF_STREAM):
+        self.fuse = fuse
+        self.index = fuse_index
+        self.recovered_chunk_queue = recovered_chunk_queue
+        self.stop = threading.Event()
+        self.END_OF_STREAM = END_OF_STREAM
+        threading.Thread.__init__(self, target=self.feeding_thread)
+
+    def feeding_thread(self):
+        while(not self.stop.wait(0.00001)):
+            self._running = True
+            chunk = self.recovered_chunk_queue.get()
+            if chunk == self.END_OF_STREAM:
+                break;
+            msg = "%d:%s" % (self.index, chunk)
+            self.fuse.fuse_write(msg)
+        self._running = False
+
+    def fuse_write(self, data):
+        self._pipe.write(data + "\n")
+
+    # pylint is confused by the values returned from Popen.communicate()
+    # pylint: disable=E1103
+    def launch(self):
+        read, write = os.pipe()
+        try:
+            self.proc = subprocess.Popen([self.vmnetfs_path], stdin=read,
+                    stdout=subprocess.PIPE, stderr=subprocess.PIPE,
+                    close_fds=True)
+            self._pipe = os.fdopen(write, 'w')
+            self._pipe.write(self._args)
+            self._pipe.flush()
+            out = self.proc.stdout.readline()
+            self.mountpoint = out.strip()
+        except:
+            if self._pipe is not None:
+                self._pipe.close()
+            else:
+                os.close(write)
+            raise
+        finally:
+            pass
+            #os.close(read)
+    # pylint: enable=E1103
 
     def terminate(self):
         self.stop.set()

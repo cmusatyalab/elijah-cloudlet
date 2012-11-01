@@ -338,7 +338,6 @@ class Recovered_delta(multiprocessing.Process):
         # You have to specify parent to indicate whether you're recover memory or disk 
         # optionally you can use overlay_memory to recover overlay disk which is
         # de-duplicated with overlay memory
-        multiprocessing.Process.__init__(self)
 
         if base_disk == None and base_mem == None:
             raise MemoryError("Need either base_disk or base_memory")
@@ -376,6 +375,7 @@ class Recovered_delta(multiprocessing.Process):
             self.parent_raw = self.raw_mem
         else:
             raise DeltaError("Parent should be either disk or memory")
+        multiprocessing.Process.__init__(self)
 
     def run(self):
         start_time = time.time()

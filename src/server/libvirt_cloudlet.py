@@ -42,6 +42,7 @@ from tool import comp_lzma
 from tool import decomp_lzma
 from tool import diff_files
 from tool import merge_files
+import threading
 
 class Log(object):
     out = sys.stdout
@@ -531,33 +532,33 @@ def recover_launchVM(base_image, overlay_meta, overlay_disk, overlay_mem, **kwar
     print "[INFO] Start FUSE"
 
     # Recover Modified Memory
+    start_time = time()
     memory_chunk_queue = JoinableQueue()
     recovered_memory = delta.Recovered_delta(base_image, base_mem, overlay_mem, \
             modified_mem.name, Memory.Memory.RAM_PAGE_SIZE, 
             out_stream_queue=memory_chunk_queue, parent=base_mem)
     recovered_memory.start()
-    while True:
-        chunk = memory_chunk_queue.get()
-        if chunk == delta.Recovered_delta.END_OF_STREAM:
-            break;
-        # for Memory (2: chunk id number)
-        fuse.fuse_write("2:%s" % chunk)
-    recovered_memory.finish()
+    recover_memory_fuse = vmnetfs.FuseFeedingThread(fuse, 
+            vmnetfs.FuseFeedingThread.FUSE_IMAGE_INDEX_MEMORY,
+            memory_chunk_queue, delta.Recovered_delta.END_OF_STREAM)
+    recover_memory_fuse.start()
+    recovered_memory.join()
+    print "time for memory feeding: %f" % (time()-start_time)
 
     # Recover Modified Disk
+    start_time = time()
     disk_chunk_queue = JoinableQueue()
     disk_chunk_list = []
     recovered_disk = delta.Recovered_delta(base_image, base_mem, overlay_disk, \
             modified_img.name, Const.CHUNK_SIZE, out_stream_queue=disk_chunk_queue,
             parent=base_image, overlay_memory=modified_mem.name)
     recovered_disk.start()
-    while True:
-        chunk = disk_chunk_queue.get()
-        if chunk == delta.Recovered_delta.END_OF_STREAM:
-            break;
-        # for Memory (2: chunk id number)
-        fuse.fuse_write("1:%s" % chunk)
-    recovered_disk.finish()
+    recover_disk_fuse = vmnetfs.FuseFeedingThread(fuse, 
+            vmnetfs.FuseFeedingThread.FUSE_IMAGE_INDEX_DISK,
+            disk_chunk_queue, delta.Recovered_delta.END_OF_STREAM)
+    recover_disk_fuse.start()
+    recovered_disk.join()
+    print "time for disk feeding: %f" % (time()-start_time)
 
     print "[INFO] VM Disk is Fully recovered at %s" % modified_img.name
     print "[INFO] VM Memory is Fully recoverd at %s" % modified_mem.name
