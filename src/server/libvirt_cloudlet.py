@@ -395,7 +395,7 @@ def _create_overlay_meta(overlay_metafile, modified_disk, modified_mem,
     meta_dict[Const.META_OVERLAY_DISK_SIZE] = os.path.getsize(comp_overlay_diskpath)
     meta_dict[Const.META_OVERLAY_MEMORY_SIZE] = os.path.getsize(comp_overlay_mempath)
     meta_dict[Const.META_MODIFIED_DISK_CHUNKS] = disk_offsetlist
-    meta_dict[Const.META_OVERLAY_MEMORY_SIZE] = mem_offsetlist
+    meta_dict[Const.META_MODIFIED_MEMORY_CHUNKS] = mem_offsetlist
 
     bson_serialized = bson.dumps(meta_dict)
     fout.write(bson_serialized)
@@ -519,7 +519,7 @@ def recover_launchVM(base_image, overlay_meta, overlay_disk, overlay_mem, **kwar
     vm_disk_size = meta_info[Const.META_VM_DISK_SIZE]
     vm_memory_size = meta_info[Const.META_VM_MEMORY_SIZE]
     memory_chunk_list = ["%ld:0" % item for item in meta_info[Const.META_MODIFIED_MEMORY_CHUNKS]]
-    disk_chunk_list = ["%ld:0" % item for item in meta_info[Const.META_MODIFIED_MEMORY_CHUNKS]]
+    disk_chunk_list = ["%ld:0" % item for item in meta_info[Const.META_MODIFIED_DISK_CHUNKS]]
     disk_overlay_map = ','.join(disk_chunk_list)
     memory_overlay_map = ','.join(memory_chunk_list)
 

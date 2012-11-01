@@ -47,7 +47,8 @@ class VMNetFS(threading.Thread):
             self._running = True
             oneline = self.proc.stdout.readline()
             if len(oneline.strip()) > 0:
-                sys.stdout.write(oneline)
+                #sys.stdout.write(oneline)
+                pass
         self._running = False
         print "[INFO] close Fuse monitoring thread"
 
@@ -66,8 +67,6 @@ class VMNetFS(threading.Thread):
             self._pipe.write(self._args)
             self._pipe.flush()
             out = self.proc.stdout.readline()
-            print "!! %s" % out
-
             self.mountpoint = out.strip()
         except:
             if self._pipe is not None:
