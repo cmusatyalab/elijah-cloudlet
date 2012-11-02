@@ -92,7 +92,6 @@ static int image_getattr(void *dentry_ctx, struct stat *st)
 
 static int image_truncate(void *dentry_ctx, uint64_t size)
 {
-	printf("krha, image_truncate, copy whole image\n");
     struct vmnetfs_image *img = dentry_ctx;
     GError *err = NULL;
 
@@ -113,7 +112,6 @@ static int image_truncate(void *dentry_ctx, uint64_t size)
 static int image_open(void *dentry_ctx, struct vmnetfs_fuse_fh *fh)
 {
     struct vmnetfs_image *img = dentry_ctx;
-    printf("krha, image_open\n");
 
     fh->data = img;
     return 0;

@@ -522,7 +522,7 @@ def recover_launchVM(base_image, overlay_meta, overlay_disk, overlay_mem, **kwar
     vm_memory_size = meta_info[Const.META_RESUME_VM_MEMORY_SIZE]
     memory_chunk_list = ["%ld:0" % item for item in meta_info[Const.META_MODIFIED_MEMORY_CHUNKS]]
     disk_chunk_list = ["%ld:0" % item for item in meta_info[Const.META_MODIFIED_DISK_CHUNKS]]
-    print "Modified size memory: %ld, disk: %ld" % (len(memory_chunk_list), len(disk_chunk_list))
+    print "Modified VM size memory: %ld, disk: %ld" % (len(memory_chunk_list), len(disk_chunk_list))
     disk_overlay_map = ','.join(disk_chunk_list)
     memory_overlay_map = ','.join(memory_chunk_list)
 
@@ -541,7 +541,8 @@ def recover_launchVM(base_image, overlay_meta, overlay_disk, overlay_mem, **kwar
             out_pipe=mem_pipe_child, parent=base_mem)
     memory_fuse = vmnetfs.FuseFeedingThread(fuse, 
             vmnetfs.FuseFeedingThread.FUSE_IMAGE_INDEX_MEMORY,
-            mem_pipe_parent, memory_recover_dict)
+            mem_pipe_parent, memory_recover_dict, 
+            delta.Recovered_delta.END_OF_PIPE)
     # Recover Modified Disk
     disk_pipe_parent, disk_pipe_child = Pipe()
     disk_recover_dict = dict()
@@ -551,7 +552,8 @@ def recover_launchVM(base_image, overlay_meta, overlay_disk, overlay_mem, **kwar
             parent=base_image, overlay_memory_info=overlay_memory_info)
     disk_fuse = vmnetfs.FuseFeedingThread(fuse, 
             vmnetfs.FuseFeedingThread.FUSE_IMAGE_INDEX_DISK,
-            disk_pipe_parent, disk_recover_dict)
+            disk_pipe_parent, disk_recover_dict,
+            delta.Recovered_delta.END_OF_PIPE)
     return [modified_img.name, modified_mem.name, fuse, delta_memory, memory_fuse, delta_disk, disk_fuse]
 
 
@@ -813,10 +815,10 @@ def synthesis(base_disk, meta, comp_overlay_disk, comp_overlay_mem):
     # decomp
     overlay_disk = NamedTemporaryFile(prefix="cloudlet-synthesis-disk-")
     overlay_mem = NamedTemporaryFile(prefix="cloudlet-synthesis-mem-")
-    outpath, time = decomp_lzma(comp_overlay_disk, overlay_disk.name)
-    Log.out.write("[Debug] Overlay-disk decomp time: %s\n" % (time))
-    outpath, time = decomp_lzma(comp_overlay_mem, overlay_mem.name)
-    Log.out.write("[Debug] Overlay-mem decomp time: %s\n" % (time))
+    outpath, decomp_time = decomp_lzma(comp_overlay_disk, overlay_disk.name)
+    Log.out.write("[Debug] Overlay-disk decomp time: %s\n" % (decomp_time))
+    outpath, decomp_time = decomp_lzma(comp_overlay_mem, overlay_mem.name)
+    Log.out.write("[Debug] Overlay-mem decomp time: %s\n" % (decomp_time))
 
     # recover VM
     Log.out.write("[Debug] recover launch VM\n")
@@ -835,13 +837,14 @@ def synthesis(base_disk, meta, comp_overlay_disk, comp_overlay_mem):
     disk_fuse.start()
     delta_disk.join()
 
+    while True:
+        user_input = raw_input("type q to quit : ")
+        if user_input == 'q':
+            break
+
     print "[INFO] VM Disk is Fully recovered at %s" % modified_img
     print "[INFO] VM Memory is Fully recoverd at %s" % modified_mem
 
-    while True:
-        user_input = raw_input("type q to quit :")
-        if user_input == 'q':
-            break
     # terminate
     resumed_VM.terminate()
     fuse.terminate()

@@ -328,16 +328,15 @@ static uint64_t read_chunk_unlocked(struct vmnetfs_image *img,
 					return 0;
 				}
 			} else {
+				// wait until get it from client
+				// and send message to parent
+				CPRINTF("%p is Waiting chunk(%ld) at %ld, length(%d)\n",
+						img->current_overlay_map, chunk, chunk * img->chunk_size + offset,
+						length);
+
 				while (1) {
-					// wait until get it from client
-					// and send message to parent
-					CPRINTF("%p is Waiting chunk(%ld) at %ld, length(%d)\n",
-							img->current_overlay_map, chunk, chunk * img->chunk_size + offset,
-							length);
 					if (_vmnetfs_bit_test(img->current_overlay_map, chunk)) {
 						// Get it from overlay VM
-						DPRINTF("Overlay read at %ld, length(%d)\n",p
-								chunk * img->chunk_size + offset, length);
 						if (!_cloudlet_read_chunk(img, img->current_overlay_map,
 								img->overlay_fd, data, chunk, offset, length,
 								err)) {
@@ -347,7 +346,8 @@ static uint64_t read_chunk_unlocked(struct vmnetfs_image *img,
 							break;
 						}
 					}
-					sleep(1);
+					// TODO: change it to wait with condition
+					usleep(1);
 				}
         	}
         }

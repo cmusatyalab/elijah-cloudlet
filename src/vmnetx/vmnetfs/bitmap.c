@@ -244,7 +244,6 @@ void _vmnetfs_bit_set_force(struct bitmap *map, uint64_t bit, bool is_force_noti
 void _vmnetfs_bit_set_nolock(struct bitmap *map, uint64_t bit)
 {
     if (bit < map->mgrp->nbits) {
-        !test_bit(map, bit);
         set_bit(map, bit);
     }
 }

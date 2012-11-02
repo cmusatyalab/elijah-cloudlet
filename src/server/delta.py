@@ -329,6 +329,8 @@ def diff_with_hashlist(base_hashlist, delta_list, ref_id):
 
 
 class Recovered_delta(multiprocessing.Process):
+    END_OF_PIPE = -1234
+
     def __init__(self, base_disk, base_mem, delta_path, output_path, output_size,
             chunk_size, parent=None, overlay_memory_info=None,
             out_pipe=None, time_queue=None, overlay_map_queue=None):
@@ -421,6 +423,7 @@ class Recovered_delta(multiprocessing.Process):
 
         if len(overlay_chunk_ids) > 0:
             self.out_pipe.send(overlay_chunk_ids)
+        self.out_pipe.send(Recovered_delta.END_OF_PIPE)
         self.out_pipe.close()
         recover_fd.close()
 

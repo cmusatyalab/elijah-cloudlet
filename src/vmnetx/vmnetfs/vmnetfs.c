@@ -251,8 +251,8 @@ static void handle_stdin(struct vmnetfs *fs, const char *oneline, GError **err){
 	}
 
 	// Set bit for total_overlay_map
-    _vmnetfs_bit_set(img->current_overlay_map, chunk_number);
-    printf("update overlay at chunk(%p : %lu)\n", img->current_overlay_map, chunk_number);
+	_vmnetfs_bit_set_nolock(img->current_overlay_map, chunk_number);
+//    printf("update overlay at chunk(%p : %lu)\n", img->current_overlay_map, chunk_number);
 
 }
 
