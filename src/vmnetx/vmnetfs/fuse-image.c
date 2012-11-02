@@ -20,6 +20,15 @@
 #include <errno.h>
 #include "vmnetfs-private.h"
 
+//#define DEBUG_FUSE_IMAGE
+#ifdef DEBUG_FUSE_IMAGE
+#define DPRINTF(fmt, ...) \
+    do { fprintf(stdout, "[DEBUG] FUSE_IMAGE: " fmt, ## __VA_ARGS__); } while (0)
+#else
+#define DPRINTF(fmt, ...) \
+    do { } while (0)
+#endif
+
 struct io_cursor {
     /* Public fields; do not modify */
     uint64_t chunk;
@@ -146,7 +155,7 @@ static int image_read(struct vmnetfs_fuse_fh *fh, void *buf, uint64_t start,
 static int image_write(struct vmnetfs_fuse_fh *fh, const void *buf,
         uint64_t start, uint64_t count)
 {
-    printf("krha, image_write: start(%ld), count(%ld)\n", start, count);
+    DPRINTF("krha, image_write: start(%ld), count(%ld)\n", start, count);
     struct vmnetfs_image *img = fh->data;
     struct io_cursor cur;
     GError *err = NULL;

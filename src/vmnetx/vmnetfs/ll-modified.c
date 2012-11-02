@@ -22,6 +22,15 @@
 #include <errno.h>
 #include "vmnetfs-private.h"
 
+//#define DEBUG_LL
+#ifdef DEBUG_LL
+#define DPRINTF(fmt, ...) \
+    do { fprintf(stdout, "[DEBUG] IO: " fmt, ## __VA_ARGS__); } while (0)
+#else
+#define DPRINTF(fmt, ...) \
+    do { } while (0)
+#endif
+
 bool _vmnetfs_ll_modified_init(struct vmnetfs_image *img, GError **err)
 {
     char *file;
@@ -65,7 +74,7 @@ bool _vmnetfs_ll_modified_write_chunk(struct vmnetfs_image *img,
         uint64_t image_size, const void *data, uint64_t chunk,
         uint32_t offset, uint32_t length, GError **err)
 {
-	printf("krha, _vmnetfs_ll_modified_write_chunk, start(%ld), length(%ld)\n", \
+	DPRINTF("krha, _vmnetfs_ll_modified_write_chunk, start(%ld), length(%ld)\n", \
 			chunk * img->chunk_size + offset, length);
     g_assert(_vmnetfs_bit_test(img->modified_map, chunk) ||
             (offset == 0 && length == MIN(img->chunk_size,

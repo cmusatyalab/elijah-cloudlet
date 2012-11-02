@@ -48,7 +48,7 @@ class VMNetFS(threading.Thread):
             self._running = True
             oneline = self.proc.stdout.readline()
             if len(oneline.strip()) > 0:
-                #sys.stdout.write(oneline)
+                sys.stdout.write(oneline)
                 pass
         self._running = False
         print "[INFO] close Fuse monitoring thread"
@@ -231,7 +231,7 @@ class FuseFeedingThread(threading.Thread):
                 chunks = self.input_pipe.recv()
             except EOFError:
                 break
-            msg = ','.join(["%d:%ld" % (self.index, chunk) for chunk in chunks])
+            msg = '\n'.join(["%d:%ld" % (self.index, chunk) for chunk in chunks])
             self.fuse.fuse_write(msg)
             count += 1
         self._running = False

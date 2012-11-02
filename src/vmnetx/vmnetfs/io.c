@@ -16,14 +16,24 @@
  */
 
 #include <inttypes.h>
+#include <stdio.h>
 #include "vmnetfs-private.h"
 
-#define DEBUG_IO
+//#define DEBUG_IO
 #ifdef DEBUG_IO
 #define DPRINTF(fmt, ...) \
-    do { printf("[DEBUG] IO: " fmt, ## __VA_ARGS__); } while (0)
+    do { fprintf(stdout, "[DEBUG] IO: " fmt, ## __VA_ARGS__); } while (0)
 #else
 #define DPRINTF(fmt, ...) \
+    do { } while (0)
+#endif
+
+#define CLOUDLET_IO
+#ifdef CLOUDLET_IO
+#define CPRINTF(fmt, ...) \
+    do { fprintf(stdout, "[cloudlet] IO: " fmt, ## __VA_ARGS__); fflush(stdout);} while (0)
+#else
+#define CPRINTF(fmt, ...) \
     do { } while (0)
 #endif
 
@@ -326,7 +336,7 @@ static uint64_t read_chunk_unlocked(struct vmnetfs_image *img,
 				while (1) {
 					// stall
 					if (strcmp(img->url, "disk") == 0) {
-						DPRINTF(
+						CPRINTF(
 								"Waiting chunk(%ld) until it is tansfered at %ld, length(%d)\n",
 								chunk, chunk * img->chunk_size + offset, length);
 					}
