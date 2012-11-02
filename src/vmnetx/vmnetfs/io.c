@@ -315,62 +315,40 @@ static uint64_t read_chunk_unlocked(struct vmnetfs_image *img,
 
         if (_vmnetfs_bit_test(img->total_overlay_map, chunk) == false) {
         	// get it from Base VM
-        	if(strcmp(img->url, "disk") == 0){
-            	DPRINTF("Base read at %ld, length(%d)\n", chunk * img->chunk_size + offset, length);
-        	}
             if (!_cloudlet_read_chunk(img, img->total_overlay_map, img->base_fd, data, chunk, offset, length, err)) {
                 return 0;
             }
         }else{
 			if (_vmnetfs_bit_test(img->current_overlay_map, chunk)) {
 				// get it from overlay VM
-				if (strcmp(img->url, "disk") == 0) {
-					DPRINTF("Base read at %ld, length(%d)\n",
-							chunk * img->chunk_size + offset, length);
-				}
+				DPRINTF("Overlay read at %ld, length(%d)\n",
+						chunk * img->chunk_size + offset, length);
 				if (!_cloudlet_read_chunk(img, img->current_overlay_map,
 						img->overlay_fd, data, chunk, offset, length, err)) {
 					return 0;
 				}
 			} else {
 				while (1) {
-					// stall
-					if (strcmp(img->url, "disk") == 0) {
-						CPRINTF(
-								"Waiting chunk(%ld) until it is tansfered at %ld, length(%d)\n",
-								chunk, chunk * img->chunk_size + offset, length);
-					}
+					// wait until get it from client
+					// and send message to parent
+					CPRINTF("%p is Waiting chunk(%ld) at %ld, length(%d)\n",
+							img->current_overlay_map, chunk, chunk * img->chunk_size + offset,
+							length);
 					if (_vmnetfs_bit_test(img->current_overlay_map, chunk)) {
-						// get it from overlay VM
-						DPRINTF("Overlay read at %ld, length(%d)\n",
+						// Get it from overlay VM
+						DPRINTF("Overlay read at %ld, length(%d)\n",p
 								chunk * img->chunk_size + offset, length);
 						if (!_cloudlet_read_chunk(img, img->current_overlay_map,
 								img->overlay_fd, data, chunk, offset, length,
 								err)) {
+							// return 0 --> failed to get right chunk from overlay
 							return 0;
+						}else{
+							break;
 						}
 					}
 					sleep(1);
 				}
-
-				// request early fetch over pipe
-				/*
-				uint64_t start = chunk * img->chunk_size;
-				uint64_t count = MIN(img->initial_size - start, img->chunk_size);
-
-				void *buf = g_malloc(count);
-				_vmnetfs_u64_stat_increment(img->chunk_fetches, 1);
-				if (!fetch_data(img, buf, start, count, err)) {
-					g_free(buf);
-					return 0;
-				}
-				// Do not make cache, data will at overlay after fetching return
-				bool ok = _vmnetfs_ll_pristine_write_chunk(img, buf, chunk, count, err);
-				if (!ok) {
-					return 0;
-				}
-				g_free(buf);
-				*/
         	}
         }
     }

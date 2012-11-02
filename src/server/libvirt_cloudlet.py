@@ -35,6 +35,7 @@ from uuid import uuid4
 from tempfile import NamedTemporaryFile
 from time import time
 from time import sleep
+import threading
 from optparse import OptionParser
 from multiprocessing import Pipe
 
@@ -521,6 +522,7 @@ def recover_launchVM(base_image, overlay_meta, overlay_disk, overlay_mem, **kwar
     vm_memory_size = meta_info[Const.META_RESUME_VM_MEMORY_SIZE]
     memory_chunk_list = ["%ld:0" % item for item in meta_info[Const.META_MODIFIED_MEMORY_CHUNKS]]
     disk_chunk_list = ["%ld:0" % item for item in meta_info[Const.META_MODIFIED_DISK_CHUNKS]]
+    print "Modified size memory: %ld, disk: %ld" % (len(memory_chunk_list), len(disk_chunk_list))
     disk_overlay_map = ','.join(disk_chunk_list)
     memory_overlay_map = ','.join(memory_chunk_list)
 
@@ -532,38 +534,25 @@ def recover_launchVM(base_image, overlay_meta, overlay_disk, overlay_mem, **kwar
     print "[INFO] Start FUSE"
 
     # Recover Modified Memory
-    start_time = time()
     mem_pipe_parent, mem_pipe_child = Pipe()
-    recovered_memory = delta.Recovered_delta(base_image, base_mem, overlay_mem, \
+    memory_recover_dict = dict()
+    delta_memory = delta.Recovered_delta(base_image, base_mem, overlay_mem, \
             modified_mem.name, vm_memory_size, Memory.Memory.RAM_PAGE_SIZE, 
             out_pipe=mem_pipe_child, parent=base_mem)
-    recovered_memory.start()
-    recover_memory_fuse = vmnetfs.FuseFeedingThread(fuse, 
+    memory_fuse = vmnetfs.FuseFeedingThread(fuse, 
             vmnetfs.FuseFeedingThread.FUSE_IMAGE_INDEX_MEMORY,
-            mem_pipe_parent)
-    recover_memory_fuse.start()
-    recovered_memory.join()
-    print "time for memory feeding: %f" % (time()-start_time)
-
+            mem_pipe_parent, memory_recover_dict)
     # Recover Modified Disk
-    start_time = time()
     disk_pipe_parent, disk_pipe_child = Pipe()
-    disk_chunk_list = []
-    recovered_disk = delta.Recovered_delta(base_image, base_mem, overlay_disk, \
+    disk_recover_dict = dict()
+    overlay_memory_info = {'dict':memory_recover_dict, 'path':modified_mem.name}
+    delta_disk = delta.Recovered_delta(base_image, base_mem, overlay_disk, \
             modified_img.name, vm_disk_size, Const.CHUNK_SIZE, out_pipe=disk_pipe_child,
-            parent=base_image, overlay_memory=modified_mem.name)
-    recovered_disk.start()
-    recover_disk_fuse = vmnetfs.FuseFeedingThread(fuse, 
+            parent=base_image, overlay_memory_info=overlay_memory_info)
+    disk_fuse = vmnetfs.FuseFeedingThread(fuse, 
             vmnetfs.FuseFeedingThread.FUSE_IMAGE_INDEX_DISK,
-            disk_pipe_parent)
-    recover_disk_fuse.start()
-    recovered_disk.join()
-    print "time for disk feeding: %f" % (time()-start_time)
-
-    print "[INFO] VM Disk is Fully recovered at %s" % modified_img.name
-    print "[INFO] VM Memory is Fully recoverd at %s" % modified_mem.name
-
-    return [modified_img.name, modified_mem.name, fuse]
+            disk_pipe_parent, disk_recover_dict)
+    return [modified_img.name, modified_mem.name, fuse, delta_memory, memory_fuse, delta_disk, disk_fuse]
 
 
 def run_fuse(bin_path, chunk_size, original_disk, fuse_disk_size,
@@ -690,7 +679,9 @@ def run_snapshot(conn, disk_image, mem_snapshot, **kwargs):
     xml = ElementTree.fromstring(hdr.xml)
     new_xml_string = convert_xml(xml, conn, disk_path=disk_image, 
             uuid=uuid4(), logfile=logfile)
+
     overwrite_xml(mem_snapshot, new_xml_string)
+
     #temp_mem = NamedTemporaryFile(prefix="cloudlet-mem-")
     #copy_with_xml(mem_snapshot, temp_mem.name, new_xml_string)
 
@@ -777,9 +768,10 @@ def rettach_nic(conn, xml, **kwargs):
 
 
 def restore_with_config(conn, mem_snapshot, xml):
-    print "[INFO] restoring VM..."
     try:
+        print "[INFO] restoring VM..."
         conn.restoreFlags(mem_snapshot, xml, libvirt.VIR_DOMAIN_SAVE_RUNNING)
+        print "[INFO] VM is restored..."
     except libvirt.libvirtError, e:
         message = "%s\nXML: %s" % (str(e), xml)
         raise CloudletGenerationError(message)
@@ -828,19 +820,34 @@ def synthesis(base_disk, meta, comp_overlay_disk, comp_overlay_mem):
 
     # recover VM
     Log.out.write("[Debug] recover launch VM\n")
-    modified_img, modified_mem, fuse = recover_launchVM(base_disk, meta, 
+    modified_img, modified_mem, fuse, delta_memory, memory_fuse, delta_disk, disk_fuse  = recover_launchVM(base_disk, meta, 
             overlay_disk.name, overlay_mem.name, log=Log.out)
 
     # resume VM
     resumed_VM = ResumedVM(modified_img, modified_mem, fuse)
-    resumed_VM.resume()
+    resumed_VM.start()
 
+    delta_memory.start()
+    memory_fuse.start()
+    delta_memory.join()
+
+    delta_disk.start()
+    disk_fuse.start()
+    delta_disk.join()
+
+    print "[INFO] VM Disk is Fully recovered at %s" % modified_img
+    print "[INFO] VM Memory is Fully recoverd at %s" % modified_mem
+
+    while True:
+        user_input = raw_input("type q to quit :")
+        if user_input == 'q':
+            break
     # terminate
     resumed_VM.terminate()
     fuse.terminate()
 
 
-class ResumedVM(object):
+class ResumedVM(threading.Thread):
     def __init__(self, modified_img, modified_mem, fuse, **kwargs):
         # kwargs
         # vnc_disable       :   show vnc console
@@ -866,6 +873,7 @@ class ResumedVM(object):
         self.monitor.start() 
         self.qemu_monitor = vmnetfs.FileMonitor(self.qemu_logfile.name, vmnetfs.FileMonitor.QEMU_LOG)
         self.qemu_monitor.start()
+        threading.Thread.__init__(self, target=self.resume)
 
     def resume(self):
         #resume VM

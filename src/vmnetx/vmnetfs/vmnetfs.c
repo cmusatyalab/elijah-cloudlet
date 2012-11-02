@@ -237,6 +237,7 @@ static void handle_stdin(struct vmnetfs *fs, const char *oneline, GError **err){
 		g_set_error(err, G_FILE_ERROR, g_file_error_from_errno(errno),
 				"Invalid overlay format at chunk number %s", *overlay_info);
 	}
+	g_strfreev(overlay_info);
 
 
 	if(image_index == 1){
@@ -251,7 +252,7 @@ static void handle_stdin(struct vmnetfs *fs, const char *oneline, GError **err){
 
 	// Set bit for total_overlay_map
     _vmnetfs_bit_set(img->current_overlay_map, chunk_number);
-    //printf("update overlay at chunk(%d : %lu)\n", image_index,  chunk_number);
+    printf("update overlay at chunk(%p : %lu)\n", img->current_overlay_map, chunk_number);
 
 }
 

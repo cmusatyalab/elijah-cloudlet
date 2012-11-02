@@ -241,6 +241,26 @@ void _vmnetfs_bit_set_force(struct bitmap *map, uint64_t bit, bool is_force_noti
     }
 }
 
+void _vmnetfs_bit_set_nolock(struct bitmap *map, uint64_t bit)
+{
+    if (bit < map->mgrp->nbits) {
+        !test_bit(map, bit);
+        set_bit(map, bit);
+    }
+}
+
+bool _vmnetfs_bit_test_print(struct bitmap *map, uint64_t bit){
+    bool ret = true;
+
+    g_mutex_lock(map->mgrp->lock);
+    if (bit < map->mgrp->nbits) {
+		printf("%p is Waiting chunk(%ld)\n", map, bit);
+        ret = test_bit(map, bit);
+    }
+    g_mutex_unlock(map->mgrp->lock);
+    return ret;
+
+}
 /* Testing an out-of-range bit returns true to simplify resize races */
 bool _vmnetfs_bit_test(struct bitmap *map, uint64_t bit)
 {

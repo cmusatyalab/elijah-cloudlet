@@ -48,7 +48,7 @@ class VMNetFS(threading.Thread):
             self._running = True
             oneline = self.proc.stdout.readline()
             if len(oneline.strip()) > 0:
-                sys.stdout.write(oneline)
+                #sys.stdout.write(oneline)
                 pass
         self._running = False
         print "[INFO] close Fuse monitoring thread"
@@ -216,27 +216,33 @@ class FuseFeedingThread(threading.Thread):
     FUSE_IMAGE_INDEX_DISK = 1
     FUSE_IMAGE_INDEX_MEMORY = 2
 
-    def __init__(self, fuse, fuse_index, input_pipe):
+    def __init__(self, fuse, fuse_index, input_pipe, feeding_info):
         self.fuse = fuse
         self.index = fuse_index
         self.input_pipe = input_pipe
+        self.feeding_info = feeding_info
         self.stop = threading.Event()
         threading.Thread.__init__(self, target=self.feeding_thread)
 
     def feeding_thread(self):
-        start_time = time.time()
         count = 0
+        start_time = time.time()
         while(not self.stop.wait(0.0000001)):
             self._running = True
             try:
                 chunks = self.input_pipe.recv()
             except EOFError:
                 break
-            msg = '\n'.join(["%d:%ld" % (self.index, chunk) for chunk in chunks])
+            feeding_list = []
+            for chunk in chunks:
+                if chunk == 262147:
+                    print "!!! 262147"
+                self.feeding_info[chunk] = True
+                feeding_list.append("%d:%ld" % (self.index, chunk))
+            count += len(feeding_list)
+            msg = '\n'.join(feeding_list)
             self.fuse.fuse_write(msg)
-            count += 1
-        self._running = False
-        print "fuse feeding time :%f, total loop : %d" % (time.time()-start_time, count)
+        print "fuse feeding time :%f, count: %d" % (time.time()-start_time, count)
 
     def fuse_write(self, data):
         self._pipe.write(data + "\n")

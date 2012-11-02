@@ -330,7 +330,7 @@ def diff_with_hashlist(base_hashlist, delta_list, ref_id):
 
 class Recovered_delta(multiprocessing.Process):
     def __init__(self, base_disk, base_mem, delta_path, output_path, output_size,
-            chunk_size, parent=None, overlay_memory=None,
+            chunk_size, parent=None, overlay_memory_info=None,
             out_pipe=None, time_queue=None, overlay_map_queue=None):
         # recover delta list using base disk/memory
         # You have to specify parent to indicate whether you're recover memory or disk 
@@ -345,7 +345,6 @@ class Recovered_delta(multiprocessing.Process):
         self.output_size = output_size
         self.out_pipe = out_pipe
         self.time_queue = time_queue
-        self.overlay_memory = overlay_memory
         self.base_disk = base_disk
         self.base_mem = base_mem
         self.overlay_map_queue = overlay_map_queue
@@ -355,6 +354,7 @@ class Recovered_delta(multiprocessing.Process):
         self.raw_disk = None
         self.raw_mem = None
         self.parent_raw = None
+        self.mem_overlay_dict = None
         self.raw_mem_overlay = None
         self.chunk_size = chunk_size
         self.zero_data = struct.pack("!s", chr(0x00)) * chunk_size
@@ -374,22 +374,30 @@ class Recovered_delta(multiprocessing.Process):
             self.parent_raw = self.raw_mem
         else:
             raise DeltaError("Parent should be either disk or memory")
+
+        # create output file without content
+        # this is designed for mmap of overlay memory before finishing reconstruction
+        recover_fd = open(self.output_path, "wr+b")
+        recover_fd.seek(self.output_size-1)
+        last_one_byte = recover_fd.read(1)
+        if (not last_one_byte) or len(last_one_byte) == 0:
+            recover_fd.write('0')
+            recover_fd.flush()
+        recover_fd.close()
+
+        if overlay_memory_info != None:
+            overlay_mem_path = overlay_memory_info['path']
+            self.overlay_mem_dict = overlay_memory_info['dict']
+            self.overlay_mem_fd = open(overlay_mem_path, "rb")
+            self.recover_base_size = os.path.getsize(self.base_disk)
+        else:
+            self.recover_base_size = os.path.getsize(self.base_mem)
         multiprocessing.Process.__init__(self)
 
     def run(self):
         start_time = time.time()
         recover_fd = open(self.output_path, "wr+b")
         delta_stream = open(self.delta_path, "r")
-
-        # make mmap for overlay memory recover at this point beacuse 
-        # memory may not recovered when we create this object
-        if self.overlay_memory:
-            overlay_mem_fd = open(self.overlay_memory, "rb")
-            self.raw_mem_overlay = mmap.mmap(overlay_mem_fd.fileno(), 0, prot=mmap.PROT_READ)
-            self.recover_base_size = os.path.getsize(self.base_disk)
-        else:
-            self.raw_mem_overlay = None
-            self.recover_base_size = os.path.getsize(self.base_mem)
 
         overlay_chunk_ids = []
         for delta_item in DeltaList.from_stream(delta_stream):
@@ -413,12 +421,7 @@ class Recovered_delta(multiprocessing.Process):
 
         if len(overlay_chunk_ids) > 0:
             self.out_pipe.send(overlay_chunk_ids)
-
-        # fill zero to the end of the modified file
-        recover_fd.seek(self.output_size-1)
-        last_one_byte = recover_fd.read(1)
-        if (not last_one_byte) or len(last_one_byte) == 0:
-            recover_fd.write('0')
+        self.out_pipe.close()
         recover_fd.close()
 
         if self.overlay_map_queue != None:
@@ -449,11 +452,19 @@ class Recovered_delta(multiprocessing.Process):
             offset = delta_item.data
             recover_data = self.raw_disk[offset:offset+self.chunk_size]
         elif (delta_item.ref_id == DeltaItem.REF_OVERLAY_MEM):
-            if not self.raw_mem_overlay:
+            if not self.overlay_mem_fd:
                 msg = "Need overlay memory if overlay disk is de-duped with it"
                 raise DeltaError(msg)
             offset = delta_item.data
-            recover_data = self.raw_mem_overlay[offset:offset+self.chunk_size]
+            while True:
+                if self.overlay_mem_dict.get(offset/self.chunk_size, False) == True:
+                    break
+                msg = "Need overlay memory info at %ld" % (offset/self.chunk_size)
+                print msg
+                time.sleep(1)
+            self.overlay_mem_fd.seek(offset)
+            recover_data = self.overlay_mem_fd.read(self.chunk_size)
+            #recover_data = self.raw_mem_overlay[offset:offset+self.chunk_size]
         elif delta_item.ref_id == DeltaItem.REF_SELF:
             ref_offset = delta_item.data
             self_ref_delta_item = self.recovered_delta_dict.get(ref_offset, None)
