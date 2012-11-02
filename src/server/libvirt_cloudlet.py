@@ -62,8 +62,8 @@ class Const(object):
     OVERLAY_DISK        = ".overlay-img"
     OVERLAY_MEM         = ".overlay-mem"
 
-    META_VM_DISK_SIZE           = "resumed_vm_disk_size"
-    META_VM_MEMORY_SIZE         = "resumed_vm_memory_size"
+    META_RESUME_VM_DISK_SIZE           = "resumed_vm_disk_size"
+    META_RESUME_VM_MEMORY_SIZE         = "resumed_vm_memory_size"
     META_OVERLAY_DISK_SIZE      = "overlay_disk_size"
     META_OVERLAY_MEMORY_SIZE    = "overlay_memory_size"
     META_MODIFIED_DISK_CHUNKS   = "modified_disk_chunk"
@@ -391,8 +391,8 @@ def _create_overlay_meta(overlay_metafile, modified_disk, modified_mem,
             raise CloudletGenerationError(msg)
 
     meta_dict = dict()
-    meta_dict[Const.META_VM_DISK_SIZE] = os.path.getsize(modified_disk)
-    meta_dict[Const.META_VM_MEMORY_SIZE] = os.path.getsize(modified_mem)
+    meta_dict[Const.META_RESUME_VM_DISK_SIZE] = os.path.getsize(modified_disk)
+    meta_dict[Const.META_RESUME_VM_MEMORY_SIZE] = os.path.getsize(modified_mem)
     meta_dict[Const.META_OVERLAY_DISK_SIZE] = os.path.getsize(comp_overlay_diskpath)
     meta_dict[Const.META_OVERLAY_MEMORY_SIZE] = os.path.getsize(comp_overlay_mempath)
     meta_dict[Const.META_MODIFIED_DISK_CHUNKS] = disk_offsetlist
@@ -517,8 +517,8 @@ def recover_launchVM(base_image, overlay_meta, overlay_disk, overlay_mem, **kwar
 
     # Get modified list from overlay_meta
     meta_info = bson.loads(open(overlay_meta, "r").read())
-    vm_disk_size = meta_info[Const.META_VM_DISK_SIZE]
-    vm_memory_size = meta_info[Const.META_VM_MEMORY_SIZE]
+    vm_disk_size = meta_info[Const.META_RESUME_VM_DISK_SIZE]
+    vm_memory_size = meta_info[Const.META_RESUME_VM_MEMORY_SIZE]
     memory_chunk_list = ["%ld:0" % item for item in meta_info[Const.META_MODIFIED_MEMORY_CHUNKS]]
     disk_chunk_list = ["%ld:0" % item for item in meta_info[Const.META_MODIFIED_DISK_CHUNKS]]
     disk_overlay_map = ','.join(disk_chunk_list)
@@ -535,7 +535,7 @@ def recover_launchVM(base_image, overlay_meta, overlay_disk, overlay_mem, **kwar
     start_time = time()
     mem_pipe_parent, mem_pipe_child = Pipe()
     recovered_memory = delta.Recovered_delta(base_image, base_mem, overlay_mem, \
-            modified_mem.name, Memory.Memory.RAM_PAGE_SIZE, 
+            modified_mem.name, vm_memory_size, Memory.Memory.RAM_PAGE_SIZE, 
             out_pipe=mem_pipe_child, parent=base_mem)
     recovered_memory.start()
     recover_memory_fuse = vmnetfs.FuseFeedingThread(fuse, 
@@ -550,7 +550,7 @@ def recover_launchVM(base_image, overlay_meta, overlay_disk, overlay_mem, **kwar
     disk_pipe_parent, disk_pipe_child = Pipe()
     disk_chunk_list = []
     recovered_disk = delta.Recovered_delta(base_image, base_mem, overlay_disk, \
-            modified_img.name, Const.CHUNK_SIZE, out_pipe=disk_pipe_child,
+            modified_img.name, vm_disk_size, Const.CHUNK_SIZE, out_pipe=disk_pipe_child,
             parent=base_image, overlay_memory=modified_mem.name)
     recovered_disk.start()
     recover_disk_fuse = vmnetfs.FuseFeedingThread(fuse, 

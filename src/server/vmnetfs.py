@@ -224,6 +224,7 @@ class FuseFeedingThread(threading.Thread):
         threading.Thread.__init__(self, target=self.feeding_thread)
 
     def feeding_thread(self):
+        start_time = time.time()
         count = 0
         while(not self.stop.wait(0.0000001)):
             self._running = True
@@ -235,7 +236,7 @@ class FuseFeedingThread(threading.Thread):
             self.fuse.fuse_write(msg)
             count += 1
         self._running = False
-        print "total loop : %d" % count
+        print "fuse feeding time :%f, total loop : %d" % (time.time()-start_time, count)
 
     def fuse_write(self, data):
         self._pipe.write(data + "\n")
