@@ -48,7 +48,7 @@ import threading
 
 class Log(object):
     out = sys.stdout
-    mute = open("/dev/null", "w+b")
+    mute = open("/dev/null", "wrb")
 
 class Const(object):
     TRIM_SUPPORT        = True
@@ -215,7 +215,7 @@ def create_baseVM(disk_image_path):
         # TODO: need more efficient implementation, e.g. bisect
         Disk.hashing(disk_image_path, base_diskmeta, print_out=Log.out)
         base_hashvalue = hashlib.sha256(open(disk_image_path, "rb").read()).hexdigest()
-        open(base_hashpath, "w+b").write(base_hashvalue)
+        open(base_hashpath, "wrb").write(base_hashvalue)
     except Exception as e:
         sys.stderr.write(str(e)+"\n")
         if machine:
@@ -333,7 +333,7 @@ def create_overlay(base_image):
     if Const.XRAY_SUPPORT == True:
         # 3-1. list-up all the files that is associated with overlay sectors
         xray_start_time = time()
-        xray_log = open("./xray_log", "w+b")
+        xray_log = open("./xray_log", "wrb")
         import pprint
         sectors = [item.offset/512 for item in disk_deltalist]
         sec_file_dict = xray.get_files_from_sectors(modified_disk, sectors)
@@ -395,7 +395,7 @@ def create_overlay(base_image):
 def _create_overlay_meta(base_hash, overlay_metafile, modified_disk, modified_mem, 
         comp_overlay_diskpath, comp_overlay_mempath,
         disk_deltalist, mem_deltalist):
-    fout = open(overlay_metafile, "w+b")
+    fout = open(overlay_metafile, "wrb")
 
     disk_offsetlist = list()
     mem_offsetlist = list()
@@ -532,7 +532,7 @@ def recover_launchVM(base_image, meta_info, overlay_disk, overlay_mem, **kwargs)
     # nova_util = nova_util is executioin wrapper for nova framework
     #           You should use nova_util in OpenStack, or subprocess 
     #           will be returned without finishing their work
-    log = kwargs.get('log', open("/dev/null", "w+b"))
+    log = kwargs.get('log', open("/dev/null", "wrb"))
     nova_util = kwargs.get('nova_util', None)
 
     (base_diskmeta, base_mem, base_memmeta) = \
@@ -814,8 +814,8 @@ def overwrite_xml(in_path, new_xml):
 
 def copy_with_xml(in_path, out_path, xml):
     fin = open(in_path)
-    fout = open(out_path, 'w+b')
-    hdr = vmnetx._QemuMemoryHeader(fin)
+    fout = open(out_path, 'wrb')
+    hdr = vmnetx._QemuMemoryneader(fin)
 
     # Write header
     hdr.xml = xml

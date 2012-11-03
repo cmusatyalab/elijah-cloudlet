@@ -397,7 +397,7 @@ class Recovered_delta(multiprocessing.Process):
 
     def run(self):
         start_time = time.time()
-        recover_fd = open(self.output_path, "wr+b")
+        recover_fd = open(self.output_path, "wrb")
         delta_stream = open(self.delta_path, "r")
 
         overlay_chunk_ids = []

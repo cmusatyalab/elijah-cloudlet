@@ -211,7 +211,7 @@ class SynthesisTCPHandler(SocketServer.StreamRequestHandler):
         bson_data = request.recv(bson_size)
         while len(bson_data) < bson_size:
             bson_data += request.recv(bson_size - len(bson_data))
-        open("./bson_transfer", "w+b").write(bson_data)
+        open("./bson_transfer", "wrb").write(bson_data)
         bson_header = bson.loads(bson_data)
 
         try:
