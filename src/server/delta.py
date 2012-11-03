@@ -333,7 +333,7 @@ class Recovered_delta(multiprocessing.Process):
 
     def __init__(self, base_disk, base_mem, delta_path, output_path, output_size,
             chunk_size, parent=None, overlay_memory_info=None,
-            out_pipe=None, time_queue=None, overlay_map_queue=None):
+            out_pipe=None, time_queue=None):
         # recover delta list using base disk/memory
         # You have to specify parent to indicate whether you're recover memory or disk 
         # optionally you can use overlay_memory to recover overlay disk which is
@@ -349,7 +349,6 @@ class Recovered_delta(multiprocessing.Process):
         self.time_queue = time_queue
         self.base_disk = base_disk
         self.base_mem = base_mem
-        self.overlay_map_queue = overlay_map_queue
 
         self.base_disk_fd = None
         self.base_mem_fd = None
@@ -426,11 +425,6 @@ class Recovered_delta(multiprocessing.Process):
         self.out_pipe.send(Recovered_delta.END_OF_PIPE)
         self.out_pipe.close()
         recover_fd.close()
-
-        if self.overlay_map_queue != None:
-            offset_list = self.recovered_delta_dict.keys()
-            chunk_list = [("%ld:1" % (offset/self.chunk_size)) for offset in offset_list]
-            self.overlay_map_queue.put(",".join(chunk_list))
 
         end_time = time.time()
         if self.time_queue != None: 

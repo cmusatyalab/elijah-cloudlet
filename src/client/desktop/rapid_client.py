@@ -16,10 +16,11 @@
 #
 
 import os
-import json
+import bson
 import struct
 import sys
 import socket
+import json
 from optparse import OptionParser
 
 application = ['moped', 'face']
@@ -30,9 +31,6 @@ def process_command_line(argv):
 
     parser = OptionParser(usage="usage: ./cloudlet_client.py [option]",\
             version="Desktop Cloudlet Client")
-    parser.add_option(
-            '-b', '--base', action='store', type='string', dest='base',
-            help="Set base VM name")
     parser.add_option(
             '-a', '--app', action='store', type='string', dest='application',
             help="Set base VM name")
@@ -46,9 +44,6 @@ def process_command_line(argv):
     if not settings.application:
         parser.error("Need application among [%s]" % ('|'.join(application)))
     
-    if not settings.base:
-        parser.error("Need base VM name")
-
     return settings, args
 
 
@@ -59,31 +54,17 @@ def recv_all(sock, size):
     return data
 
 
-def synthesis(address, port, base_name, application):
+def synthesis(address, port, application):
     if application == 'moped':
+        overlay_meta_path = '/home/krha/cloudlet/image/overlay/ubuntu/moped/precise.overlay-meta'
         overlay_disk_path = '/home/krha/cloudlet/image/overlay/ubuntu/moped/precise.overlay-img.lzma'
         overlay_mem_path = '/home/krha/cloudlet/image/overlay/ubuntu/moped/precise.overlay-mem.lzma'
     elif application == 'face':
+        overlay_meta_path = '/home/krha/cloudlet/image/overlay/window/face/window7.overlay-meta'
         overlay_disk_path = '/home/krha/cloudlet/image/overlay/window/face/window7.overlay-img.lzma'
         overlay_mem_path = '/home/krha/cloudlet/image/overlay/window/face/window7.overlay-mem.lzma'
     else:
         raise Exception("NO valid application name: %s" % application)
-    overlay_disk_size = os.path.getsize(overlay_disk_path)
-    overlay_mem_size = os.path.getsize(overlay_mem_path)
-
-    json_str = {"command":33, \
-            "protocol-version": "1.0", \
-            "VM":[{ \
-                "overlay_name": application, \
-                "memory_snapshot_path": overlay_mem_path, \
-                "memory_snapshot_size": overlay_mem_size, \
-                "diskimg_path": overlay_disk_path, \
-                "diskimg_size": overlay_disk_size, \
-                "base_name": base_name
-                }],\
-            "Request_synthesis_core":"4" \
-            }
-    print json.dumps(json_str, indent=4)
 
     # connection
     try:
@@ -96,9 +77,9 @@ def synthesis(address, port, base_name, application):
         sys.exit(1)
 
     # send header
-    json_data = json.dumps(json_str)
-    sock.sendall(struct.pack("!I", len(json_data)))
-    sock.sendall(json_data)
+    sock.sendall(struct.pack("!I", os.path.getsize(overlay_meta_path)))
+    overlay_meta = open(overlay_meta_path, "rb").read()
+    sock.sendall(overlay_meta)
 
     # send data
     mem_data = open(overlay_mem_path, "rb").read()
@@ -126,7 +107,7 @@ def main(argv=None):
     else:
         cloudlet_server_ip = "cloudlet.krha.kr"
     cloudlet_server_port = 8021
-    synthesis(cloudlet_server_ip, cloudlet_server_port, settings.base, settings.application)
+    synthesis(cloudlet_server_ip, cloudlet_server_port, settings.application)
 
 
 if __name__ == "__main__":

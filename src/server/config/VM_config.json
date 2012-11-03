@@ -3,6 +3,7 @@
    "VM":[
       {
          "name":"Ubuntu12.04.01-server-i386",
+         "sha256":"f7cb4fa5148f49bbe83f703814b3e23c3ca44a07d1a451e90fea3c8321a804b6",
          "type":"baseVM",
          "OS":"Linux",
          "OS-version":"Ubuntu12.04-server-i386",
@@ -10,6 +11,7 @@
       },
       {
          "name":"window7",
+         "sha256":"18aab1a8f4df496bfd8a04cddb1663bad864e12b682f3c3ce4a08c31179397ba",
          "type":"baseVM",
          "OS":"Window",
          "OS-version":"Window7-enterprise-x86",

@@ -27,6 +27,7 @@ import stat
 import delta
 import xray
 import bson
+import hashlib
 from delta import DeltaList
 from delta import DeltaItem
 from xml.etree import ElementTree
@@ -56,6 +57,7 @@ class Const(object):
 
     BASE_DISK           = ".base-img"
     BASE_MEM            = ".base-mem"
+    BAES_DISK_HASH      = ".base-img-hash"
     BASE_DISK_META      = ".base-img-meta"
     BASE_MEM_META       = ".base-mem-meta"
     BASE_MEM_RAW        = ".base-mem.raw"
@@ -63,24 +65,27 @@ class Const(object):
     OVERLAY_DISK        = ".overlay-img"
     OVERLAY_MEM         = ".overlay-mem"
 
-    META_RESUME_VM_DISK_SIZE           = "resumed_vm_disk_size"
-    META_RESUME_VM_MEMORY_SIZE         = "resumed_vm_memory_size"
-    META_OVERLAY_DISK_SIZE      = "overlay_disk_size"
-    META_OVERLAY_MEMORY_SIZE    = "overlay_memory_size"
-    META_MODIFIED_DISK_CHUNKS   = "modified_disk_chunk"
-    META_MODIFIED_MEMORY_CHUNKS = "modified_memory_chunk"
+    META_BASE_VM_SHA256                 = "base_vm_sha256"
+    META_RESUME_VM_DISK_SIZE            = "resumed_vm_disk_size"
+    META_RESUME_VM_MEMORY_SIZE          = "resumed_vm_memory_size"
+    META_OVERLAY_DISK_SIZE              = "overlay_disk_size"
+    META_OVERLAY_MEMORY_SIZE            = "overlay_memory_size"
+    META_MODIFIED_DISK_CHUNKS           = "modified_disk_chunk"
+    META_MODIFIED_MEMORY_CHUNKS         = "modified_memory_chunk"
 
     TEMPLATE_XML = "./config/VM_TEMPLATE.xml"
     VMNETFS_PATH = "/home/krha/cloudlet/src/vmnetx/vmnetfs/vmnetfs"
     CHUNK_SIZE=4096
 
     @staticmethod
+    def _check_path(name, path):
+        if not os.path.exists(path):
+            message = "Cannot find name at %s" % (path)
+            raise CloudletGenerationError(message)
+
+    @staticmethod
     def get_basepath(base_disk_path, check_exist=False):
-        def _check_path(name, path):
-            if not os.path.exists(path):
-                message = "Cannot find name at %s" % (path)
-                raise CloudletGenerationError(message)
-        _check_path('base disk', base_disk_path)
+        Const._check_path('base disk', base_disk_path)
 
         image_name = os.path.splitext(base_disk_path)[0]
         dir_path = os.path.dirname(base_disk_path)
@@ -90,11 +95,21 @@ class Const(object):
 
         #check sanity
         if check_exist==True:
-            _check_path('base memory', mempath)
-            _check_path('base disk-hash', diskmeta)
-            _check_path('base memory-hash', memmeta)
+            Const._check_path('base memory', mempath)
+            Const._check_path('base disk-hash', diskmeta)
+            Const._check_path('base memory-hash', memmeta)
 
         return diskmeta, mempath, memmeta
+
+    @staticmethod
+    def get_basehash_path(base_disk_path, check_exist=False):
+        Const._check_path('base disk', base_disk_path)
+        image_name = os.path.splitext(base_disk_path)[0]
+        dir_path = os.path.dirname(base_disk_path)
+        diskhash = os.path.join(dir_path, image_name+Const.BAES_DISK_HASH)
+        if check_exist == True:
+            Const._check_path(diskhash)
+        return diskhash
 
 
 class CloudletGenerationError(Exception):
@@ -157,6 +172,7 @@ def create_baseVM(disk_image_path):
 
     (base_diskmeta, base_mempath, base_memmeta) = \
             Const.get_basepath(disk_image_path)
+    base_hashpath = Const.get_basehash_path(disk_image_path)
 
     # check sanity
     if not os.path.exists(Const.TEMPLATE_XML):
@@ -177,6 +193,8 @@ def create_baseVM(disk_image_path):
         os.unlink(base_mempath)
     if os.path.exists(base_memmeta):
         os.unlink(base_memmeta)
+    if os.path.exists(base_hashpath):
+        os.unlink(base_hashpath)
 
     # edit default XML to have new disk path
     conn = get_libvirt_connection()
@@ -196,6 +214,8 @@ def create_baseVM(disk_image_path):
         # generate disk hashing
         # TODO: need more efficient implementation, e.g. bisect
         Disk.hashing(disk_image_path, base_diskmeta, print_out=Log.out)
+        base_hashvalue = hashlib.sha256(open(disk_image_path, "rb").read()).hexdigest()
+        open(base_hashpath, "w+b").write(base_hashvalue)
     except Exception as e:
         sys.stderr.write(str(e)+"\n")
         if machine:
@@ -207,6 +227,7 @@ def create_baseVM(disk_image_path):
     os.chmod(base_diskmeta, stat.S_IRUSR)
     os.chmod(base_mempath, stat.S_IRUSR)
     os.chmod(base_memmeta, stat.S_IRUSR)
+    os.chmod(base_hashpath, stat.S_IRUSR)
     return disk_image_path, base_mempath
 
 
@@ -218,6 +239,8 @@ def create_overlay(base_image):
 
     (base_diskmeta, base_mem, base_memmeta) = \
             Const.get_basepath(base_image, check_exist=True)
+    base_hash_path = Const.get_basehash_path(base_image)
+    base_hash_value = open(base_hash_path, "rb").read()
     
     # filename for overlay VM
     qemu_logfile = NamedTemporaryFile(prefix="cloudlet-qemu-log-", delete=False)
@@ -341,7 +364,7 @@ def create_overlay(base_image):
 
     # 4. create metadata
     overlay_metafile = os.path.join(dir_path, image_name+Const.OVERLAY_META)
-    _create_overlay_meta(overlay_metafile, modified_disk, modified_mem.name,
+    _create_overlay_meta(base_hash_value, overlay_metafile, modified_disk, modified_mem.name,
             comp_overlay_diskpath, comp_overlay_mempath,
             disk_deltalist, mem_deltalist)
 
@@ -369,7 +392,7 @@ def create_overlay(base_image):
     return overlay_files
     '''
 
-def _create_overlay_meta(overlay_metafile, modified_disk, modified_mem, 
+def _create_overlay_meta(base_hash, overlay_metafile, modified_disk, modified_mem, 
         comp_overlay_diskpath, comp_overlay_mempath,
         disk_deltalist, mem_deltalist):
     fout = open(overlay_metafile, "w+b")
@@ -392,6 +415,7 @@ def _create_overlay_meta(overlay_metafile, modified_disk, modified_mem,
             raise CloudletGenerationError(msg)
 
     meta_dict = dict()
+    meta_dict[Const.META_BASE_VM_SHA256] = base_hash
     meta_dict[Const.META_RESUME_VM_DISK_SIZE] = os.path.getsize(modified_disk)
     meta_dict[Const.META_RESUME_VM_MEMORY_SIZE] = os.path.getsize(modified_mem)
     meta_dict[Const.META_OVERLAY_DISK_SIZE] = os.path.getsize(comp_overlay_diskpath)
@@ -501,7 +525,7 @@ def run_delta_compression(output_list, **kwargs):
     return ret_files
 
 
-def recover_launchVM(base_image, overlay_meta, overlay_disk, overlay_mem, **kwargs):
+def recover_launchVM(base_image, meta_info, overlay_disk, overlay_mem, **kwargs):
     # kwargs
     # skip_validation   :   skip sha1 validation
     # LOG = log object for nova
@@ -517,12 +541,10 @@ def recover_launchVM(base_image, overlay_meta, overlay_disk, overlay_mem, **kwar
     modified_img = NamedTemporaryFile(prefix="cloudlet-recoverd-img-", delete=False)
 
     # Get modified list from overlay_meta
-    meta_info = bson.loads(open(overlay_meta, "r").read())
     vm_disk_size = meta_info[Const.META_RESUME_VM_DISK_SIZE]
     vm_memory_size = meta_info[Const.META_RESUME_VM_MEMORY_SIZE]
     memory_chunk_list = ["%ld:0" % item for item in meta_info[Const.META_MODIFIED_MEMORY_CHUNKS]]
     disk_chunk_list = ["%ld:0" % item for item in meta_info[Const.META_MODIFIED_DISK_CHUNKS]]
-    print "Modified VM size memory: %ld, disk: %ld" % (len(memory_chunk_list), len(disk_chunk_list))
     disk_overlay_map = ','.join(disk_chunk_list)
     memory_overlay_map = ','.join(memory_chunk_list)
 
@@ -822,8 +844,9 @@ def synthesis(base_disk, meta, comp_overlay_disk, comp_overlay_mem):
 
     # recover VM
     Log.out.write("[Debug] recover launch VM\n")
-    modified_img, modified_mem, fuse, delta_memory, memory_fuse, delta_disk, disk_fuse  = recover_launchVM(base_disk, meta, 
-            overlay_disk.name, overlay_mem.name, log=Log.out)
+    meta_info = bson.loads(open(meta, "r").read())
+    modified_img, modified_mem, fuse, delta_memory, memory_fuse, delta_disk, disk_fuse = \
+            recover_launchVM(base_disk, meta_info, overlay_disk.name, overlay_mem.name, log=Log.out)
 
     # resume VM
     resumed_VM = ResumedVM(modified_img, modified_mem, fuse)

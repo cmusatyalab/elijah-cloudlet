@@ -21,6 +21,7 @@ import SocketServer
 import socket
 import subprocess
 import tool
+import bson
 
 from optparse import OptionParser
 from multiprocessing import Process, JoinableQueue, Queue
@@ -55,6 +56,12 @@ class Const(object):
 class RapidSynthesisError(Exception):
     pass
 
+
+def recv_all(request, size):
+    data = ''
+    while len(data) < size:
+        data += request.recv(size - len(data))
+    return data
 
 def network_worker(data, queue, time_queue, chunk_size, data_size=sys.maxint):
     start_time= time.time()
@@ -198,36 +205,35 @@ class SynthesisTCPHandler(SocketServer.StreamRequestHandler):
     def _check_validity(self, request):
         # self.request is the TCP socket connected to the clinet
         data = request.recv(4)
-        json_size = struct.unpack("!I", data)[0]
+        bson_size = struct.unpack("!I", data)[0]
 
         # recv JSON header
-        json_str = request.recv(json_size)
-        json_data = json.loads(json_str)
-        if 'VM' not in json_data or len(json_data['VM']) == 0:
-            self.ret_fail("No VM Key at JSON")
-            return
+        bson_data = request.recv(bson_size)
+        while len(bson_data) < bson_size:
+            bson_data += request.recv(bson_size - len(bson_data))
+        open("./bson_transfer", "w+b").write(bson_data)
+        bson_header = bson.loads(bson_data)
 
-        vm_name = ''
         try:
-            vm_name = json_data['VM'][0]['base_name']
-            disk_size = int(json_data['VM'][0]['diskimg_size'])
-            mem_size = int(json_data['VM'][0]['memory_snapshot_size'])
+            base_hashvalue = bson_header.get(cloudlet.Const.META_BASE_VM_SHA256, None)
+            disk_size = bson_header[cloudlet.Const.META_OVERLAY_DISK_SIZE]
+            mem_size = bson_header[cloudlet.Const.META_OVERLAY_MEMORY_SIZE]
         except KeyError:
             message = 'No key is in JSON'
             print message
             self.ret_fail(message)
             return
-        print "[INFO] New client request %s VM (will transfer %d MB, %d MB)" \
-                % (vm_name, disk_size/1024/1024, mem_size/1024/1024)
-
         # check base VM
         for base_vm in BaseVM_list:
-            if vm_name.lower() == base_vm['name'].lower():
+            if base_hashvalue == base_vm.get('sha256', None):
                 base_path = base_vm['path']
-                return [base_path, disk_size, mem_size]
-                (base_diskmeta, base_mem, base_memmeta) = \
-                        cloudlet.Const.get_basepath(base_path, check_exist=True)
+                print "[INFO] New client request %s VM (will transfer %d MB, %d MB)" \
+                        % (base_path, disk_size/1024/1024, mem_size/1024/1024)
+                return [base_path, bson_header, disk_size, mem_size]
 
+        message = "Cannot find matching Base VM\nsha256: %s" % (base_hashvalue)
+        print message
+        self.ret_fail(message)
         return None
 
     def handle(self):
@@ -236,20 +242,15 @@ class SynthesisTCPHandler(SocketServer.StreamRequestHandler):
         header_start_time = time.time()
         ret_info = self._check_validity(self.request)
         header_end_time = time.time()
-        setup_start_time = time.time()
         if ret_info == None:
             message = "Failed, No such base VM exist : %s" % (ret_info[0])
             print message
             self.wfile.write(message)            
             self.ret_fail()
             return
-        base_path, disk_size, mem_size = ret_info
+        base_path, meta_info, disk_size, mem_size = ret_info
         (base_diskmeta, base_mem, base_memmeta) = \
                 cloudlet.Const.get_basepath(base_path, check_exist=True)
-        modified_mem = NamedTemporaryFile(prefix="cloudlet-recoverd-mem-", 
-                delete=False)
-        modified_img = NamedTemporaryFile(prefix="cloudlet-recoverd-img-", 
-                delete=False)
 
         # read overlay files
         # create named pipe to convert queue to stream
@@ -260,7 +261,6 @@ class SynthesisTCPHandler(SocketServer.StreamRequestHandler):
 
         # Memory overlay
         mem_download_queue = JoinableQueue()
-        mem_overlay_map_queue = JoinableQueue()
         mem_download_process = Process(target=network_worker, 
                 args=(
                     self.rfile, mem_download_queue, time_transfer_mem, Const.TRANSFER_SIZE, mem_size
@@ -271,15 +271,10 @@ class SynthesisTCPHandler(SocketServer.StreamRequestHandler):
                     mem_download_queue, memory_pipe, time_decomp_mem
                     )
                 )
-        mem_delta_process = delta.Recovered_delta(base_path, base_mem, memory_pipe, \
-                modified_mem.name, Memory.Memory.RAM_PAGE_SIZE, 
-                parent=base_mem, time_queue=time_delta_mem, 
-                overlay_map_queue=mem_overlay_map_queue)
 
         # Disk overlay
         time_transfer_disk = Queue(); time_decomp_disk = Queue(); time_delta_disk = Queue()
         disk_download_queue = JoinableQueue()
-        disk_overlay_map_queue = JoinableQueue()
 
         disk_pipe = os.path.join(tmp_dir, 'disk_pipe')
         os.mkfifo(disk_pipe)
@@ -293,61 +288,52 @@ class SynthesisTCPHandler(SocketServer.StreamRequestHandler):
                     disk_download_queue, disk_pipe, time_decomp_disk
                     )
                 )
-        disk_delta_process = delta.Recovered_delta(base_path, base_mem, disk_pipe, \
-                modified_img.name, cloudlet.Const.CHUNK_SIZE, 
-                parent=base_path, overlay_memory=modified_mem.name, 
-                time_queue=time_delta_disk,
-                overlay_map_queue=disk_overlay_map_queue)
-        setup_end_time = time.time()
+
+        modified_img, modified_mem, fuse, delta_memory, memory_fuse, delta_disk, disk_fuse =\
+                cloudlet.recover_launchVM(base_path, meta_info, disk_pipe, memory_pipe)
+        delta_memory.time_queue = time_delta_mem
+        delta_disk.time_queue = time_delta_disk
+
+        # resume VM
+        resumed_VM = cloudlet.ResumedVM(modified_img, modified_mem, fuse)
+        resumed_VM.start()
 
         # start processes
         mem_download_process.start()
         mem_decomp_process.start()
-        mem_delta_process.start()
-        memory_overlay_map = mem_overlay_map_queue.get()
-        mem_overlay_map_queue.task_done()
-        mem_delta_process.join()
+        delta_memory.start()
+        memory_fuse.start()
+        delta_memory.join()
 
         # Once memory is ready, start disk download
         # disk thread cannot start before finish memory
         disk_download_process.start()
         disk_decomp_process.start()
-        disk_delta_process.start()
-        disk_overlay_map = disk_overlay_map_queue.get()
-        disk_overlay_map_queue.task_done()
-        disk_delta_process.join()
-
-        # make FUSE disk & memory
-        fuse_start_time = time.time()
-        (base_diskmeta, base_mem, base_memmeta) = \
-                cloudlet.Const.get_basepath(base_path, check_exist=True)
-        fuse = cloudlet.run_fuse(cloudlet.Const.VMNETFS_PATH, 
-                cloudlet.Const.CHUNK_SIZE, 
-                base_path, base_mem, resumed_disk=modified_img.name, 
-                disk_overlay_map=disk_overlay_map,
-                resumed_memory=modified_mem.name, 
-                memory_overlay_map=memory_overlay_map)
-        fuse_end_time = time.time()
+        delta_disk.start()
+        disk_fuse.start()
+        delta_disk.join()
         end_time = time.time()
 
-        # resume VM
-        resumed_VM = cloudlet.ResumedVM(modified_img.name, modified_mem.name, fuse)
-        resume_time = resumed_VM.resume()
-        resumed_VM.terminate()
-        total_time = (end_time-start_time) + resume_time
+        total_time = (end_time-start_time)
 
         # printout result
-        SynthesisTCPHandler.print_statistics(total_time, resume_time, \
+        SynthesisTCPHandler.print_statistics(total_time, \
                 time_transfer_mem, time_decomp_mem, time_delta_mem, \
                 time_transfer_disk, time_decomp_disk, time_delta_disk)
         # additional statistics to be deleted
         print "header handling time\t:%011.6f" % (header_end_time-header_start_time)
-        print "setup time\t:%011.6f" % (setup_end_time-setup_start_time)
-        print "fuse creation time\t:%011.6f" % (fuse_end_time-fuse_start_time)
+
+        while True:
+            user_input = raw_input("type q to quit : ")
+            if user_input == 'q':
+                break
 
         # terminate
-        mem_delta_process.finish()
-        disk_delta_process.finish()
+        delta_memory.finish()
+        delta_disk.finish()
+        resumed_VM.terminate()
+        fuse.terminate()
+
         if os.path.exists(memory_pipe):
             os.unlink(memory_pipe)
         if os.path.exists(disk_pipe):
@@ -358,7 +344,7 @@ class SynthesisTCPHandler(SocketServer.StreamRequestHandler):
 
 
     @staticmethod
-    def print_statistics(total_time, resume_time, \
+    def print_statistics(total_time, \
             time_transfer_mem, time_decomp_mem, time_delta_mem, \
             time_transfer_disk, time_decomp_disk, time_delta_disk):
         # Print out Time Measurement
@@ -390,11 +376,10 @@ class SynthesisTCPHandler(SocketServer.StreamRequestHandler):
 
         message = "\n"
         message += "Pipelined measurement\n"
-        message += 'Transfer\tDecomp\t\tDelta\tResume\t\tTotal\n'
+        message += 'Transfer\tDecomp\t\tDelta\t\tTotal\n'
         message += "%011.06f\t" % (transfer_diff)
         message += "%011.06f\t" % (decomp_diff)
         message += "%011.06f\t" % (delta_diff)
-        message += "%011.06f\t" % (resume_time)
         message += "%011.06f\t" % (total_time)
         message += "\n"
         print message

@@ -1,13 +1,12 @@
-!/bin/bash
+#!/bin/bash
 
 ./configure \
-	--enable-sdl \
 	--enable-debug \
-	--audio-drv-list=pa,alsa \
 	--enable-trace-backend=stderr \
 	--enable-kvm \
-	--static
+	--static \
+	--prefix=/usr/
 #	--prefix=/home/krha/cloudlet/src/qemu-kvm/ 
 
-make
-make install
+make -j4
+sudo make install
