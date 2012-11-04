@@ -254,7 +254,8 @@ class SynthesisTCPHandler(SocketServer.StreamRequestHandler):
 
         # read overlay files
         # create named pipe to convert queue to stream
-        time_transfer_mem = Queue(); time_decomp_mem = Queue(); time_delta_mem = Queue()
+        time_transfer_mem = Queue(); time_decomp_mem = Queue();
+        time_delta_mem = Queue(); time_fuse_mem = Queue();
         tmp_dir = tempfile.mkdtemp()
         memory_pipe = os.path.join(tmp_dir, 'memory_pipe')
         os.mkfifo(memory_pipe)
@@ -273,7 +274,8 @@ class SynthesisTCPHandler(SocketServer.StreamRequestHandler):
                 )
 
         # Disk overlay
-        time_transfer_disk = Queue(); time_decomp_disk = Queue(); time_delta_disk = Queue()
+        time_transfer_disk = Queue(); time_decomp_disk = Queue(); 
+        time_delta_disk = Queue(); time_fuse_disk = Queue();
         disk_download_queue = JoinableQueue()
 
         disk_pipe = os.path.join(tmp_dir, 'disk_pipe')
@@ -288,11 +290,12 @@ class SynthesisTCPHandler(SocketServer.StreamRequestHandler):
                     disk_download_queue, disk_pipe, time_decomp_disk
                     )
                 )
-
         modified_img, modified_mem, fuse, delta_memory, memory_fuse, delta_disk, disk_fuse =\
                 cloudlet.recover_launchVM(base_path, meta_info, disk_pipe, memory_pipe)
         delta_memory.time_queue = time_delta_mem
         delta_disk.time_queue = time_delta_disk
+        memory_fuse.time_queue = time_fuse_mem
+        disk_fuse.time_queue = time_fuse_disk
 
         # resume VM
         resumed_VM = cloudlet.ResumedVM(modified_img, modified_mem, fuse)
@@ -311,24 +314,26 @@ class SynthesisTCPHandler(SocketServer.StreamRequestHandler):
         disk_decomp_process.start()
         delta_disk.start()
         disk_fuse.start()
-        delta_disk.join()
-        end_time = time.time()
 
+        end_time = time.time()
         total_time = (end_time-start_time)
 
         # printout result
-        SynthesisTCPHandler.print_statistics(total_time, \
-                time_transfer_mem, time_decomp_mem, time_delta_mem, \
-                time_transfer_disk, time_decomp_disk, time_delta_disk)
+        SynthesisTCPHandler.print_statistics(start_time, end_time, \
+                time_transfer_mem, time_decomp_mem, time_delta_mem, time_fuse_mem,
+                time_transfer_disk, time_decomp_disk, time_delta_disk, time_fuse_disk)
         # additional statistics to be deleted
         print "header handling time\t:%011.6f" % (header_end_time-header_start_time)
+        self.ret_success()
 
+        # terminate
         while True:
             user_input = raw_input("type q to quit : ")
             if user_input == 'q':
                 break
 
-        # terminate
+        close_start_time = time.time()
+        delta_disk.join()
         delta_memory.finish()
         delta_disk.finish()
         resumed_VM.terminate()
@@ -339,48 +344,56 @@ class SynthesisTCPHandler(SocketServer.StreamRequestHandler):
         if os.path.exists(disk_pipe):
             os.unlink(disk_pipe)
         shutil.rmtree(tmp_dir)
+        close_end_time = time.time()
+        print "Time for finishing(close all fd) : %f" % (close_end_time-close_start_time)
 
-        self.ret_success()
 
 
     @staticmethod
-    def print_statistics(total_time, \
-            time_transfer_mem, time_decomp_mem, time_delta_mem, \
-            time_transfer_disk, time_decomp_disk, time_delta_disk):
+    def print_statistics(start_time, end_time, \
+            time_transfer_mem, time_decomp_mem, time_delta_mem, time_fuse_mem,\
+            time_transfer_disk, time_decomp_disk, time_delta_disk, time_fuse_disk):
         # Print out Time Measurement
         disk_transfer_time = time_transfer_disk.get()
         disk_decomp_time = time_decomp_disk.get()
         disk_delta_time = time_delta_disk.get()
+        disk_fuse_time = time_fuse_disk.get()
         mem_transfer_time = time_transfer_mem.get()
         mem_decomp_time = time_decomp_mem.get()
         mem_delta_time = time_delta_mem.get()
+        mem_fuse_time = time_fuse_mem.get()
         disk_transfer_start_time = disk_transfer_time['start_time']
         disk_transfer_end_time = disk_transfer_time['end_time']
         disk_decomp_start_time = disk_decomp_time['start_time']
         disk_decomp_end_time = disk_decomp_time['end_time']
         disk_delta_start_time = disk_delta_time['start_time']
         disk_delta_end_time = disk_delta_time['end_time']
+        disk_fuse_start_time = disk_fuse_time['start_time']
+        disk_fuse_end_time = disk_fuse_time['end_time']
+
         mem_transfer_start_time = mem_transfer_time['start_time']
         mem_transfer_end_time = mem_transfer_time['end_time']
         mem_decomp_start_time = mem_decomp_time['start_time']
         mem_decomp_end_time = mem_decomp_time['end_time']
         mem_delta_start_time = mem_delta_time['start_time']
         mem_delta_end_time = mem_delta_time['end_time']
+        mem_fuse_start_time = mem_fuse_time['start_time']
+        mem_fuse_end_time = mem_fuse_time['end_time']
 
         transfer_diff = (disk_transfer_end_time-disk_transfer_start_time) + \
                 (mem_transfer_end_time-mem_transfer_start_time)
         decomp_diff = (disk_decomp_end_time-disk_transfer_end_time) + \
                 (mem_decomp_end_time-mem_transfer_end_time)
-        delta_diff = (disk_delta_end_time-disk_decomp_end_time) + \
-                (mem_delta_end_time-mem_decomp_end_time)
+        delta_diff = (disk_fuse_end_time-disk_decomp_end_time) + \
+                (mem_fuse_end_time-mem_decomp_end_time)
 
         message = "\n"
         message += "Pipelined measurement\n"
-        message += 'Transfer\tDecomp\t\tDelta\t\tTotal\n'
+        message += 'Transfer\tDecomp\t\tDelta(Fuse)\t\tTotal\n'
         message += "%011.06f\t" % (transfer_diff)
         message += "%011.06f\t" % (decomp_diff)
         message += "%011.06f\t" % (delta_diff)
-        message += "%011.06f\t" % (total_time)
+        message += "%011.06f\t" % (end_time-start_time)
         message += "\n"
         print message
 

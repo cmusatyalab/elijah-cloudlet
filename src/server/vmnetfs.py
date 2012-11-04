@@ -222,6 +222,7 @@ class FuseFeedingThread(threading.Thread):
         self.input_pipe = input_pipe
         self.feeding_info = feeding_info
         self.END_OF_PIPE = END_OF_PIPE
+        self.time_queue = None
         self.stop = threading.Event()
         threading.Thread.__init__(self, target=self.feeding_thread)
 
@@ -243,7 +244,12 @@ class FuseFeedingThread(threading.Thread):
             count += len(feeding_list)
             msg = '\n'.join(feeding_list)
             self.fuse.fuse_write(msg)
-        print "fuse feeding time :%f, count: %d" % (time.time()-start_time, count)
+
+        end_time = time.time()
+        if self.time_queue != None: 
+            self.time_queue.put({'start_time':start_time, 'end_time':end_time})
+        print "[FUSE] : (%s)-(%s)=(%s)" % \
+                (start_time, end_time, (end_time-start_time))
 
     def fuse_write(self, data):
         self._pipe.write(data + "\n")
