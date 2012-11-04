@@ -347,7 +347,7 @@ static uint64_t read_chunk_unlocked(struct vmnetfs_image *img,
 						}
 					}
 					// TODO: change it to wait with condition
-					usleep(1);
+					usleep(10);
 				}
         	}
         }

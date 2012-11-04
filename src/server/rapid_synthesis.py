@@ -306,7 +306,7 @@ class SynthesisTCPHandler(SocketServer.StreamRequestHandler):
         mem_decomp_process.start()
         delta_memory.start()
         memory_fuse.start()
-        delta_memory.join()
+        memory_fuse.join()
 
         # Once memory is ready, start disk download
         # disk thread cannot start before finish memory
@@ -314,6 +314,7 @@ class SynthesisTCPHandler(SocketServer.StreamRequestHandler):
         disk_decomp_process.start()
         delta_disk.start()
         disk_fuse.start()
+        disk_fuse.join()
 
         end_time = time.time()
         total_time = (end_time-start_time)
