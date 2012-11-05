@@ -34,15 +34,15 @@ OVERLAY_DIR = '/home/krha/cloudlet/image/overlay'
 
 command_type = ["synthesis_cloud", "synthesis_mobile", "isr_cloud", "isr_mobile"]
 application_names = ["moped", "face", "graphics", "speech", "mar", "null"]
-cloudlet_server_ip = "server.krha.kr"
+cloudlet_server_ip = "cloudlet.krha.kr"
 cloudlet_server_port = 8021
-isr_server_ip = "server.krha.kr"
+isr_server_ip = "cloudlet.krha.kr"
 isr_server_port = 9091
 is_stop_thread = False
 last_average_power = 0.0
 
 
-delivery_server = "server.krha.kr"
+delivery_server = "cloudlet.krha.kr"
 APP_DIR = "/home/krha/cloudlet/src/client/applications"
 MOPED_client = "%s/moped_client.py -i ./input/moped -s %s -p 9092" % (APP_DIR, delivery_server)
 GRAPHICS_client = "%s/graphics_client.py -i ./input/graphics/acc_input_50sec -s %s -p 9093" % (APP_DIR, delivery_server)
@@ -201,7 +201,7 @@ def run_application(app_name):
             break;
         sys.stdout.write(output)
         sys.stdout.flush()
-        time.sleep(0.01)
+        time.sleep(0.001)
     proc.wait()
     return proc.returncode, output_file
 

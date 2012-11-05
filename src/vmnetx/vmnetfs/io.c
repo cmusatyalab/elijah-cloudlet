@@ -16,6 +16,8 @@
  */
 
 #include <inttypes.h>
+#include <sys/time.h>
+#include <unistd.h>
 #include <stdio.h>
 #include "vmnetfs-private.h"
 
@@ -31,11 +33,33 @@
 #define CLOUDLET_IO
 #ifdef CLOUDLET_IO
 #define CPRINTF(fmt, ...) \
-    do { fprintf(stdout, "[cloudlet] IO: " fmt, ## __VA_ARGS__); fflush(stdout);} while (0)
+    do { fprintf(stdout, "[FUSE] IO: " fmt, ## __VA_ARGS__); fflush(stdout);} while (0)
 #else
 #define CPRINTF(fmt, ...) \
     do { } while (0)
 #endif
+
+static int timeval_subtract(struct timeval *result, struct timeval *x, struct timeval *y) {
+	/* Perform the carry for the later subtraction by updating y. */
+	if (x->tv_usec < y->tv_usec) {
+		int nsec = (y->tv_usec - x->tv_usec) / 1000000 + 1;
+		y->tv_usec -= 1000000 * nsec;
+		y->tv_sec += nsec;
+	}
+	if (x->tv_usec - y->tv_usec > 1000000) {
+		int nsec = (x->tv_usec - y->tv_usec) / 1000000;
+		y->tv_usec += 1000000 * nsec;
+		y->tv_sec -= nsec;
+	}
+
+	/* Compute the time remaining to wait.
+	 * 	 tv_usec is certainly positive. */
+	result->tv_sec = x->tv_sec - y->tv_sec;
+	result->tv_usec = x->tv_usec - y->tv_usec;
+
+	/* Return 1 if result is negative. */
+	return x->tv_sec < y->tv_sec;
+}
 
 struct chunk_state {
     GMutex *lock;
@@ -330,9 +354,11 @@ static uint64_t read_chunk_unlocked(struct vmnetfs_image *img,
 			} else {
 				// wait until get it from client
 				// and send message to parent
-				CPRINTF("%p is Waiting chunk(%ld) at %ld, length(%d)\n",
-						img->current_overlay_map, chunk, chunk * img->chunk_size + offset,
-						length);
+				struct timeval waiting_start_time, waiting_end_time, diff_time;
+				gettimeofday(&waiting_start_time, NULL);
+
+				CPRINTF("Waiting chunk(%ld) at %ld, length(%d)\n",
+						chunk, chunk * img->chunk_size + offset, length);
 
 				while (1) {
 					if (_vmnetfs_bit_test(img->current_overlay_map, chunk)) {
@@ -343,6 +369,11 @@ static uint64_t read_chunk_unlocked(struct vmnetfs_image *img,
 							// return 0 --> failed to get right chunk from overlay
 							return 0;
 						}else{
+							gettimeofday(&waiting_end_time, NULL);
+							timeval_subtract(&diff_time, \
+									&waiting_end_time, &waiting_start_time);
+							CPRINTF("Waiting chunk(%ld) time : %ld.%06ld\n", \
+									chunk, diff_time.tv_sec, diff_time.tv_usec);
 							break;
 						}
 					}

@@ -24,6 +24,7 @@ import json
 import time
 from optparse import OptionParser
 from threading import Thread
+import cloudlet_client
 
 application = ['moped', 'face']
 
@@ -57,7 +58,6 @@ def recv_all(sock, size):
 
 
 def synthesis(address, port, application):
-
     # connection
     start_time = time.time()
     try:
@@ -82,8 +82,10 @@ def synthesis(address, port, application):
     recv.join()
     send_end = send_end_time['time']
     recv_end = recv_end_time['time']
+    app_ret = recv_end_time['app']
     print "Transfer %f-%f = %f" % (send_end, start_time, (send_end-start_time))
     print "Response %f-%f = %f" % (recv_end, start_time, (recv_end-start_time))
+    print "App End  %f-%f = %f" % (app_ret, start_time, (app_ret-start_time))
 
 
 def send_thread(sock, application, time_dict):
@@ -121,6 +123,10 @@ def recv_thread(sock, application, time_dict):
     if ret_value != "SUCCESS":
         print "Synthesis Failed"
     time_dict['time'] = time.time()
+
+    #run application
+    cloudlet_client.run_application(application)
+    time_dict['app'] = time.time()
 
 
 def main(argv=None):

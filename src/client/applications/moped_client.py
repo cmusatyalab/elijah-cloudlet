@@ -46,6 +46,9 @@ def process_command_line(argv):
     parser.add_option(
             '-p', '--port', action='store', type='int', dest='server_port', default=9092,
             help='Set Input image directory')
+    parser.add_option(
+            '-r', '--repeat', action='store', type='int', dest='conn_repeat', default=100,
+            help='Repeat connecting number')
     settings, args = parser.parse_args(argv)
     if not len(args) == 0:
         parser.error('program takes no command-line arguments; "%s" ignored.' % (args,))
@@ -58,16 +61,31 @@ def process_command_line(argv):
     return settings, args
 
 
-def send_request(address, port, inputs):
+def send_request(address, port, inputs, conn_repeat):
     # connection
-    try:
-        print "Connecting to (%s, %d).." % (address, port)
-        sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-        sock.setblocking(True)
-        sock.connect((address, port))
-    except socket.error, msg:
-        sys.stderr.write("Error, %s\n" % msg[1])
+    conn_count = 0
+    connect_start_time = time.time()
+    while conn_count < conn_repeat:
+        try:
+            print "Connecting..."
+            sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+            sock.setblocking(True)
+            sock.connect((address, port))
+            conn_count += 1
+            break
+        except socket.error, msg:
+            print "Connection failed, retry"
+            sock.close()
+            time.sleep(0.1)
+
+    if (sock == None) or (sock.fileno() <= 0):
+        sys.stderr.write("Connection faild to (%s:%d)\n" % (address, port))
         sys.exit(1)
+
+    connect_end_time = time.time()
+    print "Connecting to (%s, %d) takes %f seconds" % \
+            (address, port, (connect_end_time-connect_start_time))
+
 
     # send requests
     current_duration = -1
@@ -116,7 +134,7 @@ def main(argv=None):
     settings, args = process_command_line(sys.argv[1:])
 
     files = [os.path.join(settings.input_dir, file) for file in os.listdir(settings.input_dir) if file[-3:] == "jpg" or file[-3:] == "JPG"]  
-    send_request(settings.server_address, settings.server_port, files)
+    send_request(settings.server_address, settings.server_port, files, settings.conn_repeat)
 
     return 0
 
