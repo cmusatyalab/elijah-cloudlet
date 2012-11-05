@@ -21,7 +21,9 @@ import struct
 import sys
 import socket
 import json
+import time
 from optparse import OptionParser
+from threading import Thread
 
 application = ['moped', 'face']
 
@@ -55,6 +57,36 @@ def recv_all(sock, size):
 
 
 def synthesis(address, port, application):
+
+    # connection
+    start_time = time.time()
+    try:
+        print "Connecting to (%s, %d).." % (address, port)
+        sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        sock.setblocking(True)
+        sock.connect((address, port))
+    except socket.error, msg:
+        sys.stderr.write("Error, %s\n" % msg)
+        sys.exit(1)
+
+    send_end_time = {}
+    recv_end_time = {}
+    sender = Thread(target=send_thread, args=(sock, application, send_end_time))
+    recv = Thread(target=recv_thread, args=(sock, application, recv_end_time))
+
+    sender.start()
+    recv.start()
+
+    print "Waiting for Thread joinining"
+    sender.join()
+    recv.join()
+    send_end = send_end_time['time']
+    recv_end = recv_end_time['time']
+    print "Transfer %f-%f = %f" % (send_end, start_time, (send_end-start_time))
+    print "Response %f-%f = %f" % (recv_end, start_time, (recv_end-start_time))
+
+
+def send_thread(sock, application, time_dict):
     if application == 'moped':
         overlay_meta_path = '/home/krha/cloudlet/image/overlay/ubuntu/moped/precise.overlay-meta'
         overlay_disk_path = '/home/krha/cloudlet/image/overlay/ubuntu/moped/precise.overlay-img.lzma'
@@ -65,17 +97,6 @@ def synthesis(address, port, application):
         overlay_mem_path = '/home/krha/cloudlet/image/overlay/window/face/window7.overlay-mem.lzma'
     else:
         raise Exception("NO valid application name: %s" % application)
-
-    # connection
-    try:
-        print "Connecting to (%s, %d).." % (address, port)
-        sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-        sock.setblocking(True)
-        sock.connect((address, port))
-    except socket.error, msg:
-        sys.stderr.write("Error, %s\n" % msg)
-        sys.exit(1)
-
     # send header
     sock.sendall(struct.pack("!I", os.path.getsize(overlay_meta_path)))
     overlay_meta = open(overlay_meta_path, "rb").read()
@@ -86,7 +107,10 @@ def synthesis(address, port, application):
     sock.sendall(mem_data)
     disk_data = open(overlay_disk_path, "rb").read()
     sock.sendall(disk_data)
-    
+    time_dict['time'] = time.time()
+
+
+def recv_thread(sock, application, time_dict):
     #recv
     data = sock.recv(4)
     ret_size = struct.unpack("!I", data)[0]
@@ -96,8 +120,7 @@ def synthesis(address, port, application):
     print ret_value
     if ret_value != "SUCCESS":
         print "Synthesis Failed"
-        sys.exit(1)
-    return 0
+    time_dict['time'] = time.time()
 
 
 def main(argv=None):
