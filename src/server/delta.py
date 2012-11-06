@@ -416,7 +416,7 @@ class Recovered_delta(multiprocessing.Process):
             self.recover_fd.write(delta_item.data)
             overlay_chunk_id = long(delta_item.offset/self.chunk_size)
             overlay_chunk_ids.append(overlay_chunk_id)
-            if len(overlay_chunk_ids) % 100 == 0:
+            if len(overlay_chunk_ids) % 1000 == 0:
                 self.out_pipe.send(overlay_chunk_ids)
                 overlay_chunk_ids[:] = []
 

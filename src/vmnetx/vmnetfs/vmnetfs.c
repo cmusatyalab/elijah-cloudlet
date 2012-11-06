@@ -218,42 +218,52 @@ static void *glib_loop_thread(void *data)
 
 static void handle_stdin(struct vmnetfs *fs, const char *oneline, GError **err){
 	// valid format : (image_index: chunk_number),
-	// ex) 1:10251
+	// ex) 1:10251,1:10252, ..
+
+	// check end signal
+	if (strcmp(oneline, "END_OF_TRANSMISSION") == 0){
+		fprintf(stdout, "Receive END_OF_TRANSMISSION\n");
+		fflush(stdout);
+		return;
+	}
+//	printf("update overlay %s\n", oneline);
+
     struct vmnetfs_image *img;
 	u_int image_index = -1;
 	guint64 chunk_number = -1;
 
+    gchar **components;
+    gchar **cur;
 	gchar *end;
-	gchar **overlay_info = g_strsplit(oneline, ":", 0);
-	// 1 for disk, 2 for memory
-	image_index = (int) g_ascii_strtoull(*(overlay_info), &end, 10);
-	if (*overlay_info == end) {
-		g_set_error(err, G_FILE_ERROR, g_file_error_from_errno(errno),
-				"Invalid overlay format at image index %s", *(overlay_info + 1));
+	components = g_strsplit(oneline, ",", 0);
+	for (cur = components; *cur != NULL; cur++) {
+		gchar **overlay_info = g_strsplit(*cur, ":", 0);
+		// 1 for disk, 2 for memory
+		image_index = (int) g_ascii_strtoull(*(overlay_info), &end, 10);
+		if (*overlay_info == end) {
+			g_set_error(err, G_FILE_ERROR, g_file_error_from_errno(errno),
+					"Invalid overlay format at image index %s",
+					*(overlay_info + 1));
+		}
+		chunk_number = g_ascii_strtoull(*(overlay_info + 1), &end, 10);
+		if (*overlay_info == end) {
+			g_set_error(err, G_FILE_ERROR, g_file_error_from_errno(errno),
+					"Invalid overlay format at chunk number %s", *overlay_info);
+		}
+
+		if (image_index == 1) {
+			img = fs->disk;
+		} else if (image_index == 2) {
+			img = fs->memory;
+		} else {
+			g_set_error(err, G_FILE_ERROR, g_file_error_from_errno(errno),
+					"Invalid index number %d", image_index);
+			continue;
+		}
+		_vmnetfs_bit_set(img->current_overlay_map, chunk_number);
+		g_strfreev(overlay_info);
 	}
-
-	chunk_number = g_ascii_strtoull(*(overlay_info+1), &end, 10);
-	if (*overlay_info == end) {
-		g_set_error(err, G_FILE_ERROR, g_file_error_from_errno(errno),
-				"Invalid overlay format at chunk number %s", *overlay_info);
-	}
-	g_strfreev(overlay_info);
-
-
-	if(image_index == 1){
-		img = fs->disk;
-	}else if(image_index == 2){
-		img = fs->memory;
-	}else{
-		g_set_error(err, G_FILE_ERROR, g_file_error_from_errno(errno),
-				"Invalid index number %d", image_index);
-		return;
-	}
-
-	// Set bit for total_overlay_map
-	_vmnetfs_bit_set(img->current_overlay_map, chunk_number);
-//    printf("update overlay at chunk(%p : %lu)\n", img->current_overlay_map, chunk_number);
-
+    g_strfreev(components);
 }
 
 static gboolean read_stdin(GIOChannel *source,

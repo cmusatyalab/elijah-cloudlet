@@ -55,6 +55,7 @@ class VMNetFS(threading.Thread):
 
     def fuse_write(self, data):
         self._pipe.write(data + "\n")
+        self._pipe.flush()
 
     # pylint is confused by the values returned from Popen.communicate()
     # pylint: disable=E1103
@@ -229,6 +230,7 @@ class FuseFeedingThread(threading.Thread):
     def feeding_thread(self):
         count = 0
         start_time = time.time()
+        self.fuse.fuse_write("END_OF_TRANSMISSION")
         while(not self.stop.wait(0.0000001)):
             self._running = True
             try:
@@ -242,17 +244,15 @@ class FuseFeedingThread(threading.Thread):
                 self.feeding_info[chunk] = True
                 feeding_list.append("%d:%ld" % (self.index, chunk))
             count += len(feeding_list)
-            msg = '\n'.join(feeding_list)
+            msg = ','.join(feeding_list)
             self.fuse.fuse_write(msg)
 
         end_time = time.time()
         if self.time_queue != None: 
             self.time_queue.put({'start_time':start_time, 'end_time':end_time})
-        print "[FUSE] : (%s)-(%s)=(%s)" % \
-                (start_time, end_time, (end_time-start_time))
-
-    def fuse_write(self, data):
-        self._pipe.write(data + "\n")
+        print "[FUSE] : (%s)-(%s)=(%s), send total (%ld) chunks" % \
+                (start_time, end_time, (end_time-start_time), count)
+        self.fuse.fuse_write("END_OF_TRANSMISSION")
 
     # pylint is confused by the values returned from Popen.communicate()
     # pylint: disable=E1103
