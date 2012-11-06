@@ -33,7 +33,7 @@ WATTS_BIN = "~/cloudlet/src/measurement/power/wattsup"
 OVERLAY_DIR = '/home/krha/cloudlet/image/overlay'
 
 command_type = ["synthesis_cloud", "synthesis_mobile", "isr_cloud", "isr_mobile"]
-application_names = ["moped", "face", "graphics", "speech", "mar", "null"]
+application_names = ["moped", "face", "graphics", "speech", "mar", "null", "webserver"]
 cloudlet_server_ip = "cloudlet.krha.kr"
 cloudlet_server_port = 8021
 isr_server_ip = "cloudlet.krha.kr"
@@ -192,17 +192,25 @@ def run_application(app_name):
         cmd = MAR_client + " 2>&1 > %s" % output_file
     elif app_name == application_names[5]:  # null
         return 0, output_file
+    elif app_name == application_names[6]:  # webserver
+        cmd = "wget %s:9092/vmtest.ko" % delivery_server
 
     print "Run client : %s" % (cmd)
-    proc = subprocess.Popen(cmd, shell=True, stdin=subprocess.PIPE, stdout=subprocess.PIPE)
     while True:
-        output = proc.stdout.readline()
-        if len(output) == 0:
-            break;
-        sys.stdout.write(output)
-        sys.stdout.flush()
-        time.sleep(0.001)
-    proc.wait()
+        proc = subprocess.Popen(cmd, shell=True, stdin=subprocess.PIPE, stdout=subprocess.PIPE)
+        while True:
+            output = proc.stdout.readline()
+            if len(output) == 0:
+                break;
+            sys.stdout.write(output)
+            sys.stdout.flush()
+            time.sleep(0.001)
+        proc.wait()
+        if proc.returncode == 0:
+            break
+        else:
+            time.sleep(0.1)
+
     return proc.returncode, output_file
 
 

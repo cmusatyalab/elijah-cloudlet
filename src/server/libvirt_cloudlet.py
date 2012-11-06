@@ -712,16 +712,19 @@ def run_snapshot(conn, disk_image, mem_snapshot, **kwargs):
     # resume
     restore_with_config(conn, mem_snapshot, new_xml_string)
     if resume_time != None:
-        resume_time_sec = time() - start_resume_time
-        print "resume time : %f" % resume_time_sec
-        resume_time['time'] = resume_time_sec
+        resume_time['start_time'] = start_resume_time
+        resume_time['end_time'] = time()
+        print "[RESUME] : QEMU resume time (%f)~(%f)=(%f)" % \
+                (resume_time['start_time'], resume_time['end_time'], \
+                resume_time['end_time']-resume_time['start_time'])
+
 
     # get machine
     domxml = ElementTree.fromstring(new_xml_string)
     uuid_element = domxml.find('uuid')
     uuid = str(uuid_element.text)
     machine = conn.lookupByUUIDString(uuid)
-    if kwargs.get('vnc_disable'):
+    if kwargs.get('vnc_disable') == True:
         return machine
 
     # Get VNC port
@@ -880,6 +883,7 @@ class ResumedVM(threading.Thread):
         # wait_vnc          :   wait until vnc finishes if vnc_enabled
         # qemu_logfile      :   log file for QEMU-KVM
         self.wait_vnc = kwargs.get('wait_vnc', True)
+        self.vnc_disable = kwargs.get('vnc_disable', True)
 
         # monitor modified chunks
         self.machine = None
@@ -904,13 +908,13 @@ class ResumedVM(threading.Thread):
     def resume(self):
         #resume VM
         conn = get_libvirt_connection()
-        resume_time = {'time':-100}
+        self.resume_time = {'time':-100}
         try:
-            self.machine=run_snapshot(conn, self.residue_img, self.residue_mem, wait_vnc=self.wait_vnc, 
-                    qemu_logfile=self.qemu_logfile.name, resume_time=resume_time)
+            self.machine=run_snapshot(conn, self.residue_img, self.residue_mem, 
+                    vnc_disable=self.vnc_disable, wait_vnc=self.wait_vnc, 
+                    qemu_logfile=self.qemu_logfile.name, resume_time=self.resume_time)
         except Exception as e:
             sys.stdout.write(str(e)+"\n")
-        return resume_time['time']
 
     def terminate(self):
         if self.machine:

@@ -26,7 +26,7 @@ from optparse import OptionParser
 from threading import Thread
 import cloudlet_client
 
-application = ['moped', 'face']
+application = ['moped', 'face', 'webserver']
 
 def process_command_line(argv):
     global command_type
@@ -82,10 +82,13 @@ def synthesis(address, port, application):
     recv.join()
     send_end = send_end_time['time']
     recv_end = recv_end_time['time']
-    #app_ret = recv_end_time['app']
+    app_start_time = recv_end_time['app_start']
+    app_end_time = recv_end_time['app_end']
     print "Transfer %f-%f = %f" % (send_end, start_time, (send_end-start_time))
     print "Response %f-%f = %f" % (recv_end, start_time, (recv_end-start_time))
-    #print "App End  %f-%f = %f" % (app_ret, start_time, (app_ret-start_time))
+    print "App End  %f-%f = %f" % (app_end_time, start_time, (app_end_time-start_time))
+    print "App      %f-%f = %f" % (app_end_time, app_start_time, (app_end_time-app_start_time))
+
 
 
 def send_thread(sock, application, time_dict):
@@ -93,6 +96,10 @@ def send_thread(sock, application, time_dict):
         overlay_meta_path = '/home/krha/cloudlet/image/overlay/ubuntu/moped/precise.overlay-meta'
         overlay_disk_path = '/home/krha/cloudlet/image/overlay/ubuntu/moped/precise.overlay-img.lzma'
         overlay_mem_path = '/home/krha/cloudlet/image/overlay/ubuntu/moped/precise.overlay-mem.lzma'
+    elif application == 'webserver':
+        overlay_meta_path = '/home/krha/cloudlet/image/overlay/ubuntu/webserver/precise.overlay-meta'
+        overlay_disk_path = '/home/krha/cloudlet/image/overlay/ubuntu/webserver/precise.overlay-img.lzma'
+        overlay_mem_path = '/home/krha/cloudlet/image/overlay/ubuntu/webserver/precise.overlay-mem.lzma'
     elif application == 'face':
         overlay_meta_path = '/home/krha/cloudlet/image/overlay/window/face/window7.overlay-meta'
         overlay_disk_path = '/home/krha/cloudlet/image/overlay/window/face/window7.overlay-img.lzma'
@@ -125,8 +132,9 @@ def recv_thread(sock, application, time_dict):
     time_dict['time'] = time.time()
 
     #run application
-    #cloudlet_client.run_application(application)
-    #time_dict['app'] = time.time()
+    time_dict['app_start'] = time.time()
+    cloudlet_client.run_application(application)
+    time_dict['app_end'] = time.time()
 
 
 def main(argv=None):

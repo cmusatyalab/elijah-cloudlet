@@ -301,6 +301,10 @@ class SynthesisTCPHandler(SocketServer.StreamRequestHandler):
         resumed_VM = cloudlet.ResumedVM(modified_img, modified_mem, fuse)
         resumed_VM.start()
 
+        # early return to have application request
+        # but need to wait until VM port opens
+        self.ret_success()
+
         # start processes
         mem_download_process.start()
         mem_decomp_process.start()
@@ -324,11 +328,6 @@ class SynthesisTCPHandler(SocketServer.StreamRequestHandler):
                 time_transfer_mem, time_decomp_mem, time_delta_mem, time_fuse_mem,
                 time_transfer_disk, time_decomp_disk, time_delta_disk, time_fuse_disk)
 
-
-        # early return to have application request
-        # but need to wait until VM port opens
-        self.ret_success()
-
         # terminate
         while True:
             user_input = raw_input("type q to quit : ")
@@ -349,7 +348,6 @@ class SynthesisTCPHandler(SocketServer.StreamRequestHandler):
         shutil.rmtree(tmp_dir)
         close_end_time = time.time()
         print "Time for finishing(close all fd) : %f" % (close_end_time-close_start_time)
-
 
 
     @staticmethod

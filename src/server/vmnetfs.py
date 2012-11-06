@@ -230,7 +230,6 @@ class FuseFeedingThread(threading.Thread):
     def feeding_thread(self):
         count = 0
         start_time = time.time()
-        self.fuse.fuse_write("END_OF_TRANSMISSION")
         while(not self.stop.wait(0.0000001)):
             self._running = True
             try:

@@ -378,6 +378,7 @@ class Recovered_delta(multiprocessing.Process):
 
         # create output file without content
         # this is designed for mmap of overlay memory before finishing reconstruction
+        '''
         self.recover_fd = open(self.output_path, "wr+b")
         self.recover_fd.seek(self.output_size-1)
         last_one_byte = self.recover_fd.read(1)
@@ -385,6 +386,7 @@ class Recovered_delta(multiprocessing.Process):
             self.recover_fd.write('0')
             self.recover_fd.flush()
         self.recover_fd.close()
+        '''
 
         if overlay_memory_info != None:
             overlay_mem_path = overlay_memory_info['path']
@@ -425,7 +427,7 @@ class Recovered_delta(multiprocessing.Process):
 
         self.out_pipe.send(Recovered_delta.END_OF_PIPE)
         self.out_pipe.close()
-        self.recover_fd.flush()
+        self.recover_fd.close()
         end_time = time.time()
 
         if self.time_queue != None: 
@@ -501,8 +503,6 @@ class Recovered_delta(multiprocessing.Process):
             self.raw_mem.close()
         if self.raw_mem_overlay:
             self.raw_mem_overlay.close()
-        if self.recover_fd.close():
-            self.recover_fd.close()
         print "[DEBUG] Recover finishes"
 
 
