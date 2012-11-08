@@ -270,8 +270,8 @@ def create_overlay(base_image):
 
     # 1-1. resume & get modified disk
     conn = get_libvirt_connection()
-    machine = run_snapshot(conn, modified_disk, base_mem_fuse, 
-            wait_vnc=True, qemu_logfile=qemu_logfile.name)
+    machine = run_snapshot(conn, modified_disk, base_mem_fuse, qemu_logfile=qemu_logfile.name)
+    connect_vnc(machine)
     # 1-2. get modified memory
     # TODO: support stream of modified memory rather than tmp file
     save_mem_snapshot(machine, modified_mem.name)
@@ -689,8 +689,6 @@ def save_mem_snapshot(machine, fout_path, **kwargs):
 
 def run_snapshot(conn, disk_image, mem_snapshot, **kwargs):
     # kwargs
-    # vnc_disable       :   show vnc console
-    # wait_vnc          :   wait until vnc finishes if vnc_enabled
     # qemu_logfile      :   log file for QEMU-KVM
     # resume_time       :   write back the resumed_time
     resume_time = kwargs.get('resume_time', None)
@@ -724,9 +722,11 @@ def run_snapshot(conn, disk_image, mem_snapshot, **kwargs):
     uuid_element = domxml.find('uuid')
     uuid = str(uuid_element.text)
     machine = conn.lookupByUUIDString(uuid)
-    if kwargs.get('vnc_disable') == True:
-        return machine
 
+    return machine
+
+
+def connect_vnc(machine):
     # Get VNC port
     vnc_port = 5900
     try:
@@ -738,16 +738,15 @@ def run_snapshot(conn, disk_image, mem_snapshot, **kwargs):
         sys.stderr.write("Warning, Possible VNC port error:%s\n" % str(e))
 
     # Run VNC
-    vnc_process = subprocess.Popen("gvncviewer localhost:%d" % vnc_port, shell=True)
-    if kwargs.get('wait_vnc'):
-        print "[INFO] waiting for finishing VNC interaction"
-        try:
-            vnc_process.wait()
-        except KeyboardInterrupt as e:
-            print "keyboard interrupt while waiting VNC"
-            vnc_process.terminate()
-
-    return machine
+    vnc_process = subprocess.Popen("gvncviewer localhost:%d" % vnc_port, 
+            stdout=subprocess.PIPE, stderr=subprocess.PIPE,
+            shell=True)
+    print "[INFO] waiting for finishing VNC interaction"
+    try:
+        vnc_process.wait()
+    except KeyboardInterrupt as e:
+        print "keyboard interrupt while waiting VNC"
+        vnc_process.terminate()
 
 
 def rettach_nic(conn, xml, **kwargs):
@@ -854,6 +853,7 @@ def synthesis(base_disk, meta, comp_overlay_disk, comp_overlay_mem):
     # resume VM
     resumed_VM = ResumedVM(modified_img, modified_mem, fuse)
     resumed_VM.start()
+    #import pdb;pdb.set_trace()
 
     delta_memory.start()
     memory_fuse.start()
@@ -862,14 +862,11 @@ def synthesis(base_disk, meta, comp_overlay_disk, comp_overlay_mem):
     delta_disk.start()
     disk_fuse.start()
     delta_disk.join()
-
-    while True:
-        user_input = raw_input("type q to quit : ")
-        if user_input == 'q':
-            break
-
     print "[INFO] VM Disk is Fully recovered at %s" % modified_img
     print "[INFO] VM Memory is Fully recoverd at %s" % modified_mem
+
+    resumed_VM.join()
+    connect_vnc(resumed_VM.machine)
 
     # terminate
     resumed_VM.terminate()
@@ -879,11 +876,7 @@ def synthesis(base_disk, meta, comp_overlay_disk, comp_overlay_mem):
 class ResumedVM(threading.Thread):
     def __init__(self, modified_img, modified_mem, fuse, **kwargs):
         # kwargs
-        # vnc_disable       :   show vnc console
-        # wait_vnc          :   wait until vnc finishes if vnc_enabled
         # qemu_logfile      :   log file for QEMU-KVM
-        self.wait_vnc = kwargs.get('wait_vnc', True)
-        self.vnc_disable = kwargs.get('vnc_disable', True)
 
         # monitor modified chunks
         self.machine = None
@@ -911,7 +904,6 @@ class ResumedVM(threading.Thread):
         self.resume_time = {'time':-100}
         try:
             self.machine=run_snapshot(conn, self.residue_img, self.residue_mem, 
-                    vnc_disable=self.vnc_disable, wait_vnc=self.wait_vnc, 
                     qemu_logfile=self.qemu_logfile.name, resume_time=self.resume_time)
         except Exception as e:
             sys.stdout.write(str(e)+"\n")
@@ -988,7 +980,9 @@ def main(argv):
         overlay_mem_url = "http://dagama.isr.cs.cmu.edu/overlay/nova_overlay_mem.lzma"
         launch_disk, launch_mem = recover_launchVM_from_URL(base_disk_path, base_mem_path, overlay_disk_url, overlay_mem_url)
         conn = get_libvirt_connection()
-        run_snapshot(conn, launch_disk, launch_mem, wait_vnc=True)
+        machine=run_snapshot(conn, launch_disk, launch_mem)
+        connect_vnc(machine)
+
     elif mode == 'test_new_xml':    # To be delete
         in_path = args[1]
         out_path = in_path + ".new"
