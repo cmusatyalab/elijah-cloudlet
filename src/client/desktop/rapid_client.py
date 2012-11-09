@@ -90,20 +90,13 @@ def synthesis(address, port, application):
     print "App      %f-%f = %f" % (app_end_time, app_start_time, (app_end_time-app_start_time))
 
 
-
 def send_thread(sock, application, time_dict):
     if application == 'moped':
         overlay_meta_path = '/home/krha/cloudlet/image/overlay/ubuntu/moped/precise.overlay-meta'
-        overlay_disk_path = '/home/krha/cloudlet/image/overlay/ubuntu/moped/precise.overlay-img.lzma'
-        overlay_mem_path = '/home/krha/cloudlet/image/overlay/ubuntu/moped/precise.overlay-mem.lzma'
-    elif application == 'webserver':
-        overlay_meta_path = '/home/krha/cloudlet/image/overlay/ubuntu/webserver/precise.overlay-meta'
-        overlay_disk_path = '/home/krha/cloudlet/image/overlay/ubuntu/webserver/precise.overlay-img.lzma'
-        overlay_mem_path = '/home/krha/cloudlet/image/overlay/ubuntu/webserver/precise.overlay-mem.lzma'
+        overlay_path = '/home/krha/cloudlet/image/overlay/ubuntu/moped/precise.overlay.lzma'
     elif application == 'face':
         overlay_meta_path = '/home/krha/cloudlet/image/overlay/window/face/window7.overlay-meta'
-        overlay_disk_path = '/home/krha/cloudlet/image/overlay/window/face/window7.overlay-img.lzma'
-        overlay_mem_path = '/home/krha/cloudlet/image/overlay/window/face/window7.overlay-mem.lzma'
+        overlay_path = '/home/krha/cloudlet/image/overlay/window/face/window7.overlay.lzma'
     else:
         raise Exception("NO valid application name: %s" % application)
     # send header
@@ -112,10 +105,8 @@ def send_thread(sock, application, time_dict):
     sock.sendall(overlay_meta)
 
     # send data
-    mem_data = open(overlay_mem_path, "rb").read()
+    mem_data = open(overlay_path, "rb").read()
     sock.sendall(mem_data)
-    disk_data = open(overlay_disk_path, "rb").read()
-    sock.sendall(disk_data)
     time_dict['time'] = time.time()
 
 

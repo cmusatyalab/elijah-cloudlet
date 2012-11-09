@@ -62,7 +62,8 @@ class Const(object):
     BASE_MEM_META       = ".base-mem-meta"
     BASE_MEM_RAW        = ".base-mem.raw"
     OVERLAY_META        = ".overlay-meta"
-    OVERLAY_FILE         = ".overlay"
+    OVERLAY_FILE        = ".overlay"
+    BASE_ACCESS_PATERN  = ".access"
 
     META_BASE_VM_SHA256                 = "base_vm_sha256"
     META_RESUME_VM_DISK_SIZE            = "resumed_vm_disk_size"
@@ -320,10 +321,14 @@ def create_overlay(base_image):
     free_pfn_counter = 0
     if Const.FREE_SUPPORT:
         free_pfn_counter = long(freed_counter_ret.get("freed_counter", 0))
+
+    access_pattern_file = base_image + Const.BASE_ACCESS_PATERN
+    delta.reorder_deltalist(access_pattern_file, 
+            Memory.Memory.RAM_PAGE_SIZE, merged_deltalist)
+
     DeltaList.statistics(merged_deltalist, print_out=Log.out, 
             mem_discarded=free_pfn_counter,
             disk_discarded=disk_statistics.get('trimed', 0))
-
     DeltaList.tofile(merged_deltalist, overlay_path)
 
     # TO BE DELETE: DMA performance checking
@@ -791,6 +796,7 @@ def restore_with_config(conn, mem_snapshot, xml):
     try:
         print "[INFO] restoring VM..."
         conn.restoreFlags(mem_snapshot, xml, libvirt.VIR_DOMAIN_SAVE_RUNNING)
+        #conn.restoreFlags(mem_snapshot, xml, libvirt.VIR_DOMAIN_SAVE_PAUSED)
         print "[INFO] VM is restored..."
     except libvirt.libvirtError, e:
         message = "%s\nXML: %s" % (str(e), xml)

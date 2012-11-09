@@ -53,7 +53,11 @@ class DeltaItem(object):
 
         # new field for identify delta_item
         # because offset is not unique once we use both memory and disk
-        self.index = long((self.offset << 1) | (self.delta_type & 0x0F))
+        self.index = DeltaItem.get_index(self.delta_type, self.offset)
+
+    @staticmethod
+    def get_index(delta_type, offset):
+        return long((offset << 1) | (delta_type & 0x0F))
 
     def __getitem__(self, item):
         return self.__dict__[item]
@@ -228,7 +232,7 @@ class DeltaList(object):
                 ref_index = delta_item.data
                 ref_delta = previous_delta_dict.get(ref_index, None)
                 if ref_delta == None:
-                    raise("Cannot calculate statistics for self_referencing")
+                    raise DeltaError("Cannot calculate statistics for self_referencing")
                 if delta_item.delta_type == DeltaItem.DELTA_DISK:
                     if (ref_delta.delta_type == DeltaItem.DELTA_MEMORY):
                         from_overlay_mem += 1
@@ -545,3 +549,43 @@ def create_overlay(memory_deltalist, memory_chunk_size,
     DeltaList.get_self_delta(delta_list)
 
     return delta_list
+
+def reorder_deltalist(mem_access_file, chunk_size, delta_list):
+    # chunks that appear earlier in access file comes afront in deltalist
+    start_time = time.time()
+    access_list = open(mem_access_file, "r").read().split()
+    if len(access_list[-1].strip()) == 0:
+        access_list = access_list[:-1]
+
+    delta_dict = dict()
+    for item in delta_list:
+        delta_dict[item.index] = item
+
+    access_list.reverse()
+    before_length = len(delta_list)
+    count = 0 
+    for chunk_number in access_list:
+        chunk_index = DeltaItem.get_index(DeltaItem.DELTA_MEMORY, long(chunk_number)*chunk_size)
+        delta_item = delta_dict.get(chunk_index, None)
+        if delta_item:
+            print "chunk(%ld) moved from %d --> 0" % (delta_item.offset/chunk_size, delta_list.index(delta_item))
+            delta_list.remove(delta_item)
+            delta_list.insert(0, delta_item)
+            count += 1
+
+            # moved item has reference
+            if delta_item.ref_id == DeltaItem.REF_SELF:
+                ref_index = delta_item.data
+                ref_delta = delta_dict[ref_index]
+                delta_list.remove(ref_delta)
+                delta_list.insert(0, ref_delta)
+                print "chunk(%ld) moving because its reference of chunk(%ld)" % \
+                        (ref_delta.offset/chunk_size, delta_item.offset/chunk_size)
+    after_length = len(delta_list)
+    if before_length != after_length:
+        raise DeltaError("DeltaList size shouldn't be changed after reordering")
+
+    end_time = time.time()
+    print "[DEBUG][RODERING] time %f" % (end_time-start_time)
+    print "[DEBUG][ORDERING] changed %d deltaitem (total access pattern: %d)" % (count, len(access_list))
+
