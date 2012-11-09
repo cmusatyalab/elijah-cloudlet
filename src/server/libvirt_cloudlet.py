@@ -62,14 +62,13 @@ class Const(object):
     BASE_MEM_META       = ".base-mem-meta"
     BASE_MEM_RAW        = ".base-mem.raw"
     OVERLAY_META        = ".overlay-meta"
-    OVERLAY_DISK        = ".overlay-img"
-    OVERLAY_MEM         = ".overlay-mem"
+    OVERLAY_FILE         = ".overlay"
 
     META_BASE_VM_SHA256                 = "base_vm_sha256"
     META_RESUME_VM_DISK_SIZE            = "resumed_vm_disk_size"
     META_RESUME_VM_MEMORY_SIZE          = "resumed_vm_memory_size"
-    META_OVERLAY_DISK_SIZE              = "overlay_disk_size"
-    META_OVERLAY_MEMORY_SIZE            = "overlay_memory_size"
+    META_OVERLAY_FILE_NAMES             = "overlay_files"
+    META_OVERLAY_FILE_SIZES             = "overlay_sizes"
     META_MODIFIED_DISK_CHUNKS           = "modified_disk_chunk"
     META_MODIFIED_MEMORY_CHUNKS         = "modified_memory_chunk"
 
@@ -246,8 +245,7 @@ def create_overlay(base_image):
     qemu_logfile = NamedTemporaryFile(prefix="cloudlet-qemu-log-", delete=False)
     image_name = os.path.basename(base_image).split(".")[0]
     dir_path = os.path.dirname(base_mem)
-    overlay_diskpath = os.path.join(dir_path, image_name+Const.OVERLAY_DISK)
-    overlay_mempath = os.path.join(dir_path, image_name+Const.OVERLAY_MEM)
+    overlay_path = os.path.join(dir_path, image_name+Const.OVERLAY_FILE)
     
     # make FUSE disk & memory
     fuse = run_fuse(Const.VMNETFS_PATH, Const.CHUNK_SIZE, 
@@ -294,38 +292,39 @@ def create_overlay(base_image):
         used_blocks_dict = xray.get_used_blocks(modified_disk)
 
     # 2-1. get memory overlay
-    mem_deltalist= Memory.create_memory_overlay(modified_mem.name, 
+    mem_deltalist= Memory.create_memory_deltalist(modified_mem.name, 
             basemem_meta=base_memmeta, basemem_path=base_mem,
-            basedisk_hashlist=basedisk_hashlist, basedisk_path=base_image,
             freed_counter_ret = freed_counter_ret,
             print_out=Log.out)
-    Log.out.write("[Debug] Statistics for Memory overlay\n")
-    free_pfn_counter = 0
-    if Const.FREE_SUPPORT:
-        free_pfn_counter = long(freed_counter_ret.get("freed_counter", 0))
-    DeltaList.statistics(mem_deltalist, print_out=Log.out, discarded_num=free_pfn_counter)
-    DeltaList.tofile(mem_deltalist, overlay_mempath)
 
     # 2-2. get disk overlay
     m_chunk_dict = monitor.chunk_dict
     disk_statistics = dict()
-    disk_deltalist = Disk.create_disk_overlay(modified_disk,
+    disk_deltalist = Disk.create_disk_deltalist(modified_disk,
             m_chunk_dict, Const.CHUNK_SIZE,
             basedisk_hashlist=basedisk_hashlist, basedisk_path=base_image,
-            basemem_hashlist=basemem_hashlist, basemem_path=base_mem,
             trim_dict=trim_dict,
             dma_dict=dma_dict,
             used_blocks_dict=used_blocks_dict,
             ret_statistics=disk_statistics,
             print_out=Log.out)
 
-    # 2-3. disk-memory de-duplication
-    # update disk delta list using memory delta list
-    delta.diff_with_deltalist(disk_deltalist, mem_deltalist, DeltaItem.REF_OVERLAY_MEM)
-    Log.out.write("[Debug] Statistics for Disk overlay\n")
-    DeltaList.statistics(disk_deltalist, print_out=Log.out, 
-            discarded_num=disk_statistics.get('trimed', 0))
-    DeltaList.tofile(disk_deltalist, overlay_diskpath)
+    # 2-3. Merge disk & memory delta_list to generate overlay file
+    merged_deltalist = delta.create_overlay(
+            mem_deltalist, Memory.Memory.RAM_PAGE_SIZE,
+            disk_deltalist, Const.CHUNK_SIZE,
+            basedisk_hashlist=basedisk_hashlist,
+            basemem_hashlist=basemem_hashlist,
+            print_out=Log.out)
+
+    free_pfn_counter = 0
+    if Const.FREE_SUPPORT:
+        free_pfn_counter = long(freed_counter_ret.get("freed_counter", 0))
+    DeltaList.statistics(merged_deltalist, print_out=Log.out, 
+            mem_discarded=free_pfn_counter,
+            disk_discarded=disk_statistics.get('trimed', 0))
+
+    DeltaList.tofile(merged_deltalist, overlay_path)
 
     # TO BE DELETE: DMA performance checking
     # _test_dma_accuracy(dma_dict, disk_deltalist, mem_deltalist)
@@ -355,18 +354,14 @@ def create_overlay(base_image):
         Log.out.write("[Debug] WASTED TIME FOR XRAY LOGGING: %f\n" % (xray_end_time-xray_start_time))
 
     # 3. Compression
-    comp_overlay_diskpath = overlay_diskpath + ".lzma"
-    comp_overlay_mempath = overlay_mempath + ".lzma"
-    comp_disk_file, time1 = comp_lzma(overlay_diskpath, comp_overlay_diskpath)
-    Log.out.write("[Debug] Overlay-disk Compression time: %s\n" % (time1))
-    comp_mem_file, time2 = comp_lzma(overlay_mempath, comp_overlay_mempath)
-    Log.out.write("[Debug] Overlay-mem Compression time: %s\n" % (time2))
+    comp_overlay_path = overlay_path + ".lzma"
+    comp_disk_file, time1 = comp_lzma(overlay_path, comp_overlay_path)
+    Log.out.write("[Debug] Overlay Compression time: %s\n" % (time1))
 
     # 4. create metadata
     overlay_metafile = os.path.join(dir_path, image_name+Const.OVERLAY_META)
     _create_overlay_meta(base_hash_value, overlay_metafile, modified_disk, modified_mem.name,
-            comp_overlay_diskpath, comp_overlay_mempath,
-            disk_deltalist, mem_deltalist)
+            comp_overlay_path, merged_deltalist)
 
     # 4. terminting
     fuse.terminate()
@@ -378,7 +373,7 @@ def create_overlay(base_image):
     #if os.path.exists(qemu_logfile.name):
     #    os.unlink(qemu_logfile.name)
 
-    return (overlay_metafile, comp_overlay_diskpath, comp_overlay_mempath)
+    return (overlay_metafile, comp_overlay_path)
     '''
     output_list = []
     output_list.append((base_image, modified_disk, overlay_diskpath))
@@ -393,33 +388,32 @@ def create_overlay(base_image):
     '''
 
 def _create_overlay_meta(base_hash, overlay_metafile, modified_disk, modified_mem, 
-        comp_overlay_diskpath, comp_overlay_mempath,
-        disk_deltalist, mem_deltalist):
+        comp_overlay_path, delta_list):
     fout = open(overlay_metafile, "wrb")
 
     disk_offsetlist = list()
     mem_offsetlist = list()
-    for item in disk_deltalist:
+    for item in delta_list:
         chunk_number = int(item.offset/Const.CHUNK_SIZE)
-        disk_offsetlist.append(chunk_number)
+        if item.delta_type == DeltaItem.DELTA_MEMORY:
+            mem_offsetlist.append(chunk_number)
+        elif item.delta_type == DeltaItem.DELTA_DISK:
+            disk_offsetlist.append(chunk_number)
+        else:
+            msg = "META Generation: delta type should be either disk or memory"
+            raise CloudletGenerationError(msg)
+
         if long(item.offset/Const.CHUNK_SIZE) != chunk_number:
             msg = "Overflow in chunk while generating meta file %ld != %ld" \
                     % (chunk_number, item.offset/Const.CHUNK_SIZE)
-            raise CloudletGenerationError(msg)
-    for item in mem_deltalist:
-        chunk_number = int(item.offset/Memory.Memory.RAM_PAGE_SIZE)
-        mem_offsetlist.append(chunk_number)
-        if long(item.offset/Memory.Memory.RAM_PAGE_SIZE) != chunk_number:
-            msg = "Overflow in chunk while generating meta file %ld != %ld" \
-                    % (chunk_number, item.offset/Memory.Memory.RAM_PAGE_SIZE)
             raise CloudletGenerationError(msg)
 
     meta_dict = dict()
     meta_dict[Const.META_BASE_VM_SHA256] = base_hash
     meta_dict[Const.META_RESUME_VM_DISK_SIZE] = os.path.getsize(modified_disk)
     meta_dict[Const.META_RESUME_VM_MEMORY_SIZE] = os.path.getsize(modified_mem)
-    meta_dict[Const.META_OVERLAY_DISK_SIZE] = os.path.getsize(comp_overlay_diskpath)
-    meta_dict[Const.META_OVERLAY_MEMORY_SIZE] = os.path.getsize(comp_overlay_mempath)
+    meta_dict[Const.META_OVERLAY_FILE_NAMES] = [os.path.basename(comp_overlay_path)]
+    meta_dict[Const.META_OVERLAY_FILE_SIZES] = [os.path.getsize(comp_overlay_path)]
     meta_dict[Const.META_MODIFIED_DISK_CHUNKS] = disk_offsetlist
     meta_dict[Const.META_MODIFIED_MEMORY_CHUNKS] = mem_offsetlist
 
@@ -525,7 +519,7 @@ def run_delta_compression(output_list, **kwargs):
     return ret_files
 
 
-def recover_launchVM(base_image, meta_info, overlay_disk, overlay_mem, **kwargs):
+def recover_launchVM(base_image, meta_info, overlay_file, **kwargs):
     # kwargs
     # skip_validation   :   skip sha1 validation
     # LOG = log object for nova
@@ -556,15 +550,14 @@ def recover_launchVM(base_image, meta_info, overlay_disk, overlay_mem, **kwargs)
     print "[INFO] Start FUSE"
 
     # Recover Modified Memory
-    mem_pipe_parent, mem_pipe_child = Pipe()
-    memory_recover_dict = dict()
-    delta_memory = delta.Recovered_delta(base_image, base_mem, overlay_mem, \
-            modified_mem.name, vm_memory_size, Memory.Memory.RAM_PAGE_SIZE, 
-            out_pipe=mem_pipe_child, parent=base_mem)
-    memory_fuse = vmnetfs.FuseFeedingThread(fuse, 
-            vmnetfs.FuseFeedingThread.FUSE_IMAGE_INDEX_MEMORY,
-            mem_pipe_parent, memory_recover_dict, 
-            delta.Recovered_delta.END_OF_PIPE)
+    pipe_parent, pipe_child = Pipe()
+    delta_proc = delta.Recovered_delta(base_image, base_mem, overlay_file, \
+            modified_mem.name, vm_memory_size, 
+            modified_img.name, vm_disk_size, Const.CHUNK_SIZE, 
+            out_pipe=pipe_child)
+    fuse_thread = vmnetfs.FuseFeedingThread(fuse, 
+            pipe_parent, delta.Recovered_delta.END_OF_PIPE)
+    '''
     # Recover Modified Disk
     disk_pipe_parent, disk_pipe_child = Pipe()
     disk_recover_dict = dict()
@@ -576,7 +569,8 @@ def recover_launchVM(base_image, meta_info, overlay_disk, overlay_mem, **kwargs)
             vmnetfs.FuseFeedingThread.FUSE_IMAGE_INDEX_DISK,
             disk_pipe_parent, disk_recover_dict,
             delta.Recovered_delta.END_OF_PIPE)
-    return [modified_img.name, modified_mem.name, fuse, delta_memory, memory_fuse, delta_disk, disk_fuse]
+    '''
+    return [modified_img.name, modified_mem.name, fuse, delta_proc, fuse_thread]
 
 
 def run_fuse(bin_path, chunk_size, original_disk, fuse_disk_size,
@@ -829,7 +823,7 @@ def copy_with_xml(in_path, out_path, xml):
     fout.write(fin.read())
 
 
-def synthesis(base_disk, meta, comp_overlay_disk, comp_overlay_mem):
+def synthesis(base_disk, meta):
     # VM Synthesis and run recoverd VM
     # param base_disk : path to base disk
     # param meta : path to meta file for overlay
@@ -837,31 +831,26 @@ def synthesis(base_disk, meta, comp_overlay_disk, comp_overlay_mem):
     # param overlay_mem : path to overlay memory file
 
     # decomp
-    overlay_disk = NamedTemporaryFile(prefix="cloudlet-synthesis-disk-")
-    overlay_mem = NamedTemporaryFile(prefix="cloudlet-synthesis-mem-")
-    outpath, decomp_time = decomp_lzma(comp_overlay_disk, overlay_disk.name)
-    Log.out.write("[Debug] Overlay-disk decomp time: %s\n" % (decomp_time))
-    outpath, decomp_time = decomp_lzma(comp_overlay_mem, overlay_mem.name)
-    Log.out.write("[Debug] Overlay-mem decomp time: %s\n" % (decomp_time))
+    meta_info = bson.loads(open(meta, "r").read())
+    comp_overlay_files = meta_info[Const.META_OVERLAY_FILE_NAMES]
+    comp_overlay_files = [os.path.join(os.path.dirname(meta), item) for item in comp_overlay_files]
+    overlay_file = NamedTemporaryFile(prefix="cloudlet-overlay-file-")
+    outpath, decomp_time = decomp_lzma(comp_overlay_files[0], overlay_file.name)
+    Log.out.write("[Debug] Overlay decomp time: %s\n" % (decomp_time))
 
     # recover VM
     Log.out.write("[Debug] recover launch VM\n")
-    meta_info = bson.loads(open(meta, "r").read())
-    modified_img, modified_mem, fuse, delta_memory, memory_fuse, delta_disk, disk_fuse = \
-            recover_launchVM(base_disk, meta_info, overlay_disk.name, overlay_mem.name, log=Log.out)
+    modified_img, modified_mem, fuse, delta_proc, fuse_thread = \
+            recover_launchVM(base_disk, meta_info, overlay_file.name, log=Log.out)
 
     # resume VM
     resumed_VM = ResumedVM(modified_img, modified_mem, fuse)
     resumed_VM.start()
     #import pdb;pdb.set_trace()
 
-    delta_memory.start()
-    memory_fuse.start()
-    delta_memory.join()
-
-    delta_disk.start()
-    disk_fuse.start()
-    delta_disk.join()
+    delta_proc.start()
+    fuse_thread.start()
+    delta_proc.join()
     print "[INFO] VM Disk is Fully recovered at %s" % modified_img
     print "[INFO] VM Memory is Fully recoverd at %s" % modified_mem
 
@@ -958,21 +947,16 @@ def main(argv):
         disk_path = args[1]
         overlay_files = create_overlay(disk_path)
         print "[INFO] overlay metafile : %s" % overlay_files[0]
-        print "[INFO] disk overlay : %s" % overlay_files[1]
-        print "[INFO] memory overlay : %s" % overlay_files[2]
+        print "[INFO] overlay : %s" % overlay_files[1]
     elif mode == MODE[2]:   #synthesis
-        if len(args) != 5:
-            parser.error("Synthesis requires 4 arguments\n \
+        if len(args) != 3:
+            parser.error("Synthesis requires 2 arguments\n \
                     1)base-disk path\n \
-                    2)overlay meta path\n \
-                    2)overlay disk path\n \
-                    3)overlay memory path")
+                    2)overlay meta path\n")
             sys.exit(1)
         base_disk_path = args[1]
         meta = args[2]
-        overlay_disk = args[3]
-        overlay_mem = args[4]
-        synthesis(base_disk_path, meta, overlay_disk, overlay_mem)
+        synthesis(base_disk_path, meta)
     elif mode == 'test_overlay_download':    # To be delete
         base_disk_path = "/home/krha/cloudlet/image/nova/base_disk"
         base_mem_path = "/home/krha/cloudlet/image/nova/base_memory"

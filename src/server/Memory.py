@@ -116,7 +116,8 @@ class Memory(object):
                         try:
                             patch = tool.diff_data(source_data, data, 2*len(source_data))
                             if len(patch) < len(data):
-                                delta_item = DeltaItem(ram_offset, len(data),
+                                delta_item = DeltaItem(DeltaItem.DELTA_MEMORY,
+                                        ram_offset, len(data),
                                         hash_value=sha256(data).digest(),
                                         ref_id=DeltaItem.REF_XDELTA,
                                         data_len=len(patch),
@@ -125,7 +126,8 @@ class Memory(object):
                                 raise IOError("xdelta3 patch is bigger than origianl")
                         except IOError as e:
                             #print "[INFO] xdelta failed, so save it as raw (%s)" % str(e)
-                            delta_item = DeltaItem(ram_offset, len(data),
+                            delta_item = DeltaItem(DeltaItem.DELTA_MEMORY,
+                                    ram_offset, len(data),
                                     hash_value=sha256(data).digest(),
                                     ref_id=DeltaItem.REF_RAW,
                                     data_len=len(data),
@@ -338,17 +340,14 @@ def _process_cmd(argv):
     return settings, command
 
 
-def create_memory_overlay(modified_mempath,
+def create_memory_deltalist(modified_mempath,
             basemem_meta=None, basemem_path=None,
-            basedisk_hashlist=None, basedisk_path=None,
             freed_counter_ret=None,
             print_out=None):
     # get memory delta
     # modified_mempath : file path for modified memory
     # basemem_meta : hashlist file for base mem
     # basemem_path : raw base memory path
-    # basedisk_hashlist : haslist of base disk
-    # basedisk_path : raw base disk path
     # freed_counter_ret : return pointer for freed counter
     # print_out : log stream
 
@@ -358,21 +357,6 @@ def create_memory_overlay(modified_mempath,
     # 1.get modified page
     print_out.write("[Debug] 1.get modified page list\n")
     delta_list = base.get_modified(modified_mempath, freed_counter_ret=freed_counter_ret)
-
-    # 2.find shared with base memory 
-    print_out.write("[Debug] 2-1.Find zero page\n")
-    zero_hash = sha256(struct.pack("!s", chr(0x00))*Memory.RAM_PAGE_SIZE).digest()
-    zero_hash_list = [(-1, Memory.RAM_PAGE_SIZE, zero_hash)]
-    delta.diff_with_hashlist(zero_hash_list, delta_list, ref_id=DeltaItem.REF_ZEROS)
-    print_out.write("[Debug] 2-2.get delta from base Memory\n")
-    delta.diff_with_hashlist(base.hash_list, delta_list, ref_id=DeltaItem.REF_BASE_MEM)
-    if basedisk_hashlist:
-        print_out.write("[Debug] 2-3.get delta from base Disk\n")
-        delta.diff_with_hashlist(basedisk_hashlist, delta_list, ref_id=DeltaItem.REF_BASE_DISK)
-
-    # 3.find shared within self
-    print_out.write("[Debug] 3.get delta from itself\n")
-    DeltaList.get_self_delta(delta_list)
 
     return delta_list
 
@@ -502,7 +486,7 @@ if __name__ == "__main__":
         out_path = settings.mig_file + ".delta"
         #delta_list = create_memory_overlay(modi_mem_path, raw_path, modi_mem_path, out_path, print_out=sys.stdout)
 
-        mem_deltalist= create_memory_overlay(modi_mem_path,
+        mem_deltalist= create_memory_deltalist(modi_mem_path,
                 basemem_meta=meta_path, basemem_path=raw_path,
                 print_out=sys.stdout)
         DeltaList.statistics(mem_deltalist, print_out=sys.stdout)

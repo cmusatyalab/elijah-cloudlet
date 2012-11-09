@@ -148,10 +148,9 @@ def parse_qemu_log(qemu_logfile, chunk_size):
     return dma_dict, discard_dict
 
 
-def create_disk_overlay(modified_disk, 
+def create_disk_deltalist(modified_disk, 
             modified_chunk_dict, chunk_size,
             basedisk_hashlist=None, basedisk_path=None,
-            basemem_hashlist=None, basemem_path=None,
             trim_dict=None, dma_dict=None,
             used_blocks_dict=None,
             ret_statistics=None,
@@ -211,7 +210,8 @@ def create_disk_overlay(modified_disk,
         try:
             patch = tool.diff_data(source_data, data, 2*len(source_data))
             if len(patch) < len(data):
-                delta_item = DeltaItem(offset, len(data),
+                delta_item = DeltaItem(DeltaItem.DELTA_DISK,
+                        offset, len(data),
                         hash_value=sha256(data).digest(),
                         ref_id=DeltaItem.REF_XDELTA,
                         data_len=len(patch),
@@ -220,7 +220,8 @@ def create_disk_overlay(modified_disk,
                 raise IOError("xdelta3 patch is bigger than origianl")
         except IOError as e:
             #print "[INFO] xdelta failed, so save it as raw (%s)" % str(e)
-            delta_item = DeltaItem(offset, len(data),
+            delta_item = DeltaItem(DeltaItem.DELTA_DISK,
+                    offset, len(data),
                     hash_value=sha256(data).digest(),
                     ref_id=DeltaItem.REF_RAW,
                     data_len=len(data),
@@ -231,21 +232,7 @@ def create_disk_overlay(modified_disk,
         ret_statistics['xrayed'] = xray_counter
         ret_statistics['trimed_list'] = trimed_list
         ret_statistics['xrayed_list'] = xrayed_list
-
-    # 2.find shared with base memory 
     print_out.write("[Debug] 1-1. Trim(%d), Xray(%d)\n" % (trim_counter, xray_counter))
-    print_out.write("[Debug] 2-1.Find zero page\n")
-    zero_hash = sha256(struct.pack("!s", chr(0x00))*chunk_size).digest()
-    zero_hash_list = [(-1, chunk_size, zero_hash)]
-    delta.diff_with_hashlist(zero_hash_list, delta_list, ref_id=DeltaItem.REF_ZEROS)
-    print_out.write("[Debug] 2-2.get delta from base Disk \n")
-    delta.diff_with_hashlist(basedisk_hashlist, delta_list, ref_id=DeltaItem.REF_BASE_DISK)
-    print_out.write("[Debug] 2-3.get delta from base memory\n")
-    delta.diff_with_hashlist(basemem_hashlist, delta_list, ref_id=DeltaItem.REF_BASE_MEM)
-
-    # 3.find shared within self
-    print_out.write("[Debug] 3.get delta from itself\n")
-    DeltaList.get_self_delta(delta_list)
 
     return delta_list
 

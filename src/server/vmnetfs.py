@@ -48,7 +48,7 @@ class VMNetFS(threading.Thread):
             self._running = True
             oneline = self.proc.stdout.readline()
             if len(oneline.strip()) > 0:
-                sys.stdout.write(oneline)
+                sys.stdout.write("[FUSE] %s" % oneline)
                 pass
         self._running = False
         print "[INFO] close Fuse monitoring thread"
@@ -214,14 +214,10 @@ class FileMonitor(threading.Thread):
 
 
 class FuseFeedingThread(threading.Thread):
-    FUSE_IMAGE_INDEX_DISK = 1
-    FUSE_IMAGE_INDEX_MEMORY = 2
 
-    def __init__(self, fuse, fuse_index, input_pipe, feeding_info, END_OF_PIPE):
+    def __init__(self, fuse, input_pipe, END_OF_PIPE):
         self.fuse = fuse
-        self.index = fuse_index
         self.input_pipe = input_pipe
-        self.feeding_info = feeding_info
         self.END_OF_PIPE = END_OF_PIPE
         self.time_queue = None
         self.stop = threading.Event()
@@ -238,12 +234,8 @@ class FuseFeedingThread(threading.Thread):
                 break
             if chunks == self.END_OF_PIPE:
                 break
-            feeding_list = []
-            for chunk in chunks:
-                self.feeding_info[chunk] = True
-                feeding_list.append("%d:%ld" % (self.index, chunk))
-            count += len(feeding_list)
-            msg = ','.join(feeding_list)
+            count += len(chunks)
+            msg = ','.join(chunks)
             self.fuse.fuse_write(msg)
 
         end_time = time.time()
