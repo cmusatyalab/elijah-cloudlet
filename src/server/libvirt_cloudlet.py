@@ -842,6 +842,7 @@ def synthesis(base_disk, meta):
     comp_overlay_files = [os.path.join(os.path.dirname(meta), item) for item in comp_overlay_files]
     overlay_file = NamedTemporaryFile(prefix="cloudlet-overlay-file-")
     outpath, decomp_time = decomp_lzma(comp_overlay_files[0], overlay_file.name)
+    Log.out.write("[Debug] Overlay decomp from %s to %s\n" % (comp_overlay_files[0], overlay_file.name))
     Log.out.write("[Debug] Overlay decomp time: %s\n" % (decomp_time))
 
     # recover VM
@@ -963,6 +964,36 @@ def main(argv):
         base_disk_path = args[1]
         meta = args[2]
         synthesis(base_disk_path, meta)
+    elif mode == 'reorder':
+        if len(args) != 3:
+            parser.error("Reordering requires 2 arguments\n \
+                    1)access-pattern file\n \
+                    2)meta file\n")
+            sys.exit(1)
+
+        access_pattern_file = args[1]
+        meta = args[2]
+
+        # decomp
+        meta_info = bson.loads(open(meta, "r").read())
+        comp_overlay_files = meta_info[Const.META_OVERLAY_FILE_NAMES]
+        comp_overlay_files = [os.path.join(os.path.dirname(meta), item) for item in comp_overlay_files]
+        overlay_file = NamedTemporaryFile(prefix="cloudlet-overlay-file-")
+        outpath, decomp_time = decomp_lzma(comp_overlay_files[0], overlay_file.name)
+        # load delta list
+        delta_list = DeltaList.fromfile(overlay_file.name)
+        output_file = NamedTemporaryFile(prefix="cloudlet-overlay-out-")
+        # reorder
+        delta.reorder_deltalist(access_pattern_file, 
+                Memory.Memory.RAM_PAGE_SIZE, overlay_file.name)
+        DeltaList.statistics(delta_list, print_out=sys.stdout)
+        DeltaList.tofile(delta_list, output_file.name)
+        # compress
+        comp_disk_file, time1 = comp_lzma(output_file.name, comp_overlay_files[0])
+        new_file_size = os.path.getsize(comp_overlay_files[0])
+        meta_info[Const.META_OVERLAY_FILE_SIZES] = [new_file_size]
+        open(meta, "w+b").write(bson.dumps(meta_info))
+
     elif mode == 'test_overlay_download':    # To be delete
         base_disk_path = "/home/krha/cloudlet/image/nova/base_disk"
         base_mem_path = "/home/krha/cloudlet/image/nova/base_memory"

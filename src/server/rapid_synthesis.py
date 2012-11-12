@@ -211,7 +211,6 @@ class SynthesisTCPHandler(SocketServer.StreamRequestHandler):
         bson_data = request.recv(bson_size)
         while len(bson_data) < bson_size:
             bson_data += request.recv(bson_size - len(bson_data))
-        open("./bson_transfer", "wrb").write(bson_data)
         bson_header = bson.loads(bson_data)
 
         try:
@@ -300,10 +299,8 @@ class SynthesisTCPHandler(SocketServer.StreamRequestHandler):
                 time_transfer, time_decomp, time_delta, time_fuse)
 
         # terminate
-        while True:
-            user_input = raw_input("type q to quit : ")
-            if user_input == 'q':
-                break
+        resumed_VM.join()
+        cloudlet.connect_vnc(resumed_VM.machine)
 
         close_start_time = time.time()
         delta_proc.join()

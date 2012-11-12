@@ -568,7 +568,7 @@ def reorder_deltalist(mem_access_file, chunk_size, delta_list):
         chunk_index = DeltaItem.get_index(DeltaItem.DELTA_MEMORY, long(chunk_number)*chunk_size)
         delta_item = delta_dict.get(chunk_index, None)
         if delta_item:
-            print "chunk(%ld) moved from %d --> 0" % (delta_item.offset/chunk_size, delta_list.index(delta_item))
+            #print "chunk(%ld) moved from %d --> 0" % (delta_item.offset/chunk_size, delta_list.index(delta_item))
             delta_list.remove(delta_item)
             delta_list.insert(0, delta_item)
             count += 1
@@ -579,11 +579,21 @@ def reorder_deltalist(mem_access_file, chunk_size, delta_list):
                 ref_delta = delta_dict[ref_index]
                 delta_list.remove(ref_delta)
                 delta_list.insert(0, ref_delta)
-                print "chunk(%ld) moving because its reference of chunk(%ld)" % \
-                        (ref_delta.offset/chunk_size, delta_item.offset/chunk_size)
+                #print "chunk(%ld) moving because its reference of chunk(%ld)" % \
+                #        (ref_delta.offset/chunk_size, delta_item.offset/chunk_size)
     after_length = len(delta_list)
     if before_length != after_length:
         raise DeltaError("DeltaList size shouldn't be changed after reordering")
+
+    delta_dict_new = dict()
+    for item in delta_list:
+        delta_dict_new[item.index] = item
+
+    prev_indexes = delta_dict.keys().sort()
+    new_indexes = delta_dict_new.keys().sort()
+    if prev_indexes != new_indexes:
+        print "Reordered delta list is not same as previous"
+        sys.exit(1)
 
     end_time = time.time()
     print "[DEBUG][RODERING] time %f" % (end_time-start_time)
