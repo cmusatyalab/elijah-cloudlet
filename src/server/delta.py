@@ -19,11 +19,13 @@ import sys
 import time
 import struct
 import mmap
-import os
 import tool
+import os
+from Const import Const
 from operator import itemgetter
 from hashlib import sha256
 import multiprocessing 
+from lzma import LZMACompressor
 
 class DeltaError(Exception):
     pass
@@ -466,7 +468,6 @@ class Recovered_delta(multiprocessing.Process):
         #print "recovering %ld/%ld" % (index, len(delta_list))
         if (delta_item.ref_id == DeltaItem.REF_RAW):
             recover_data = delta_item.data
-            pass
         elif (delta_item.ref_id == DeltaItem.REF_ZEROS):
             recover_data = self.zero_data
         elif (delta_item.ref_id == DeltaItem.REF_BASE_MEM):
@@ -497,9 +498,9 @@ class Recovered_delta(multiprocessing.Process):
             raise MemoryError("Cannot recover: invalid referce id %d" % delta_item.ref_id)
 
         if len(recover_data) != delta_item.offset_len:
-            msg = "Recovered Size Error: %d, ref_id: %d, %ld, %ld" % \
+            msg = "Recovered Size Error: %d, ref_id: %s, %ld %ld" % \
                     (len(recover_data), delta_item.ref_id, \
-                    delta_item.data_len, delta_item.data)
+                    delta_item.data_len, delta_item.offset)
             raise MemoryError(msg)
 
         # recover
@@ -525,7 +526,7 @@ class Recovered_delta(multiprocessing.Process):
 def create_overlay(memory_deltalist, memory_chunk_size,
         disk_deltalist, disk_chunk_size,
         basedisk_hashlist=None, basemem_hashlist=None, 
-        print_out=None):
+        print_out=sys.stdout):
 
     if memory_chunk_size != disk_chunk_size:
         raise DeltaError("Expect same chunk size for Disk and Memory")
@@ -570,9 +571,9 @@ def reorder_deltalist(mem_access_file, chunk_size, delta_list):
     for chunk_number in access_list:
         chunk_index = DeltaItem.get_index(DeltaItem.DELTA_MEMORY, long(chunk_number)*chunk_size)
         delta_item = delta_dict.get(chunk_index, None)
-        print "%ld in access list" % (long(chunk_number))
+        #print "%ld in access list" % (long(chunk_number))
         if delta_item:
-            print "chunk(%ld) moved from %d --> 0" % (delta_item.offset/chunk_size, delta_list.index(delta_item))
+            #print "chunk(%ld) moved from %d --> 0" % (delta_item.offset/chunk_size, delta_list.index(delta_item))
             delta_list.remove(delta_item)
             delta_list.insert(0, delta_item)
             count += 1
@@ -583,8 +584,8 @@ def reorder_deltalist(mem_access_file, chunk_size, delta_list):
                 ref_delta = delta_dict[ref_index]
                 delta_list.remove(ref_delta)
                 delta_list.insert(0, ref_delta)
-                print "chunk(%ld) moving because its reference of chunk(%ld)" % \
-                        (ref_delta.offset/chunk_size, delta_item.offset/chunk_size)
+                #print "chunk(%ld) moving because its reference of chunk(%ld)" % \
+                #        (ref_delta.offset/chunk_size, delta_item.offset/chunk_size)
     after_length = len(delta_list)
     if before_length != after_length:
         raise DeltaError("DeltaList size shouldn't be changed after reordering")
@@ -600,6 +601,80 @@ def reorder_deltalist(mem_access_file, chunk_size, delta_list):
         sys.exit(1)
 
     end_time = time.time()
-    print "[DEBUG][RODERING] time %f" % (end_time-start_time)
-    print "[DEBUG][ORDERING] changed %d deltaitem (total access pattern: %d)" % (count, len(access_list))
+    print "[DEBUG][REORDER] time %f" % (end_time-start_time)
+    print "[DEBUG][REORDER] changed %d deltaitem (total access pattern: %d)" % (count, len(access_list))
+
+
+def _save_blob(delta_list, blob_name, blob_size):
+    # mode = 2 indicates LZMA_SYNC_FLUSH, which show all output right after input
+    comp_option = {'format':'xz', 'level':9}
+    comp = LZMACompressor(options=comp_option)
+    disk_offset_list = list()
+    memory_offset_list= list()
+    comp_data = ''
+    original_length = 0
+    for index, delta_item in enumerate(delta_list):
+        delta_item = delta_list[index]
+        if delta_item.delta_type == DeltaItem.DELTA_MEMORY:
+            memory_offset_list.append(delta_item.offset)
+        elif delta_item.delta_type == DeltaItem.DELTA_DISK:
+            disk_offset_list.append(delta_item.offset)
+        else:
+            raise DeltaError("Delta should be either memory or disk")
+
+        delta_bytes = delta_item.get_serialized()
+        original_length += len(delta_bytes)
+        comp_data += comp.compress(delta_bytes)
+        if len(comp_data) >= blob_size:
+            print "savefile for %s %ld --> %ld" % (blob_name, original_length, len(comp_data))
+            comp_data += comp.flush()
+            #remove dependency
+            blob_file = open(blob_name, "w+b")
+            blob_file.write(comp_data)
+            blob_file.close()
+            return index+1, memory_offset_list, disk_offset_list
+
+    comp_data += comp.flush()
+    if len(comp_data) > 0 :
+        print "savefile for %s %ld --> %ld" % (blob_name, original_length, len(comp_data))
+        blob_file = open(blob_name, "w+b")
+        blob_file.write(comp_data)
+        blob_file.close()
+        #import pdb; pdb.set_trace()
+        return index+1, memory_offset_list, disk_offset_list
+    else:
+        raise DeltaError("LZMA compression is zero")
+
+
+def divide_blobs(delta_list, overlay_path, blob_size_kb, 
+        disk_chunk_size, memory_chunk_size,
+        print_out=sys.stdout):
+    # save delta list into multiple file with compression
+
+    start_time = time.time()
+
+    blob_size = blob_size_kb*1024
+    blob_number = 1
+    overlay_list = list()
+    index = 0
+    while index < len(delta_list):
+        blob_name = "%s_%02d.xz" % (overlay_path, blob_number)
+        new_index, memory_offsets, disk_offsets = _save_blob(delta_list[index:], blob_name, blob_size)
+        #print "Compressing delta_list[%ld:%ld]" % (index, index+new_index)
+        index += new_index
+        blob_number += 1
+
+        memory_chunks = [offset/memory_chunk_size for offset in memory_offsets]
+        disk_chunks = [offset/disk_chunk_size for offset in disk_offsets]
+        file_size = os.path.getsize(blob_name)
+        overlay_list.append({
+            Const.META_OVERLAY_FILE_NAME:os.path.basename(blob_name),
+            Const.META_OVERLAY_FILE_SIZE:file_size,
+            Const.META_OVERLAY_FILE_DISK_CHUNKS: disk_chunks,
+            Const.META_OVERLAY_FILE_MEMORY_CHUNKS: memory_chunks
+            })
+    end_time = time.time()
+    print_out.write("[Debug] Overlay Compression time: %f\n" % (end_time-start_time))
+    return overlay_list 
+
 

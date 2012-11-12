@@ -30,20 +30,14 @@ import json
 import tempfile
 import struct
 import libvirt_cloudlet as cloudlet
+from Const import Const
 from lzma import LZMADecompressor
-import Memory
 import shutil
-import delta
-
 
 application = ['moped', 'face']
 BaseVM_list = []
 
-class Const(object):
-    # Delta type
-    DELTA_MEMORY    = 1
-    DELTA_DISK      = 2
-
+class Server_Const(object):
     # PIPLINING
     TRANSFER_SIZE = 1024*16
     END_OF_FILE = "!!Overlay Transfer End Marker"
@@ -77,7 +71,7 @@ def network_worker(data, queue, time_queue, chunk_size, data_size=sys.maxint):
         else:
             break
 
-    queue.put(Const.END_OF_FILE)
+    queue.put(Server_Const.END_OF_FILE)
     end_time = time.time()
     time_delta= end_time-start_time
     time_queue.put({'start_time':start_time, 'end_time':end_time})
@@ -101,7 +95,7 @@ def decomp_worker(in_queue, pipe_filepath, time_queue):
 
     while True:
         chunk = in_queue.get()
-        if chunk == Const.END_OF_FILE:
+        if chunk == Server_Const.END_OF_FILE:
             break
         data_size = data_size + len(chunk)
         decomp_chunk = decompressor.decompress(chunk)
@@ -164,7 +158,7 @@ def parse_configfile(filename):
         # check file location
         base_path = os.path.abspath(vm_info['path'])
         (base_diskmeta, base_mempath, base_memmeta) = \
-                cloudlet.Const.get_basepath(base_path)
+                Const.get_basepath(base_path)
         vm_info['path'] = os.path.abspath(vm_info['path'])
         if not os.path.exists(base_path):
             print "Error, disk image (%s) is not exist" % (vm_info['path'])
@@ -196,7 +190,7 @@ class SynthesisTCPHandler(SocketServer.StreamRequestHandler):
         self.wfile.write(json_ret)
 
     def ret_success(self):
-        json_ret = json.dumps({"command":0x22, "return":"SUCCESS", "LaunchVM-IP":Const.LOCAL_IPADDRESS})
+        json_ret = json.dumps({"command":0x22, "return":"SUCCESS", "LaunchVM-IP":Server_Const.LOCAL_IPADDRESS})
         print "SUCCESS to launch VM"
         json_size = struct.pack("!I", len(json_ret))
         self.request.send(json_size)
@@ -214,8 +208,8 @@ class SynthesisTCPHandler(SocketServer.StreamRequestHandler):
         bson_header = bson.loads(bson_data)
 
         try:
-            base_hashvalue = bson_header.get(cloudlet.Const.META_BASE_VM_SHA256, None)
-            overlay_size = bson_header[cloudlet.Const.META_OVERLAY_FILE_SIZES]
+            base_hashvalue = bson_header.get(Const.META_BASE_VM_SHA256, None)
+            overlay_size = bson_header[Const.META_OVERLAY_FILE_SIZES]
             overlay_size = overlay_size[0]
         except KeyError:
             message = 'No key is in JSON'
@@ -248,7 +242,7 @@ class SynthesisTCPHandler(SocketServer.StreamRequestHandler):
             self.ret_fail()
             return
         (base_diskmeta, base_mem, base_memmeta) = \
-                cloudlet.Const.get_basepath(base_path, check_exist=True)
+                Const.get_basepath(base_path, check_exist=True)
 
         # read overlay files
         # create named pipe to convert queue to stream
@@ -262,7 +256,7 @@ class SynthesisTCPHandler(SocketServer.StreamRequestHandler):
         download_queue = JoinableQueue()
         download_process = Process(target=network_worker, 
                 args=(
-                    self.rfile, download_queue, time_transfer, Const.TRANSFER_SIZE, overlay_size, 
+                    self.rfile, download_queue, time_transfer, Server_Const.TRANSFER_SIZE, overlay_size, 
                     )
                 )
         decomp_process = Process(target=decomp_worker,
@@ -390,8 +384,8 @@ def main(argv=None):
             print error_msg
             sys.exit(2)
 
-        Const.LOCAL_IPADDRESS = "0.0.0.0" # get_local_ipaddress()
-        server_address = (Const.LOCAL_IPADDRESS, Const.SERVER_PORT_NUMBER)
+        Sever_Const.LOCAL_IPADDRESS = "0.0.0.0" # get_local_ipaddress()
+        server_address = (Server_Const.LOCAL_IPADDRESS, Server_Const.SERVER_PORT_NUMBER)
         print "Open TCP Server (%s)\n" % (str(server_address))
         SocketServer.TCPServer.allow_reuse_address = True
         server = SocketServer.TCPServer(server_address, SynthesisTCPHandler)
