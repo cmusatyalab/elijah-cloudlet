@@ -552,6 +552,9 @@ def create_overlay(memory_deltalist, memory_chunk_size,
 
 def reorder_deltalist(mem_access_file, chunk_size, delta_list):
     # chunks that appear earlier in access file comes afront in deltalist
+    if len(delta_list) == 0 or type(delta_list[0]) != DeltaItem:
+        raise MemoryError("Need list of DeltaItem")
+
     start_time = time.time()
     access_list = open(mem_access_file, "r").read().split()
     if len(access_list[-1].strip()) == 0:
@@ -567,8 +570,9 @@ def reorder_deltalist(mem_access_file, chunk_size, delta_list):
     for chunk_number in access_list:
         chunk_index = DeltaItem.get_index(DeltaItem.DELTA_MEMORY, long(chunk_number)*chunk_size)
         delta_item = delta_dict.get(chunk_index, None)
+        print "%ld in access list" % (long(chunk_number))
         if delta_item:
-            #print "chunk(%ld) moved from %d --> 0" % (delta_item.offset/chunk_size, delta_list.index(delta_item))
+            print "chunk(%ld) moved from %d --> 0" % (delta_item.offset/chunk_size, delta_list.index(delta_item))
             delta_list.remove(delta_item)
             delta_list.insert(0, delta_item)
             count += 1
@@ -579,8 +583,8 @@ def reorder_deltalist(mem_access_file, chunk_size, delta_list):
                 ref_delta = delta_dict[ref_index]
                 delta_list.remove(ref_delta)
                 delta_list.insert(0, ref_delta)
-                #print "chunk(%ld) moving because its reference of chunk(%ld)" % \
-                #        (ref_delta.offset/chunk_size, delta_item.offset/chunk_size)
+                print "chunk(%ld) moving because its reference of chunk(%ld)" % \
+                        (ref_delta.offset/chunk_size, delta_item.offset/chunk_size)
     after_length = len(delta_list)
     if before_length != after_length:
         raise DeltaError("DeltaList size shouldn't be changed after reordering")

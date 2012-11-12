@@ -985,7 +985,7 @@ def main(argv):
         output_file = NamedTemporaryFile(prefix="cloudlet-overlay-out-")
         # reorder
         delta.reorder_deltalist(access_pattern_file, 
-                Memory.Memory.RAM_PAGE_SIZE, overlay_file.name)
+                Memory.Memory.RAM_PAGE_SIZE, delta_list)
         DeltaList.statistics(delta_list, print_out=sys.stdout)
         DeltaList.tofile(delta_list, output_file.name)
         # compress
