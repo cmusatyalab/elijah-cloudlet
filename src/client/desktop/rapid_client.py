@@ -16,7 +16,7 @@
 #
 
 import os
-import bson
+import msgpack
 import struct
 import sys
 import socket
@@ -82,31 +82,36 @@ def synthesis(address, port, application):
     recv.join()
     send_end = send_end_time['time']
     recv_end = recv_end_time['time']
-    app_start_time = recv_end_time['app_start']
-    app_end_time = recv_end_time['app_end']
     print "Transfer %f-%f = %f" % (send_end, start_time, (send_end-start_time))
     print "Response %f-%f = %f" % (recv_end, start_time, (recv_end-start_time))
+    '''
+    app_start_time = recv_end_time['app_start']
+    app_end_time = recv_end_time['app_end']
     print "App End  %f-%f = %f" % (app_end_time, start_time, (app_end_time-start_time))
     print "App      %f-%f = %f" % (app_end_time, app_start_time, (app_end_time-app_start_time))
+    '''
 
 
 def send_thread(sock, application, time_dict):
     if application == 'moped':
-        overlay_meta_path = '/home/krha/cloudlet/image/overlay/ubuntu/moped/precise.overlay-meta'
-        overlay_path = '/home/krha/cloudlet/image/overlay/ubuntu/moped/precise.overlay_01.xz'
+        overlay_meta_path = '/home/krha/cloudlet/image/overlay/moped/precise.overlay-meta'
     elif application == 'face':
-        overlay_meta_path = '/home/krha/cloudlet/image/overlay/window/face/window7.overlay-meta'
-        overlay_path = '/home/krha/cloudlet/image/overlay/window/face/window7.overlay_01.xz'
+        overlay_meta_path = '/home/krha/cloudlet/image/overlay/face/window7.overlay-meta'
     else:
         raise Exception("NO valid application name: %s" % application)
-    # send header
-    sock.sendall(struct.pack("!I", os.path.getsize(overlay_meta_path)))
-    overlay_meta = open(overlay_meta_path, "rb").read()
-    sock.sendall(overlay_meta)
 
-    # send data
-    mem_data = open(overlay_path, "rb").read()
-    sock.sendall(mem_data)
+    # modify overlay path
+    local_ip = sock.getsockname()[0]
+    meta_info = msgpack.unpackb(open(overlay_meta_path, "r").read())
+    for blob in meta_info['overlay_files']:
+        filename = os.path.basename(blob['overlay_name'])
+        url = "http://%s/overlay/%s/%s" % (local_ip, application, filename)
+        blob['overlay_name'] = url
+
+    # send header
+    header = msgpack.packb(meta_info)
+    sock.sendall(struct.pack("!I", len(header)))
+    sock.sendall(header)
     time_dict['time'] = time.time()
 
 
@@ -123,9 +128,11 @@ def recv_thread(sock, application, time_dict):
     time_dict['time'] = time.time()
 
     #run application
+    '''
     time_dict['app_start'] = time.time()
     cloudlet_client.run_application(application)
     time_dict['app_end'] = time.time()
+    '''
 
 
 def main(argv=None):

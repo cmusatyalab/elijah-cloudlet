@@ -924,8 +924,8 @@ def main(argv):
             os.makedirs(output_dir)
 
         # decomp
-        overlay_path = os.path.join(output_dir, "overlay")
-        new_meta_path = os.path.join(output_dir, "overlay-meta")
+        overlay_path = os.path.join(output_dir, "precise.overlay")
+        new_meta_path = os.path.join(output_dir, "precise.overlay-meta")
         meta_info = decomp_overlay(meta, overlay_path)
         delta_list = DeltaList.fromfile(overlay_path)
         # reorder

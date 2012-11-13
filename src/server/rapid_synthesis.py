@@ -22,6 +22,7 @@ import socket
 import subprocess
 import tool
 import msgpack
+import urllib2
 
 from optparse import OptionParser
 from multiprocessing import Process, JoinableQueue, Queue
@@ -57,19 +58,21 @@ def recv_all(request, size):
         data += request.recv(size - len(data))
     return data
 
-def network_worker(data, queue, time_queue, chunk_size, data_size=sys.maxint):
+def network_worker(overlay_urls, queue, time_queue, chunk_size):
     start_time= time.time()
     total_read_size = 0
     counter = 0
-    while total_read_size < data_size:
-        read_size = min(data_size-total_read_size, chunk_size)
-        counter = counter + 1
-        chunk = data.read(read_size)
-        total_read_size = total_read_size + len(chunk)
-        if chunk:
-            queue.put(chunk)
-        else:
-            break
+    for index, overlay_url in enumerate(overlay_urls):
+        print "reading %d, %s" % (index, overlay_url)
+        stream = urllib2.urlopen(overlay_url)
+        while True:
+            counter += 1
+            chunk = stream.read(chunk_size)
+            total_read_size += len(chunk)
+            if chunk:
+                queue.put(chunk)
+            else:
+                break
 
     queue.put(Server_Const.END_OF_FILE)
     end_time = time.time()
@@ -209,7 +212,6 @@ class SynthesisTCPHandler(SocketServer.StreamRequestHandler):
 
         try:
             base_hashvalue = header.get(Const.META_BASE_VM_SHA256, None)
-            overlay_size = header[Const.META_OVERLAY_FILES][0][Const.META_OVERLAY_FILE_SIZE]
         except KeyError:
             message = 'No key is in JSON'
             print message
@@ -219,10 +221,9 @@ class SynthesisTCPHandler(SocketServer.StreamRequestHandler):
         for base_vm in BaseVM_list:
             if base_hashvalue == base_vm.get('sha256', None):
                 base_path = base_vm['path']
-                print "[INFO] New client request %s VM (will transfer %d MB)" \
-                        % (base_path, overlay_size/1024/1024)
-                return [base_path, header, overlay_size]
-
+                print "[INFO] New client request %s VM" \
+                        % (base_path)
+                return [base_path, header]
         message = "Cannot find matching Base VM\nsha256: %s" % (base_hashvalue)
         print message
         self.ret_fail(message)
@@ -232,9 +233,13 @@ class SynthesisTCPHandler(SocketServer.StreamRequestHandler):
         # check_base VM
         start_time = time.time()
         header_start_time = time.time()
-        base_path, meta_info, overlay_size = self._check_validity(self.request)
+        base_path, meta_info = self._check_validity(self.request)
+        overlay_urls = list()
+        for blob in meta_info[Const.META_OVERLAY_FILES]:
+            url = blob[Const.META_OVERLAY_FILE_NAME]
+            overlay_urls.append(url)
         header_end_time = time.time()
-        if base_path == None or meta_info == None or overlay_size == None:
+        if base_path == None or meta_info == None or overlay_urls == None:
             message = "Failed, Invalid header information"
             print message
             self.wfile.write(message)            
@@ -255,9 +260,10 @@ class SynthesisTCPHandler(SocketServer.StreamRequestHandler):
         download_queue = JoinableQueue()
         download_process = Process(target=network_worker, 
                 args=(
-                    self.rfile, download_queue, time_transfer, Server_Const.TRANSFER_SIZE, overlay_size, 
+                    overlay_urls, download_queue, time_transfer, Server_Const.TRANSFER_SIZE, 
                     )
                 )
+
         decomp_process = Process(target=decomp_worker,
                 args=(
                     download_queue, overlay_pipe, time_decomp

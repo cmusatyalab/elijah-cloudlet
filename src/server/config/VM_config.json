@@ -11,7 +11,7 @@
       },
       {
          "name":"window7",
-         "sha256":"18aab1a8f4df496bfd8a04cddb1663bad864e12b682f3c3ce4a08c31179397ba",
+         "sha256":"f8936e32decf0a0bb698421b1c9ff3e887140bbf84c6e6832208e5c9747826db",
          "type":"baseVM",
          "OS":"Window",
          "OS-version":"Window7-enterprise-x86",
