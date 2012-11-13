@@ -25,7 +25,8 @@ from hashlib import sha1
 from hashlib import sha256
 import mmap
 import struct
-import tempfile
+import msgpack 
+from Const import Const
 from lzma import LZMACompressor
 from lzma import LZMADecompressor
 
@@ -223,6 +224,27 @@ def decomp_lzma(inputname, outputname, **kwargs):
 
     time_diff = str(time()-prev_time)
     return outputname, str(time_diff)
+
+
+def decomp_overlay(meta, output_path, print_out=sys.stdout):
+    meta_dict = msgpack.unpackb(open(meta, "r").read())
+    decomp_start_time = time()
+    comp_overlay_files = meta_dict[Const.META_OVERLAY_FILES]
+    comp_overlay_files = [item[Const.META_OVERLAY_FILE_NAME] for item in comp_overlay_files]
+    comp_overlay_files = [os.path.join(os.path.dirname(meta), item) for item in comp_overlay_files]
+    overlay_file = open(output_path, "w+b")
+    for comp_file in comp_overlay_files:
+        decompressor = LZMADecompressor()
+        comp_data = open(comp_file, "r").read()
+        decomp_data = decompressor.decompress(comp_data)
+        decomp_data += decompressor.flush()
+        overlay_file.write(decomp_data)
+    print_out.write("[Debug] Overlay decomp time for %d files: %f at %s\n" % 
+            (len(comp_overlay_files), (time()-decomp_start_time), output_path))
+    overlay_file.close()
+
+    return meta_dict
+
 
 def sha1_fromfile(file_path):
     if not os.path.exists(file_path):

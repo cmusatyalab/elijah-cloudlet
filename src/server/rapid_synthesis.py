@@ -21,7 +21,7 @@ import SocketServer
 import socket
 import subprocess
 import tool
-import bson
+import msgpack
 
 from optparse import OptionParser
 from multiprocessing import Process, JoinableQueue, Queue
@@ -199,17 +199,17 @@ class SynthesisTCPHandler(SocketServer.StreamRequestHandler):
     def _check_validity(self, request):
         # self.request is the TCP socket connected to the clinet
         data = request.recv(4)
-        bson_size = struct.unpack("!I", data)[0]
+        msgpack_size = struct.unpack("!I", data)[0]
 
         # recv JSON header
-        bson_data = request.recv(bson_size)
-        while len(bson_data) < bson_size:
-            bson_data += request.recv(bson_size - len(bson_data))
-        bson_header = bson.loads(bson_data)
+        msgpack_data = request.recv(msgpack_size)
+        while len(msgpack_data) < msgpack_size:
+            msgpack_data += request.recv(msgpack_size- len(msgpack_data))
+        header = msgpack.unpackb(msgpack_data)
 
         try:
-            base_hashvalue = bson_header.get(Const.META_BASE_VM_SHA256, None)
-            overlay_size = bson_header[Const.META_OVERLAY_FILES][0][Const.META_OVERLAY_FILE_SIZE]
+            base_hashvalue = header.get(Const.META_BASE_VM_SHA256, None)
+            overlay_size = header[Const.META_OVERLAY_FILES][0][Const.META_OVERLAY_FILE_SIZE]
         except KeyError:
             message = 'No key is in JSON'
             print message
@@ -221,7 +221,7 @@ class SynthesisTCPHandler(SocketServer.StreamRequestHandler):
                 base_path = base_vm['path']
                 print "[INFO] New client request %s VM (will transfer %d MB)" \
                         % (base_path, overlay_size/1024/1024)
-                return [base_path, bson_header, overlay_size]
+                return [base_path, header, overlay_size]
 
         message = "Cannot find matching Base VM\nsha256: %s" % (base_hashvalue)
         print message

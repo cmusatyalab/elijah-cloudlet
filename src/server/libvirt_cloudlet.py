@@ -26,8 +26,8 @@ import vmnetx
 import stat
 import delta
 import xray
-import bson
 import hashlib
+import msgpack
 from Const import Const
 from delta import DeltaList
 from delta import DeltaItem
@@ -43,8 +43,8 @@ from multiprocessing import Pipe
 
 from tool import comp_lzma
 from tool import decomp_lzma
-from lzma import LZMADecompressor
 from tool import diff_files
+from tool import decomp_overlay
 
 class Log(object):
     out = sys.stdout
@@ -295,7 +295,6 @@ def create_overlay(base_image):
     blob_list = delta.divide_blobs(merged_deltalist, overlay_path, 
             Const.OVERLAY_BLOB_SIZE_KB, Const.CHUNK_SIZE,
             Memory.Memory.RAM_PAGE_SIZE, print_out=Log.out)
-    DeltaList.tofile(merged_deltalist, overlay_path)
     DeltaList.statistics(merged_deltalist, print_out=Log.out, 
             mem_discarded=free_pfn_counter,
             disk_discarded=disk_statistics.get('trimed', 0))
@@ -303,8 +302,7 @@ def create_overlay(base_image):
     # 4. create metadata
     overlay_metafile = os.path.join(dir_path, image_name+Const.OVERLAY_META)
     _create_overlay_meta(base_hash_value, overlay_metafile, 
-            modified_disk, modified_mem.name,
-            blob_list, merged_deltalist)
+            modified_disk, modified_mem.name, blob_list)
 
     # 4. terminting
     fuse.terminate()
@@ -319,8 +317,9 @@ def create_overlay(base_image):
     blob_files = [item[Const.META_OVERLAY_FILE_NAME] for item in blob_list]
     return (overlay_metafile, blob_files)
 
+
 def _create_overlay_meta(base_hash, overlay_metafile, modified_disk, modified_mem, 
-        blob_info, delta_list):
+        blob_info):
     fout = open(overlay_metafile, "wrb")
 
     meta_dict = dict()
@@ -329,8 +328,18 @@ def _create_overlay_meta(base_hash, overlay_metafile, modified_disk, modified_me
     meta_dict[Const.META_RESUME_VM_MEMORY_SIZE] = os.path.getsize(modified_mem)
     meta_dict[Const.META_OVERLAY_FILES] = blob_info
 
-    bson_serialized = bson.dumps(meta_dict)
-    fout.write(bson_serialized)
+    serialized = msgpack.packb(meta_dict)
+    fout.write(serialized)
+    fout.close()
+
+
+def _update_overlay_meta(original_meta, new_path, blob_info=None):
+    fout = open(new_path, "wrb")
+
+    if blob_info:
+        original_meta[Const.META_OVERLAY_FILES] = blob_info
+    serialized = msgpack.packb(original_meta)
+    fout.write(serialized)
     fout.close()
 
 
@@ -707,8 +716,8 @@ def rettach_nic(conn, xml, **kwargs):
 def restore_with_config(conn, mem_snapshot, xml):
     try:
         print "[INFO] restoring VM..."
-        #conn.restoreFlags(mem_snapshot, xml, libvirt.VIR_DOMAIN_SAVE_RUNNING)
-        conn.restoreFlags(mem_snapshot, xml, libvirt.VIR_DOMAIN_SAVE_PAUSED)
+        conn.restoreFlags(mem_snapshot, xml, libvirt.VIR_DOMAIN_SAVE_RUNNING)
+        #conn.restoreFlags(mem_snapshot, xml, libvirt.VIR_DOMAIN_SAVE_PAUSED)
         print "[INFO] VM is restored..."
     except libvirt.libvirtError, e:
         message = "%s\nXML: %s" % (str(e), xml)
@@ -749,22 +758,8 @@ def synthesis(base_disk, meta):
     # param overlay_mem : path to overlay memory file
 
     # decomp
-    meta_info = bson.loads(open(meta, "r").read())
-    comp_overlay_files = meta_info[Const.META_OVERLAY_FILES]
-    comp_overlay_files = [item[Const.META_OVERLAY_FILE_NAME] for item in comp_overlay_files]
-    comp_overlay_files = [os.path.join(os.path.dirname(meta), item) for item in comp_overlay_files]
     overlay_filename = NamedTemporaryFile(prefix="cloudlet-overlay-file-")
-    overlay_file = open(overlay_filename.name, "w+b")
-    decomp_start_time = time()
-    for comp_file in comp_overlay_files:
-        decompressor = LZMADecompressor()
-        comp_data = open(comp_file, "r").read()
-        decomp_data = decompressor.decompress(comp_data)
-        decomp_data += decompressor.flush()
-        overlay_file.write(decomp_data)
-    Log.out.write("[Debug] Overlay decomp time: %f at %s\n" % 
-            ((time()-decomp_start_time), overlay_filename.name))
-    overlay_file.close()
+    meta_info = decomp_overlay(meta, overlay_filename.name, print_out=Log.out)
 
     # recover VM
     Log.out.write("[Debug] recover launch VM\n")
@@ -884,6 +879,32 @@ def main(argv):
         base_disk_path = args[1]
         meta = args[2]
         synthesis(base_disk_path, meta)
+    elif mode == 'compress':
+        if len(args) != 3:
+            parser.error("recompress requires 2 arguments\n \
+                    1)meta file\n \
+                    2)output directory\n")
+            sys.exit(1)
+        meta = args[1]
+        output_dir = args[2]
+        if not os.path.exists(output_dir):
+            os.makedirs(output_dir)
+        blob_size_list = [1024, 1024*8, 1024*16, 1024*64, 1024*1024]
+        overlay_path = os.path.join(output_dir, "overlay")
+        meta_info = decomp_overlay(meta, overlay_path)
+        delta_list = DeltaList.fromfile(overlay_path)
+        for blob_size in blob_size_list:
+            sub_dir = os.path.join(output_dir, "%d" % (blob_size/1024))
+            if not os.path.exists(sub_dir):
+                os.makedirs(sub_dir)
+            meta_path = os.path.join(sub_dir, "overlay-meta")
+            overlay_prefix = os.path.join(sub_dir, "overlay-blob")
+            print "Creating %d KB overlays" % blob_size
+            blob_list = delta.divide_blobs(delta_list, overlay_prefix, 
+                    blob_size, Const.CHUNK_SIZE,
+                    Memory.Memory.RAM_PAGE_SIZE, print_out=Log.out)
+            _update_overlay_meta(meta_info, meta_path, blob_info=blob_list)
+            DeltaList.statistics(delta_list, print_out=sys.stdout)
     elif mode == 'reorder':
         if len(args) != 3:
             parser.error("Reordering requires 2 arguments\n \
@@ -895,24 +916,17 @@ def main(argv):
         meta = args[2]
 
         # decomp
-        meta_info = bson.loads(open(meta, "r").read())
-        comp_overlay_files = meta_info[Const.META_OVERLAY_FILE_NAMES]
-        comp_overlay_files = [os.path.join(os.path.dirname(meta), item) for item in comp_overlay_files]
-        overlay_file = NamedTemporaryFile(prefix="cloudlet-overlay-file-")
-        outpath, decomp_time = decomp_lzma(comp_overlay_files[0], overlay_file.name)
+        overlay_path = os.path.join(output_dir, "overlay")
+        meta_info = decomp_overlay(meta, overlay_path)
+        delta_list = DeltaList.fromfile(overlay_path)
         # load delta list
-        delta_list = DeltaList.fromfile(overlay_file.name)
+        delta_list = DeltaList.fromfile(overlay_path)
         output_file = NamedTemporaryFile(prefix="cloudlet-overlay-out-")
         # reorder
         delta.reorder_deltalist(access_pattern_file, 
                 Memory.Memory.RAM_PAGE_SIZE, delta_list)
         DeltaList.statistics(delta_list, print_out=sys.stdout)
         DeltaList.tofile(delta_list, output_file.name)
-        # compress
-        comp_disk_file, time1 = comp_lzma(output_file.name, comp_overlay_files[0])
-        new_file_size = os.path.getsize(comp_overlay_files[0])
-        meta_info[Const.META_OVERLAY_FILE_SIZE] = [new_file_size]
-        open(meta, "w+b").write(bson.dumps(meta_info))
 
     elif mode == 'test_overlay_download':    # To be delete
         base_disk_path = "/home/krha/cloudlet/image/nova/base_disk"
