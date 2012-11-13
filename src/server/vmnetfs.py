@@ -41,15 +41,35 @@ class VMNetFS(threading.Thread):
         self._pipe = None
         self.mountpoint = None
         self.stop = threading.Event()
+
+        # fuse can handle on-demand fetching
+        # TODO: passing these argument through kwargs
+        self.demanding_queue = None
+        self.meta_info = None
         threading.Thread.__init__(self, target=self.fuse_read)
 
     def fuse_read(self):
+        if (self.meta_info != None) and (self.demanding_queue != None):
+            memory_overlay_dict = dict()
+            disk_overlay_dict = dict()
+            from Const import Const
+            for blob in self.meta_info[Const.META_OVERLAY_FILES]:
+                overlay_url = blob[Const.META_OVERLAY_FILE_NAME]
+                memory_chunks = blob[Const.META_OVERLAY_FILE_MEMORY_CHUNKS]
+                for chunk in memory_chunks:
+                    memory_overlay_dict[chunk] = overlay_url
+                disk_chunks = blob[Const.META_OVERLAY_FILE_DISK_CHUNKS]
+                for chunk in disk_chunks:
+                    disk_overlay_dict[chunk] = overlay_url
+
         while(not self.stop.wait(0.0001)):
             self._running = True
             oneline = self.proc.stdout.readline()
             if len(oneline.strip()) > 0:
                 sys.stdout.write("[FUSE] %s" % oneline)
-                pass
+                if self.demanding_queue != None:
+                    #self.demanding_queue.put("http://128.2.213.24/overlay/moped/overlay-blob_72.xz")
+                    pass
         self._running = False
         print "[INFO] close Fuse monitoring thread"
 

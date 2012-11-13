@@ -25,7 +25,7 @@ import msgpack
 import urllib2
 
 from optparse import OptionParser
-from multiprocessing import Process, JoinableQueue, Queue
+from multiprocessing import Process, JoinableQueue, Queue, Manager
 from tempfile import NamedTemporaryFile
 import json
 import tempfile
@@ -58,23 +58,40 @@ def recv_all(request, size):
         data += request.recv(size - len(data))
     return data
 
-def network_worker(overlay_urls, queue, time_queue, chunk_size):
+def network_worker(overlay_urls, demanding_queue, out_queue, time_queue, chunk_size):
     start_time= time.time()
     total_read_size = 0
     counter = 0
-    for index, overlay_url in enumerate(overlay_urls):
+    index = 0 
+    finished_url = list()
+    while len(overlay_urls) > 0:
+        if not demanding_queue.empty():
+            urgent_overlay_url = demanding_queue.get()
+            if urgent_overlay_url in finished_url:
+                # it's already processed
+                overlay_url = overlay_urls.pop(0)
+            else:
+                # process urgent overlay first
+                overlay_url = urgent_overlay_url
+                overlay_urls.remove(overlay_url)
+        else:
+            # No urgent request, process as normal
+            overlay_url = overlay_urls.pop(0)
+
         print "reading %d, %s" % (index, overlay_url)
+        finished_url.append(overlay_url)
         stream = urllib2.urlopen(overlay_url)
         while True:
             counter += 1
             chunk = stream.read(chunk_size)
             total_read_size += len(chunk)
             if chunk:
-                queue.put(chunk)
+                out_queue.put(chunk)
             else:
                 break
+        index += 1
 
-    queue.put(Server_Const.END_OF_FILE)
+    out_queue.put(Server_Const.END_OF_FILE)
     end_time = time.time()
     time_delta= end_time-start_time
     time_queue.put({'start_time':start_time, 'end_time':end_time})
@@ -234,11 +251,11 @@ class SynthesisTCPHandler(SocketServer.StreamRequestHandler):
         start_time = time.time()
         header_start_time = time.time()
         base_path, meta_info = self._check_validity(self.request)
-        overlay_urls = list()
+        url_manager = Manager()
+        overlay_urls = url_manager.list()
         for blob in meta_info[Const.META_OVERLAY_FILES]:
             url = blob[Const.META_OVERLAY_FILE_NAME]
             overlay_urls.append(url)
-        header_end_time = time.time()
         if base_path == None or meta_info == None or overlay_urls == None:
             message = "Failed, Invalid header information"
             print message
@@ -247,6 +264,7 @@ class SynthesisTCPHandler(SocketServer.StreamRequestHandler):
             return
         (base_diskmeta, base_mem, base_memmeta) = \
                 Const.get_basepath(base_path, check_exist=True)
+        header_end_time = time.time()
 
         # read overlay files
         # create named pipe to convert queue to stream
@@ -257,13 +275,13 @@ class SynthesisTCPHandler(SocketServer.StreamRequestHandler):
         os.mkfifo(overlay_pipe)
 
         # overlay
+        demanding_queue = Queue()
         download_queue = JoinableQueue()
         download_process = Process(target=network_worker, 
                 args=(
-                    overlay_urls, download_queue, time_transfer, Server_Const.TRANSFER_SIZE, 
+                    overlay_urls, demanding_queue, download_queue, time_transfer, Server_Const.TRANSFER_SIZE, 
                     )
                 )
-
         decomp_process = Process(target=decomp_worker,
                 args=(
                     download_queue, overlay_pipe, time_decomp
@@ -274,6 +292,8 @@ class SynthesisTCPHandler(SocketServer.StreamRequestHandler):
                 cloudlet.recover_launchVM(base_path, meta_info, overlay_pipe, log=sys.stdout)
         delta_proc.time_queue = time_delta
         fuse_thread.time_queue = time_fuse
+        fuse.demanding_queue = demanding_queue
+        fuse.meta_info = meta_info
 
         # resume VM
         resumed_VM = cloudlet.ResumedVM(modified_img, modified_mem, fuse)
