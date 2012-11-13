@@ -909,27 +909,33 @@ def main(argv):
             _update_overlay_meta(meta_info, meta_path, blob_info=blob_list)
             DeltaList.statistics(delta_list, print_out=sys.stdout)
     elif mode == 'reorder':
-        if len(args) != 3:
-            parser.error("Reordering requires 2 arguments\n \
+        if len(args) != 4:
+            print args
+            parser.error("Reordering requires 3 arguments\n \
                     1)access-pattern file\n \
-                    2)meta file\n")
+                    2)meta file\n \
+                    3)output directory\n")
             sys.exit(1)
 
         access_pattern_file = args[1]
         meta = args[2]
+        output_dir = args[3]
+        if not os.path.exists(output_dir):
+            os.makedirs(output_dir)
 
         # decomp
         overlay_path = os.path.join(output_dir, "overlay")
+        new_meta_path = os.path.join(output_dir, "overlay-meta")
         meta_info = decomp_overlay(meta, overlay_path)
         delta_list = DeltaList.fromfile(overlay_path)
-        # load delta list
-        delta_list = DeltaList.fromfile(overlay_path)
-        output_file = NamedTemporaryFile(prefix="cloudlet-overlay-out-")
         # reorder
         delta.reorder_deltalist(access_pattern_file, 
                 Memory.Memory.RAM_PAGE_SIZE, delta_list)
         DeltaList.statistics(delta_list, print_out=sys.stdout)
-        DeltaList.tofile(delta_list, output_file.name)
+        blob_list = delta.divide_blobs(delta_list, overlay_path, 
+                Const.OVERLAY_BLOB_SIZE_KB, Const.CHUNK_SIZE,
+                Memory.Memory.RAM_PAGE_SIZE, print_out=Log.out)
+        _update_overlay_meta(meta_info, new_meta_path, blob_info=blob_list)
 
     elif mode == 'test_overlay_download':    # To be delete
         base_disk_path = "/home/krha/cloudlet/image/nova/base_disk"
