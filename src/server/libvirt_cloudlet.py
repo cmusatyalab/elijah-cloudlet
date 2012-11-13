@@ -290,8 +290,11 @@ def create_overlay(base_image):
 
     # 3. Reorder transfer order & Compression
     access_pattern_file = base_image + Const.BASE_ACCESS_PATERN
-    delta.reorder_deltalist(access_pattern_file, 
-            Memory.Memory.RAM_PAGE_SIZE, merged_deltalist)
+    if os.path.exists(access_pattern_file):
+        delta.reorder_deltalist(access_pattern_file, 
+                Memory.Memory.RAM_PAGE_SIZE, merged_deltalist)
+    else:
+        Log.out.write("Warning: Cannot find access pattern file")
     blob_list = delta.divide_blobs(merged_deltalist, overlay_path, 
             Const.OVERLAY_BLOB_SIZE_KB, Const.CHUNK_SIZE,
             Memory.Memory.RAM_PAGE_SIZE, print_out=Log.out)
