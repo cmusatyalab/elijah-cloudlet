@@ -209,8 +209,7 @@ class SynthesisTCPHandler(SocketServer.StreamRequestHandler):
 
         try:
             base_hashvalue = bson_header.get(Const.META_BASE_VM_SHA256, None)
-            overlay_size = bson_header[Const.META_OVERLAY_FILE_SIZES]
-            overlay_size = overlay_size[0]
+            overlay_size = bson_header[Const.META_OVERLAY_FILES][0][Const.META_OVERLAY_FILE_SIZE]
         except KeyError:
             message = 'No key is in JSON'
             print message
@@ -384,7 +383,7 @@ def main(argv=None):
             print error_msg
             sys.exit(2)
 
-        Sever_Const.LOCAL_IPADDRESS = "0.0.0.0" # get_local_ipaddress()
+        Server_Const.LOCAL_IPADDRESS = "0.0.0.0" # get_local_ipaddress()
         server_address = (Server_Const.LOCAL_IPADDRESS, Server_Const.SERVER_PORT_NUMBER)
         print "Open TCP Server (%s)\n" % (str(server_address))
         SocketServer.TCPServer.allow_reuse_address = True

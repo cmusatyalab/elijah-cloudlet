@@ -93,10 +93,10 @@ def synthesis(address, port, application):
 def send_thread(sock, application, time_dict):
     if application == 'moped':
         overlay_meta_path = '/home/krha/cloudlet/image/overlay/ubuntu/moped/precise.overlay-meta'
-        overlay_path = '/home/krha/cloudlet/image/overlay/ubuntu/moped/precise.overlay.lzma'
+        overlay_path = '/home/krha/cloudlet/image/overlay/ubuntu/moped/precise.overlay_01.xz'
     elif application == 'face':
         overlay_meta_path = '/home/krha/cloudlet/image/overlay/window/face/window7.overlay-meta'
-        overlay_path = '/home/krha/cloudlet/image/overlay/window/face/window7.overlay.lzma'
+        overlay_path = '/home/krha/cloudlet/image/overlay/window/face/window7.overlay_01.xz'
     else:
         raise Exception("NO valid application name: %s" % application)
     # send header

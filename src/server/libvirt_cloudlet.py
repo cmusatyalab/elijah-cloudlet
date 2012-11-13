@@ -707,8 +707,8 @@ def rettach_nic(conn, xml, **kwargs):
 def restore_with_config(conn, mem_snapshot, xml):
     try:
         print "[INFO] restoring VM..."
-        conn.restoreFlags(mem_snapshot, xml, libvirt.VIR_DOMAIN_SAVE_RUNNING)
-        #conn.restoreFlags(mem_snapshot, xml, libvirt.VIR_DOMAIN_SAVE_PAUSED)
+        #conn.restoreFlags(mem_snapshot, xml, libvirt.VIR_DOMAIN_SAVE_RUNNING)
+        conn.restoreFlags(mem_snapshot, xml, libvirt.VIR_DOMAIN_SAVE_PAUSED)
         print "[INFO] VM is restored..."
     except libvirt.libvirtError, e:
         message = "%s\nXML: %s" % (str(e), xml)
@@ -911,7 +911,7 @@ def main(argv):
         # compress
         comp_disk_file, time1 = comp_lzma(output_file.name, comp_overlay_files[0])
         new_file_size = os.path.getsize(comp_overlay_files[0])
-        meta_info[Const.META_OVERLAY_FILE_SIZES] = [new_file_size]
+        meta_info[Const.META_OVERLAY_FILE_SIZE] = [new_file_size]
         open(meta, "w+b").write(bson.dumps(meta_info))
 
     elif mode == 'test_overlay_download':    # To be delete
