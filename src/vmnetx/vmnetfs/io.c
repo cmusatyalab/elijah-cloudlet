@@ -24,7 +24,7 @@
 //#define DEBUG_IO
 #ifdef DEBUG_IO
 #define DPRINTF(fmt, ...) \
-    do { fprintf(stdout, "[DEBUG] IO: " fmt, ## __VA_ARGS__); } while (0)
+    do { fprintf(stdout, "[DEBUG][IO] " fmt, ## __VA_ARGS__); } while (0)
 #else
 #define DPRINTF(fmt, ...) \
     do { } while (0)
@@ -33,7 +33,7 @@
 #define CLOUDLET_IO
 #ifdef CLOUDLET_IO
 #define CPRINTF(fmt, ...) \
-    do { fprintf(stdout, "[FUSE] IO: " fmt, ## __VA_ARGS__); fflush(stdout);} while (0)
+    do { fprintf(stdout, "[FUSE][IO] " fmt, ## __VA_ARGS__); fflush(stdout);} while (0)
 #else
 #define CPRINTF(fmt, ...) \
     do { } while (0)
@@ -345,8 +345,6 @@ static uint64_t read_chunk_unlocked(struct vmnetfs_image *img,
         }else{
 			if (_vmnetfs_bit_test(img->current_overlay_map, chunk)) {
 				// get it from overlay VM
-				DPRINTF("Overlay read at %ld, length(%d)\n",
-						chunk * img->chunk_size + offset, length);
 				if (!_cloudlet_read_chunk(img, img->current_overlay_map,
 						img->overlay_fd, data, chunk, offset, length, err)) {
 					return 0;
@@ -356,10 +354,7 @@ static uint64_t read_chunk_unlocked(struct vmnetfs_image *img,
 				// and send message to parent
 				struct timeval waiting_start_time, waiting_end_time, diff_time;
 				gettimeofday(&waiting_start_time, NULL);
-
-				CPRINTF("Waiting chunk(%ld) at %ld, length(%d)\n",
-						chunk, chunk * img->chunk_size + offset, length);
-
+				CPRINTF("REQUEST,type:%s,chunk:%ld\n", img->url, chunk);
 				while (1) {
 					if (_vmnetfs_bit_test(img->current_overlay_map, chunk)) {
 						// Get it from overlay VM
@@ -372,8 +367,8 @@ static uint64_t read_chunk_unlocked(struct vmnetfs_image *img,
 							gettimeofday(&waiting_end_time, NULL);
 							timeval_subtract(&diff_time, \
 									&waiting_end_time, &waiting_start_time);
-							CPRINTF("Waiting chunk(%ld) time : %ld.%06ld\n", \
-									chunk, diff_time.tv_sec, diff_time.tv_usec);
+							CPRINTF("STATISTICS-WAIT,type:%s,chunk:%ld,time:%ld.%06ld\n",
+									img->url, chunk, diff_time.tv_sec, diff_time.tv_usec);
 							break;
 						}
 					}

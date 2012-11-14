@@ -22,6 +22,7 @@ import io
 import threading
 import time
 import sys
+from pprint import pprint
 
 
 # system.py is built at install time, so pylint may fail to import it.
@@ -34,7 +35,10 @@ class VMNetFSError(Exception):
 
 
 class VMNetFS(threading.Thread):
-    def __init__(self, bin_path, args):
+    FUSE_TYPE_DISK      =   "disk"
+    FUSE_TYPE_MEMORY    =   "memory"
+
+    def __init__(self, bin_path, args, **kwargs):
         self.vmnetfs_path = bin_path
         self._args = '%d\n%s\n' % (len(args),
                 '\n'.join(a.replace('\n', '') for a in args))
@@ -44,11 +48,12 @@ class VMNetFS(threading.Thread):
 
         # fuse can handle on-demand fetching
         # TODO: passing these argument through kwargs
-        self.demanding_queue = None
-        self.meta_info = None
+        self.demanding_queue = kwargs.get("demanding_queue", None)
+        self.meta_info = kwargs.get("meta_info", None)
         threading.Thread.__init__(self, target=self.fuse_read)
 
     def fuse_read(self):
+        wait_statistics = list()
         if (self.meta_info != None) and (self.demanding_queue != None):
             memory_overlay_dict = dict()
             disk_overlay_dict = dict()
@@ -66,12 +71,38 @@ class VMNetFS(threading.Thread):
             self._running = True
             oneline = self.proc.stdout.readline()
             if len(oneline.strip()) > 0:
-                sys.stdout.write("[FUSE] %s" % oneline)
-                if self.demanding_queue != None:
-                    #self.demanding_queue.put("http://128.2.213.24/overlay/moped/overlay-blob_72.xz")
-                    pass
+                request_split = oneline.split(",")
+                if (self.demanding_queue != None) and \
+                        (len(request_split) > 0) and \
+                        (request_split[0].find("REQUEST") > 0):
+                    overlay_type = request_split[1].split(":")[1].strip()
+                    chunk = long(request_split[2].split(":")[1])
+                    if overlay_type == VMNetFS.FUSE_TYPE_DISK:
+                        url = disk_overlay_dict.get(chunk, None)
+                    elif overlay_type == VMNetFS.FUSE_TYPE_MEMORY:
+                        url = memory_overlay_dict.get(chunk, None)
+                    else:
+                        msg = "FUSE type does not match : %s" % overlay_type
+                        raise VMNetFSError(msg)
+
+                    if url == None:
+                        msg = "Cannot find matching blob with chunk(%ld)" % chunk
+                        raise VMNetFSError(msg)
+                    self.demanding_queue.put(url)
+                elif (len(request_split) > 0) and (request_split[0].find("STATISTICS-WAIT") > 0):
+                    type_name, overlay_type = request_split[1].split(":")
+                    chunk_name, chunk = request_split[2].split(":")
+                    wait_name, wait_time = request_split[3].split(":")
+                    data = {type_name:overlay_type, chunk_name:long(chunk.strip()), wait_name:float(wait_time.strip())}
+                    wait_statistics.append(data)
+                else:
+                    sys.stdout.write(oneline)
+
         self._running = False
-        print "[INFO] close Fuse monitoring thread"
+        print "[INFO] close Fuse Exec thread"
+        if len(wait_statistics) > 0:
+            print "[INFO] Waiting chunks"
+            pprint(wait_statistics)
 
     def fuse_write(self, data):
         self._pipe.write(data + "\n")

@@ -64,6 +64,8 @@ def network_worker(overlay_urls, demanding_queue, out_queue, time_queue, chunk_s
     counter = 0
     index = 0 
     finished_url = list()
+    out_of_order_count = 0
+    total_urls_count = len(overlay_urls)
     while len(overlay_urls) > 0:
         if not demanding_queue.empty():
             urgent_overlay_url = demanding_queue.get()
@@ -74,11 +76,12 @@ def network_worker(overlay_urls, demanding_queue, out_queue, time_queue, chunk_s
                 # process urgent overlay first
                 overlay_url = urgent_overlay_url
                 overlay_urls.remove(overlay_url)
+                out_of_order_count += 1
         else:
             # No urgent request, process as normal
             overlay_url = overlay_urls.pop(0)
 
-        print "reading %d, %s" % (index, overlay_url)
+        #print "reading %d, %s" % (index, overlay_url)
         finished_url.append(overlay_url)
         stream = urllib2.urlopen(overlay_url)
         while True:
@@ -95,6 +98,9 @@ def network_worker(overlay_urls, demanding_queue, out_queue, time_queue, chunk_s
     end_time = time.time()
     time_delta= end_time-start_time
     time_queue.put({'start_time':start_time, 'end_time':end_time})
+    print "[Transfer] out-of-order fetching : %d / %d == %5.2f %%" % \
+            (out_of_order_count, total_urls_count, \
+            100.0*out_of_order_count/total_urls_count)
     try:
         print "[Transfer] : (%s)~(%s)=(%s) (%d loop, %d bytes, %lf Mbps)" % \
                 (start_time, end_time, (time_delta),\
@@ -287,13 +293,11 @@ class SynthesisTCPHandler(SocketServer.StreamRequestHandler):
                     download_queue, overlay_pipe, time_decomp
                     )
                 )
-
         modified_img, modified_mem, fuse, delta_proc, fuse_thread = \
-                cloudlet.recover_launchVM(base_path, meta_info, overlay_pipe, log=sys.stdout)
+                cloudlet.recover_launchVM(base_path, meta_info, overlay_pipe, 
+                        log=sys.stdout, demanding_queue=demanding_queue)
         delta_proc.time_queue = time_delta
         fuse_thread.time_queue = time_fuse
-        fuse.demanding_queue = demanding_queue
-        fuse.meta_info = meta_info
 
         # resume VM
         resumed_VM = cloudlet.ResumedVM(modified_img, modified_mem, fuse)

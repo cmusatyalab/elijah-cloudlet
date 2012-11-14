@@ -472,10 +472,11 @@ def recover_launchVM(base_image, meta_info, overlay_file, **kwargs):
     memory_overlay_map = ','.join(memory_chunk_list)
 
     # make FUSE disk & memory
+    kwargs['meta_info'] = meta_info
     fuse = run_fuse(Const.VMNETFS_PATH, Const.CHUNK_SIZE, 
             base_image, vm_disk_size, base_mem, vm_memory_size,
-            resumed_disk=modified_img.name, resumed_memory=modified_mem.name, 
-            disk_overlay_map=disk_overlay_map, memory_overlay_map=memory_overlay_map)
+            modified_img.name,  disk_overlay_map,
+            modified_mem.name, memory_overlay_map, **kwargs)
     print "[INFO] Start FUSE"
 
     # Recover Modified Memory
@@ -486,26 +487,14 @@ def recover_launchVM(base_image, meta_info, overlay_file, **kwargs):
             out_pipe=pipe_child)
     fuse_thread = vmnetfs.FuseFeedingThread(fuse, 
             pipe_parent, delta.Recovered_delta.END_OF_PIPE)
-    '''
-    # Recover Modified Disk
-    disk_pipe_parent, disk_pipe_child = Pipe()
-    disk_recover_dict = dict()
-    overlay_memory_info = {'dict':memory_recover_dict, 'path':modified_mem.name}
-    delta_disk = delta.Recovered_delta(base_image, base_mem, overlay_disk, \
-            modified_img.name, vm_disk_size, Const.CHUNK_SIZE, out_pipe=disk_pipe_child,
-            parent=base_image, overlay_memory_info=overlay_memory_info)
-    disk_fuse = vmnetfs.FuseFeedingThread(fuse, 
-            vmnetfs.FuseFeedingThread.FUSE_IMAGE_INDEX_DISK,
-            disk_pipe_parent, disk_recover_dict,
-            delta.Recovered_delta.END_OF_PIPE)
-    '''
     return [modified_img.name, modified_mem.name, fuse, delta_proc, fuse_thread]
 
 
 def run_fuse(bin_path, chunk_size, original_disk, fuse_disk_size,
         original_memory, fuse_memory_size,
         resumed_disk=None, disk_overlay_map=None,
-        resumed_memory=None, memory_overlay_map=None):
+        resumed_memory=None, memory_overlay_map=None,
+        **kwargs):
     if fuse_disk_size <= 0:
         raise CloudletGenerationError("FUSE disk size should be bigger than 0")
     if original_memory != None and fuse_memory_size <= 0:
@@ -520,7 +509,7 @@ def run_fuse(bin_path, chunk_size, original_disk, fuse_disk_size,
     # launch fuse
     execute_args = ['', '', \
             # disk parameter
-            'disk',
+            '%s' % vmnetfs.VMNetFS.FUSE_TYPE_DISK,
             "%s" % os.path.abspath(original_disk),  # base path
             "%s" % resumed_disk,                    # overlay path
             "%s" % disk_overlay_map,                # overlay map
@@ -530,7 +519,7 @@ def run_fuse(bin_path, chunk_size, original_disk, fuse_disk_size,
     if original_memory:
         for parameter in [
                 # memory parameter
-                'memory',
+                '%s' % vmnetfs.VMNetFS.FUSE_TYPE_MEMORY,
                 "%s" % os.path.abspath(original_memory), 
                 "%s" % resumed_memory, 
                 "%s" % memory_overlay_map, 
@@ -540,9 +529,7 @@ def run_fuse(bin_path, chunk_size, original_disk, fuse_disk_size,
                 ]:
             execute_args.append(parameter)
 
-    #print "Fuse argument %s" % ",".join(execute_args)
-
-    fuse_process = vmnetfs.VMNetFS(bin_path, execute_args)
+    fuse_process = vmnetfs.VMNetFS(bin_path, execute_args, **kwargs)
     fuse_process.launch()
     fuse_process.start()
     return fuse_process
