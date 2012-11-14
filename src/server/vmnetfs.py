@@ -88,21 +88,24 @@ class VMNetFS(threading.Thread):
                     if url == None:
                         msg = "Cannot find matching blob with chunk(%ld)" % chunk
                         raise VMNetFSError(msg)
+                    #print "requesting chunk(%ld) at %s" % (chunk, url)
                     self.demanding_queue.put(url)
                 elif (len(request_split) > 0) and (request_split[0].find("STATISTICS-WAIT") > 0):
                     type_name, overlay_type = request_split[1].split(":")
                     chunk_name, chunk = request_split[2].split(":")
                     wait_name, wait_time = request_split[3].split(":")
                     data = {type_name:overlay_type, chunk_name:long(chunk.strip()), wait_name:float(wait_time.strip())}
+                    #print oneline
                     wait_statistics.append(data)
-                else:
-                    sys.stdout.write(oneline)
 
+        if len(wait_statistics) > 0:
+            total_wait_time = 0.0
+            for item in wait_statistics:
+                total_wait_time += item['time']
+            print "[INFO] %d chunks waited for synthesizing for avg %f seconds" % \
+                    (len(wait_statistics), total_wait_time/len(wait_statistics))
         self._running = False
         print "[INFO] close Fuse Exec thread"
-        if len(wait_statistics) > 0:
-            print "[INFO] Waiting chunks"
-            pprint(wait_statistics)
 
     def fuse_write(self, data):
         self._pipe.write(data + "\n")

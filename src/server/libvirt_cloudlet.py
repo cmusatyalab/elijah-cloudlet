@@ -291,10 +291,12 @@ def create_overlay(base_image):
     # 3. Reorder transfer order & Compression
     access_pattern_file = base_image + Const.BASE_ACCESS_PATERN
     if os.path.exists(access_pattern_file):
+        Log.out.write("[ORDEING] change chunk ordering using pattern file")
         delta.reorder_deltalist(access_pattern_file, 
                 Memory.Memory.RAM_PAGE_SIZE, merged_deltalist)
     else:
-        Log.out.write("Warning: Cannot find access pattern file")
+        Log.out.write("[ORDEING] change chunk ordering by offset")
+        delta.reorder_deltalist_linear(Const.CHUNK_SIZE, merged_deltalist)
     blob_list = delta.divide_blobs(merged_deltalist, overlay_path, 
             Const.OVERLAY_BLOB_SIZE_KB, Const.CHUNK_SIZE,
             Memory.Memory.RAM_PAGE_SIZE, print_out=Log.out)
@@ -879,12 +881,14 @@ def main(argv):
         output_dir = args[2]
         if not os.path.exists(output_dir):
             os.makedirs(output_dir)
-        blob_size_list = [1024, 1024*8, 1024*16, 1024*64, 1024*1024]
+        blob_size_list = [256, 512, 1024, 1024*8, 1024*16, 1024*64, 1024*1024]
+        #blob_size_list = [1024]
         overlay_path = os.path.join(output_dir, "overlay")
         meta_info = decomp_overlay(meta, overlay_path)
         delta_list = DeltaList.fromfile(overlay_path)
+        delta.reorder_deltalist_linear(Const.CHUNK_SIZE, delta_list)
         for blob_size in blob_size_list:
-            sub_dir = os.path.join(output_dir, "%d" % (blob_size/1024))
+            sub_dir = os.path.join(output_dir, "%d" % (blob_size))
             if not os.path.exists(sub_dir):
                 os.makedirs(sub_dir)
             meta_path = os.path.join(sub_dir, "overlay-meta")
@@ -896,17 +900,19 @@ def main(argv):
             _update_overlay_meta(meta_info, meta_path, blob_info=blob_list)
             DeltaList.statistics(delta_list, print_out=sys.stdout)
     elif mode == 'reorder':
-        if len(args) != 4:
+        if len(args) != 5:
             print args
-            parser.error("Reordering requires 3 arguments\n \
+            parser.error("Reordering requires 4 arguments\n \
                     1)access-pattern file\n \
                     2)meta file\n \
-                    3)output directory\n")
+                    3)blob size in kb\n \
+                    4)output directory\n")
             sys.exit(1)
 
         access_pattern_file = args[1]
         meta = args[2]
-        output_dir = args[3]
+        blob_size_kb = int(args[3])
+        output_dir = args[4]
         if not os.path.exists(output_dir):
             os.makedirs(output_dir)
 
@@ -920,7 +926,7 @@ def main(argv):
                 Memory.Memory.RAM_PAGE_SIZE, delta_list)
         DeltaList.statistics(delta_list, print_out=sys.stdout)
         blob_list = delta.divide_blobs(delta_list, overlay_path, 
-                Const.OVERLAY_BLOB_SIZE_KB, Const.CHUNK_SIZE,
+                blob_size_kb, Const.CHUNK_SIZE,
                 Memory.Memory.RAM_PAGE_SIZE, print_out=Log.out)
         _update_overlay_meta(meta_info, new_meta_path, blob_info=blob_list)
 

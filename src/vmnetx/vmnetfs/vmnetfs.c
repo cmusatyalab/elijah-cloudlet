@@ -222,7 +222,7 @@ static void handle_stdin(struct vmnetfs *fs, const char *oneline, GError **err){
 
 	// check end signal
 	if (strcmp(oneline, "END_OF_TRANSMISSION") == 0){
-		fprintf(stdout, "Receive END_OF_TRANSMISSION\n");
+		fprintf(stdout, "[FUSE] Receive END_OF_TRANSMISSION\n");
 		fflush(stdout);
 		return;
 	}

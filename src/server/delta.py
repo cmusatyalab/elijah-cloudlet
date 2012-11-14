@@ -551,6 +551,26 @@ def create_overlay(memory_deltalist, memory_chunk_size,
 
     return delta_list
 
+def reorder_deltalist_linear(chunk_size, delta_list):
+    if len(delta_list) == 0 or type(delta_list[0]) != DeltaItem:
+        raise MemoryError("Need list of DeltaItem")
+    start_time = time.time()
+    delta_dict = dict()
+    for item in delta_list:
+        delta_dict[item.index] = item
+
+    delta_list.sort(key=itemgetter('delta_type', 'offset'))
+    for index, delta_item in enumerate(delta_list):
+        if delta_item.ref_id == DeltaItem.REF_SELF:
+            ref_index = long(delta_item.data)
+            ref_item = delta_dict.get(ref_index, None)
+            ref_pos = delta_list.index(ref_item)
+            if ref_pos > index:
+                print "[Debug][REORDER] move reference from %d to %d" % (ref_pos, (index-1))
+                delta_list.remove(ref_item)
+                delta_list.insert(index, ref_item)
+    print "[Debug][REORDER] reordering by offset takes : %f" % (time.time()-start_time)
+
 def reorder_deltalist(mem_access_file, chunk_size, delta_list):
     # chunks that appear earlier in access file comes afront in deltalist
     if len(delta_list) == 0 or type(delta_list[0]) != DeltaItem:
@@ -618,18 +638,18 @@ def _save_blob(start_index, delta_list, self_ref_dict, blob_name, blob_size, sta
     
     while index < len(delta_list):
         delta_item = delta_list[index]
-        if delta_item.delta_type == DeltaItem.DELTA_MEMORY:
-            memory_offset_list.append(delta_item.offset)
-        elif delta_item.delta_type == DeltaItem.DELTA_DISK:
-            disk_offset_list.append(delta_item.offset)
-        else:
-            raise DeltaError("Delta should be either memory or disk")
 
         if delta_item.ref_id != DeltaItem.REF_SELF:
             delta_bytes = delta_item.get_serialized()
             original_length += len(delta_bytes)
             comp_data += comp.compress(delta_bytes)
             item_count += 1
+            if delta_item.delta_type == DeltaItem.DELTA_MEMORY:
+                memory_offset_list.append(delta_item.offset)
+            elif delta_item.delta_type == DeltaItem.DELTA_DISK:
+                disk_offset_list.append(delta_item.offset)
+            else:
+                raise DeltaError("Delta should be either memory or disk")
 
             # remove dependece getting required index by finding reference
             deduped_list = self_ref_dict.get(delta_item.index, None)
@@ -640,6 +660,12 @@ def _save_blob(start_index, delta_list, self_ref_dict, blob_name, blob_size, sta
                     original_length += len(deduped_bytes)
                     comp_data += comp.compress(deduped_bytes)
                     item_count += 1
+                    if deduped_item.delta_type == DeltaItem.DELTA_MEMORY:
+                        memory_offset_list.append(deduped_item.offset)
+                    elif deduped_item.delta_type == DeltaItem.DELTA_DISK:
+                        disk_offset_list.append(deduped_item.offset)
+                    else:
+                        raise DeltaError("Delta should be either memory or disk")
             
         if len(comp_data) >= blob_size:
             print "savefile for %s(%ld delta item) %ld --> %ld" % \
@@ -689,7 +715,7 @@ def divide_blobs(delta_list, overlay_path, blob_size_kb,
     index = 0
     comp_counter = 0
     while index < len(delta_list):
-        blob_name = "%s_%02d.xz" % (overlay_path, blob_number)
+        blob_name = "%s_%d.xz" % (overlay_path, blob_number)
         end_index, memory_offsets, disk_offsets = \
                 _save_blob(index, delta_list, self_ref_dict, blob_name, blob_size, statistics)
         index = (end_index+1)

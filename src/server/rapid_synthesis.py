@@ -67,19 +67,25 @@ def network_worker(overlay_urls, demanding_queue, out_queue, time_queue, chunk_s
     out_of_order_count = 0
     total_urls_count = len(overlay_urls)
     while len(overlay_urls) > 0:
-        if not demanding_queue.empty():
-            urgent_overlay_url = demanding_queue.get()
-            if urgent_overlay_url in finished_url:
-                # it's already processed
-                overlay_url = overlay_urls.pop(0)
-            else:
-                # process urgent overlay first
-                overlay_url = urgent_overlay_url
-                overlay_urls.remove(overlay_url)
-                out_of_order_count += 1
+        urgent_overlay_url = None
+        while not demanding_queue.empty():
+            # demanding_queue can have multiple same request
+            demanding_url = demanding_queue.get()
+            #print "getting from demading queue %s" % demanding_url
+            if demanding_url not in finished_url:
+                urgent_overlay_url = demanding_url
+                break
+
+        if urgent_overlay_url != None:
+            # process urgent overlay first
+            overlay_url = urgent_overlay_url
+            overlay_urls.remove(overlay_url)
+            out_of_order_count += 1
+            #print "find urgent : %s" % urgent_overlay_url
         else:
             # No urgent request, process as normal
             overlay_url = overlay_urls.pop(0)
+            #print "cannot find urgent"
 
         #print "reading %d, %s" % (index, overlay_url)
         finished_url.append(overlay_url)

@@ -18,6 +18,7 @@
 #include <inttypes.h>
 #include <sys/time.h>
 #include <unistd.h>
+#include <sys/syscall.h>
 #include <stdio.h>
 #include "vmnetfs-private.h"
 
@@ -354,7 +355,8 @@ static uint64_t read_chunk_unlocked(struct vmnetfs_image *img,
 				// and send message to parent
 				struct timeval waiting_start_time, waiting_end_time, diff_time;
 				gettimeofday(&waiting_start_time, NULL);
-				CPRINTF("REQUEST,type:%s,chunk:%ld\n", img->url, chunk);
+				CPRINTF("REQUEST,type:%s,chunk:%ld,thread:%ld\n", \
+						img->url, chunk, syscall(SYS_gettid));
 				while (1) {
 					if (_vmnetfs_bit_test(img->current_overlay_map, chunk)) {
 						// Get it from overlay VM
@@ -372,7 +374,7 @@ static uint64_t read_chunk_unlocked(struct vmnetfs_image *img,
 							break;
 						}
 					}
-					// TODO: change it to wait with condition
+					// TODO: change it to wait for conditional lock
 					usleep(10);
 				}
         	}
