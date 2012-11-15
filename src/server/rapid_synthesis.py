@@ -329,7 +329,12 @@ class SynthesisTCPHandler(SocketServer.StreamRequestHandler):
 
         # terminate
         resumed_VM.join()
-        cloudlet.connect_vnc(resumed_VM.machine)
+        #cloudlet.connect_vnc(resumed_VM.machine)
+        while True:
+            user_input = raw_input("q to quit: ")
+            if user_input == 'q':
+                break
+
 
         close_start_time = time.time()
         delta_proc.join()

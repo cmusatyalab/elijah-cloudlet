@@ -210,12 +210,17 @@ def create_overlay(base_image):
     conn = get_libvirt_connection()
     machine = run_snapshot(conn, modified_disk, base_mem_fuse, qemu_logfile=qemu_logfile.name)
     connect_vnc(machine)
-    # 1-2. get modified memory
+
+    # 1-2. Stop monitoring for memory access (snapshot will create a lot of access)
+    #      and get modified memory
+    monitor.del_path(vmnetfs.StreamMonitor.MEMORY_ACCESS)
     # TODO: support stream of modified memory rather than tmp file
     save_mem_snapshot(machine, modified_mem.name)
+
     # 1-3. get hashlist of base memory and disk
     basemem_hashlist = Memory.base_hashlist(base_memmeta)
     basedisk_hashlist = Disk.base_hashlist(base_diskmeta)
+
     # 1-4. get dma & discard information
     if Const.TRIM_SUPPORT:
         dma_dict, trim_dict = Disk.parse_qemu_log(qemu_logfile.name, Const.CHUNK_SIZE)
@@ -238,7 +243,7 @@ def create_overlay(base_image):
             print_out=Log.out)
 
     # 2-2. get disk overlay
-    m_chunk_dict = monitor.chunk_dict
+    m_chunk_dict = monitor.modified_chunk_dict
     disk_statistics = dict()
     disk_deltalist = Disk.create_disk_deltalist(modified_disk,
             m_chunk_dict, Const.CHUNK_SIZE,
@@ -289,8 +294,9 @@ def create_overlay(base_image):
         Log.out.write("[Debug] WASTED TIME FOR XRAY LOGGING: %f\n" % (xray_end_time-xray_start_time))
 
     # 3. Reorder transfer order & Compression
-    Log.out.write("[DEBUG][REORDER] change chunk ordering by offset\n")
-    delta.reorder_deltalist_linear(Const.CHUNK_SIZE, merged_deltalist)
+    Log.out.write("[DEBUG][REORDER] change chunk ordering by mem access\n")
+    mem_access_list = monitor.access_chunk_list
+    delta.reorder_deltalist(mem_access_list, Const.CHUNK_SIZE, merged_deltalist)
     Log.out.write("[DEBUG][LZMA] Compressing overlay blobs\n")
     blob_list = delta.divide_blobs(merged_deltalist, overlay_path, 
             Const.OVERLAY_BLOB_SIZE_KB, Const.CHUNK_SIZE,
@@ -770,6 +776,9 @@ def synthesis(base_disk, meta):
     connect_vnc(resumed_VM.machine)
 
     # terminate
+    mem_access_list = resumed_VM.monitor.access_chunk_list
+    mem_access_list = [str(item) for item in mem_access_list]
+    open("mem_access_synthesis", "w+").write("\n".join(mem_access_list))
     resumed_VM.terminate()
     fuse.terminate()
 
@@ -884,7 +893,6 @@ def main(argv):
         overlay_path = os.path.join(output_dir, "overlay")
         meta_info = decomp_overlay(meta, overlay_path)
         delta_list = DeltaList.fromfile(overlay_path)
-        delta.reorder_deltalist_linear(Const.CHUNK_SIZE, delta_list)
         for blob_size in blob_size_list:
             sub_dir = os.path.join(output_dir, "%d" % (blob_size))
             if not os.path.exists(sub_dir):
@@ -920,7 +928,7 @@ def main(argv):
         meta_info = decomp_overlay(meta, overlay_path)
         delta_list = DeltaList.fromfile(overlay_path)
         # reorder
-        delta.reorder_deltalist(access_pattern_file, 
+        delta.reorder_deltalist_file(access_pattern_file, 
                 Memory.Memory.RAM_PAGE_SIZE, delta_list)
         DeltaList.statistics(delta_list, print_out=sys.stdout)
         blob_list = delta.divide_blobs(delta_list, overlay_path, 

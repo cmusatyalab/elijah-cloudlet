@@ -574,16 +574,19 @@ def reorder_deltalist_linear(chunk_size, delta_list):
                 delta_list.insert(index, ref_item)
     print "[Debug][REORDER] reordering takes : %f" % (time.time()-start_time)
 
-def reorder_deltalist(mem_access_file, chunk_size, delta_list):
+def reorder_deltalist_file(mem_access_file, chunk_size, delta_list):
     # chunks that appear earlier in access file comes afront in deltalist
     if len(delta_list) == 0 or type(delta_list[0]) != DeltaItem:
         raise MemoryError("Need list of DeltaItem")
 
-    start_time = time.time()
-    access_list = open(mem_access_file, "r").read().split()
+    access_list = open(mem_access_file, "r").read().split('\n')
     if len(access_list[-1].strip()) == 0:
         access_list = access_list[:-1]
+    reorder_deltalist(access_list, chunk_size, delta_list)
 
+
+def reorder_deltalist(access_list, chunk_size, delta_list):
+    start_time = time.time()
     delta_dict = dict()
     for item in delta_list:
         delta_dict[item.index] = item

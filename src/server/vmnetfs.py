@@ -154,7 +154,8 @@ class StreamMonitor(threading.Thread):
         self.stream_dict = dict()
         self._running = False
         self.stop = threading.Event()
-        self.chunk_dict = dict()
+        self.modified_chunk_dict = dict()
+        self.access_chunk_list = list()
         threading.Thread.__init__(self, target=self.io_watch)
 
     def add_path(self, path, name):
@@ -162,8 +163,20 @@ class StreamMonitor(threading.Thread):
         # through fcntl()
         print "[INFO] start monitoring at %s" % path
         fd = os.open(path, os.O_RDONLY | os.O_NONBLOCK)
-        self.stream_dict[fd] = {'name':name, 'buf':''}
+        self.stream_dict[fd] = {'name':name, 'buf':'', 'path':path}
         self.epoll.register(fd, select.EPOLLIN | select.EPOLLOUT | select.EPOLLPRI)
+
+    def del_path(self, name):
+        # We need to set O_NONBLOCK in open() because FUSE doesn't pass
+        # through fcntl()
+        for fileno, item in self.stream_dict.items():
+            monitor_path = item['path']
+            monitor_name = item['name']
+            if name == monitor_name:
+                print "[INFO] stop monitoring at %s" % monitor_path
+                self.epoll.unregister(fileno)
+                os.close(fileno)
+                del self.stream_dict[fileno]
 
     def io_watch(self):
         while(not self.stop.wait(0.0001)):
@@ -211,7 +224,7 @@ class StreamMonitor(threading.Thread):
         ctime, chunk = line.split("\t")
         ctime = float(ctime)
         chunk = int(chunk)
-        self.chunk_dict[chunk] = ctime
+        self.modified_chunk_dict[chunk] = ctime
         #print "%s: %f, %d" % ("modification", ctime, chunk)
 
     def _handle_disk_access(self, line):
@@ -219,8 +232,10 @@ class StreamMonitor(threading.Thread):
         pass
 
     def _handle_memory_access(self, line):
-        #print "memory access: " + line
-        pass
+        ctime, chunk = line.split("\t")
+        ctime = float(ctime)
+        chunk = int(chunk)
+        self.access_chunk_list.append(chunk)
 
     def terminate(self):
         self.stop.set()
