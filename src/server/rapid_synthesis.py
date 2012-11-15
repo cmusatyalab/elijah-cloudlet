@@ -308,9 +308,6 @@ class SynthesisTCPHandler(SocketServer.StreamRequestHandler):
         # resume VM
         resumed_VM = cloudlet.ResumedVM(modified_img, modified_mem, fuse)
         resumed_VM.start()
-
-        # early return to have application request
-        # but need to wait until VM port opens
         self.ret_success()
 
         # start processes

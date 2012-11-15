@@ -444,6 +444,7 @@ class Recovered_delta(multiprocessing.Process):
             if len(overlay_chunk_ids) % 1000 == 0:
                 self.recover_mem_fd.flush()
                 self.recover_disk_fd.flush()
+
                 self.out_pipe.send(overlay_chunk_ids)
                 count += len(overlay_chunk_ids)
                 overlay_chunk_ids[:] = []
