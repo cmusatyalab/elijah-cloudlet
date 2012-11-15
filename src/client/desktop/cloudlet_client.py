@@ -202,8 +202,8 @@ def run_application(app_name):
             output = proc.stdout.readline()
             if len(output) == 0:
                 break;
-            sys.stdout.write(output)
-            sys.stdout.flush()
+            #sys.stdout.write(output)
+            #sys.stdout.flush()
             time.sleep(0.001)
         proc.wait()
         if proc.returncode == 0:
