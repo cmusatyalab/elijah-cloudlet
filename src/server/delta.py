@@ -442,6 +442,8 @@ class Recovered_delta(multiprocessing.Process):
                         (Recovered_delta.FUSE_INDEX_DISK, overlay_chunk_id))
 
             if len(overlay_chunk_ids) % 1000 == 0:
+                self.recover_mem_fd.flush()
+                self.recover_disk_fd.flush()
                 self.out_pipe.send(overlay_chunk_ids)
                 count += len(overlay_chunk_ids)
                 overlay_chunk_ids[:] = []
@@ -569,7 +571,7 @@ def reorder_deltalist_linear(chunk_size, delta_list):
                 print "[Debug][REORDER] move reference from %d to %d" % (ref_pos, (index-1))
                 delta_list.remove(ref_item)
                 delta_list.insert(index, ref_item)
-    print "[Debug][REORDER] reordering by offset takes : %f" % (time.time()-start_time)
+    print "[Debug][REORDER] reordering takes : %f" % (time.time()-start_time)
 
 def reorder_deltalist(mem_access_file, chunk_size, delta_list):
     # chunks that appear earlier in access file comes afront in deltalist
@@ -726,12 +728,13 @@ def divide_blobs(delta_list, overlay_path, blob_size_kb,
         memory_chunks = [offset/memory_chunk_size for offset in memory_offsets]
         disk_chunks = [offset/disk_chunk_size for offset in disk_offsets]
         file_size = os.path.getsize(blob_name)
-        overlay_list.append({
+        blob_dict = {
             Const.META_OVERLAY_FILE_NAME:os.path.basename(blob_name),
             Const.META_OVERLAY_FILE_SIZE:file_size,
             Const.META_OVERLAY_FILE_DISK_CHUNKS: disk_chunks,
             Const.META_OVERLAY_FILE_MEMORY_CHUNKS: memory_chunks
-            })
+            }
+        overlay_list.append(blob_dict)
     end_time = time.time()
     print_out.write("[Debug] Overlay Compression time: %f, delta_item: %ld\n" % 
             ((end_time-start_time), comp_counter))

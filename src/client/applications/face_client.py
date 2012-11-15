@@ -67,7 +67,7 @@ def send_request(address, port, inputs):
         sock.setblocking(True)
         sock.connect((address, port))
     except socket.error, msg:
-        sys.stderr.write("Error, %s\n" % msg[1])
+        sys.stderr.write("Connection error\n")
         sys.exit(1)
 
     # send requests

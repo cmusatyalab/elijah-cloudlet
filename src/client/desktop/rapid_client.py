@@ -26,7 +26,7 @@ from optparse import OptionParser
 from threading import Thread
 import cloudlet_client
 
-application = ['moped', 'face', 'webserver']
+application = ['moped', 'moped_random', 'face']
 
 def process_command_line(argv):
     global command_type
@@ -84,19 +84,20 @@ def synthesis(address, port, application):
     recv_end = recv_end_time['time']
     print "Transfer %f-%f = %f" % (send_end, start_time, (send_end-start_time))
     print "Response %f-%f = %f" % (recv_end, start_time, (recv_end-start_time))
-    '''
     app_start_time = recv_end_time['app_start']
     app_end_time = recv_end_time['app_end']
     print "App End  %f-%f = %f" % (app_end_time, start_time, (app_end_time-start_time))
     print "App      %f-%f = %f" % (app_end_time, app_start_time, (app_end_time-app_start_time))
-    '''
 
 
 def send_thread(sock, application, time_dict):
     if application == 'moped':
-        overlay_meta_path = '/home/krha/cloudlet/image/overlay/moped/precise.overlay-meta'
+        overlay_meta_path = '/home/krha/cloudlet/image/overlay/moped/overlay-meta'
+    elif application == 'moped_random':
+        # moped + random 100MB file
+        overlay_meta_path = '/home/krha/cloudlet/image/overlay/moped_random/overlay-meta'
     elif application == 'face':
-        overlay_meta_path = '/home/krha/cloudlet/image/overlay/face/window7.overlay-meta'
+        overlay_meta_path = '/home/krha/cloudlet/image/overlay/face/overlay-meta'
     else:
         raise Exception("NO valid application name: %s" % application)
 
@@ -116,6 +117,9 @@ def send_thread(sock, application, time_dict):
 
 
 def recv_thread(sock, application, time_dict):
+    if application == "moped_random":
+        application = "moped"
+
     #recv
     data = sock.recv(4)
     ret_size = struct.unpack("!I", data)[0]
@@ -128,11 +132,9 @@ def recv_thread(sock, application, time_dict):
     time_dict['time'] = time.time()
 
     #run application
-    '''
     time_dict['app_start'] = time.time()
     cloudlet_client.run_application(application)
     time_dict['app_end'] = time.time()
-    '''
 
 
 def main(argv=None):

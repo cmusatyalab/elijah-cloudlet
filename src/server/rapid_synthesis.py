@@ -318,6 +318,9 @@ class SynthesisTCPHandler(SocketServer.StreamRequestHandler):
         decomp_process.start()
         delta_proc.start()
         fuse_thread.start()
+
+        # MUST JOIN ON FUSE FEEDING THREAD 
+        # OR YOU WILL HAVE SUBTLE VM RESUME ISSUE
         fuse_thread.join()
 
         end_time = time.time()

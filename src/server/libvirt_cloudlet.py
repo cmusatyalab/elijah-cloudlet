@@ -289,14 +289,9 @@ def create_overlay(base_image):
         Log.out.write("[Debug] WASTED TIME FOR XRAY LOGGING: %f\n" % (xray_end_time-xray_start_time))
 
     # 3. Reorder transfer order & Compression
-    access_pattern_file = base_image + Const.BASE_ACCESS_PATERN
-    if os.path.exists(access_pattern_file):
-        Log.out.write("[ORDEING] change chunk ordering using pattern file")
-        delta.reorder_deltalist(access_pattern_file, 
-                Memory.Memory.RAM_PAGE_SIZE, merged_deltalist)
-    else:
-        Log.out.write("[ORDEING] change chunk ordering by offset")
-        delta.reorder_deltalist_linear(Const.CHUNK_SIZE, merged_deltalist)
+    Log.out.write("[DEBUG][REORDER] change chunk ordering by offset\n")
+    delta.reorder_deltalist_linear(Const.CHUNK_SIZE, merged_deltalist)
+    Log.out.write("[DEBUG][LZMA] Compressing overlay blobs\n")
     blob_list = delta.divide_blobs(merged_deltalist, overlay_path, 
             Const.OVERLAY_BLOB_SIZE_KB, Const.CHUNK_SIZE,
             Memory.Memory.RAM_PAGE_SIZE, print_out=Log.out)
@@ -764,9 +759,12 @@ def synthesis(base_disk, meta):
 
     delta_proc.start()
     fuse_thread.start()
+
     delta_proc.join()
+    fuse_thread.join()
     print "[INFO] VM Disk is Fully recovered at %s" % modified_img
     print "[INFO] VM Memory is Fully recoverd at %s" % modified_mem
+    #raw_input("waiting key input")
 
     resumed_VM.join()
     connect_vnc(resumed_VM.machine)
@@ -882,7 +880,7 @@ def main(argv):
         if not os.path.exists(output_dir):
             os.makedirs(output_dir)
         blob_size_list = [256, 512, 1024, 1024*8, 1024*16, 1024*64, 1024*1024]
-        #blob_size_list = [1024]
+        #blob_size_list = [1024*1024]
         overlay_path = os.path.join(output_dir, "overlay")
         meta_info = decomp_overlay(meta, overlay_path)
         delta_list = DeltaList.fromfile(overlay_path)
