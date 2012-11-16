@@ -843,11 +843,27 @@ class ResumedVM(threading.Thread):
             os.unlink(self.qemu_logfile.name)
 
 
+def validate_congifuration():
+    cmd = "kvm --version"
+    proc = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, shell=True)
+    out, err = proc.communicate()
+    if len(err) > 0:
+        print "KVM validation Error: %s" % (err)
+        return False
+    if out.find("Cloudlet") < 0:
+        print "KVM validation Error, Incorrect Version:\n%s" % (out)
+        return False
+    return True
+
+
 def main(argv):
     MODE = ('base', 'overlay', 'synthesis', "test")
     USAGE = 'Usage: %prog ' + ("[%s]" % "|".join(MODE)) + " [paths..]"
     VERSION = '%prog 0.1'
     DESCRIPTION = 'Cloudlet Overlay Generation & Synthesis'
+    if not validate_congifuration():
+        sys.stderr.write("failed to validate configuration\n")
+        sys.exit(1)
 
     parser = OptionParser(usage=USAGE, version=VERSION, description=DESCRIPTION)
     opts, args = parser.parse_args()
