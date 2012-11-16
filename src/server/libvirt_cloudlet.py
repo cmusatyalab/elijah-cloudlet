@@ -757,12 +757,12 @@ def synthesis(base_disk, meta):
 
     # decomp
     overlay_filename = NamedTemporaryFile(prefix="cloudlet-overlay-file-")
-    meta_info = decomp_overlay(meta, overlay_filename.name, print_out=Log.out)
+    meta_info = decomp_overlay(meta, overlay_filename.name, print_out=Log)
 
     # recover VM
-    Log.out.write("[Debug] recover launch VM\n")
+    Log.write("[Debug] recover launch VM\n")
     modified_img, modified_mem, fuse, delta_proc, fuse_thread = \
-            recover_launchVM(base_disk, meta_info, overlay_filename.name, log=Log.out)
+            recover_launchVM(base_disk, meta_info, overlay_filename.name, log=Log)
 
     # resume VM
     resumed_VM = ResumedVM(modified_img, modified_mem, fuse)
@@ -923,7 +923,7 @@ def main(argv):
             print "Creating %d KB overlays" % blob_size
             blob_list = delta.divide_blobs(delta_list, overlay_prefix, 
                     blob_size, Const.CHUNK_SIZE,
-                    Memory.Memory.RAM_PAGE_SIZE, print_out=Log.out)
+                    Memory.Memory.RAM_PAGE_SIZE, print_out=Log)
             _update_overlay_meta(meta_info, meta_path, blob_info=blob_list)
             DeltaList.statistics(delta_list, print_out=sys.stdout)
     elif mode == 'reorder':
@@ -954,7 +954,7 @@ def main(argv):
         DeltaList.statistics(delta_list, print_out=sys.stdout)
         blob_list = delta.divide_blobs(delta_list, overlay_path, 
                 blob_size_kb, Const.CHUNK_SIZE,
-                Memory.Memory.RAM_PAGE_SIZE, print_out=Log.out)
+                Memory.Memory.RAM_PAGE_SIZE, print_out=Log)
         _update_overlay_meta(meta_info, new_meta_path, blob_info=blob_list)
 
     elif mode == 'test_overlay_download':    # To be delete
