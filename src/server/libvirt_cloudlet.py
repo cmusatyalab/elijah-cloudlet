@@ -42,18 +42,23 @@ from optparse import OptionParser
 from multiprocessing import Pipe
 
 from tool import comp_lzma
-from tool import decomp_lzma
 from tool import diff_files
 from tool import decomp_overlay
-
-class Log(object):
-    out = sys.stdout
-    mute = open("/dev/null", "wrb")
 
 
 class CloudletGenerationError(Exception):
     pass
 
+
+class CloudletLog(object):
+    def __init__(self):
+        self.logfile = open(Const.OVERLAY_LOG, "w+")
+        self.mute = open("/dev/null", "wrb")
+
+    def write(self, log):
+        self.logfile.write(log)
+        sys.stdout.write(log)
+Log = CloudletLog()
 
 def copy_disk(in_path, out_path):
     print "[INFO] Copying disk image to %s" % out_path
@@ -152,7 +157,7 @@ def create_baseVM(disk_image_path):
 
         # generate disk hashing
         # TODO: need more efficient implementation, e.g. bisect
-        Disk.hashing(disk_image_path, base_diskmeta, print_out=Log.out)
+        Disk.hashing(disk_image_path, base_diskmeta, print_out=Log)
         base_hashvalue = hashlib.sha256(open(disk_image_path, "rb").read()).hexdigest()
         open(base_hashpath, "wrb").write(base_hashvalue)
     except Exception as e:
@@ -240,7 +245,7 @@ def create_overlay(base_image):
     mem_deltalist= Memory.create_memory_deltalist(modified_mem.name, 
             basemem_meta=base_memmeta, basemem_path=base_mem,
             freed_counter_ret = freed_counter_ret,
-            print_out=Log.out)
+            print_out=Log)
 
     # 2-2. get disk overlay
     m_chunk_dict = monitor.modified_chunk_dict
@@ -252,7 +257,7 @@ def create_overlay(base_image):
             dma_dict=dma_dict,
             used_blocks_dict=used_blocks_dict,
             ret_statistics=disk_statistics,
-            print_out=Log.out)
+            print_out=Log)
 
     # 2-3. Merge disk & memory delta_list to generate overlay file
     merged_deltalist = delta.create_overlay(
@@ -260,7 +265,7 @@ def create_overlay(base_image):
             disk_deltalist, Const.CHUNK_SIZE,
             basedisk_hashlist=basedisk_hashlist,
             basemem_hashlist=basemem_hashlist,
-            print_out=Log.out)
+            print_out=Log)
 
     free_pfn_counter = 0
     if Const.FREE_SUPPORT:
@@ -291,17 +296,17 @@ def create_overlay(base_image):
         xray_log.write("trim(%ld) == xray(%ld)\n" % (disk_statistics.get('trimed', 0), disk_statistics.get('xrayed', 0)))
         xray_log.write("-------END\n")
         xray_end_time = time()
-        Log.out.write("[Debug] WASTED TIME FOR XRAY LOGGING: %f\n" % (xray_end_time-xray_start_time))
+        Log.write("[Debug] WASTED TIME FOR XRAY LOGGING: %f\n" % (xray_end_time-xray_start_time))
 
     # 3. Reorder transfer order & Compression
-    Log.out.write("[DEBUG][REORDER] change chunk ordering by mem access\n")
+    Log.write("[DEBUG][REORDER] change chunk ordering by mem access\n")
     mem_access_list = monitor.access_chunk_list
     delta.reorder_deltalist(mem_access_list, Const.CHUNK_SIZE, merged_deltalist)
-    Log.out.write("[DEBUG][LZMA] Compressing overlay blobs\n")
+    Log.write("[DEBUG][LZMA] Compressing overlay blobs\n")
     blob_list = delta.divide_blobs(merged_deltalist, overlay_path, 
             Const.OVERLAY_BLOB_SIZE_KB, Const.CHUNK_SIZE,
-            Memory.Memory.RAM_PAGE_SIZE, print_out=Log.out)
-    DeltaList.statistics(merged_deltalist, print_out=Log.out, 
+            Memory.Memory.RAM_PAGE_SIZE, print_out=Log)
+    DeltaList.statistics(merged_deltalist, print_out=Log, 
             mem_discarded=free_pfn_counter,
             disk_discarded=disk_statistics.get('trimed', 0))
 
