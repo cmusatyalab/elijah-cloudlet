@@ -215,20 +215,36 @@ class DeltaList(object):
         if type(delta_list[0]) != DeltaItem:
             raise DeltaError("Need list of DeltaItem")
 
-        from_self = 0
-        from_zeros = 0
-        from_raw = 0
-        from_base_disk = 0
-        from_base_mem = 0
-        from_xdelta = 0
-        from_overlay_disk = 0
-        from_overlay_mem = 0
+        memory_count = 0
+        disk_count = 0
+        memory_from_self = 0
+        memory_from_zeros = 0
+        memory_from_raw = 0
+        memory_from_base_disk = 0
+        memory_from_base_mem = 0
+        memory_from_xdelta = 0
+        memory_from_overlay_disk = 0
+        memory_from_overlay_mem = 0
+        disk_from_self = 0
+        disk_from_zeros = 0
+        disk_from_raw = 0
+        disk_from_base_disk = 0
+        disk_from_base_mem = 0
+        disk_from_xdelta = 0
+        disk_from_overlay_mem = 0
+        disk_from_overlay_disk = 0
         xdelta_size = 0
         raw_size = 0
+
         # to quickly find memory-disk dedup
         previous_delta_dict = dict() 
 
         for delta_item in delta_list:
+            if delta_item.delta_type == DeltaItem.DELTA_MEMORY:
+                memory_count += 1
+            elif delta_item.delta_type == DeltaItem.DELTA_DISK:
+                disk_count += 1
+
             previous_delta_dict[delta_item.index] = delta_item
             if delta_item.ref_id == DeltaItem.REF_SELF:
                 ref_index = delta_item.data
@@ -237,55 +253,87 @@ class DeltaList(object):
                     raise DeltaError("Cannot calculate statistics for self_referencing")
                 if delta_item.delta_type == DeltaItem.DELTA_DISK:
                     if (ref_delta.delta_type == DeltaItem.DELTA_MEMORY):
-                        from_overlay_mem += 1
+                        disk_from_overlay_mem += 1
                     else:
-                        from_self += 1
+                        disk_from_self += 1
                 elif delta_item.delta_type == DeltaItem.DELTA_MEMORY:
                     if (ref_delta.delta_type == DeltaItem.DELTA_DISK):
-                        from_overlay_mem += 1
+                        memory_from_overlay_disk += 1
                     else:
-                        from_self += 1
+                        memory_from_self += 1
             elif delta_item.ref_id == DeltaItem.REF_ZEROS:
-                from_zeros += 1
+                if delta_item.delta_type == DeltaItem.DELTA_MEMORY:
+                    memory_from_zeros += 1
+                elif delta_item.delta_type == DeltaItem.DELTA_DISK:
+                    disk_from_zeros += 1
             elif delta_item.ref_id == DeltaItem.REF_BASE_DISK:
-                from_base_disk += 1
+                if delta_item.delta_type == DeltaItem.DELTA_MEMORY:
+                    memory_from_base_disk += 1
+                elif delta_item.delta_type == DeltaItem.DELTA_DISK:
+                    disk_from_base_disk += 1
             elif delta_item.ref_id == DeltaItem.REF_BASE_MEM:
-                from_base_mem += 1
+                if delta_item.delta_type == DeltaItem.DELTA_MEMORY:
+                    memory_from_base_mem += 1
+                elif delta_item.delta_type == DeltaItem.DELTA_DISK:
+                    disk_from_base_mem += 1
             elif delta_item.ref_id == DeltaItem.REF_XDELTA:
-                from_xdelta += 1
+                if delta_item.delta_type == DeltaItem.DELTA_MEMORY:
+                    memory_from_xdelta += 1
+                elif delta_item.delta_type == DeltaItem.DELTA_DISK:
+                    disk_from_xdelta += 1
                 xdelta_size += len(delta_item.data)
             elif delta_item.ref_id == DeltaItem.REF_RAW:
-                from_raw += 1
+                if delta_item.delta_type == DeltaItem.DELTA_MEMORY:
+                    memory_from_raw += 1
+                elif delta_item.delta_type == DeltaItem.DELTA_DISK:
+                    disk_from_raw += 1
                 raw_size += len(delta_item.data)
 
-        chunk_size = delta_list[0].offset_len
-        size_MB = chunk_size/1024.0
-        discarded_num = mem_discarded+disk_discarded
-        total_count= (len(delta_list)+discarded_num)/100.0
+        total_memory_count = (memory_count + mem_discarded)
+        total_disk_count = (disk_count + disk_discarded)
 
         print_out.write("-"*50 + "\n")
-        print_out.write("[INFO] Total Modified page #\t: %ld\t( 100 %% )\n" % 
-                (len(delta_list)+discarded_num))
+        print_out.write("[INFO] Total Modified Disk #\t: %ld\t( 100 %% )\n" % 
+                (total_disk_count))
         print_out.write("[INFO] TRIM discard\t\t: %ld\t( %f %% )\n" % 
-                (disk_discarded, disk_discarded/total_count))
-        print_out.write("[INFO] FREE discard\t\t: %ld\t( %f %% )\n" % 
-                (mem_discarded, mem_discarded/total_count))
+                (disk_discarded, disk_discarded*100.0/total_disk_count))
         print_out.write("[INFO] Zero pages\t\t: %ld\t( %f %% )\n" % 
-                (from_zeros, from_zeros/total_count))
+                (disk_from_zeros, disk_from_zeros*100.0/total_disk_count))
         print_out.write("[INFO] Shared with Base Disk\t: %ld\t( %f %% )\n" % 
-                (from_base_disk, from_base_disk/total_count))
+                (disk_from_base_disk, disk_from_base_disk*100.0/total_disk_count))
         print_out.write("[INFO] Shared with Base Mem\t: %ld\t( %f %% )\n" % 
-                (from_base_mem, from_base_mem/total_count))
+                (disk_from_base_mem, disk_from_base_mem*100.0/total_disk_count))
         print_out.write("[INFO] Shared within Self\t: %ld\t( %f %% )\n" % 
-                (from_self, from_self/total_count))
+                (disk_from_self, disk_from_self*100.0/total_disk_count))
         print_out.write("[INFO] Shared with Overlay Disk\t: %ld\t( %f %% )\n" % 
-                (from_overlay_disk, from_overlay_disk/total_count))
+                (disk_from_overlay_disk, disk_from_overlay_disk*100.0/total_disk_count))
         print_out.write("[INFO] Shared with Overlay Mem\t: %ld\t( %f %% )\n" % 
-                (from_overlay_mem, from_overlay_mem/total_count))
+                (disk_from_overlay_mem, disk_from_overlay_mem*100.0/total_disk_count))
         print_out.write("[INFO] xdelta\t\t\t: %ld\t( %f %%, real_size: %.0f KB )\n" %
-                (from_xdelta, from_xdelta/total_count, xdelta_size))
+                (disk_from_xdelta, disk_from_xdelta*100.0/total_disk_count, xdelta_size))
         print_out.write("[INFO] raw\t\t\t: %ld\t( %f %%, real_size: %.0f KB )\n" % 
-                (from_raw, from_raw/total_count, raw_size))
+                (disk_from_raw, disk_from_raw*100.0/total_disk_count, raw_size))
+        print_out.write("-"*50 + "\n")
+        print_out.write("[INFO] Total Modified Memory #\t: %ld\t( 100 %% )\n" % 
+                (total_memory_count))
+        print_out.write("[INFO] FREE discard\t\t: %ld\t( %f %% )\n" % 
+                (mem_discarded, mem_discarded*100.0/total_memory_count))
+        print_out.write("[INFO] Zero pages\t\t: %ld\t( %f %% )\n" % 
+                (memory_from_zeros, memory_from_zeros*100.0/total_memory_count))
+        print_out.write("[INFO] Shared with Base Disk\t: %ld\t( %f %% )\n" % 
+                (memory_from_base_disk, memory_from_base_disk*100.0/total_memory_count))
+        print_out.write("[INFO] Shared with Base Mem\t: %ld\t( %f %% )\n" % 
+                (memory_from_base_mem, memory_from_base_mem*100.0/total_memory_count))
+        print_out.write("[INFO] Shared within Self\t: %ld\t( %f %% )\n" % 
+                (memory_from_self, memory_from_self*100.0/total_memory_count))
+        print_out.write("[INFO] Shared with Overlay Disk\t: %ld\t( %f %% )\n" % 
+                (memory_from_overlay_disk, memory_from_overlay_disk*100.0/total_memory_count))
+        print_out.write("[INFO] Shared with Overlay Mem\t: %ld\t( %f %% )\n" % 
+                (memory_from_overlay_mem, memory_from_overlay_mem*100.0/total_memory_count))
+        print_out.write("[INFO] xdelta\t\t\t: %ld\t( %f %%, real_size: %.0f KB )\n" %
+                (memory_from_xdelta, memory_from_xdelta*100.0/total_memory_count, xdelta_size))
+        print_out.write("[INFO] raw\t\t\t: %ld\t( %f %%, real_size: %.0f KB )\n" % 
+                (memory_from_raw, memory_from_raw*100.0/total_memory_count, raw_size))
         print_out.write("-"*50 + "\n")
 
 
