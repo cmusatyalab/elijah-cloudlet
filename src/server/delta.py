@@ -639,6 +639,9 @@ def reorder_deltalist(access_list, chunk_size, delta_list):
     for item in delta_list:
         delta_dict[item.index] = item
 
+    # first sort the chunks with offset
+    delta_list.sort(key=itemgetter('delta_type', 'offset'))
+
     access_list.reverse()
     before_length = len(delta_list)
     count = 0 

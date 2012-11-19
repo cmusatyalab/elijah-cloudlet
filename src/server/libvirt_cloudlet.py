@@ -809,7 +809,8 @@ def synthesis_statistics(meta_info, mem_access_list, disk_access_list, print_out
         # (memory, memory_total, disk, disk_total)
         access_per_blobs[blob_name] = {
                 'mem_access':0, 'mem_total':len(memory_chunks), 
-                'disk_access':0, 'disk_total':len(disk_chunks)}
+                'disk_access':0, 'disk_total':len(disk_chunks),
+                'blob_size':each_file[Const.META_OVERLAY_FILE_SIZE]}
         total_overlay_mem_chunks += len(memory_chunks)
         total_overlay_disk_chunks += len(disk_chunks)
 
@@ -828,20 +829,21 @@ def synthesis_statistics(meta_info, mem_access_list, disk_access_list, print_out
             overlay_disk_access_count += 1
 
     print_out.write("-------------------------------------------------\n")
-    print_out.write("Synthesis Statistics\n")
-    print_out.write("Overlay memory acccess / VM memory access\t: %d / %d = %05.2f %%\n" % \
+    print_out.write("## Synthesis Statistics ##\n")
+    print_out.write("Overlay memory acccess / total memory overlay\t: %d / %d = %05.2f %%\n" % \
             (overlay_mem_access_count, total_overlay_mem_chunks,\
             100.0 * overlay_mem_access_count/total_overlay_mem_chunks))
-    print_out.write("Overlay memory acccess / total memory overlay\t: %d / %d = %05.2f %%\n" % \
+    print_out.write("Overlay memory acccess / VM memory access\t: %d / %d = %05.2f %%\n" % \
             (overlay_mem_access_count, len(mem_access_list), \
             100.0 * overlay_mem_access_count/len(mem_access_list)))
-    print_out.write("Overlay disk acccess / VM disk access\t: %d / %d = %05.2f %%\n" % \
+    print_out.write("Overlay disk acccess / total disk overlay\t: %d / %d = %05.2f %%\n" % \
             (overlay_disk_access_count, total_overlay_disk_chunks, \
             100.0 * overlay_disk_access_count/total_overlay_disk_chunks))
-    print_out.write("Overlay disk acccess / total disk overlay\t: %d / %d = %05.2f %%\n" % \
+    print_out.write("Overlay disk acccess / VM disk access\t: %d / %d = %05.2f %%\n" % \
             (overlay_disk_access_count, len(disk_access_list), \
             100.0 * overlay_disk_access_count/len(disk_access_list)))
     used_blob_count = 0
+    used_blob_size = 0
     for blob_name in access_per_blobs.keys():
         mem_access = access_per_blobs[blob_name]['mem_access']
         total_mem_chunks = access_per_blobs[blob_name]['mem_total']
@@ -849,10 +851,13 @@ def synthesis_statistics(meta_info, mem_access_list, disk_access_list, print_out
         total_disk_chunks = access_per_blobs[blob_name]['disk_total']
         if mem_access > 0:
             used_blob_count += 1
-        #print_out.write("\t%s\t:\t%d / %d = %f is used\n" % (blob_name, mem_access, \
-        #        total_mem_chunks, mem_access*100.0/total_mem_chunks))
-    print_out.write("%d blobs are required out of %d (%05.2f %%)\n" % \
-            (used_blob_count, len(access_per_blobs.keys()), \
+            used_blob_size += access_per_blobs[blob_name]['blob_size']
+        if total_mem_chunks != 0:
+            pass
+            #print_out.write("    %s\t:\t%d/%d\t=\t%5.2f is used\n" % (blob_name, mem_access, \
+            #    total_mem_chunks, mem_access*100.0/total_mem_chunks))
+    print_out.write("%d blobs (%f MB) are required out of %d (%05.2f %%)\n" % \
+            (used_blob_count, used_blob_size/1024.0/1024, len(access_per_blobs.keys()), \
             used_blob_count*100.0/len(access_per_blobs.keys())))
     print_out.write("-------------------------------------------------\n")
 
