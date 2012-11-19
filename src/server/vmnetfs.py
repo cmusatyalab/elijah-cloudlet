@@ -155,7 +155,8 @@ class StreamMonitor(threading.Thread):
         self._running = False
         self.stop = threading.Event()
         self.modified_chunk_dict = dict()
-        self.access_chunk_list = list()
+        self.disk_access_chunk_list = list()
+        self.mem_access_chunk_list = list()
         threading.Thread.__init__(self, target=self.io_watch)
 
     def add_path(self, path, name):
@@ -228,14 +229,16 @@ class StreamMonitor(threading.Thread):
         #print "%s: %f, %d" % ("modification", ctime, chunk)
 
     def _handle_disk_access(self, line):
-        #print "access: " + line
-        pass
+        ctime, chunk = line.split("\t")
+        ctime = float(ctime)
+        chunk = int(chunk)
+        self.disk_access_chunk_list.append(chunk)
 
     def _handle_memory_access(self, line):
         ctime, chunk = line.split("\t")
         ctime = float(ctime)
         chunk = int(chunk)
-        self.access_chunk_list.append(chunk)
+        self.mem_access_chunk_list.append(chunk)
 
     def terminate(self):
         self.stop.set()

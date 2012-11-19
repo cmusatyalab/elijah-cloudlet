@@ -300,7 +300,7 @@ def create_overlay(base_image):
 
     # 3. Reorder transfer order & Compression
     Log.write("[DEBUG][REORDER] change chunk ordering by mem access\n")
-    mem_access_list = monitor.access_chunk_list
+    mem_access_list = monitor.mem_access_chunk_list
     delta.reorder_deltalist(mem_access_list, Const.CHUNK_SIZE, merged_deltalist)
     Log.write("[DEBUG][LZMA] Compressing overlay blobs\n")
     blob_list = delta.divide_blobs(merged_deltalist, overlay_path, 
@@ -780,12 +780,82 @@ def synthesis(base_disk, meta):
     resumed_VM.join()
     connect_vnc(resumed_VM.machine)
 
+    # statistics
+    mem_access_list = resumed_VM.monitor.mem_access_chunk_list
+    disk_access_list = resumed_VM.monitor.disk_access_chunk_list
+    synthesis_statistics(meta_info, mem_access_list, disk_access_list, print_out=Log)
+
     # terminate
-    mem_access_list = resumed_VM.monitor.access_chunk_list
-    mem_access_list = [str(item) for item in mem_access_list]
-    open("mem_access_synthesis", "w+").write("\n".join(mem_access_list))
     resumed_VM.terminate()
     fuse.terminate()
+
+
+def synthesis_statistics(meta_info, mem_access_list, disk_access_list, print_out=sys.stdout):
+    overlay_mem_chunks = dict()
+    overlay_disk_chunks = dict()
+    access_per_blobs = dict()
+    total_overlay_mem_chunks = 0
+    total_overlay_disk_chunks = 0
+
+    # get all overlay chunks from meta info
+    for each_file in meta_info[Const.META_OVERLAY_FILES]:
+        memory_chunks = each_file[Const.META_OVERLAY_FILE_MEMORY_CHUNKS]
+        disk_chunks = each_file[Const.META_OVERLAY_FILE_DISK_CHUNKS]
+        blob_name = each_file[Const.META_OVERLAY_FILE_NAME]
+        for mem_chunk in memory_chunks:
+            overlay_mem_chunks[mem_chunk] = blob_name
+        for disk_chunk in disk_chunks:
+            overlay_disk_chunks[disk_chunk] = blob_name
+        # (memory, memory_total, disk, disk_total)
+        access_per_blobs[blob_name] = {
+                'mem_access':0, 'mem_total':len(memory_chunks), 
+                'disk_access':0, 'disk_total':len(disk_chunks)}
+        total_overlay_mem_chunks += len(memory_chunks)
+        total_overlay_disk_chunks += len(disk_chunks)
+
+    # compare real accessed chunks with overlay chunk list
+    overlay_mem_access_count = 0
+    overlay_disk_access_count = 0
+    for access_chunk in mem_access_list:
+        if overlay_mem_chunks.get(access_chunk, None) != None:
+            blob_name = overlay_mem_chunks.get(access_chunk)
+            access_per_blobs[blob_name]['mem_access'] += 1 # 0: memory
+            overlay_mem_access_count += 1
+    for access_chunk in disk_access_list:
+        if overlay_disk_chunks.get(access_chunk, None) != None:
+            blob_name = overlay_disk_chunks.get(access_chunk)
+            access_per_blobs[blob_name]['disk_access'] += 1 # 0: memory
+            overlay_disk_access_count += 1
+
+    print_out.write("-------------------------------------------------\n")
+    print_out.write("Synthesis Statistics\n")
+    print_out.write("Overlay memory acccess / VM memory access\t: %d / %d = %05.2f %%\n" % \
+            (overlay_mem_access_count, total_overlay_mem_chunks,\
+            100.0 * overlay_mem_access_count/total_overlay_mem_chunks))
+    print_out.write("Overlay memory acccess / total memory overlay\t: %d / %d = %05.2f %%\n" % \
+            (overlay_mem_access_count, len(mem_access_list), \
+            100.0 * overlay_mem_access_count/len(mem_access_list)))
+    print_out.write("Overlay disk acccess / VM disk access\t: %d / %d = %05.2f %%\n" % \
+            (overlay_disk_access_count, total_overlay_disk_chunks, \
+            100.0 * overlay_disk_access_count/total_overlay_disk_chunks))
+    print_out.write("Overlay disk acccess / total disk overlay\t: %d / %d = %05.2f %%\n" % \
+            (overlay_disk_access_count, len(disk_access_list), \
+            100.0 * overlay_disk_access_count/len(disk_access_list)))
+    used_blob_count = 0
+    for blob_name in access_per_blobs.keys():
+        mem_access = access_per_blobs[blob_name]['mem_access']
+        total_mem_chunks = access_per_blobs[blob_name]['mem_total']
+        disk_access = access_per_blobs[blob_name]['disk_access']
+        total_disk_chunks = access_per_blobs[blob_name]['disk_total']
+        if mem_access > 0:
+            used_blob_count += 1
+        #print_out.write("\t%s\t:\t%d / %d = %f is used\n" % (blob_name, mem_access, \
+        #        total_mem_chunks, mem_access*100.0/total_mem_chunks))
+    print_out.write("%d blobs are required out of %d (%05.2f %%)\n" % \
+            (used_blob_count, len(access_per_blobs.keys()), \
+            used_blob_count*100.0/len(access_per_blobs.keys())))
+    print_out.write("-------------------------------------------------\n")
+
 
 
 class ResumedVM(threading.Thread):

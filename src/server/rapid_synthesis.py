@@ -315,9 +315,6 @@ class SynthesisTCPHandler(SocketServer.StreamRequestHandler):
         decomp_process.start()
         delta_proc.start()
         fuse_thread.start()
-
-        # MUST JOIN ON FUSE FEEDING THREAD 
-        # OR YOU WILL HAVE SUBTLE VM RESUME ISSUE
         fuse_thread.join()
 
         end_time = time.time()
@@ -335,6 +332,10 @@ class SynthesisTCPHandler(SocketServer.StreamRequestHandler):
             if user_input == 'q':
                 break
 
+        # printout synthesis statistics
+        mem_access_list = resumed_VM.monitor.mem_access_chunk_list
+        disk_access_list = resumed_VM.monitor.disk_access_chunk_list
+        cloudlet.synthesis_statistics(meta_info, mem_access_list, disk_access_list)
 
         close_start_time = time.time()
         delta_proc.join()
