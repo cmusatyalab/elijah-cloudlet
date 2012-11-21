@@ -238,12 +238,16 @@ class DeltaList(object):
 
         # to quickly find memory-disk dedup
         previous_delta_dict = dict() 
+        disk_overlay_size = 0
+        mem_overlay_size = 0
 
         for delta_item in delta_list:
             if delta_item.delta_type == DeltaItem.DELTA_MEMORY:
                 memory_count += 1
+                mem_overlay_size += len(delta_item.get_serialized())
             elif delta_item.delta_type == DeltaItem.DELTA_DISK:
                 disk_count += 1
+                disk_overlay_size+= len(delta_item.get_serialized())
 
             previous_delta_dict[delta_item.index] = delta_item
             if delta_item.ref_id == DeltaItem.REF_SELF:
@@ -293,8 +297,8 @@ class DeltaList(object):
         total_disk_count = (disk_count + disk_discarded)
 
         print_out.write("-"*50 + "\n")
-        print_out.write("[INFO] Total Modified Disk #\t: %ld\t( 100 %% )\n" % 
-                (total_disk_count))
+        print_out.write("[INFO] Total Modified Disk #\t: %ld\t( 100 %%, %f MB )\n" % 
+                (total_disk_count, disk_overlay_size/1024.0/1024))
         print_out.write("[INFO] TRIM discard\t\t: %ld\t( %f %% )\n" % 
                 (disk_discarded, disk_discarded*100.0/total_disk_count))
         print_out.write("[INFO] Zero pages\t\t: %ld\t( %f %% )\n" % 
@@ -314,8 +318,8 @@ class DeltaList(object):
         print_out.write("[INFO] raw\t\t\t: %ld\t( %f %%, real_size: %.0f KB )\n" % 
                 (disk_from_raw, disk_from_raw*100.0/total_disk_count, raw_size))
         print_out.write("-"*50 + "\n")
-        print_out.write("[INFO] Total Modified Memory #\t: %ld\t( 100 %% )\n" % 
-                (total_memory_count))
+        print_out.write("[INFO] Total Modified Memory #\t: %ld\t( 100 %%, %f MB)\n" % 
+                (total_memory_count, mem_overlay_size/1024.0/1024))
         print_out.write("[INFO] FREE discard\t\t: %ld\t( %f %% )\n" % 
                 (mem_discarded, mem_discarded*100.0/total_memory_count))
         print_out.write("[INFO] Zero pages\t\t: %ld\t( %f %% )\n" % 
@@ -489,7 +493,7 @@ class Recovered_delta(multiprocessing.Process):
                 overlay_chunk_ids.append("%d:%ld" % 
                         (Recovered_delta.FUSE_INDEX_DISK, overlay_chunk_id))
 
-            if len(overlay_chunk_ids) % 1000 == 0:
+            if len(overlay_chunk_ids) % 1 == 0:
                 self.recover_mem_fd.flush()
                 self.recover_disk_fd.flush()
 
@@ -692,6 +696,9 @@ def _save_blob(start_index, delta_list, self_ref_dict, blob_name, blob_size, sta
     original_length = 0
     index = start_index
     item_count = 0
+
+    memory_overlay_size = 0
+    disk_overlay_size = 0
     
     while index < len(delta_list):
         delta_item = delta_list[index]
@@ -699,12 +706,15 @@ def _save_blob(start_index, delta_list, self_ref_dict, blob_name, blob_size, sta
         if delta_item.ref_id != DeltaItem.REF_SELF:
             delta_bytes = delta_item.get_serialized()
             original_length += len(delta_bytes)
-            comp_data += comp.compress(delta_bytes)
+            comp_delta_bytes = comp.compress(delta_bytes)
+            comp_data += comp_delta_bytes
             item_count += 1
             if delta_item.delta_type == DeltaItem.DELTA_MEMORY:
                 memory_offset_list.append(delta_item.offset)
+                memory_overlay_size += len(comp_delta_bytes)
             elif delta_item.delta_type == DeltaItem.DELTA_DISK:
                 disk_offset_list.append(delta_item.offset)
+                disk_overlay_size += len(comp_delta_bytes)
             else:
                 raise DeltaError("Delta should be either memory or disk")
 
@@ -715,12 +725,15 @@ def _save_blob(start_index, delta_list, self_ref_dict, blob_name, blob_size, sta
                 for deduped_item in deduped_list:
                     deduped_bytes = deduped_item.get_serialized()
                     original_length += len(deduped_bytes)
-                    comp_data += comp.compress(deduped_bytes)
+                    comp_deduped_bytes = comp.compress(deduped_bytes)
+                    comp_data += comp_deduped_bytes
                     item_count += 1
                     if deduped_item.delta_type == DeltaItem.DELTA_MEMORY:
                         memory_offset_list.append(deduped_item.offset)
+                        memory_overlay_size += len(comp_deduped_bytes)
                     elif deduped_item.delta_type == DeltaItem.DELTA_DISK:
                         disk_offset_list.append(deduped_item.offset)
+                        disk_overlay_size += len(comp_deduped_bytes)
                     else:
                         raise DeltaError("Delta should be either memory or disk")
             

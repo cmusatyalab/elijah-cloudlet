@@ -34,6 +34,9 @@ import libvirt_cloudlet as cloudlet
 from Const import Const
 from lzma import LZMADecompressor
 import shutil
+from datetime import datetime
+
+Log = cloudlet.CloudletLog("log_synthesis-%s" % str(datetime.now()).split(" ")[1])
 
 application = ['moped', 'face']
 BaseVM_list = []
@@ -85,7 +88,6 @@ def network_worker(overlay_urls, demanding_queue, out_queue, time_queue, chunk_s
         else:
             # No urgent request, process as normal
             overlay_url = overlay_urls.pop(0)
-            #print "cannot find urgent"
 
         #print "reading %d, %s" % (index, overlay_url)
         finished_url.append(overlay_url)
@@ -118,7 +120,7 @@ def network_worker(overlay_urls, demanding_queue, out_queue, time_queue, chunk_s
                 counter, total_read_size)
 
 
-def decomp_worker(in_queue, pipe_filepath, time_queue):
+def decomp_worker(in_queue, pipe_filepath, time_queue, temp_overlay_file=None):
     start_time = time.time()
     data_size = 0
     counter = 0
@@ -134,11 +136,16 @@ def decomp_worker(in_queue, pipe_filepath, time_queue):
 
         in_queue.task_done()
         pipe.write(decomp_chunk)
+        if temp_overlay_file:
+            temp_overlay_file.write(decomp_chunk)
         counter = counter + 1
 
     decomp_chunk = decompressor.flush()
     pipe.write(decomp_chunk)
     pipe.close()
+    if temp_overlay_file:
+        temp_overlay_file.write(decomp_chunk)
+        temp_overlay_file.close()
 
     end_time = time.time()
     time_queue.put({'start_time':start_time, 'end_time':end_time})
@@ -283,6 +290,8 @@ class SynthesisTCPHandler(SocketServer.StreamRequestHandler):
         time_transfer = Queue(); time_decomp = Queue();
         time_delta = Queue(); time_fuse = Queue();
         tmp_dir = tempfile.mkdtemp()
+        temp_overlay_filepath = os.path.join(tmp_dir, "overlay_file")
+        temp_overlay_file = open(temp_overlay_filepath, "w+b")
         overlay_pipe = os.path.join(tmp_dir, 'overlay_pipe')
         os.mkfifo(overlay_pipe)
 
@@ -296,7 +305,7 @@ class SynthesisTCPHandler(SocketServer.StreamRequestHandler):
                 )
         decomp_process = Process(target=decomp_worker,
                 args=(
-                    download_queue, overlay_pipe, time_decomp
+                    download_queue, overlay_pipe, time_decomp, temp_overlay_file,
                     )
                 )
         modified_img, modified_mem, fuse, delta_proc, fuse_thread = \
@@ -322,7 +331,8 @@ class SynthesisTCPHandler(SocketServer.StreamRequestHandler):
 
         # printout result
         SynthesisTCPHandler.print_statistics(start_time, end_time, \
-                time_transfer, time_decomp, time_delta, time_fuse)
+                time_transfer, time_decomp, time_delta, time_fuse, \
+                print_out=Log)
 
         # terminate
         resumed_VM.join()
@@ -335,7 +345,9 @@ class SynthesisTCPHandler(SocketServer.StreamRequestHandler):
         # printout synthesis statistics
         mem_access_list = resumed_VM.monitor.mem_access_chunk_list
         disk_access_list = resumed_VM.monitor.disk_access_chunk_list
-        cloudlet.synthesis_statistics(meta_info, mem_access_list, disk_access_list)
+        cloudlet.synthesis_statistics(meta_info, temp_overlay_filepath, \
+                mem_access_list, disk_access_list, \
+                print_out=Log)
 
         close_start_time = time.time()
         delta_proc.join()
@@ -347,11 +359,12 @@ class SynthesisTCPHandler(SocketServer.StreamRequestHandler):
             os.unlink(overlay_pipe)
         shutil.rmtree(tmp_dir)
         close_end_time = time.time()
-        print "Time for finishing(close all fd) : %f" % (close_end_time-close_start_time)
+        Log.write("Time for finishing(close all fd) : %f\n" % (close_end_time-close_start_time))
 
     @staticmethod
     def print_statistics(start_time, end_time, \
-            time_transfer, time_decomp, time_delta, time_fuse):
+            time_transfer, time_decomp, time_delta, time_fuse,
+            print_out=sys.stdout):
         # Print out Time Measurement
         transfer_time = time_transfer.get()
         decomp_time = time_decomp.get()
@@ -378,7 +391,7 @@ class SynthesisTCPHandler(SocketServer.StreamRequestHandler):
         message += "%011.06f\t" % (delta_diff)
         message += "%011.06f\t" % (end_time-start_time)
         message += "\n"
-        print message
+        print_out.write(message)
 
 
 def get_local_ipaddress():
