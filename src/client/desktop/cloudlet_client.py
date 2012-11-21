@@ -30,7 +30,7 @@ import paramiko
 from threading import Thread
 
 WATTS_BIN = "~/cloudlet/src/measurement/power/wattsup"
-OVERLAY_DIR = '/home/krha/cloudlet/image/overlay'
+OVERLAY_DIR = '/home/krha/cloudlet/image/overlay/old'
 
 command_type = ["synthesis_cloud", "synthesis_mobile", "isr_cloud", "isr_mobile"]
 application_names = ["moped", "face", "graphics", "speech", "mar", "null", "webserver"]
@@ -110,7 +110,7 @@ def process_command_line(argv):
     global command_type
     global application_names
 
-    parser = OptionParser(usage="usage: ./cloudlet_client.py [%s]" % "|".join(command_type), version="Desktop Cloudlet Client")
+    parser = OptionParser(usage="usage: ./cloudlet_client.py -c [%s]" % "|".join(command_type), version="Desktop Cloudlet Client")
     parser.add_option(
             '-c', '--commnad', action='store', type='string', dest='command',
             help="Set Command Type among (%s)" % ",".join(command_type))
@@ -223,40 +223,40 @@ def get_overlay_info(app_name):
     overlay_mem_size = ''
 
     if app_name == application_names[0]:    # moped
-        base_name = 'ubuntu11.10-server'
-        overlay_disk_path = "%s/%s/moped/ubuntu-11.overlay.4cpu.4096mem.qcow2.lzma" % (OVERLAY_DIR, base_name)
+        base_name = 'ubuntu'
+        overlay_disk_path = "%s/%s/moped/precise.overlay.4cpu.1024mem.qcow2.lzma" % (OVERLAY_DIR, base_name)
         overlay_disk_size = os.path.getsize(overlay_disk_path)
-        overlay_mem_path = "%s/%s/moped/ubuntu-11.overlay.4cpu.4096mem.mem.lzma" % (OVERLAY_DIR, base_name)
+        overlay_mem_path = "%s/%s/moped/precise.overlay.4cpu.1024mem.mem.lzma" % (OVERLAY_DIR, base_name)
         overlay_mem_size = os.path.getsize(overlay_mem_path)
     elif app_name == application_names[1]:  # face
         base_name = 'window7'
-        overlay_disk_path = "%s/%s/face/window7-enterprise-i386.overlay.4cpu.4096mem.qcow2.lzma" % (OVERLAY_DIR, base_name)
+        overlay_disk_path = "%s/%s/face/window7.overlay.4cpu.1024mem.qcow2.lzma" % (OVERLAY_DIR, base_name)
         overlay_disk_size = os.path.getsize(overlay_disk_path)
-        overlay_mem_path = "%s/%s/face/window7-enterprise-i386.overlay.4cpu.4096mem.mem.lzma" % (OVERLAY_DIR, base_name)
+        overlay_mem_path = "%s/%s/face/window7.overlay.4cpu.1024mem.mem.lzma" % (OVERLAY_DIR, base_name)
         overlay_mem_size = os.path.getsize(overlay_mem_path)
     elif app_name == application_names[2]:  # physics
-        base_name = 'ubuntu11.10-server'
-        overlay_disk_path = "%s/%s/graphics/ubuntu-11.overlay.4cpu.4096mem.qcow2.lzma" % (OVERLAY_DIR, base_name)
+        base_name = 'ubuntu'
+        overlay_disk_path = "%s/%s/graphics/precise.overlay.4cpu.1024mem.qcow2.lzma" % (OVERLAY_DIR, base_name)
         overlay_disk_size = os.path.getsize(overlay_disk_path)
-        overlay_mem_path = "%s/%s/graphics/ubuntu-11.overlay.4cpu.4096mem.mem.lzma" % (OVERLAY_DIR, base_name)
+        overlay_mem_path = "%s/%s/graphics/precise.overlay.4cpu.1024mem..mem.lzma" % (OVERLAY_DIR, base_name)
         overlay_mem_size = os.path.getsize(overlay_mem_path)
     elif app_name == application_names[3]:  # speech
         base_name = 'window7'
-        overlay_disk_path = "%s/%s/speech/window7-enterprise-i386.overlay.4cpu.4096mem.qcow2.lzma" % (OVERLAY_DIR, base_name)
+        overlay_disk_path = "%s/%s/speech/window7.overlay.4cpu.1024mem.qcow2.lzma" % (OVERLAY_DIR, base_name)
         overlay_disk_size = os.path.getsize(overlay_disk_path)
-        overlay_mem_path = "%s/%s/speech/window7-enterprise-i386.overlay.4cpu.4096mem.mem.lzma" % (OVERLAY_DIR, base_name)
+        overlay_mem_path = "%s/%s/speech/window7.overlay.4cpu.1024mem.mem.lzma" % (OVERLAY_DIR, base_name)
         overlay_mem_size = os.path.getsize(overlay_mem_path)
     elif app_name == application_names[4]:  # mar
         base_name = 'window7'
-        overlay_disk_path = "%s/%s/mar/window7-enterprise-i386.overlay.4cpu.4096mem.qcow2.lzma" % (OVERLAY_DIR, base_name)
+        overlay_disk_path = "%s/%s/mar/window7.overlay.4cpu.1024mem.qcow2.lzma" % (OVERLAY_DIR, base_name)
         overlay_disk_size = os.path.getsize(overlay_disk_path)
-        overlay_mem_path = "%s/%s/mar/window7-enterprise-i386.overlay.4cpu.4096mem.mem.lzma" % (OVERLAY_DIR, base_name)
+        overlay_mem_path = "%s/%s/mar/window7.overlay.4cpu.1024mem.mem.lzma" % (OVERLAY_DIR, base_name)
         overlay_mem_size = os.path.getsize(overlay_mem_path)
     elif app_name == application_names[5]:  # null
         base_name = 'ubuntu11.10-server'
-        overlay_disk_path = "%s/%s/null/ubuntu-11.overlay.4cpu.4096mem.qcow2.lzma" % (OVERLAY_DIR, base_name)
+        overlay_disk_path = "%s/%s/null/ubuntu-11.overlay.4cpu.1024mem.qcow2.lzma" % (OVERLAY_DIR, base_name)
         overlay_disk_size = os.path.getsize(overlay_disk_path)
-        overlay_mem_path = "%s/%s/null/ubuntu-11.overlay.4cpu.4096mem.mem.lzma" % (OVERLAY_DIR, base_name)
+        overlay_mem_path = "%s/%s/null/ubuntu-11.overlay.4cpu.1024mem.mem.lzma" % (OVERLAY_DIR, base_name)
         overlay_mem_size = os.path.getsize(overlay_mem_path)
         
     return (base_name, overlay_disk_path, overlay_disk_size, overlay_mem_path, overlay_mem_size) 
