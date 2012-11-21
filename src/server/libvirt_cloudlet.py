@@ -61,7 +61,6 @@ class CloudletLog(object):
     def write(self, log):
         self.logfile.write(log)
         sys.stdout.write(log)
-Log = CloudletLog()
 
 def copy_disk(in_path, out_path):
     print "[INFO] Copying disk image to %s" % out_path
@@ -120,6 +119,7 @@ def create_baseVM(disk_image_path):
     (base_diskmeta, base_mempath, base_memmeta) = \
             Const.get_basepath(disk_image_path)
     base_hashpath = Const.get_basehash_path(disk_image_path)
+    Log = CloudletLog(os.path.basepath(base_diskmeta)+Const.OVERLAY_LOG)
 
     # check sanity
     if not os.path.exists(Const.TEMPLATE_XML):
@@ -183,6 +183,7 @@ def create_overlay(base_image, disk_only=True):
     # First resume VM, then let user edit its VM
     # Finally, return disk/memory binary as an overlay
     # base_image: path to base disk
+    Log = CloudletLog()
 
     (base_diskmeta, base_mem, base_memmeta) = \
             Const.get_basepath(base_image, check_exist=True)
@@ -765,6 +766,7 @@ def synthesis(base_disk, meta, disk_only=True):
     # param meta : path to meta file for overlay
     # param overlay_disk : path to overlay disk file
     # param overlay_mem : path to overlay memory file
+    Log = CloudletLog()
 
     # decomp
     overlay_filename = NamedTemporaryFile(prefix="cloudlet-overlay-file-")
@@ -1033,6 +1035,7 @@ def main(argv):
         meta = args[2]
         synthesis(base_disk_path, meta)
     elif mode == 'compress':
+        Log = CloudletLog()
         if len(args) != 3:
             parser.error("recompress requires 2 arguments\n \
                     1)meta file\n \
@@ -1042,24 +1045,35 @@ def main(argv):
         output_dir = args[2]
         if not os.path.exists(output_dir):
             os.makedirs(output_dir)
-        blob_size_list = [16, 128, 256, 1024, 1024*8, 1024*16, 1024*64, 1024*1024]
-        #blob_size_list = [1024*1024]
         overlay_path = os.path.join(output_dir, "overlay")
         meta_info = decomp_overlay(meta, overlay_path)
-        delta_list = DeltaList.fromfile(overlay_path)
-        for blob_size in blob_size_list:
-            sub_dir = os.path.join(output_dir, "%d" % (blob_size))
-            if not os.path.exists(sub_dir):
-                os.makedirs(sub_dir)
-            meta_path = os.path.join(sub_dir, "overlay-meta")
-            overlay_prefix = os.path.join(sub_dir, "overlay-blob")
-            print "Creating %d KB overlays" % blob_size
-            blob_list = delta.divide_blobs(delta_list, overlay_prefix, 
-                    blob_size, Const.CHUNK_SIZE,
-                    Memory.Memory.RAM_PAGE_SIZE, print_out=Log)
-            _update_overlay_meta(meta_info, meta_path, blob_info=blob_list)
-            DeltaList.statistics(delta_list, print_out=sys.stdout)
+
+        blob_size_list = [4, 16, 128, 512, 1024, 1024*8, 1024*16, 1024*64, 1024*1024]
+        #blob_size_list = [16]
+        for order_type in ("access", "linear", "random"):
+            delta_list = DeltaList.fromfile(overlay_path)
+            sub_dir1 = os.path.join(output_dir, order_type)
+            if order_type == "access":
+                pass
+            elif order_type == "linear":
+                delta.reorder_deltalist_linear(Memory.Memory.RAM_PAGE_SIZE, delta_list)
+            elif order_type == "random":
+                delta.reorder_deltalist_random(Memory.Memory.RAM_PAGE_SIZE, delta_list)
+
+            for blob_size in blob_size_list:
+                sub_dir = os.path.join(sub_dir1, "%d" % (blob_size))
+                if not os.path.exists(sub_dir):
+                    os.makedirs(sub_dir)
+                meta_path = os.path.join(sub_dir, "overlay-meta")
+                overlay_prefix = os.path.join(sub_dir, "overlay-blob")
+                print "Creating %d KB overlays" % blob_size
+                blob_list = delta.divide_blobs(delta_list, overlay_prefix, 
+                        blob_size, Const.CHUNK_SIZE,
+                        Memory.Memory.RAM_PAGE_SIZE, print_out=Log)
+                _update_overlay_meta(meta_info, meta_path, blob_info=blob_list)
+                DeltaList.statistics(delta_list, print_out=sys.stdout)
     elif mode == 'reorder':
+        Log = CloudletLog()
         if len(args) != 5:
             print args
             parser.error("Reordering requires 4 arguments\n \

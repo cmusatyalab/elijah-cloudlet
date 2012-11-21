@@ -21,6 +21,7 @@ import struct
 import mmap
 import tool
 import os
+import random
 from Const import Const
 from operator import itemgetter
 from hashlib import sha256
@@ -626,6 +627,7 @@ def reorder_deltalist_linear(chunk_size, delta_list):
                 delta_list.insert(index, ref_item)
     print "[Debug][REORDER] reordering takes : %f" % (time.time()-start_time)
 
+
 def reorder_deltalist_file(mem_access_file, chunk_size, delta_list):
     # chunks that appear earlier in access file comes afront in deltalist
     if len(delta_list) == 0 or type(delta_list[0]) != DeltaItem:
@@ -634,6 +636,12 @@ def reorder_deltalist_file(mem_access_file, chunk_size, delta_list):
     access_list = open(mem_access_file, "r").read().split('\n')
     if len(access_list[-1].strip()) == 0:
         access_list = access_list[:-1]
+    reorder_deltalist(access_list, chunk_size, delta_list)
+
+
+def reorder_deltalist_random(chunk_size, delta_list):
+    access_list = [delta_item.offset/chunk_size for delta_item in delta_list]
+    random.shuffle(access_list)
     reorder_deltalist(access_list, chunk_size, delta_list)
 
 

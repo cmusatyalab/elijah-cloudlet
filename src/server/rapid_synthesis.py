@@ -349,7 +349,6 @@ class SynthesisTCPHandler(SocketServer.StreamRequestHandler):
                 mem_access_list, disk_access_list, \
                 print_out=Log)
 
-        close_start_time = time.time()
         delta_proc.join()
         delta_proc.finish()
         resumed_VM.terminate()
@@ -358,8 +357,6 @@ class SynthesisTCPHandler(SocketServer.StreamRequestHandler):
         if os.path.exists(overlay_pipe):
             os.unlink(overlay_pipe)
         shutil.rmtree(tmp_dir)
-        close_end_time = time.time()
-        Log.write("Time for finishing(close all fd) : %f\n" % (close_end_time-close_start_time))
 
     @staticmethod
     def print_statistics(start_time, end_time, \
