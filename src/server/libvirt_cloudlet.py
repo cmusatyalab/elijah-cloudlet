@@ -178,7 +178,7 @@ def create_baseVM(disk_image_path):
     return disk_image_path, base_mempath
 
 
-def create_overlay(base_image, disk_only=True):
+def create_overlay(base_image, disk_only=False):
     # create user customized overlay.
     # First resume VM, then let user edit its VM
     # Finally, return disk/memory binary as an overlay
@@ -324,8 +324,13 @@ def create_overlay(base_image, disk_only=True):
 
     # 4. create metadata
     overlay_metafile = os.path.join(dir_path, image_name+Const.OVERLAY_META)
-    _create_overlay_meta(base_hash_value, overlay_metafile, 
-            modified_disk, modified_mem.name, blob_list)
+    if not disk_only:
+        _create_overlay_meta(base_hash_value, overlay_metafile, 
+                modified_disk, modified_mem.name, blob_list)
+    else:
+        _create_overlay_meta(base_hash_value, overlay_metafile, 
+                modified_disk, base_mem, blob_list)
+
 
     # 4. terminting
     fuse.terminate()
@@ -760,7 +765,7 @@ def copy_with_xml(in_path, out_path, xml):
     fout.write(fin.read())
 
 
-def synthesis(base_disk, meta, disk_only=True):
+def synthesis(base_disk, meta, disk_only=False):
     # VM Synthesis and run recoverd VM
     # param base_disk : path to base disk
     # param meta : path to meta file for overlay
@@ -778,7 +783,7 @@ def synthesis(base_disk, meta, disk_only=True):
             recover_launchVM(base_disk, meta_info, overlay_filename.name, log=Log)
 
     # resume VM
-    resumed_VM = ResumedVM(modified_img, modified_mem, fuse, disk_only=True)
+    resumed_VM = ResumedVM(modified_img, modified_mem, fuse, disk_only=disk_only)
     resumed_VM.start()
 
     delta_proc.start()
@@ -786,6 +791,16 @@ def synthesis(base_disk, meta, disk_only=True):
 
     delta_proc.join()
     fuse_thread.join()
+
+    # prevent resume VM when modified_mem is not exist
+    if os.path.getsize(modified_mem) == 0 and disk_only == False:
+        # terminate
+        resumed_VM.join()
+        resumed_VM.terminate()
+        fuse.terminate()
+        print "[Error] NO memory overlay file exist. Check disk_only parameter"
+        return
+
     print "[INFO] VM Disk is Fully recovered at %s" % modified_img
     print "[INFO] VM Memory is Fully recoverd at %s" % modified_mem
     #raw_input("waiting key input")
@@ -877,24 +892,27 @@ def synthesis_statistics(meta_info, decomp_overlay_file,
             ((overlay_mem_access_size+overlay_disk_access_size)/1024.0/1024, \
             (total_overlay_size/1024.0/1024),\
             100.0 * (overlay_mem_access_size+overlay_disk_access_size)/total_overlay_size))
-    print_out.write("  Memory Count: Overlay memory acccess / total memory overlay\t: %d / %d = %05.2f %%\n" % \
-            (overlay_mem_access_count, total_overlay_mem_chunks,\
-            100.0 * overlay_mem_access_count/total_overlay_mem_chunks))
-    print_out.write("  Memory Size: Overlay memory acccess / total overlay\t: %d / %d = %05.2f %%\n" % \
-            (overlay_mem_access_size, total_overlay_size,\
-            100.0 * overlay_mem_access_size/total_overlay_size))
-    print_out.write("  Disk Count: Overlay acccess / total disk overlay\t: %d / %d = %05.2f %%\n" % \
-            (overlay_disk_access_count, total_overlay_disk_chunks, \
-            100.0 * overlay_disk_access_count/total_overlay_disk_chunks))
-    print_out.write("  Disk Size: Overlay acccess / total overlay\t: %d / %d = %05.2f %%\n" % \
-            (overlay_disk_access_size, total_overlay_size, \
-            100.0 * overlay_disk_access_size/total_overlay_size))
-    print_out.write("  EXTRA (count): Overlay memory acccess / VM memory access\t: %d / %d = %05.2f %%\n" % \
-            (overlay_mem_access_count, len(mem_access_list), \
-            100.0 * overlay_mem_access_count/len(mem_access_list)))
-    print_out.write("  EXTRA (count): Overlay disk acccess / VM disk access\t: %d / %d = %05.2f %%\n" % \
-            (overlay_disk_access_count, len(disk_access_list), \
-            100.0 * overlay_disk_access_count/len(disk_access_list)))
+    try:
+        print_out.write("  Memory Count: Overlay memory acccess / total memory overlay\t: %d / %d = %05.2f %%\n" % \
+                (overlay_mem_access_count, total_overlay_mem_chunks,\
+                100.0 * overlay_mem_access_count/total_overlay_mem_chunks))
+        print_out.write("  Memory Size: Overlay memory acccess / total overlay\t: %d / %d = %05.2f %%\n" % \
+                (overlay_mem_access_size, total_overlay_size,\
+                100.0 * overlay_mem_access_size/total_overlay_size))
+        print_out.write("  Disk Count: Overlay acccess / total disk overlay\t: %d / %d = %05.2f %%\n" % \
+                (overlay_disk_access_count, total_overlay_disk_chunks, \
+                100.0 * overlay_disk_access_count/total_overlay_disk_chunks))
+        print_out.write("  Disk Size: Overlay acccess / total overlay\t: %d / %d = %05.2f %%\n" % \
+                (overlay_disk_access_size, total_overlay_size, \
+                100.0 * overlay_disk_access_size/total_overlay_size))
+        print_out.write("  EXTRA (count): Overlay memory acccess / VM memory access\t: %d / %d = %05.2f %%\n" % \
+                (overlay_mem_access_count, len(mem_access_list), \
+                100.0 * overlay_mem_access_count/len(mem_access_list)))
+        print_out.write("  EXTRA (count): Overlay disk acccess / VM disk access\t: %d / %d = %05.2f %%\n" % \
+                (overlay_disk_access_count, len(disk_access_list), \
+                100.0 * overlay_disk_access_count/len(disk_access_list)))
+    except ZeroDivisionError as e:
+        pass
     used_blob_count = 0
     used_blob_size = 0
     for blob_name in access_per_blobs.keys():
@@ -930,6 +948,7 @@ class ResumedVM(threading.Thread):
 
         # monitor modified chunks
         self.machine = None
+        self.disk_only = disk_only
         self.fuse = fuse
         self.modified_img = modified_img
         self.modified_mem = modified_mem
@@ -953,8 +972,15 @@ class ResumedVM(threading.Thread):
         conn = get_libvirt_connection()
         self.resume_time = {'time':-100}
         try:
-            self.machine=run_snapshot(conn, self.residue_img, self.residue_mem, 
-                    qemu_logfile=self.qemu_logfile.name, resume_time=self.resume_time)
+            if self.disk_only:
+                # edit default XML to have new disk path
+                conn = get_libvirt_connection()
+                xml = ElementTree.fromstring(open(Const.TEMPLATE_XML, "r").read())
+                new_xml_string = convert_xml(xml, conn, disk_path=self.residue_img, uuid=str(uuid4()))
+                self.machine = run_vm(conn, new_xml_string, vnc_disable=True)
+            else:
+                self.machine=run_snapshot(conn, self.residue_img, self.residue_mem, 
+                        qemu_logfile=self.qemu_logfile.name, resume_time=self.resume_time)
         except Exception as e:
             sys.stdout.write(str(e)+"\n")
 
@@ -1017,23 +1043,34 @@ def main(argv):
         print "Disk: %s" % disk_path
         print "Mem: %s" % mem_path
     elif mode == MODE[1]:   #overlay VM creation
-        if len(args) != 2:
-            parser.error("Overlay Creation requires 2 arguments\n1) Base disk path")
+        if len(args) < 2:
+            parser.error("Overlay Creation requires 1 arguments\n \
+                    1) Base disk path\n \
+                    2) disk if disk only")
             sys.exit(1)
         # create overlay
         disk_path = args[1]
-        overlay_files = create_overlay(disk_path)
+        if len(args) == 3 and args[2] == 'disk':
+            disk_only = True
+        else:
+            disk_only = False
+        overlay_files = create_overlay(disk_path, disk_only)
         print "[INFO] overlay metafile : %s" % overlay_files[0]
         print "[INFO] overlay : %s" % str(overlay_files[1])
     elif mode == MODE[2]:   #synthesis
-        if len(args) != 3:
+        if len(args) < 3:
             parser.error("Synthesis requires 2 arguments\n \
-                    1)base-disk path\n \
-                    2)overlay meta path\n")
+                    1) base-disk path\n \
+                    2) overlay meta path\n \
+                    3) disk if disk only")
             sys.exit(1)
         base_disk_path = args[1]
         meta = args[2]
-        synthesis(base_disk_path, meta)
+        if len(args) == 4 and args[3] == 'disk':
+            disk_only = True
+        else:
+            disk_only = False
+        synthesis(base_disk_path, meta, disk_only)
     elif mode == 'compress':
         Log = CloudletLog()
         if len(args) != 3:

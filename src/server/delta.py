@@ -319,27 +319,30 @@ class DeltaList(object):
         print_out.write("[INFO] raw\t\t\t: %ld\t( %f %%, real_size: %.0f KB )\n" % 
                 (disk_from_raw, disk_from_raw*100.0/total_disk_count, raw_size))
         print_out.write("-"*50 + "\n")
-        print_out.write("[INFO] Total Modified Memory #\t: %ld\t( 100 %%, %f MB)\n" % 
-                (total_memory_count, mem_overlay_size/1024.0/1024))
-        print_out.write("[INFO] FREE discard\t\t: %ld\t( %f %% )\n" % 
-                (mem_discarded, mem_discarded*100.0/total_memory_count))
-        print_out.write("[INFO] Zero pages\t\t: %ld\t( %f %% )\n" % 
-                (memory_from_zeros, memory_from_zeros*100.0/total_memory_count))
-        print_out.write("[INFO] Shared with Base Disk\t: %ld\t( %f %% )\n" % 
-                (memory_from_base_disk, memory_from_base_disk*100.0/total_memory_count))
-        print_out.write("[INFO] Shared with Base Mem\t: %ld\t( %f %% )\n" % 
-                (memory_from_base_mem, memory_from_base_mem*100.0/total_memory_count))
-        print_out.write("[INFO] Shared within Self\t: %ld\t( %f %% )\n" % 
-                (memory_from_self, memory_from_self*100.0/total_memory_count))
-        print_out.write("[INFO] Shared with Overlay Disk\t: %ld\t( %f %% )\n" % 
-                (memory_from_overlay_disk, memory_from_overlay_disk*100.0/total_memory_count))
-        print_out.write("[INFO] Shared with Overlay Mem\t: %ld\t( %f %% )\n" % 
-                (memory_from_overlay_mem, memory_from_overlay_mem*100.0/total_memory_count))
-        print_out.write("[INFO] xdelta\t\t\t: %ld\t( %f %%, real_size: %.0f KB )\n" %
-                (memory_from_xdelta, memory_from_xdelta*100.0/total_memory_count, xdelta_size))
-        print_out.write("[INFO] raw\t\t\t: %ld\t( %f %%, real_size: %.0f KB )\n" % 
-                (memory_from_raw, memory_from_raw*100.0/total_memory_count, raw_size))
-        print_out.write("-"*50 + "\n")
+        try:
+            print_out.write("[INFO] Total Modified Memory #\t: %ld\t( 100 %%, %f MB)\n" % 
+                    (total_memory_count, mem_overlay_size/1024.0/1024))
+            print_out.write("[INFO] FREE discard\t\t: %ld\t( %f %% )\n" % 
+                    (mem_discarded, mem_discarded*100.0/total_memory_count))
+            print_out.write("[INFO] Zero pages\t\t: %ld\t( %f %% )\n" % 
+                    (memory_from_zeros, memory_from_zeros*100.0/total_memory_count))
+            print_out.write("[INFO] Shared with Base Disk\t: %ld\t( %f %% )\n" % 
+                    (memory_from_base_disk, memory_from_base_disk*100.0/total_memory_count))
+            print_out.write("[INFO] Shared with Base Mem\t: %ld\t( %f %% )\n" % 
+                    (memory_from_base_mem, memory_from_base_mem*100.0/total_memory_count))
+            print_out.write("[INFO] Shared within Self\t: %ld\t( %f %% )\n" % 
+                    (memory_from_self, memory_from_self*100.0/total_memory_count))
+            print_out.write("[INFO] Shared with Overlay Disk\t: %ld\t( %f %% )\n" % 
+                    (memory_from_overlay_disk, memory_from_overlay_disk*100.0/total_memory_count))
+            print_out.write("[INFO] Shared with Overlay Mem\t: %ld\t( %f %% )\n" % 
+                    (memory_from_overlay_mem, memory_from_overlay_mem*100.0/total_memory_count))
+            print_out.write("[INFO] xdelta\t\t\t: %ld\t( %f %%, real_size: %.0f KB )\n" %
+                    (memory_from_xdelta, memory_from_xdelta*100.0/total_memory_count, xdelta_size))
+            print_out.write("[INFO] raw\t\t\t: %ld\t( %f %%, real_size: %.0f KB )\n" % 
+                    (memory_from_raw, memory_from_raw*100.0/total_memory_count, raw_size))
+            print_out.write("-"*50 + "\n")
+        except ZeroDivisionError as e:
+            print_out.write("[INFO] No memory modification\n")
 
 
 def diff_with_deltalist(delta_list, const_deltalist, ref_id):
