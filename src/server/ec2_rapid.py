@@ -152,7 +152,6 @@ def mount_launchVM(fuse):
 
 
 def rsync_overlayVM(vm_dir, instance_dir):
-    import pdb; pdb.set_trace()
     instance_dir = os.path.join(instance_dir, ".")
 
     # restart init process because it might inidicate original init process
@@ -258,7 +257,7 @@ def main(argv=None):
     mount_dir, raw_image = mount_launchVM(fuse)
 
     # rsync VM to origianl disk
-    #rsync_overlayVM(mount_dir, settings.output_mount)
+    rsync_overlayVM(mount_dir, settings.output_mount)
 
     # clean up
     clean_up(fuse, mount_dir, raw_image)
