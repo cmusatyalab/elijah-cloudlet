@@ -47,7 +47,7 @@ class Const(object):
 
     TEMPLATE_XML = "./config/VM_TEMPLATE.xml"
     TEMPLATE_OVF = "./config/ovftransport.iso"
-    VMNETFS_PATH = "/home/krha/cloudlet/src/vmnetx/vmnetfs/vmnetfs"
+    VMNETFS_PATH = "../vmnetx/vmnetfs/vmnetfs"
     CHUNK_SIZE=4096
 
     @staticmethod
