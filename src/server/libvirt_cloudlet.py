@@ -62,6 +62,10 @@ class CloudletLog(object):
         self.logfile.write(log)
         sys.stdout.write(log)
 
+    def flush(self):
+        sys.stdout.flush()
+
+
 def copy_disk(in_path, out_path):
     print "[INFO] Copying disk image to %s" % out_path
     cmd = "cp %s %s" % (in_path, out_path)
@@ -85,10 +89,27 @@ def convert_xml(xml, conn, vm_name=None, disk_path=None, uuid=None, logfile=None
     # disk path is required
     if not disk_path:
         raise CloudletGenerationError("Need disk_path to run new VM")
-    disk_element = xml.find('devices/disk/source')
-    if disk_element == None:
+
+    # find all disk element(hdd, cdrom)
+    disk_elements = xml.findall('devices/disk')
+    hdd_source = None
+    cdrom_source = None
+    for disk_element in disk_elements:
+        disk_type = disk_element.attrib['device']
+        if disk_type == 'disk':
+            hdd_source = disk_element.find('source')
+        if disk_type == 'cdrom':
+            cdrom_source = disk_element.find('source')
+
+    # hdd path setting
+    if hdd_source == None:
         raise CloudletGenerationError("Malfomed XML input: %s", Const.TEMPLATE_XML)
-    disk_element.set("file", os.path.abspath(disk_path))
+    hdd_source.set("file", os.path.abspath(disk_path))
+
+    # ovf path setting
+    if cdrom_source == None:
+        raise CloudletGenerationError("Cannot find cdrom source at VM TEMPLATE: %s", Const.TEMPLATE_XML)
+    cdrom_source.set("file", os.path.abspath(Const.TEMPLATE_OVF))
 
     # append QEMU-argument
     if logfile:
@@ -119,12 +140,15 @@ def create_baseVM(disk_image_path):
     (base_diskmeta, base_mempath, base_memmeta) = \
             Const.get_basepath(disk_image_path)
     base_hashpath = Const.get_basehash_path(disk_image_path)
-    Log = CloudletLog(os.path.basepath(base_diskmeta)+Const.OVERLAY_LOG)
+    Log = CloudletLog(os.path.basename(base_diskmeta)+Const.OVERLAY_LOG)
 
     # check sanity
     if not os.path.exists(Const.TEMPLATE_XML):
         raise CloudletGenerationError("Cannot find Base VM default XML at %s\n" \
                 % Const.TEMPLATE_XML)
+    if not os.path.exists(Const.TEMPLATE_OVF):
+        raise CloudletGenerationError("Cannot find ovf file for AMIt %s\n" \
+                % Const.TEMPLATE_OVF)
     if os.path.exists(base_mempath):
         warning_msg = "Warning: (%s) exist.\nAre you sure to overwrite? (y/N) " \
                 % (base_mempath)
@@ -160,7 +184,7 @@ def create_baseVM(disk_image_path):
 
         # generate disk hashing
         # TODO: need more efficient implementation, e.g. bisect
-        Disk.hashing(disk_image_path, base_diskmeta, print_out=Log)
+        Disk.hashing(disk_image_path, base_diskmeta, print_out=sys.stdout)
         base_hashvalue = hashlib.sha256(open(disk_image_path, "rb").read()).hexdigest()
         open(base_hashpath, "wrb").write(base_hashvalue)
     except Exception as e:

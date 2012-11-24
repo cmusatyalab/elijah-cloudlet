@@ -140,6 +140,7 @@ class VMNetFS(threading.Thread):
     def terminate(self):
         self.stop.set()
         if self._pipe is not None:
+            print "[INFO] Fuse close pipe"
             self._pipe.close()
             self._pipe = None
 
