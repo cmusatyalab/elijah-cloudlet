@@ -258,6 +258,8 @@ def create_overlay(base_image, disk_only=False):
     # 1-4. get dma & discard information
     if Const.TRIM_SUPPORT:
         dma_dict, trim_dict = Disk.parse_qemu_log(qemu_logfile.name, Const.CHUNK_SIZE)
+        if len(trim_dict) == 0:
+            print "[WARNING] No TRIM Discard, Check /etc/fstab configuration"
     else:
         dma_dict = dict()
         trim_dict = dict()
@@ -342,9 +344,13 @@ def create_overlay(base_image, disk_only=False):
     blob_list = delta.divide_blobs(merged_deltalist, overlay_path, 
             Const.OVERLAY_BLOB_SIZE_KB, Const.CHUNK_SIZE,
             Memory.Memory.RAM_PAGE_SIZE, print_out=Log)
+    if Const.XRAY_SUPPORT:
+        disk_discarded_count = disk_statistics.get('xrayed', 0)
+    else:
+        disk_discarded_count = disk_statistics.get('trimed', 0)
     DeltaList.statistics(merged_deltalist, print_out=Log, 
             mem_discarded=free_pfn_counter,
-            disk_discarded=disk_statistics.get('trimed', 0))
+            disk_discarded=disk_discarded_count)
 
     # 4. create metadata
     overlay_metafile = os.path.join(dir_path, image_name+Const.OVERLAY_META)
@@ -1009,8 +1015,11 @@ class ResumedVM(threading.Thread):
             sys.stdout.write(str(e)+"\n")
 
     def terminate(self):
-        if self.machine:
-            self.machine.destroy()
+        try:
+            if self.machine:
+                self.machine.destroy()
+        except libvirt.libvirtError as e:
+            pass
 
         # terminate
         self.fuse.terminate()

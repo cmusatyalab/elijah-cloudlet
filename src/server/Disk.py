@@ -104,6 +104,7 @@ def parse_qemu_log(qemu_logfile, chunk_size):
     lines = open(qemu_logfile, "r").read().split("\n")
     discard_counter = 0
     dma_counter = 0
+    mal_aligned_sector = 0
     for line in lines:
         if not line:
             break
@@ -126,7 +127,7 @@ def parse_qemu_log(qemu_logfile, chunk_size):
                 dma_counter += 1
             else:
                 if sec_num != -1:
-                    print "Warning, mal-alignedsector(%ld %% 8 == %ld)" % (sec_num, sec_num%8)
+                    mal_aligned_sector += 0
         elif header == 'bdrv_discard':
             start_sec_num = long(data[0].split(":")[-1])
             total_sec_len = long(data[1].split(":")[-1])
@@ -145,6 +146,8 @@ def parse_qemu_log(qemu_logfile, chunk_size):
         print "[DEBUG] net DMA ratio : %ld/%ld = %f %%" % (len(dma_dict), dma_counter, 100.0*len(dma_dict)/dma_counter)
     if discard_counter != 0:
         print "[DEBUG] net discard ratio : %ld/%ld = %f %%" % (len(discard_dict), discard_counter, 100.0*len(discard_dict)/discard_counter)
+    if mal_aligned_sector != 0:
+        print "Warning, mal-alignedsector count: %d" % (mal_aligned_sector)
     return dma_dict, discard_dict
 
 
@@ -175,6 +178,7 @@ def create_disk_deltalist(modified_disk,
     # TO BE DELETED
     trimed_list = []
     xrayed_list = []
+
 
     # 1. get modified page
     print_out.write("[Debug] 1.get modified disk page\n")
