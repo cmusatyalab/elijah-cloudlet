@@ -124,13 +124,13 @@ def mount_launchVM(fuse):
     start_time = datetime.now()
     fuse_image = os.path.join(fuse.mountpoint, 'disk', 'image')
     mount_dir = tempfile.mkdtemp()
-    temp_raw_vm = NamedTemporaryFile(prefix="cloudlet-image-", delete=False)
-    raw_vm = temp_raw_vm.name
-    print "[INFO] copyting file from %s to %s" % (fuse_image, raw_vm)
-    shutil.copyfile(fuse_image, raw_vm)
+    #temp_raw_vm = NamedTemporaryFile(prefix="cloudlet-image-", delete=False)
+    #raw_vm = temp_raw_vm.name
+    #print "[INFO] copyting file from %s to %s" % (fuse_image, raw_vm)
+    #shutil.copyfile(fuse_image, raw_vm)
 
     # mount
-    cmd_mapping = "sudo kpartx -av %s" % (raw_vm)
+    cmd_mapping = "sudo kpartx -av %s" % (fuse_image)
     proc = subprocess.Popen(cmd_mapping, shell=True, stdin=sys.stdin, stdout=subprocess.PIPE)
     proc.wait()
     if proc.returncode != 0:
@@ -148,7 +148,7 @@ def mount_launchVM(fuse):
     mount_time = datetime.now()-start_time
 
     print "[TIME] Raw Mouting time : %s" % (str(mount_time))
-    return mount_dir, raw_vm
+    return mount_dir, fuse_image
 
 
 def rsync_overlayVM(vm_dir, instance_dir):
@@ -197,10 +197,12 @@ def rsync_overlayVM(vm_dir, instance_dir):
 
 
 def clean_up(fuse, mount_dir, raw_vm):
+    '''
     print "[INFO] clean up files : %s, size: %d" % (os.path.abspath(raw_vm), os.path.getsize(raw_vm))
-    print "[INFO] clean up temp dir : %s" % (os.path.abspath(mount_dir))
     if os.path.exists(raw_vm):
         os.remove(raw_vm)
+    '''
+    print "[INFO] clean up temp dir : %s" % (os.path.abspath(mount_dir))
     if os.path.exists(mount_dir):
         print "[INFO] umount VM dir, %s" % (mount_dir)
         subprocess.Popen("sudo umount %s" % (mount_dir), shell=True, stdin=sys.stdin, stdout=sys.stdout).wait()
@@ -227,7 +229,8 @@ def process_command_line(argv):
     if not len(args) == 0:
         parser.error('program takes no command-line arguments; "%s" ignored.' % (args,))
     if settings.overlay_download_url == None: # or settings.base_path == None or settings.output_mount == None:
-        parser.error('Read usage')
+        parser.error("Read usage\n \
+                Example: ./ec2_rapid.py -o http://cloudlet.krha.kr/overlay/ec2/oneiric.overlay-meta -b ~/cloudlet/image/ami-oneiric-server-amd64/oneiric.raw")
 
     if not os.path.exists(settings.base_path):
         print >> sys.stderr, "[Error] Base VM does not exist at %s" % (settings.base_path)
