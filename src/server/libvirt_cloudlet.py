@@ -140,7 +140,6 @@ def create_baseVM(disk_image_path):
     (base_diskmeta, base_mempath, base_memmeta) = \
             Const.get_basepath(disk_image_path)
     base_hashpath = Const.get_basehash_path(disk_image_path)
-    Log = CloudletLog(os.path.basename(base_diskmeta)+Const.OVERLAY_LOG)
 
     # check sanity
     if not os.path.exists(Const.TEMPLATE_XML):
@@ -207,7 +206,8 @@ def create_overlay(base_image, disk_only=False):
     # First resume VM, then let user edit its VM
     # Finally, return disk/memory binary as an overlay
     # base_image: path to base disk
-    Log = CloudletLog()
+    log_path = os.path.join(os.path.dirname(base_image), os.path.basename(base_image) + Const.OVERLAY_LOG)
+    Log = CloudletLog(log_path)
 
     (base_diskmeta, base_mem, base_memmeta) = \
             Const.get_basepath(base_image, check_exist=True)

@@ -795,6 +795,7 @@ def divide_blobs(delta_list, overlay_path, blob_size_kb,
     statistics = dict()
     index = 0
     comp_counter = 0
+    blob_output_size = 0
     while index < len(delta_list):
         blob_name = "%s_%d.xz" % (overlay_path, blob_number)
         end_index, memory_offsets, disk_offsets = \
@@ -814,9 +815,11 @@ def divide_blobs(delta_list, overlay_path, blob_size_kb,
             Const.META_OVERLAY_FILE_MEMORY_CHUNKS: memory_chunks
             }
         overlay_list.append(blob_dict)
+        blob_output_size += file_size
     end_time = time.time()
     print_out.write("[Debug] Overlay Compression time: %f, delta_item: %ld\n" % 
             ((end_time-start_time), comp_counter))
+    print_out.write("[SIZE] total blob size: %ld\n" % blob_output_size)
     return overlay_list 
 
 

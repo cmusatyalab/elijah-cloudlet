@@ -22,8 +22,8 @@ class ConstError(Exception):
 
 
 class Const(object):
-    TRIM_SUPPORT            = True
-    FREE_SUPPORT            = True
+    TRIM_SUPPORT            = False
+    FREE_SUPPORT            = False
     XRAY_SUPPORT            = False
 
     BASE_DISK               = ".base-img"
