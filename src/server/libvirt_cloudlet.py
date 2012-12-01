@@ -107,9 +107,8 @@ def convert_xml(xml, conn, vm_name=None, disk_path=None, uuid=None, logfile=None
     hdd_source.set("file", os.path.abspath(disk_path))
 
     # ovf path setting
-    if cdrom_source == None:
-        raise CloudletGenerationError("Cannot find cdrom source at VM TEMPLATE: %s", Const.TEMPLATE_XML)
-    cdrom_source.set("file", os.path.abspath(Const.TEMPLATE_OVF))
+    if cdrom_source != None:
+        cdrom_source.set("file", os.path.abspath(Const.TEMPLATE_OVF))
 
     # append QEMU-argument
     if logfile:
@@ -1104,6 +1103,79 @@ def main(argv):
         else:
             disk_only = False
         synthesis(base_disk_path, meta, disk_only)
+    elif mode == 'seperate_overlay':
+        if len(args) != 3:
+            parser.error("seperating disk and memory overlay need 3 arguments\n \
+                    1)meta file\n \
+                    2)output directory\n")
+            sys.exit(1)
+        meta = args[1]
+        output_dir = args[2]
+        if not os.path.exists(output_dir):
+            os.makedirs(output_dir)
+
+        overlay_path = NamedTemporaryFile(prefix="cloudlet-qemu-log-")
+        meta_info = decomp_overlay(meta, overlay_path.name)
+
+        comp_overlay_files = meta_info[Const.META_OVERLAY_FILES]
+        comp_overlay_files = [item[Const.META_OVERLAY_FILE_NAME] for item in comp_overlay_files]
+        comp_overlay_files = [os.path.join(os.path.dirname(meta), item) for item in comp_overlay_files]
+        import shutil
+        for comp_file in comp_overlay_files:
+            filename = os.path.join(output_dir, os.path.basename(comp_file))
+            shutil.copyfile(comp_file, filename)
+        delta_list = DeltaList.fromfile(overlay_path.name)
+        memory_delta_list = list()
+        disk_delta_list = list()
+        for delta_item in delta_list:
+            if delta_item.delta_type == DeltaItem.DELTA_MEMORY:
+                memory_delta_list.append(delta_item)
+            elif delta_item.delta_type == DeltaItem.DELTA_DISK:
+                disk_delta_list.append(delta_item)
+        disk_overlay_path = os.path.join(output_dir, "disk_overlay")
+        memory_overlay_path = os.path.join(output_dir, "memory_overlay")
+        disk_blob_list = delta.divide_blobs(disk_delta_list, disk_overlay_path, 
+                Const.OVERLAY_BLOB_SIZE_KB, Const.CHUNK_SIZE,
+                Memory.Memory.RAM_PAGE_SIZE, print_out=sys.stdout)
+        memory_blob_list = delta.divide_blobs(memory_delta_list, memory_overlay_path, 
+                Const.OVERLAY_BLOB_SIZE_KB, Const.CHUNK_SIZE,
+                Memory.Memory.RAM_PAGE_SIZE, print_out=sys.stdout)
+
+    elif mode == 'dedup_source':
+        if len(args) != 4:
+            parser.error("analyzing deduplication source need 3 arguments\n \
+                    1)meta file\n \
+                    2)raw disk\n \
+                    3)output logfile\n")
+            sys.exit(1)
+        meta = args[1]
+        raw_disk = args[2]
+        output_path = args[3]
+        output_log = open(output_path, "w")
+
+        overlay_path = NamedTemporaryFile(prefix="cloudlet-qemu-log-")
+        meta_info = decomp_overlay(meta, overlay_path.name)
+        delta_list = DeltaList.fromfile(overlay_path.name)
+
+        memory_delta_list = list()
+        disk_delta_list = list()
+        for delta_item in delta_list:
+            if delta_item.ref_id == DeltaItem.REF_BASE_DISK:
+                if delta_item.delta_type == DeltaItem.DELTA_MEMORY:
+                    memory_delta_list.append(long(delta_item.data))
+                elif delta_item.delta_type == DeltaItem.DELTA_DISK:
+                    disk_delta_list.append(long(delta_item.data))
+
+        from pprint import pprint
+        sectors_overlay_disk = [item/512 for item in disk_delta_list]
+        sectors_overlay_memory = [item/512 for item in memory_delta_list]
+        sec_file_overlay_disk = xray.get_files_from_sectors(raw_disk, sectors_overlay_disk)
+        sec_file_overlay_memory = xray.get_files_from_sectors(raw_disk, sectors_overlay_memory)
+        pprint("deduped file at overlay memory", output_log)
+        pprint(sec_file_overlay_memory.keys(), output_log)
+        pprint("deduped file at overlay disk", output_log)
+        pprint(sec_file_overlay_disk.keys(), output_log)
+            
     elif mode == 'compress':
         Log = CloudletLog()
         if len(args) != 3:
