@@ -105,6 +105,8 @@ def parse_qemu_log(qemu_logfile, chunk_size):
     discard_counter = 0
     dma_counter = 0
     mal_aligned_sector = 0
+    total_founded_discard = 0
+    effective_discard = 0
     for line in lines:
         if not line:
             break
@@ -127,21 +129,26 @@ def parse_qemu_log(qemu_logfile, chunk_size):
                 dma_counter += 1
             else:
                 if sec_num != -1:
-                    mal_aligned_sector += 0
+                    pass
         elif header == 'bdrv_discard':
             start_sec_num = long(data[0].split(":")[-1])
             total_sec_len = long(data[1].split(":")[-1])
             start_chunk_num = start_sec_num*512.0/chunk_size
             end_chunk_num = (start_sec_num*512 + total_sec_len*512)/chunk_size
             if (start_sec_num*512)%chunk_size != 0:
-                pass
+                mal_aligned_sector += total_sec_len
                 #print "Warning, disk sector is not aligned with chunksize"
+            total_founded_discard += (total_sec_len*512)
 
             start_chunk_num = int(ceil(start_chunk_num))
             for chunk_num in xrange(start_chunk_num, end_chunk_num):
                 discard_dict[chunk_num] = event_time
                 discard_counter += 1
 
+    print "[Warning] Lost %d bytes from mal-alignment" % (mal_aligned_sector*512) 
+    if total_founded_discard != 0:
+        print "[Debug] Total founded discard: %d B, effective discard: %d B" % \
+                (total_founded_discard, len(discard_dict)*chunk_size)
     if dma_counter != 0 :
         print "[DEBUG] net DMA ratio : %ld/%ld = %f %%" % (len(dma_dict), dma_counter, 100.0*len(dma_dict)/dma_counter)
     if discard_counter != 0:
@@ -173,6 +180,7 @@ def create_disk_deltalist(modified_disk,
     # 0. get info from qemu log file
     # dictionary : (chunk_%, discarded_time)
     trim_counter = 0
+    overwritten_after_trim = 0
     xray_counter = 0
 
     # TO BE DELETED
@@ -196,6 +204,9 @@ def create_disk_deltalist(modified_disk,
                     trimed_list.append(chunk)
                     trim_counter += 1
                     is_discarded = True
+                else:
+                    overwritten_after_trim += 1
+
         # check xray discard
         if used_blocks_dict:
             start_sector = offset/512
@@ -236,7 +247,8 @@ def create_disk_deltalist(modified_disk,
         ret_statistics['xrayed'] = xray_counter
         ret_statistics['trimed_list'] = trimed_list
         ret_statistics['xrayed_list'] = xrayed_list
-    print_out.write("[Debug] 1-1. Trim(%d), Xray(%d)\n" % (trim_counter, xray_counter))
+    print_out.write("[Debug] 1-1. Trim(%d, overwritten after trim(%d)), Xray(%d)\n" % \
+            (trim_counter, overwritten_after_trim, xray_counter))
 
     return delta_list
 

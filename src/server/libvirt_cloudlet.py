@@ -368,8 +368,9 @@ def create_overlay(base_image, disk_only=False):
     monitor.join()
     qemu_monitor.join()
     os.unlink(modified_mem.name)
-    if os.path.exists(qemu_logfile.name):
-        os.unlink(qemu_logfile.name)
+    
+    #if os.path.exists(qemu_logfile.name):
+    #    os.unlink(qemu_logfile.name)
 
     blob_files = [item[Const.META_OVERLAY_FILE_NAME] for item in blob_list]
     return (overlay_metafile, blob_files)
