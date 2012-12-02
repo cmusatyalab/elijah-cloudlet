@@ -241,7 +241,7 @@ def get_overlay_info(app_name):
         overlay_mem_path = "%s/%s/graphics/precise.overlay.4cpu.1024mem..mem.lzma" % (OVERLAY_DIR, base_name)
         overlay_mem_size = os.path.getsize(overlay_mem_path)
     elif app_name == application_names[3]:  # speech
-        base_name = 'window7'
+        base_name = 'ubuntu'
         overlay_disk_path = "%s/%s/speech/window7.overlay.4cpu.1024mem.qcow2.lzma" % (OVERLAY_DIR, base_name)
         overlay_disk_size = os.path.getsize(overlay_disk_path)
         overlay_mem_path = "%s/%s/speech/window7.overlay.4cpu.1024mem.mem.lzma" % (OVERLAY_DIR, base_name)
