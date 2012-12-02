@@ -37,7 +37,15 @@ operation_mode = ('run', 'mock')
 application_names = ("moped", "face", "speech", "mar", "null")
 
 # Web server for Andorid Client
-LOCAL_IPADDRESS = 'localhost'
+def get_local_ipaddress():
+    s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+    s.connect(("gmail.com",80))
+    ipaddress = (s.getsockname()[0])
+    s.close()
+    return ipaddress
+
+#LOCAL_IPADDRESS = get_local_ipaddress()
+LOCAL_IPADDRESS = "192.168.2.2"
 SERVER_PORT_NUMBER = 8021
 BaseVM_list = []
 
@@ -161,7 +169,6 @@ def delta_worker(in_path, time_queue, base_filename, out_filename):
 
     # run xdelta 3 with named pipe
     command_str = "xdelta3 -df -s %s %s %s" % (base_filename, in_path, out_filename)
-    print command_str
     xdelta_process = subprocess.Popen(command_str, shell=True)
     xdelta_process.wait()
 
@@ -407,16 +414,20 @@ class SynthesisTCPHandler(SocketServer.StreamRequestHandler):
         mem_delta_time = time_delta.get()
         disk_transfer_start_time = disk_transfer_time['start_time']
         disk_transfer_end_time = disk_transfer_time['end_time']
+        disk_decomp_start_time = disk_decomp_time['start_time']
         disk_decomp_end_time = disk_decomp_time['end_time']
+        disk_delta_start_time = disk_delta_time['start_time']
         disk_delta_end_time = disk_delta_time['end_time']
         mem_transfer_start_time = mem_transfer_time['start_time']
         mem_transfer_end_time = mem_transfer_time['end_time']
+        mem_decomp_start_time = mem_decomp_time['start_time']
         mem_decomp_end_time = mem_decomp_time['end_time']
+        mem_delta_start_time = mem_delta_time['start_time']
         mem_delta_end_time = mem_delta_time['end_time']
 
-        transfer_diff = mem_transfer_end_time-disk_transfer_start_time
-        decomp_diff = mem_decomp_end_time-mem_transfer_end_time
-        delta_diff = mem_delta_end_time-mem_decomp_end_time
+        transfer_diff = (disk_transfer_end_time-disk_transfer_start_time) + (mem_transfer_end_time-mem_transfer_start_time)
+        decomp_diff = (disk_decomp_end_time-disk_decomp_start_time) + (mem_decomp_end_time-mem_decomp_start_time)
+        delta_diff = (disk_delta_end_time-disk_delta_start_time) + (mem_delta_end_time-mem_delta_start_time)
         kvm_diff = kvm_end_time-mem_delta_end_time
         total_diff = datetime.now()-start_time
         message = "\n"
@@ -431,13 +442,6 @@ class SynthesisTCPHandler(SocketServer.StreamRequestHandler):
         self.ret_success()
 
 
-def get_local_ipaddress():
-    s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
-    s.connect(("gmail.com",80))
-    ipaddress = (s.getsockname()[0])
-    s.close()
-    return ipaddress
-
 
 def main(argv=None):
     global LOCAL_IPADDRESS
@@ -449,8 +453,7 @@ def main(argv=None):
             print error_msg
             sys.exit(2)
 
-        LOCAL_IPADDRESS = get_local_ipaddress()
-        server_address = (LOCAL_IPADDRESS, SERVER_PORT_NUMBER)
+        server_address = ("0.0.0.0", SERVER_PORT_NUMBER)
         print "Open TCP Server (%s)\n" % (str(server_address))
         SocketServer.TCPServer.allow_reuse_address = True
         server = SocketServer.TCPServer(server_address, SynthesisTCPHandler)
