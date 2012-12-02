@@ -3,7 +3,7 @@
    "VM":[
       {
          "name":"Ubuntu12.04.01-server-i386",
-         "sha256":"", 
+         "sha256":"4304c473a9f98480c7d6387f01158881d3440bb81c8a9452b1abdef794e56f03", 
          "type":"baseVM",
          "OS":"Linux",
          "OS-version":"Ubuntu12.04-server-i386",

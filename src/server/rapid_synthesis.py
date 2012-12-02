@@ -488,5 +488,8 @@ def download_app(application):
     return base_path, overlay_disk.name, overlay_mem.name
 
 if __name__ == "__main__":
+    if not cloudlet.validate_congifuration():
+        sys.stderr.write("failed to validate configuration\n")
+        sys.exit(1)
     status = main()
     sys.exit(status)
