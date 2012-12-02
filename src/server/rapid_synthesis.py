@@ -316,8 +316,6 @@ class SynthesisTCPHandler(SocketServer.StreamRequestHandler):
 
         # resume VM
         resumed_VM = cloudlet.ResumedVM(modified_img, modified_mem, fuse)
-        resumed_VM.start()
-        self.ret_success()
 
         # start processes
         download_process.start()
@@ -326,13 +324,19 @@ class SynthesisTCPHandler(SocketServer.StreamRequestHandler):
         fuse_thread.start()
         fuse_thread.join()
 
+        # sequential resume
+        time_start_resume = time.time()
+        resumed_VM.start()
+        time_end_resume = time.time()
+        self.ret_success()
+
         end_time = time.time()
         total_time = (end_time-start_time)
 
         # printout result
         SynthesisTCPHandler.print_statistics(start_time, end_time, \
                 time_transfer, time_decomp, time_delta, time_fuse, \
-                print_out=Log)
+                print_out=Log, resume_time=(time_end_resume-time_start_resume))
 
         # terminate
         resumed_VM.join()
@@ -361,7 +365,7 @@ class SynthesisTCPHandler(SocketServer.StreamRequestHandler):
     @staticmethod
     def print_statistics(start_time, end_time, \
             time_transfer, time_decomp, time_delta, time_fuse,
-            print_out=sys.stdout):
+            print_out=sys.stdout, resume_time=0):
         # Print out Time Measurement
         transfer_time = time_transfer.get()
         decomp_time = time_decomp.get()
@@ -382,10 +386,11 @@ class SynthesisTCPHandler(SocketServer.StreamRequestHandler):
 
         message = "\n"
         message += "Pipelined measurement\n"
-        message += 'Transfer\tDecomp\t\tDelta(Fuse)\t\tTotal\n'
+        message += 'Transfer\tDecomp\t\tDelta(Fuse)\tResume\t\tTotal\n'
         message += "%011.06f\t" % (transfer_diff)
         message += "%011.06f\t" % (decomp_diff)
         message += "%011.06f\t" % (delta_diff)
+        message += "%011.06f\t" % (resume_time)
         message += "%011.06f\t" % (end_time-start_time)
         message += "\n"
         print_out.write(message)
