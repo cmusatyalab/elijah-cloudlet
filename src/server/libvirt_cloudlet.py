@@ -256,7 +256,7 @@ def create_overlay(base_image, disk_only=False):
 
     # 1-4. get dma & discard information
     if Const.TRIM_SUPPORT:
-        dma_dict, trim_dict = Disk.parse_qemu_log(qemu_logfile.name, Const.CHUNK_SIZE)
+        dma_dict, trim_dict = Disk.parse_qemu_log(qemu_logfile.name, Const.CHUNK_SIZE, print_out=Log)
         if len(trim_dict) == 0:
             print "[WARNING] No TRIM Discard, Check /etc/fstab configuration"
     else:

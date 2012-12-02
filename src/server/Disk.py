@@ -90,7 +90,7 @@ def _pack_hashlist(hash_list):
             (original_length, len(hash_list), 1.0*len(hash_list)/original_length)
 
 
-def parse_qemu_log(qemu_logfile, chunk_size):
+def parse_qemu_log(qemu_logfile, chunk_size, print_out=sys.stdout):
     # return dma_dict, discard_dict
     # element of dictionary has (chunk_%:discarded_time) format
     # CAVEAT: DMA Memory Address should be sift 4096*2 bytes because 
@@ -145,16 +145,19 @@ def parse_qemu_log(qemu_logfile, chunk_size):
                 discard_dict[chunk_num] = event_time
                 discard_counter += 1
 
-    print "[Warning] Lost %d bytes from mal-alignment" % (mal_aligned_sector*512) 
-    if total_founded_discard != 0:
-        print "[Debug] Total founded discard: %d B, effective discard: %d B" % \
-                (total_founded_discard, len(discard_dict)*chunk_size)
-    if dma_counter != 0 :
-        print "[DEBUG] net DMA ratio : %ld/%ld = %f %%" % (len(dma_dict), dma_counter, 100.0*len(dma_dict)/dma_counter)
-    if discard_counter != 0:
-        print "[DEBUG] net discard ratio : %ld/%ld = %f %%" % (len(discard_dict), discard_counter, 100.0*len(discard_dict)/discard_counter)
     if mal_aligned_sector != 0:
-        print "Warning, mal-alignedsector count: %d" % (mal_aligned_sector)
+        print_out.write("[Warning] Lost %d bytes from mal-alignment\n" % (mal_aligned_sector*512))
+    if total_founded_discard != 0:
+        print_out.write("[DEBUG] Total founded TRIM: %d B, effective TRIM: %d B\n" % \
+                (total_founded_discard, len(discard_dict)*chunk_size))
+    if dma_counter != 0 :
+        print_out.write("[DEBUG] net DMA ratio : %ld/%ld = %f %%\n" % \
+                (len(dma_dict), dma_counter, 100.0*len(dma_dict)/dma_counter))
+    if discard_counter != 0:
+        print_out.write("[DEBUG] net discard ratio : %ld/%ld = %f %%\n" % \
+                (len(discard_dict), discard_counter, 100.0*len(discard_dict)/discard_counter))
+    if mal_aligned_sector != 0:
+        print_out.write("Warning, mal-alignedsector count: %d\n" % (mal_aligned_sector))
     return dma_dict, discard_dict
 
 
