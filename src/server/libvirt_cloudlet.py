@@ -409,10 +409,13 @@ def create_overlay(base_image, disk_only=False):
 
         # merged_delta_copy has only dedup optimization
         Log.write("\n================DEDUP ONLY===========================\n")
-        blob_list = delta.divide_blobs(merged_deltalist_copy, overlay_path_dedup,
+        blob_list_dedup = delta.divide_blobs(merged_deltalist_copy, overlay_path_dedup,
                 Const.OVERLAY_BLOB_SIZE_KB, Const.CHUNK_SIZE,
                 Memory.Memory.RAM_PAGE_SIZE, print_out=Log)
         DeltaList.statistics(merged_deltalist_copy, print_out=Log)
+        overlay_metafile_dedup = overlay_path_dedup + "-meta"
+        _create_overlay_meta(base_hash_value, overlay_metafile_dedup, 
+                modified_disk, modified_mem.name, blob_list_dedup)
         Log.write("=======================================================\n")
 
         # Apply semantics
@@ -421,12 +424,15 @@ def create_overlay(base_image, disk_only=False):
         disk_discarded_count = disk_statistics.get('trimed', 0)
         delta.discard_free_chunks(merged_modified_list, Const.CHUNK_SIZE, 
                 trim_dict, free_pfn_dict_new)
-        blob_list = delta.divide_blobs(merged_modified_list, overlay_path_semantic,
+        blob_list_semantic = delta.divide_blobs(merged_modified_list, overlay_path_semantic,
                 Const.OVERLAY_BLOB_SIZE_KB, Const.CHUNK_SIZE,
                 Memory.Memory.RAM_PAGE_SIZE, print_out=Log)
         DeltaList.statistics(merged_modified_list, print_out=Log, 
                 mem_discarded=free_pfn_counter_new,
                 disk_discarded=disk_discarded_count_new)
+        overlay_metafile_semantic = overlay_path_semantic + "-meta"
+        _create_overlay_meta(base_hash_value, overlay_metafile_semantic, 
+                modified_disk, modified_mem.name, blob_list_semantic)
         Log.write("=======================================================\n")
 
     # 4. terminting
