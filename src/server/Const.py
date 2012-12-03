@@ -22,6 +22,7 @@ class ConstError(Exception):
 
 
 class Const(object):
+    SEPERATE_DEDUP_REDUCING_SEMANTICS    = True
     TRIM_SUPPORT            = True
     FREE_SUPPORT            = True
     XRAY_SUPPORT            = False

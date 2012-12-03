@@ -28,6 +28,7 @@ import delta
 import xray
 import hashlib
 import msgpack
+import copy
 from Const import Const
 from delta import DeltaList
 from delta import DeltaItem
@@ -218,6 +219,8 @@ def create_overlay(base_image, disk_only=False):
     image_name = os.path.basename(base_image).split(".")[0]
     dir_path = os.path.dirname(base_mem)
     overlay_path = os.path.join(dir_path, image_name+Const.OVERLAY_FILE_PREFIX)
+    overlay_path_semantic = overlay_path + ".semantic_only"
+    overlay_path_dedup = overlay_path + ".dedup_only"
     
     # make FUSE disk & memory
     fuse = run_fuse(Const.VMNETFS_PATH, Const.CHUNK_SIZE, 
@@ -262,10 +265,8 @@ def create_overlay(base_image, disk_only=False):
     else:
         dma_dict = dict()
         trim_dict = dict()
-    if Const.FREE_SUPPORT:
-        freed_counter_ret = dict()
-    else:
-        freed_counter_ret = None
+    free_memory_dict = dict()
+
     # 1-5. get used sector information from x-ray
     used_blocks_dict = None
     if Const.XRAY_SUPPORT:
@@ -275,7 +276,8 @@ def create_overlay(base_image, disk_only=False):
     if not disk_only:
         mem_deltalist= Memory.create_memory_deltalist(modified_mem.name, 
                 basemem_meta=base_memmeta, basemem_path=base_mem,
-                freed_counter_ret = freed_counter_ret,
+                apply_free_memory=Const.FREE_SUPPORT,
+                free_memory_info=free_memory_dict,
                 print_out=Log)
     else:
         mem_deltalist = list()
@@ -284,15 +286,17 @@ def create_overlay(base_image, disk_only=False):
     m_chunk_dict = monitor.modified_chunk_dict
     disk_statistics = dict()
     disk_deltalist = Disk.create_disk_deltalist(modified_disk,
-            m_chunk_dict, Const.CHUNK_SIZE,
-            basedisk_hashlist=basedisk_hashlist, basedisk_path=base_image,
-            trim_dict=trim_dict,
-            dma_dict=dma_dict,
-            used_blocks_dict=used_blocks_dict,
-            ret_statistics=disk_statistics,
-            print_out=Log)
+        m_chunk_dict, Const.CHUNK_SIZE,
+        basedisk_hashlist=basedisk_hashlist, basedisk_path=base_image,
+        trim_dict=trim_dict,
+        apply_discard = True,
+        dma_dict=dma_dict,
+        used_blocks_dict=used_blocks_dict,
+        ret_statistics=disk_statistics,
+        print_out=Log)
 
     # 2-3. Merge disk & memory delta_list to generate overlay file
+    # deduplication
     merged_deltalist = delta.create_overlay(
             mem_deltalist, Memory.Memory.RAM_PAGE_SIZE,
             disk_deltalist, Const.CHUNK_SIZE,
@@ -300,14 +304,27 @@ def create_overlay(base_image, disk_only=False):
             basemem_hashlist=basemem_hashlist,
             print_out=Log)
 
-    free_pfn_counter = 0
-    if Const.FREE_SUPPORT:
-        free_pfn_counter = long(freed_counter_ret.get("freed_counter", 0))
+    free_pfn_counter = long(free_memory_dict.get("freed_counter", 0))
 
-    # TO BE DELETE: DMA performance checking
-    # _test_dma_accuracy(dma_dict, disk_deltalist, mem_deltalist)
+    # 3. Reorder transfer order & Compression
+    Log.write("[DEBUG][REORDER] change chunk ordering by mem access\n")
+    mem_access_list = monitor.mem_access_chunk_list
+    delta.reorder_deltalist(mem_access_list, Const.CHUNK_SIZE, merged_deltalist)
+    '''
+    Log.write("[DEBUG][REORDER] change chunk ordering by offset\n")
+    delta.reorder_deltalist_linear(Const.CHUNK_SIZE, merged_deltalist)
+    '''    
+    Log.write("[DEBUG][LZMA] Compressing overlay blobs\n")
+    blob_list = delta.divide_blobs(merged_deltalist, overlay_path, 
+            Const.OVERLAY_BLOB_SIZE_KB, Const.CHUNK_SIZE,
+            Memory.Memory.RAM_PAGE_SIZE, print_out=Log)
 
-    if Const.XRAY_SUPPORT == True:
+    disk_discarded_count = disk_statistics.get('trimed', 0)
+    DeltaList.statistics(merged_deltalist, print_out=Log, 
+            mem_discarded=free_pfn_counter,
+            disk_discarded=disk_discarded_count)
+
+    if Const.XRAY_SUPPORT:
         # 3-1. list-up all the files that is associated with overlay sectors
         xray_start_time = time()
         xray_log = open("./xray_log", "wrb")
@@ -331,26 +348,6 @@ def create_overlay(base_image, disk_only=False):
         xray_end_time = time()
         Log.write("[Debug] WASTED TIME FOR XRAY LOGGING: %f\n" % (xray_end_time-xray_start_time))
 
-    # 3. Reorder transfer order & Compression
-    Log.write("[DEBUG][REORDER] change chunk ordering by mem access\n")
-    mem_access_list = monitor.mem_access_chunk_list
-    delta.reorder_deltalist(mem_access_list, Const.CHUNK_SIZE, merged_deltalist)
-    '''
-    Log.write("[DEBUG][REORDER] change chunk ordering by offset\n")
-    delta.reorder_deltalist_linear(Const.CHUNK_SIZE, merged_deltalist)
-    '''    
-    Log.write("[DEBUG][LZMA] Compressing overlay blobs\n")
-    blob_list = delta.divide_blobs(merged_deltalist, overlay_path, 
-            Const.OVERLAY_BLOB_SIZE_KB, Const.CHUNK_SIZE,
-            Memory.Memory.RAM_PAGE_SIZE, print_out=Log)
-    if Const.XRAY_SUPPORT:
-        disk_discarded_count = disk_statistics.get('xrayed', 0)
-    else:
-        disk_discarded_count = disk_statistics.get('trimed', 0)
-    DeltaList.statistics(merged_deltalist, print_out=Log, 
-            mem_discarded=free_pfn_counter,
-            disk_discarded=disk_discarded_count)
-
     # 4. create metadata
     overlay_metafile = os.path.join(dir_path, image_name+Const.OVERLAY_META)
     if not disk_only:
@@ -360,6 +357,77 @@ def create_overlay(base_image, disk_only=False):
         _create_overlay_meta(base_hash_value, overlay_metafile, 
                 modified_disk, base_mem, blob_list)
 
+    # TO be deleted
+    if Const.SEPERATE_DEDUP_REDUCING_SEMANTICS:
+        free_memory_dict_new = dict()
+        disk_statistics_new = dict()
+        disk_deltalist_copy = Disk.create_disk_deltalist(modified_disk,
+                m_chunk_dict, Const.CHUNK_SIZE,
+                basedisk_hashlist=basedisk_hashlist, basedisk_path=base_image,
+                trim_dict=trim_dict,
+                apply_discard = False,
+                dma_dict=dma_dict,
+                used_blocks_dict=used_blocks_dict,
+                ret_statistics=disk_statistics_new,
+                print_out=Log)
+        if not disk_only:
+            mem_deltalist_copy = Memory.create_memory_deltalist(modified_mem.name, 
+                    basemem_meta=base_memmeta, basemem_path=base_mem,
+                    apply_free_memory=False,
+                    free_memory_info=free_memory_dict_new,
+                    print_out=Log)
+        else:
+            mem_deltalist_copy = list()
+
+        merged_modified_list = list()
+        for item in mem_deltalist_copy:
+            copied_item = DeltaItem(item.delta_type, item.offset, item.offset_len, \
+                    copy.deepcopy(item.hash_value), copy.deepcopy(item.ref_id),
+                    data_len=copy.deepcopy(item.data_len), 
+                    data=copy.deepcopy(item.data))
+            merged_modified_list.append(copied_item)
+        for item in disk_deltalist_copy:
+            copied_item = DeltaItem(item.delta_type, item.offset, item.offset_len, \
+                    copy.deepcopy(item.hash_value), copy.deepcopy(item.ref_id),
+                    data_len=copy.deepcopy(item.data_len), 
+                    data=copy.deepcopy(item.data))
+            merged_modified_list.append(copied_item)
+
+        free_pfn_counter_new = long(free_memory_dict_new.get("freed_counter", 0))
+        free_pfn_dict_new = free_memory_dict_new.get("free_pfn_dict", None)
+        disk_discarded_count_new = disk_statistics_new.get('trimed', 0)
+
+        merged_deltalist_copy = delta.create_overlay(
+                mem_deltalist_copy, Memory.Memory.RAM_PAGE_SIZE,
+                disk_deltalist_copy, Const.CHUNK_SIZE,
+                basedisk_hashlist=basedisk_hashlist,
+                basemem_hashlist=basemem_hashlist,
+                print_out=Log)
+
+        delta.reorder_deltalist(mem_access_list, Const.CHUNK_SIZE, merged_modified_list)
+        delta.reorder_deltalist(mem_access_list, Const.CHUNK_SIZE, merged_deltalist_copy)
+
+        # merged_delta_copy has only dedup optimization
+        Log.write("\n================DEDUP ONLY===========================\n")
+        blob_list = delta.divide_blobs(merged_deltalist_copy, overlay_path_dedup,
+                Const.OVERLAY_BLOB_SIZE_KB, Const.CHUNK_SIZE,
+                Memory.Memory.RAM_PAGE_SIZE, print_out=Log)
+        DeltaList.statistics(merged_deltalist_copy, print_out=Log)
+        Log.write("=======================================================\n")
+
+        # Apply semantics
+        # merged_modified_list has no optimization
+        Log.write("\n===============SEMANTIC ONLY ========================\n")
+        disk_discarded_count = disk_statistics.get('trimed', 0)
+        delta.discard_free_chunks(merged_modified_list, Const.CHUNK_SIZE, 
+                trim_dict, free_pfn_dict_new)
+        blob_list = delta.divide_blobs(merged_modified_list, overlay_path_semantic,
+                Const.OVERLAY_BLOB_SIZE_KB, Const.CHUNK_SIZE,
+                Memory.Memory.RAM_PAGE_SIZE, print_out=Log)
+        DeltaList.statistics(merged_modified_list, print_out=Log, 
+                mem_discarded=free_pfn_counter_new,
+                disk_discarded=disk_discarded_count_new)
+        Log.write("=======================================================\n")
 
     # 4. terminting
     fuse.terminate()
@@ -369,8 +437,8 @@ def create_overlay(base_image, disk_only=False):
     qemu_monitor.join()
     os.unlink(modified_mem.name)
     
-    #if os.path.exists(qemu_logfile.name):
-    #    os.unlink(qemu_logfile.name)
+    if os.path.exists(qemu_logfile.name):
+        os.unlink(qemu_logfile.name)
 
     blob_files = [item[Const.META_OVERLAY_FILE_NAME] for item in blob_list]
     return (overlay_metafile, blob_files)

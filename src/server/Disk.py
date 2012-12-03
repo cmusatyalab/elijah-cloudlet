@@ -165,6 +165,7 @@ def create_disk_deltalist(modified_disk,
             modified_chunk_dict, chunk_size,
             basedisk_hashlist=None, basedisk_path=None,
             trim_dict=None, dma_dict=None,
+            apply_discard=True,
             used_blocks_dict=None,
             ret_statistics=None,
             print_out=None):
@@ -219,7 +220,9 @@ def create_disk_deltalist(modified_disk,
                 is_discarded = True
 
         if is_discarded == True:
-            continue
+            # only apply when it is true
+            if apply_discard:
+                continue
 
         # check file system 
         modified_fd.seek(offset)
