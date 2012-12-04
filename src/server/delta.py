@@ -826,6 +826,11 @@ def divide_blobs(delta_list, overlay_path, blob_size_kb,
 def discard_free_chunks(merged_modified_list, chunk_size, disk_discard, memory_discard, 
         print_out=sys.stdout):
     removing_item = list()
+    if disk_discard == None:
+        disk_discard = dict()
+    if memory_discard == None:
+        memory_discard = dict()
+    
     for item in merged_modified_list:
         chunk_number = item.offset/chunk_size
         if item.delta_type == DeltaItem.DELTA_DISK:
