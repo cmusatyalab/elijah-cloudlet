@@ -26,7 +26,7 @@ from optparse import OptionParser
 from threading import Thread
 import cloudlet_client
 
-application = ['moped', 'moped_random', 'face', 'mar', 'speech']
+application = ['moped', 'moped_random', 'face', 'mar', 'speech', 'graphics']
 
 def process_command_line(argv):
     global command_type
@@ -102,6 +102,8 @@ def send_thread(sock, application, time_dict):
         overlay_meta_path = '/home/krha/cloudlet/image/overlay/speech/overlay-meta'
     elif application == 'face':
         overlay_meta_path = '/home/krha/cloudlet/image/overlay/face/overlay-meta'
+    elif application == 'graphics':
+        overlay_meta_path = '/home/krha/cloudlet/image/overlay/graphics/overlay-meta'
     else:
         raise Exception("NO valid application name: %s" % application)
 
