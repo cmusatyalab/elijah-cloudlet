@@ -102,10 +102,10 @@ class VMNetFS(threading.Thread):
             total_wait_time = 0.0
             for item in wait_statistics:
                 total_wait_time += item['time']
-            print "[INFO] %d chunks waited for synthesizing for avg %f seconds" % \
-                    (len(wait_statistics), total_wait_time/len(wait_statistics))
+            print "[INFO] %d chunks waited for synthesizing for avg %f s, total: %f s" % \
+                    (len(wait_statistics), total_wait_time/len(wait_statistics), total_wait_time)
         else:
-            print "[INFO] NO wait happended at FUSE"
+            print "[INFO] NO chunks has been waited at FUSE"
         self._running = False
         print "[INFO] close Fuse Exec thread"
 
@@ -140,6 +140,7 @@ class VMNetFS(threading.Thread):
     def terminate(self):
         self.stop.set()
         if self._pipe is not None:
+            print "[INFO] Fuse close pipe"
             self._pipe.close()
             self._pipe = None
 

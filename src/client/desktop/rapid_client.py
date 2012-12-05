@@ -26,7 +26,7 @@ from optparse import OptionParser
 from threading import Thread
 import cloudlet_client
 
-application = ['moped', 'moped_random', 'face', 'mar', 'speech', 'graphics']
+application = ['moped', 'moped_random', 'face', 'mar', 'speech', 'speech_random', 'graphics']
 
 def process_command_line(argv):
     global command_type
@@ -100,6 +100,8 @@ def send_thread(sock, application, time_dict):
         overlay_meta_path = '/home/krha/cloudlet/image/overlay/mar/overlay-meta'
     elif application == 'speech':
         overlay_meta_path = '/home/krha/cloudlet/image/overlay/speech/overlay-meta'
+    elif application == 'speech_random':
+        overlay_meta_path = '/home/krha/cloudlet/image/overlay/speech_random/overlay-meta'
     elif application == 'face':
         overlay_meta_path = '/home/krha/cloudlet/image/overlay/face/overlay-meta'
     elif application == 'graphics':
@@ -125,6 +127,8 @@ def send_thread(sock, application, time_dict):
 def recv_thread(sock, application, time_dict):
     if application == "moped_random":
         application = "moped"
+    if application == "speech_random":
+        application = "speech"
 
     #recv
     data = sock.recv(4)

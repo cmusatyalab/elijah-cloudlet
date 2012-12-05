@@ -21,6 +21,7 @@ import struct
 import mmap
 import tool
 import os
+import random
 from Const import Const
 from operator import itemgetter
 from hashlib import sha256
@@ -238,12 +239,16 @@ class DeltaList(object):
 
         # to quickly find memory-disk dedup
         previous_delta_dict = dict() 
+        disk_overlay_size = 0
+        mem_overlay_size = 0
 
         for delta_item in delta_list:
             if delta_item.delta_type == DeltaItem.DELTA_MEMORY:
                 memory_count += 1
+                mem_overlay_size += len(delta_item.get_serialized())
             elif delta_item.delta_type == DeltaItem.DELTA_DISK:
                 disk_count += 1
+                disk_overlay_size+= len(delta_item.get_serialized())
 
             previous_delta_dict[delta_item.index] = delta_item
             if delta_item.ref_id == DeltaItem.REF_SELF:
@@ -293,48 +298,51 @@ class DeltaList(object):
         total_disk_count = (disk_count + disk_discarded)
 
         print_out.write("-"*50 + "\n")
-        print_out.write("[INFO] Total Modified Disk #\t: %ld\t( 100 %% )\n" % 
-                (total_disk_count))
-        print_out.write("[INFO] TRIM discard\t\t: %ld\t( %f %% )\n" % 
+        print_out.write("[INFO] Total Modified Disk #     : %ld\t( 100 %%, %f MB )\n" % 
+                (total_disk_count, disk_overlay_size/1024.0/1024))
+        print_out.write("[INFO] TRIM discard              : %ld\t( %f %% )\n" % 
                 (disk_discarded, disk_discarded*100.0/total_disk_count))
-        print_out.write("[INFO] Zero pages\t\t: %ld\t( %f %% )\n" % 
+        print_out.write("[INFO] Zero pages                : %ld\t( %f %% )\n" % 
                 (disk_from_zeros, disk_from_zeros*100.0/total_disk_count))
-        print_out.write("[INFO] Shared with Base Disk\t: %ld\t( %f %% )\n" % 
+        print_out.write("[INFO] Shared with Base Disk     : %ld\t( %f %% )\n" % 
                 (disk_from_base_disk, disk_from_base_disk*100.0/total_disk_count))
-        print_out.write("[INFO] Shared with Base Mem\t: %ld\t( %f %% )\n" % 
+        print_out.write("[INFO] Shared with Base Mem      : %ld\t( %f %% )\n" % 
                 (disk_from_base_mem, disk_from_base_mem*100.0/total_disk_count))
-        print_out.write("[INFO] Shared within Self\t: %ld\t( %f %% )\n" % 
+        print_out.write("[INFO] Shared within Self        : %ld\t( %f %% )\n" % 
                 (disk_from_self, disk_from_self*100.0/total_disk_count))
-        print_out.write("[INFO] Shared with Overlay Disk\t: %ld\t( %f %% )\n" % 
+        print_out.write("[INFO] Shared with Overlay Disk  : %ld\t( %f %% )\n" % 
                 (disk_from_overlay_disk, disk_from_overlay_disk*100.0/total_disk_count))
-        print_out.write("[INFO] Shared with Overlay Mem\t: %ld\t( %f %% )\n" % 
+        print_out.write("[INFO] Shared with Overlay Mem   : %ld\t( %f %% )\n" % 
                 (disk_from_overlay_mem, disk_from_overlay_mem*100.0/total_disk_count))
-        print_out.write("[INFO] xdelta\t\t\t: %ld\t( %f %%, real_size: %.0f KB )\n" %
+        print_out.write("[INFO] xdelta                    : %ld\t( %f %%, real_size: %.0f KB )\n" %
                 (disk_from_xdelta, disk_from_xdelta*100.0/total_disk_count, xdelta_size))
-        print_out.write("[INFO] raw\t\t\t: %ld\t( %f %%, real_size: %.0f KB )\n" % 
+        print_out.write("[INFO] raw                       : %ld\t( %f %%, real_size: %.0f KB )\n" % 
                 (disk_from_raw, disk_from_raw*100.0/total_disk_count, raw_size))
         print_out.write("-"*50 + "\n")
-        print_out.write("[INFO] Total Modified Memory #\t: %ld\t( 100 %% )\n" % 
-                (total_memory_count))
-        print_out.write("[INFO] FREE discard\t\t: %ld\t( %f %% )\n" % 
-                (mem_discarded, mem_discarded*100.0/total_memory_count))
-        print_out.write("[INFO] Zero pages\t\t: %ld\t( %f %% )\n" % 
-                (memory_from_zeros, memory_from_zeros*100.0/total_memory_count))
-        print_out.write("[INFO] Shared with Base Disk\t: %ld\t( %f %% )\n" % 
-                (memory_from_base_disk, memory_from_base_disk*100.0/total_memory_count))
-        print_out.write("[INFO] Shared with Base Mem\t: %ld\t( %f %% )\n" % 
-                (memory_from_base_mem, memory_from_base_mem*100.0/total_memory_count))
-        print_out.write("[INFO] Shared within Self\t: %ld\t( %f %% )\n" % 
-                (memory_from_self, memory_from_self*100.0/total_memory_count))
-        print_out.write("[INFO] Shared with Overlay Disk\t: %ld\t( %f %% )\n" % 
-                (memory_from_overlay_disk, memory_from_overlay_disk*100.0/total_memory_count))
-        print_out.write("[INFO] Shared with Overlay Mem\t: %ld\t( %f %% )\n" % 
-                (memory_from_overlay_mem, memory_from_overlay_mem*100.0/total_memory_count))
-        print_out.write("[INFO] xdelta\t\t\t: %ld\t( %f %%, real_size: %.0f KB )\n" %
-                (memory_from_xdelta, memory_from_xdelta*100.0/total_memory_count, xdelta_size))
-        print_out.write("[INFO] raw\t\t\t: %ld\t( %f %%, real_size: %.0f KB )\n" % 
-                (memory_from_raw, memory_from_raw*100.0/total_memory_count, raw_size))
-        print_out.write("-"*50 + "\n")
+        try:
+            print_out.write("[INFO] Total Modified Memory #  : %ld\t( 100 %%, %f MB)\n" % 
+                    (total_memory_count, mem_overlay_size/1024.0/1024))
+            print_out.write("[INFO] FREE discard             : %ld\t( %f %% )\n" % 
+                    (mem_discarded, mem_discarded*100.0/total_memory_count))
+            print_out.write("[INFO] Zero pages               : %ld\t( %f %% )\n" % 
+                    (memory_from_zeros, memory_from_zeros*100.0/total_memory_count))
+            print_out.write("[INFO] Shared with Base Disk    : %ld\t( %f %% )\n" % 
+                    (memory_from_base_disk, memory_from_base_disk*100.0/total_memory_count))
+            print_out.write("[INFO] Shared with Base Mem     : %ld\t( %f %% )\n" % 
+                    (memory_from_base_mem, memory_from_base_mem*100.0/total_memory_count))
+            print_out.write("[INFO] Shared within Self       : %ld\t( %f %% )\n" % 
+                    (memory_from_self, memory_from_self*100.0/total_memory_count))
+            print_out.write("[INFO] Shared with Overlay Disk : %ld\t( %f %% )\n" % 
+                    (memory_from_overlay_disk, memory_from_overlay_disk*100.0/total_memory_count))
+            print_out.write("[INFO] Shared with Overlay Mem  : %ld\t( %f %% )\n" % 
+                    (memory_from_overlay_mem, memory_from_overlay_mem*100.0/total_memory_count))
+            print_out.write("[INFO] xdelta                   : %ld\t( %f %%, real_size: %.0f KB )\n" %
+                    (memory_from_xdelta, memory_from_xdelta*100.0/total_memory_count, xdelta_size))
+            print_out.write("[INFO] raw                      : %ld\t( %f %%, real_size: %.0f KB )\n" % 
+                    (memory_from_raw, memory_from_raw*100.0/total_memory_count, raw_size))
+            print_out.write("-"*50 + "\n")
+        except ZeroDivisionError as e:
+            print_out.write("[INFO] No memory modification\n")
 
 
 def diff_with_deltalist(delta_list, const_deltalist, ref_id):
@@ -489,7 +497,7 @@ class Recovered_delta(multiprocessing.Process):
                 overlay_chunk_ids.append("%d:%ld" % 
                         (Recovered_delta.FUSE_INDEX_DISK, overlay_chunk_id))
 
-            if len(overlay_chunk_ids) % 1000 == 0:
+            if len(overlay_chunk_ids) % 1 == 0:
                 self.recover_mem_fd.flush()
                 self.recover_disk_fd.flush()
 
@@ -622,6 +630,7 @@ def reorder_deltalist_linear(chunk_size, delta_list):
                 delta_list.insert(index, ref_item)
     print "[Debug][REORDER] reordering takes : %f" % (time.time()-start_time)
 
+
 def reorder_deltalist_file(mem_access_file, chunk_size, delta_list):
     # chunks that appear earlier in access file comes afront in deltalist
     if len(delta_list) == 0 or type(delta_list[0]) != DeltaItem:
@@ -633,11 +642,20 @@ def reorder_deltalist_file(mem_access_file, chunk_size, delta_list):
     reorder_deltalist(access_list, chunk_size, delta_list)
 
 
+def reorder_deltalist_random(chunk_size, delta_list):
+    access_list = [delta_item.offset/chunk_size for delta_item in delta_list]
+    random.shuffle(access_list)
+    reorder_deltalist(access_list, chunk_size, delta_list)
+
+
 def reorder_deltalist(access_list, chunk_size, delta_list):
     start_time = time.time()
     delta_dict = dict()
     for item in delta_list:
         delta_dict[item.index] = item
+
+    # first sort the chunks with offset
+    delta_list.sort(key=itemgetter('delta_type', 'offset'))
 
     access_list.reverse()
     before_length = len(delta_list)
@@ -689,6 +707,9 @@ def _save_blob(start_index, delta_list, self_ref_dict, blob_name, blob_size, sta
     original_length = 0
     index = start_index
     item_count = 0
+
+    memory_overlay_size = 0
+    disk_overlay_size = 0
     
     while index < len(delta_list):
         delta_item = delta_list[index]
@@ -696,12 +717,15 @@ def _save_blob(start_index, delta_list, self_ref_dict, blob_name, blob_size, sta
         if delta_item.ref_id != DeltaItem.REF_SELF:
             delta_bytes = delta_item.get_serialized()
             original_length += len(delta_bytes)
-            comp_data += comp.compress(delta_bytes)
+            comp_delta_bytes = comp.compress(delta_bytes)
+            comp_data += comp_delta_bytes
             item_count += 1
             if delta_item.delta_type == DeltaItem.DELTA_MEMORY:
                 memory_offset_list.append(delta_item.offset)
+                memory_overlay_size += len(comp_delta_bytes)
             elif delta_item.delta_type == DeltaItem.DELTA_DISK:
                 disk_offset_list.append(delta_item.offset)
+                disk_overlay_size += len(comp_delta_bytes)
             else:
                 raise DeltaError("Delta should be either memory or disk")
 
@@ -712,12 +736,15 @@ def _save_blob(start_index, delta_list, self_ref_dict, blob_name, blob_size, sta
                 for deduped_item in deduped_list:
                     deduped_bytes = deduped_item.get_serialized()
                     original_length += len(deduped_bytes)
-                    comp_data += comp.compress(deduped_bytes)
+                    comp_deduped_bytes = comp.compress(deduped_bytes)
+                    comp_data += comp_deduped_bytes
                     item_count += 1
                     if deduped_item.delta_type == DeltaItem.DELTA_MEMORY:
                         memory_offset_list.append(deduped_item.offset)
+                        memory_overlay_size += len(comp_deduped_bytes)
                     elif deduped_item.delta_type == DeltaItem.DELTA_DISK:
                         disk_offset_list.append(deduped_item.offset)
+                        disk_overlay_size += len(comp_deduped_bytes)
                     else:
                         raise DeltaError("Delta should be either memory or disk")
             
@@ -768,6 +795,7 @@ def divide_blobs(delta_list, overlay_path, blob_size_kb,
     statistics = dict()
     index = 0
     comp_counter = 0
+    blob_output_size = 0
     while index < len(delta_list):
         blob_name = "%s_%d.xz" % (overlay_path, blob_number)
         end_index, memory_offsets, disk_offsets = \
@@ -787,9 +815,30 @@ def divide_blobs(delta_list, overlay_path, blob_size_kb,
             Const.META_OVERLAY_FILE_MEMORY_CHUNKS: memory_chunks
             }
         overlay_list.append(blob_dict)
+        blob_output_size += file_size
     end_time = time.time()
     print_out.write("[Debug] Overlay Compression time: %f, delta_item: %ld\n" % 
             ((end_time-start_time), comp_counter))
+    print_out.write("[SIZE] total blob size: %ld\n" % blob_output_size)
     return overlay_list 
 
 
+def discard_free_chunks(merged_modified_list, chunk_size, disk_discard, memory_discard, 
+        print_out=sys.stdout):
+    removing_item = list()
+    if disk_discard == None:
+        disk_discard = dict()
+    if memory_discard == None:
+        memory_discard = dict()
+    
+    for item in merged_modified_list:
+        chunk_number = item.offset/chunk_size
+        if item.delta_type == DeltaItem.DELTA_DISK:
+            if disk_discard.get(chunk_number, None) != None:
+                removing_item.append(item)
+        if item.delta_type == DeltaItem.DELTA_MEMORY:
+            if memory_discard.get(chunk_number, None) != None:
+                removing_item.append(item)
+
+    for item in removing_item:
+        merged_modified_list.remove(item)

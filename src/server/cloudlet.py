@@ -547,7 +547,26 @@ def print_usage(program_name):
     print ' -s, --stop [command_port]' + '\tstop VM using qemu telnet monitor'
 
 
+def validate_congifuration():
+    cmd = "kvm --version"
+    proc = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, shell=True)
+    out, err = proc.communicate()
+    if len(err) > 0:
+        print "KVM validation Error: %s" % (err)
+        return False
+    if out.find("Cloudlet") > 0:
+        print "KVM validation Error, Incorrect Version:\n%s" % (out)
+        return False
+    if out.find('1.1.1') < 0:
+        print "Invalid KVM version. Use 1.1.1:\n%s" % (out)
+        return False
+    return True
+
 def main(argv):
+    if not validate_congifuration():
+        sys.stderr.write("failed to validate configuration\n")
+        sys.exit(1)
+
     if len(argv) < 2:
         print_usage(os.path.basename(argv[0]))
         sys.exit(2)
