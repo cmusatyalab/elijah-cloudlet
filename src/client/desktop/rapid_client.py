@@ -93,8 +93,13 @@ def synthesis(address, port, application):
 def send_thread(sock, application, time_dict):
     if application == 'moped':
         overlay_meta_path = '/home/krha/cloudlet/image/overlay/moped/overlay-meta'
+    elif application == 'moped_linear_16k':
+        overlay_meta_path = '/home/krha/cloudlet/image/overlay/moped/linear/16/overlay-meta'
+    elif application == 'moped_linear_1024k':
+        overlay_meta_path = '/home/krha/cloudlet/image/overlay/moped/linear/16/overlay-meta'
+    elif application == 'moped_linear_single':
+        overlay_meta_path = '/home/krha/cloudlet/image/overlay/moped/linear/16/overlay-meta'
     elif application == 'moped_random':
-        # moped + random 100MB file
         overlay_meta_path = '/home/krha/cloudlet/image/overlay/moped_random/overlay-meta'
     elif application == 'mar':
         overlay_meta_path = '/home/krha/cloudlet/image/overlay/mar/overlay-meta'

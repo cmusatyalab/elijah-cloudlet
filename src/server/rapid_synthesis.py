@@ -45,6 +45,7 @@ class Server_Const(object):
     # PIPLINING
     TRANSFER_SIZE = 1024*16
     END_OF_FILE = "!!Overlay Transfer End Marker"
+    AUTOMATION = False
 
     # Web server for Andorid Client
     LOCAL_IPADDRESS = 'localhost'
@@ -162,6 +163,9 @@ def process_command_line(argv):
     parser.add_option(
             '-c', '--config', action='store', type='string', dest='config_filename',
             help='Set configuration file, which has base VM information, to work as a server mode.')
+    parser.add_option(
+            '-r', '--repeat', action='store_true', dest='automatic',
+            help='Automatic exit triggered by client')
     parser.add_option(
             '-s', '--sequential', action='store_true', dest='sequential',
             help='test no-piplining for speedup measurement')
@@ -453,6 +457,8 @@ def main(argv=None):
             sys.exit(2)
 
         Server_Const.LOCAL_IPADDRESS = "0.0.0.0" # get_local_ipaddress()
+        if settings.automatic:
+            Server_Const.EXIT_BY_CLIENT = True
         server_address = (Server_Const.LOCAL_IPADDRESS, Server_Const.SERVER_PORT_NUMBER)
         print "Open TCP Server (%s)\n" % (str(server_address))
         SocketServer.TCPServer.allow_reuse_address = True
