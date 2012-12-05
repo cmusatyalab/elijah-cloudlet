@@ -267,6 +267,7 @@ class SynthesisTCPHandler(SocketServer.StreamRequestHandler):
 
     def handle(self):
         # check_base VM
+        Log.write("----------------------- New Connection --------------\n")
         start_time = time.time()
         header_start_time = time.time()
         base_path, meta_info = self._check_validity(self.request)
@@ -275,6 +276,9 @@ class SynthesisTCPHandler(SocketServer.StreamRequestHandler):
         for blob in meta_info[Const.META_OVERLAY_FILES]:
             url = blob[Const.META_OVERLAY_FILE_NAME]
             overlay_urls.append(url)
+        Log.write("Base VM     : %s\n" % base_path)
+        Log.write("Application : %s\n" % str(overlay_urls[0]))
+        Log.write("Blob count  : %d\n" % len(overlay_urls[0]))
         if base_path == None or meta_info == None or overlay_urls == None:
             message = "Failed, Invalid header information"
             print message
@@ -316,6 +320,10 @@ class SynthesisTCPHandler(SocketServer.StreamRequestHandler):
 
         # resume VM
         resumed_VM = cloudlet.ResumedVM(modified_img, modified_mem, fuse)
+        time_start_resume = time.time()
+        resumed_VM.start()
+        time_end_resume = time.time()
+        self.ret_success()
 
         # start processes
         download_process.start()
@@ -323,12 +331,6 @@ class SynthesisTCPHandler(SocketServer.StreamRequestHandler):
         delta_proc.start()
         fuse_thread.start()
         fuse_thread.join()
-
-        # sequential resume
-        time_start_resume = time.time()
-        resumed_VM.start()
-        time_end_resume = time.time()
-        self.ret_success()
 
         end_time = time.time()
         total_time = (end_time-start_time)

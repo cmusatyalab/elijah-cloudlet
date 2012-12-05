@@ -1265,7 +1265,7 @@ def main(argv):
         overlay_path = os.path.join(output_dir, "overlay")
         meta_info = decomp_overlay(meta, overlay_path)
 
-        blob_size_list = [4, 16, 128, 512, 1024, 1024*8, 1024*16, 1024*64, 1024*1024]
+        blob_size_list = [16, 1024, 1024*1024]
         #blob_size_list = [16]
         for order_type in ("access", "linear", "random"):
             delta_list = DeltaList.fromfile(overlay_path)
