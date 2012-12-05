@@ -276,9 +276,10 @@ class SynthesisTCPHandler(SocketServer.StreamRequestHandler):
         for blob in meta_info[Const.META_OVERLAY_FILES]:
             url = blob[Const.META_OVERLAY_FILE_NAME]
             overlay_urls.append(url)
+        app_url = str(overlay_urls[0])
         Log.write("Base VM     : %s\n" % base_path)
         Log.write("Application : %s\n" % str(overlay_urls[0]))
-        Log.write("Blob count  : %d\n" % len(overlay_urls[0]))
+        Log.write("Blob count  : %d\n" % len(overlay_urls))
         if base_path == None or meta_info == None or overlay_urls == None:
             message = "Failed, Invalid header information"
             print message
@@ -320,6 +321,7 @@ class SynthesisTCPHandler(SocketServer.StreamRequestHandler):
 
         # resume VM
         resumed_VM = cloudlet.ResumedVM(modified_img, modified_mem, fuse)
+
         time_start_resume = time.time()
         resumed_VM.start()
         time_end_resume = time.time()
@@ -347,6 +349,14 @@ class SynthesisTCPHandler(SocketServer.StreamRequestHandler):
             user_input = raw_input("q to quit: ")
             if user_input == 'q':
                 break
+
+        # TO BE DELETED - save execution pattern
+        '''
+        mem_access_list = resumed_VM.monitor.mem_access_chunk_list
+        mem_access_str = [str(item) for item in mem_access_list]
+        filename = "exec_patter_%s" % (app_url.split("/")[-2])
+        open(filename, "w+a").write('\n'.join(mem_access_str))
+        '''
 
         # printout synthesis statistics
         mem_access_list = resumed_VM.monitor.mem_access_chunk_list

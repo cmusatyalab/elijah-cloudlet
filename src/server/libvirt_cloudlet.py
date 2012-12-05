@@ -907,10 +907,10 @@ def synthesis(base_disk, meta, disk_only=False):
 
     print "[INFO] VM Disk is Fully recovered at %s" % modified_img
     print "[INFO] VM Memory is Fully recoverd at %s" % modified_mem
-    #raw_input("waiting key input")
 
     resumed_VM.join()
     connect_vnc(resumed_VM.machine)
+    #raw_input("waiting key input")
 
     # statistics
     mem_access_list = resumed_VM.monitor.mem_access_chunk_list
@@ -1267,7 +1267,7 @@ def main(argv):
 
         blob_size_list = [16, 1024, 1024*1024]
         #blob_size_list = [16]
-        for order_type in ("access", "linear", "random"):
+        for order_type in ("access", "linear"):
             delta_list = DeltaList.fromfile(overlay_path)
             sub_dir1 = os.path.join(output_dir, order_type)
             if order_type == "access":
