@@ -123,7 +123,7 @@ def start_cloudlet(sock, application, start_time):
     elif application == 'graphics':
         overlay_meta_path = '/home/krha/cloudlet/image/overlay/graphics/overlay-meta'
 
-    if len(application.split("_")) > 0:
+    if len(application.split("_")) > 1:
         app_name, order, blob_size = application.split("_")
         overlay_meta_path = "/home/krha/cloudlet/image/overlay/%s/%s/%s/overlay-meta" % \
                 (app_name, order, blob_size)
