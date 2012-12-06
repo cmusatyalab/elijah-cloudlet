@@ -30,9 +30,6 @@ import select
 
 application = ['moped', 'moped_random', 'face', 'mar', 'speech', 'speech_random', 'graphics']
 
-blob_left_list = list()
-blob_request_lock = Lock()
-blob_request_list = list()
 batch_mode = False
 
 class BlobHeader(object):
@@ -81,7 +78,7 @@ def recv_all(sock, size):
     return data
 
 
-def synthesis(address, port, application, batch=False):
+def synthesis(address, port, application, batch=False, wait_time=0):
     global batch_mode
     batch_mode = batch
     # connection
@@ -97,16 +94,18 @@ def synthesis(address, port, application, batch=False):
         sys.stderr.write("Error, %s\n" % msg)
         sys.exit(1)
 
-    recv = Thread(target=recv_thread, args=(sock, application, start_time))
-    recv.start()
+    start_cloudlet(sock, application, start_time)
+    print "finished"
+    time.sleep(wait_time)
 
-    print "Waiting for Thread joinining"
-    recv.join()
 
-def send_thread(sock, application, time_dict):
-    global blob_left_list
-    global blob_request_list
-    global blob_request_lock
+def start_cloudlet(sock, application, start_time):
+    global batch_mode
+    blob_left_list = list()
+    blob_request_list = list()
+
+    time_dict = dict()
+    app_time_dict = dict()
 
     overlay_meta_path = None
     if application == 'moped':
@@ -124,15 +123,15 @@ def send_thread(sock, application, time_dict):
     elif application == 'graphics':
         overlay_meta_path = '/home/krha/cloudlet/image/overlay/graphics/overlay-meta'
 
-    '''
     if len(application.split("_")) > 0:
         app_name, order, blob_size = application.split("_")
-        overlay_meta_path = '/home/krha/cloudlet/image/overlay/%s/%s/%s/overlay-meta' %
-    '''
+        overlay_meta_path = "/home/krha/cloudlet/image/overlay/%s/%s/%s/overlay-meta" % \
+                (app_name, order, blob_size)
 
     if overlay_meta_path == None:
         raise Exception("NO valid application name: %s" % application)
 
+    print "Overlay Meta: %s" % (overlay_meta_path)
     # modify overlay path
     local_ip = sock.getsockname()[0]
     meta_info = msgpack.unpackb(open(overlay_meta_path, "r").read())
@@ -148,110 +147,70 @@ def send_thread(sock, application, time_dict):
     sock.sendall(header)
     time_dict['send_end_time'] = time.time()
 
-    # send data
-    while len(blob_left_list) > 0:
-        # check request list
-        blob_request_lock.acquire()
-        requested_url = None
-        while len(blob_request_list) != 0:
-            requested_url = blob_request_list.pop(0)
-            if requested_url in blob_request_list:
-                break
-        blob_request_lock.release()
+    application_name = application.split("_")[0]
+    app_thread = None
 
-        if requested_url in blob_left_list:
-            sending_blob_url = requested_url
-            blob_left_list.remove(sending_blob_url)
-            #print "found urgent : %s" % (sending_blob_url)
-        else:
-            sending_blob_url = blob_left_list.pop(0)
-
-        filename = os.path.basename(sending_blob_url)
-        blob_path = os.path.join(os.path.dirname(overlay_meta_path), filename)
-        #print "sending %s" % blob_path
-        blob_data = open(blob_path, "rb").read()
-        blob_header = BlobHeader(sending_blob_url, os.path.getsize(blob_path))
-
-        sock.sendall(blob_header.get_serialized())
-        sock.sendall(blob_data)
-
-
-def recv_thread(sock, application, start_time):
-    global blob_request_list
-    global blob_request_lock
-    global batch_mode
-
-    time_dict = dict()
-    app_time_dict = dict()
-    if application == "moped_random":
-        application = "moped"
-    if application == "speech_random":
-        application = "speech"
-
-
-    epoll = select.epoll()
-    epoll.register(sock.fileno(), select.EPOLLIN)
-    connections = {}; requests = {}; responses = {}
     while True:
-        inputready, outputready, exceptrdy = select.select([sock], [],[])
+        inputready, outputready, exceptrdy = select.select([sock], [sock], [], 0.01)
         for i in inputready:
             if i == sock:
-                data = receive(self.sock)
+                data = sock.recv(4)
                 if not data:
-                    print 'Shutting down.'
-                    self.flag = True
                     break
+                ret_size = struct.unpack("!I", data)[0]
+                ret_data = recv_all(sock, ret_size);
+                json_ret = json.loads(ret_data)
+                command = json_ret.get("command")
+                if command ==  0x01:    # RET_SUCCESS
+                    print "Synthesis SUCCESS"
+                    time_dict['recv_success_time'] = time.time()
+                    #run application thread
+                    app_thread = Thread(target=application_thread, args=(sock, application_name, app_time_dict))
+                    app_thread.start()
+                    print "app started"
+                elif command == 0x02:   # RET_FAIL
+                    print "Synthesis Failed"
+                elif command == 0x03:    # request blob
+                    #print "Request: %s" % (json_ret.get("blob_url"))
+                    blob_request_list.append(str(json_ret.get("blob_url")))
                 else:
-                    sys.stdout.write(data + '\n')
-                    sys.stdout.flush()
+                    print "protocol error:%d" % (command)
 
+        # send data
+        for i in outputready:
+            if i == sock and len(blob_left_list) > 0:
+                # check request list
+                requested_url = None
+                while len(blob_request_list) != 0:
+                    requested_url = blob_request_list.pop(0)
+                    if requested_url in blob_request_list:
+                        break
 
-    # start sender thread
-    send_end_time = {}
-    sender = Thread(target=send_thread, args=(sock, application, send_end_time))
-    sender.start()
+                if requested_url in blob_left_list:
+                    sending_blob_url = requested_url
+                    blob_left_list.remove(sending_blob_url)
+                    #print "found urgent : %s" % (sending_blob_url)
+                else:
+                    sending_blob_url = blob_left_list.pop(0)
 
-    app_thread = Thread(target=application_thread, args=(sock, application, app_time_dict))
+                filename = os.path.basename(sending_blob_url)
+                blob_path = os.path.join(os.path.dirname(overlay_meta_path), filename)
+                #print "sending %s" % blob_path
+                blob_data = open(blob_path, "rb").read()
+                blob_header = BlobHeader(sending_blob_url, os.path.getsize(blob_path))
 
-    # wait for receiving
-    while True:
-        try:
-            data = sock.recv(4)
-        except socket.timeout:
-            if (app_thread.isAlive() == False) and (sender.isAlive() == False):
-                break
-            else:
-                continue
+                sock.sendall(blob_header.get_serialized())
+                sock.sendall(blob_data)
 
-        if not data:
-            break
-        ret_size = struct.unpack("!I", data)[0]
-        ret_data = recv_all(sock, ret_size);
-        json_ret = json.loads(ret_data)
-        command = json_ret.get("command")
-        if command ==  0x01:    # RET_SUCCESS
-            print "Synthesis SUCCESS"
-            time_dict['recv_success_time'] = time.time()
-            #run application thread
-            app_thread.start()
-            print "app started"
-        elif command == 0x02:   # RET_FAIL
-            print "Synthesis Failed"
-        elif command == 0x03:    # request blob
-            #print "Request: %s" % (json_ret.get("blob_url"))
-            blob_request_lock.acquire()
-            blob_request_list.append(str(json_ret.get("blob_url")))
-            blob_request_lock.release()
-        else:
-            print "protocol error:%d" % (command)
+                if len(blob_left_list) == 0:
+                    time_dict['send_end_time'] = time.time()
 
-        if (app_thread.isAlive() == False) and (sender.isAlive() == False):
+        # check condition
+        if (app_thread != None) and (app_thread.isAlive() == False) and len(blob_left_list) == 0:
             break
 
-    sender.join()
     app_thread.join()
     time_dict.update(app_time_dict)
-    time_dict.update(send_end_time)
 
     if batch_mode:
 
@@ -273,6 +232,7 @@ def application_thread(sock, application, time_dict):
     time_dict['app_start'] = time.time()
     cloudlet_client.run_application(application)
     time_dict['app_end'] = time.time()
+    print "Application Finished"
 
 
 def main(argv=None):

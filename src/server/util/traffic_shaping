@@ -19,7 +19,7 @@ IF=eth0
 # Download and Upload Bandwidth
 DNLD=40mbit
 UPLD=40mbit
-LATENCY=5ms
+LATENCY=1ms
 
 # Destination Host
 IP=128.2.210.197
