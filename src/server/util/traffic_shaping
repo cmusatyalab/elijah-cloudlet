@@ -19,11 +19,10 @@ IF=eth0
 # Download and Upload Bandwidth
 DNLD=40mbit
 UPLD=40mbit
-LATENCY=1ms
+LATENCY=5ms
 
 # Destination Host
-#IP=128.2.212.178
-IP=128.2.213.24
+IP=128.2.210.197
  
 # Filter options for limiting the intended interface.
 U32="$TC filter add dev $IF protocol ip parent 1:0 prio 1 u32"
