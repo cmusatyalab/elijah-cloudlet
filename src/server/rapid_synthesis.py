@@ -24,6 +24,7 @@ import tool
 import msgpack
 import urllib2
 
+from pprint import pformat
 from optparse import OptionParser
 from multiprocessing import Process, JoinableQueue, Queue, Manager
 from tempfile import NamedTemporaryFile
@@ -95,7 +96,7 @@ def network_worker(handler, overlay_urls, demanding_queue, out_queue, time_queue
             handler.wfile.write(json_ret)
             handler.wfile.flush()
             out_of_order_count += 1
-            print "send urgent request: %s (size:%d)" % (urgent_overlay_url, len(json_ret))
+            #print "send urgent request: %s (size:%d)" % (urgent_overlay_url, len(json_ret))
 
         #print "reading %d, %s" % (index, overlay_url)
 
@@ -104,7 +105,7 @@ def network_worker(handler, overlay_urls, demanding_queue, out_queue, time_queue
         blob_name_size = struct.unpack("!H", read_stream.read(2))[0]
         blob_url = struct.unpack("!%ds" % blob_name_size , read_stream.read(blob_name_size))[0]
         finished_url.append(blob_url)
-        print "receiving %s(%d)" % (blob_url, blob_size)
+        #print "receiving %s(%d)" % (blob_url, blob_size)
         read_count = 0
         while read_count < blob_size:
             read_min_size = min(chunk_size, blob_size-read_count)
@@ -261,7 +262,7 @@ class SynthesisTCPHandler(SocketServer.StreamRequestHandler):
         data = request.recv(4)
         msgpack_size = struct.unpack("!I", data)[0]
 
-        # recv JSON header
+        # recv MSGPACK header
         msgpack_data = request.recv(msgpack_size)
         while len(msgpack_data) < msgpack_size:
             msgpack_data += request.recv(msgpack_size- len(msgpack_data))
@@ -288,7 +289,7 @@ class SynthesisTCPHandler(SocketServer.StreamRequestHandler):
 
     def handle(self):
         # check_base VM
-        Log.write("----------------------- New Connection --------------\n")
+        Log.write("\n\n----------------------- New Connection --------------\n")
         start_time = time.time()
         header_start_time = time.time()
         base_path, meta_info = self._check_validity(self.request)
@@ -370,7 +371,18 @@ class SynthesisTCPHandler(SocketServer.StreamRequestHandler):
 
         # exit status
         if Server_Const.EXIT_BY_CLIENT:
-            finish_flag = self.rfile.read(4)
+            Log.write("[SOCKET] waiting for client exit message\n")
+            data = self.request.recv(4)
+            msgpack_size = struct.unpack("!I", data)[0]
+            # recv MSGPACK header
+            msgpack_data = self.request.recv(msgpack_size)
+            while len(msgpack_data) < msgpack_size:
+                msgpack_data += self.request.recv(msgpack_size- len(msgpack_data))
+            client_data = msgpack.unpackb(msgpack_data)
+            Log.write("-----------------------------\n")
+            Log.write("Client data\n")
+            Log.write(pformat(client_data))
+            Log.write("\n")
         else:
             #cloudlet.connect_vnc(resumed_VM.machine)
             while True:
@@ -489,6 +501,7 @@ def main(argv=None):
         server = SocketServer.TCPServer(server_address, SynthesisTCPHandler)
         server.socket.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
         server.socket.setsockopt(socket.IPPROTO_TCP, socket.TCP_NODELAY, 1)
+        print "No delay: %d" % server.socket.getsockopt(socket.IPPROTO_TCP, socket.TCP_NODELAY)
 
         try:
             server.serve_forever()

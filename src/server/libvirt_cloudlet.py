@@ -206,6 +206,7 @@ def create_overlay(base_image, disk_only=False):
     # First resume VM, then let user edit its VM
     # Finally, return disk/memory binary as an overlay
     # base_image: path to base disk
+    start_time = time()
     log_path = os.path.join(os.path.dirname(base_image), os.path.basename(base_image) + Const.OVERLAY_LOG)
     Log = CloudletLog(log_path)
 
@@ -245,6 +246,7 @@ def create_overlay(base_image, disk_only=False):
     conn = get_libvirt_connection()
     machine = run_snapshot(conn, modified_disk, base_mem_fuse, qemu_logfile=qemu_logfile.name)
     connect_vnc(machine)
+    Log.write("[TIME] user interaction time for creating overlay: %f\n" % (time()-start_time))
 
     # 1-2. Stop monitoring for memory access (snapshot will create a lot of access)
     #      and get modified memory
@@ -1156,6 +1158,7 @@ def main(argv):
                     2) disk if disk only")
             sys.exit(1)
         # create overlay
+        start_time = time()
         disk_path = args[1]
         if len(args) == 3 and args[2] == 'disk':
             disk_only = True
@@ -1164,6 +1167,7 @@ def main(argv):
         overlay_files = create_overlay(disk_path, disk_only)
         print "[INFO] overlay metafile : %s" % overlay_files[0]
         print "[INFO] overlay : %s" % str(overlay_files[1])
+        print "[INFO] overlay creation time: %f" % (time()-start_time())
     elif mode == MODE[2]:   #synthesis
         if len(args) < 3:
             parser.error("Synthesis requires 2 arguments\n \

@@ -17,8 +17,8 @@ TC=/sbin/tc
 IF=eth0
 
 # Download and Upload Bandwidth
-DNLD=40mbit
-UPLD=40mbit
+DNLD=100mbit
+UPLD=100mbit
 LATENCY=1ms
 
 # Destination Host
