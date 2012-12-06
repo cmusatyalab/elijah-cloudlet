@@ -45,11 +45,17 @@ class Server_Const(object):
     # PIPLINING
     TRANSFER_SIZE = 1024*16
     END_OF_FILE = "!!Overlay Transfer End Marker"
-    AUTOMATION = False
+    EXIT_BY_CLIENT = False
 
     # Web server for Andorid Client
     LOCAL_IPADDRESS = 'localhost'
     SERVER_PORT_NUMBER = 8021
+
+
+class SynthesisProtocol(object):
+    RET_SUCESS          = 0x01
+    RET_FAIL            = 0x02
+    RET_BLOB_REQUEST    = 0x03
 
 
 class RapidSynthesisError(Exception):
@@ -62,7 +68,8 @@ def recv_all(request, size):
         data += request.recv(size - len(data))
     return data
 
-def network_worker(overlay_urls, demanding_queue, out_queue, time_queue, chunk_size):
+def network_worker(handler, overlay_urls, demanding_queue, out_queue, time_queue, chunk_size):
+    read_stream = handler.rfile
     start_time= time.time()
     total_read_size = 0
     counter = 0
@@ -70,7 +77,7 @@ def network_worker(overlay_urls, demanding_queue, out_queue, time_queue, chunk_s
     finished_url = list()
     out_of_order_count = 0
     total_urls_count = len(overlay_urls)
-    while len(overlay_urls) > 0:
+    while len(finished_url) < total_urls_count:
         urgent_overlay_url = None
         while not demanding_queue.empty():
             # demanding_queue can have multiple same request
@@ -82,25 +89,35 @@ def network_worker(overlay_urls, demanding_queue, out_queue, time_queue, chunk_s
 
         if urgent_overlay_url != None:
             # process urgent overlay first
-            overlay_url = urgent_overlay_url
-            overlay_urls.remove(overlay_url)
+            json_ret = json.dumps({"command":SynthesisProtocol.RET_BLOB_REQUEST, "blob_url":urgent_overlay_url})
+            json_size = struct.pack("!I", len(json_ret))
+            handler.request.send(json_size)
+            handler.wfile.write(json_ret)
+            handler.wfile.flush()
             out_of_order_count += 1
-            #print "find urgent : %s" % urgent_overlay_url
-        else:
-            # No urgent request, process as normal
-            overlay_url = overlay_urls.pop(0)
+            print "send urgent request: %s (size:%d)" % (urgent_overlay_url, len(json_ret))
 
         #print "reading %d, %s" % (index, overlay_url)
-        finished_url.append(overlay_url)
-        stream = urllib2.urlopen(overlay_url)
-        while True:
-            counter += 1
-            chunk = stream.read(chunk_size)
-            total_read_size += len(chunk)
+
+        # read header
+        blob_size = struct.unpack("!I", read_stream.read(4))[0]
+        blob_name_size = struct.unpack("!H", read_stream.read(2))[0]
+        blob_url = struct.unpack("!%ds" % blob_name_size , read_stream.read(blob_name_size))[0]
+        finished_url.append(blob_url)
+        print "receiving %s(%d)" % (blob_url, blob_size)
+        read_count = 0
+        while read_count < blob_size:
+            read_min_size = min(chunk_size, blob_size-read_count)
+            chunk = read_stream.read(read_min_size)
+            read_size = len(chunk)
             if chunk:
                 out_queue.put(chunk)
             else:
                 break
+
+            counter += 1
+            read_count += read_size
+        total_read_size += read_count
         index += 1
 
     out_queue.put(Server_Const.END_OF_FILE)
@@ -164,7 +181,7 @@ def process_command_line(argv):
             '-c', '--config', action='store', type='string', dest='config_filename',
             help='Set configuration file, which has base VM information, to work as a server mode.')
     parser.add_option(
-            '-r', '--repeat', action='store_true', dest='automatic',
+            '-b', '--batch', action='store_true', dest='batch',
             help='Automatic exit triggered by client')
     parser.add_option(
             '-s', '--sequential', action='store_true', dest='sequential',
@@ -227,13 +244,13 @@ class SynthesisTCPHandler(SocketServer.StreamRequestHandler):
 
     def ret_fail(self, message):
         print "Error, %s" % str(message)
-        json_ret = json.dumps({"Error":message})
+        json_ret = json.dumps({"command":SynthesisProtocol.RET_FAIL, "Error":message})
         json_size = struct.pack("!I", len(json_ret))
         self.request.send(json_size)
         self.wfile.write(json_ret)
 
     def ret_success(self):
-        json_ret = json.dumps({"command":0x22, "return":"SUCCESS", "LaunchVM-IP":Server_Const.LOCAL_IPADDRESS})
+        json_ret = json.dumps({"command":SynthesisProtocol.RET_SUCESS, "return":"SUCCESS", "LaunchVM-IP":Server_Const.LOCAL_IPADDRESS})
         print "SUCCESS to launch VM"
         json_size = struct.pack("!I", len(json_ret))
         self.request.send(json_size)
@@ -309,7 +326,9 @@ class SynthesisTCPHandler(SocketServer.StreamRequestHandler):
         download_queue = JoinableQueue()
         download_process = Process(target=network_worker, 
                 args=(
-                    overlay_urls, demanding_queue, download_queue, time_transfer, Server_Const.TRANSFER_SIZE, 
+                    self,
+                    overlay_urls, demanding_queue, 
+                    download_queue, time_transfer, Server_Const.TRANSFER_SIZE, 
                     )
                 )
         decomp_process = Process(target=decomp_worker,
@@ -348,11 +367,16 @@ class SynthesisTCPHandler(SocketServer.StreamRequestHandler):
 
         # terminate
         resumed_VM.join()
-        #cloudlet.connect_vnc(resumed_VM.machine)
-        while True:
-            user_input = raw_input("q to quit: ")
-            if user_input == 'q':
-                break
+
+        # exit status
+        if Server_Const.EXIT_BY_CLIENT:
+            finish_flag = self.rfile.read(4)
+        else:
+            #cloudlet.connect_vnc(resumed_VM.machine)
+            while True:
+                user_input = raw_input("q to quit: ")
+                if user_input == 'q':
+                    break
 
         # TO BE DELETED - save execution pattern
         '''
@@ -457,13 +481,14 @@ def main(argv=None):
             sys.exit(2)
 
         Server_Const.LOCAL_IPADDRESS = "0.0.0.0" # get_local_ipaddress()
-        if settings.automatic:
+        if settings.batch:
             Server_Const.EXIT_BY_CLIENT = True
         server_address = (Server_Const.LOCAL_IPADDRESS, Server_Const.SERVER_PORT_NUMBER)
         print "Open TCP Server (%s)\n" % (str(server_address))
         SocketServer.TCPServer.allow_reuse_address = True
         server = SocketServer.TCPServer(server_address, SynthesisTCPHandler)
         server.socket.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+        server.socket.setsockopt(socket.IPPROTO_TCP, socket.TCP_NODELAY, 1)
 
         try:
             server.serve_forever()

@@ -23,10 +23,29 @@ import socket
 import json
 import time
 from optparse import OptionParser
-from threading import Thread
+from threading import Thread, Lock
 import cloudlet_client
 
 application = ['moped', 'moped_random', 'face', 'mar', 'speech', 'speech_random', 'graphics']
+
+blob_left_list = list()
+blob_request_lock = Lock()
+blob_request_list = list()
+batch_mode = False
+
+class BlobHeader(object):
+    def __init__(self, blob_url, blob_size):
+        self.blob_url = blob_url
+        self.blob_size = blob_size
+
+    def get_serialized(self):
+        # blob_size         :   unsigned int
+        # blob_name         :   unsigned short
+        # blob_name_size    :   variable string
+        data = struct.pack("!IH%ds" % len(self.blob_url), \
+                self.blob_size, len(self.blob_url), self.blob_url)
+        return data
+
 
 def process_command_line(argv):
     global command_type
@@ -37,6 +56,9 @@ def process_command_line(argv):
     parser.add_option(
             '-a', '--app', action='store', type='string', dest='application',
             help="Set base VM name")
+    parser.add_option(
+            '-b', '--batch', action='store_true', dest='batch',
+            help='Automatic exit triggered by client')
     parser.add_option(
             '-s', '--server', action='store', type='string', dest='server_ip',
             help="Set cloudlet server's IP address")
@@ -63,34 +85,35 @@ def synthesis(address, port, application):
     try:
         print "Connecting to (%s, %d).." % (address, port)
         sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-        sock.setblocking(True)
+        #sock.setblocking(True)
+        sock.settimeout(10)
         sock.connect((address, port))
     except socket.error, msg:
         sys.stderr.write("Error, %s\n" % msg)
         sys.exit(1)
 
-    send_end_time = {}
-    recv_end_time = {}
-    sender = Thread(target=send_thread, args=(sock, application, send_end_time))
-    recv = Thread(target=recv_thread, args=(sock, application, recv_end_time))
+    thread_time = {}
+    recv = Thread(target=recv_thread, args=(sock, application, thread_time))
 
-    sender.start()
     recv.start()
 
     print "Waiting for Thread joinining"
-    sender.join()
     recv.join()
-    send_end = send_end_time['time']
-    recv_end = recv_end_time['time']
+    send_end = thread_time['send_end_time']
+    recv_end = thread_time['recv_success_time']
     print "Transfer %f-%f = %f" % (send_end, start_time, (send_end-start_time))
     print "Response %f-%f = %f" % (recv_end, start_time, (recv_end-start_time))
-    app_start_time = recv_end_time['app_start']
-    app_end_time = recv_end_time['app_end']
+    app_start_time = thread_time['app_start']
+    app_end_time = thread_time['app_end']
     print "App End  %f-%f = %f" % (app_end_time, start_time, (app_end_time-start_time))
     print "App      %f-%f = %f" % (app_end_time, app_start_time, (app_end_time-app_start_time))
 
 
 def send_thread(sock, application, time_dict):
+    global blob_left_list
+    global blob_request_list
+    global blob_request_lock
+
     if application == 'moped':
         overlay_meta_path = '/home/krha/cloudlet/image/overlay/moped/overlay-meta'
     elif application == 'moped_linear_16k':
@@ -121,43 +144,121 @@ def send_thread(sock, application, time_dict):
         filename = os.path.basename(blob['overlay_name'])
         url = "http://%s/overlay/%s/%s" % (local_ip, application, filename)
         blob['overlay_name'] = url
+        blob_left_list.append(url)
 
     # send header
     header = msgpack.packb(meta_info)
     sock.sendall(struct.pack("!I", len(header)))
     sock.sendall(header)
-    time_dict['time'] = time.time()
+    time_dict['send_end_time'] = time.time()
+
+    # send data
+    while len(blob_left_list) > 0:
+        # check request list
+        blob_request_lock.acquire()
+        requested_url = None
+        while len(blob_request_list) != 0:
+            requested_url = blob_request_list.pop(0)
+            if requested_url in blob_request_list:
+                break
+        blob_request_lock.release()
+
+        if requested_url in blob_left_list:
+            sending_blob_url = requested_url
+            blob_left_list.remove(sending_blob_url)
+            print "found urgent : %s" % (sending_blob_url)
+        else:
+            sending_blob_url = blob_left_list.pop(0)
+
+        filename = os.path.basename(sending_blob_url)
+        blob_path = os.path.join(os.path.dirname(overlay_meta_path), filename)
+        print "sending %s" % blob_path
+        blob_data = open(blob_path, "rb").read()
+        blob_header = BlobHeader(sending_blob_url, os.path.getsize(blob_path))
+
+        sock.sendall(blob_header.get_serialized())
+        sock.sendall(blob_data)
 
 
 def recv_thread(sock, application, time_dict):
+    global blob_request_list
+    global blob_request_lock
+    global batch_mode
+
+    app_time_dict = dict()
     if application == "moped_random":
         application = "moped"
     if application == "speech_random":
         application = "speech"
 
-    #recv
-    data = sock.recv(4)
-    ret_size = struct.unpack("!I", data)[0]
-    ret_data = recv_all(sock, ret_size);
-    json_ret = json.loads(ret_data)
-    ret_value = json_ret['return']
-    print ret_value
-    if ret_value != "SUCCESS":
-        print "Synthesis Failed"
-    time_dict['time'] = time.time()
+    # start sender thread
+    send_end_time = {}
+    sender = Thread(target=send_thread, args=(sock, application, send_end_time))
+    sender.start()
 
-    #run application
+    app_thread = Thread(target=application_thread, args=(sock, application, app_time_dict))
+
+    # wait for receiving
+    while True:
+        try:
+            data = sock.recv(4)
+        except socket.timeout:
+            if (app_thread.isAlive() == False) and (sender.isAlive() == False):
+                break
+            else:
+                continue
+
+        if not data:
+            break
+        ret_size = struct.unpack("!I", data)[0]
+        ret_data = recv_all(sock, ret_size);
+        json_ret = json.loads(ret_data)
+        command = json_ret.get("command")
+        if command ==  0x01:    # RET_SUCCESS
+            print "Synthesis SUCCESS"
+            time_dict['recv_success_time'] = time.time()
+            #run application thread
+            app_thread.start()
+            print "app started"
+        elif command == 0x02:   # RET_FAIL
+            print "Synthesis Failed"
+        elif command == 0x03:    # request blob
+            print "Request: %s" % (json_ret.get("blob_url"))
+            blob_request_lock.acquire()
+            blob_request_list.append(str(json_ret.get("blob_url")))
+            blob_request_lock.release()
+        else:
+            print "protocol error:%d" % (command)
+
+        if (app_thread.isAlive() == False) and (sender.isAlive() == False):
+            break
+
+    sender.join()
+    app_thread.join()
+    time_dict.update(app_time_dict)
+    time_dict.update(send_end_time)
+
+    if batch_mode:
+        finish_flag = struct.pack("!I", 1)
+        sock.sendall(finish_flag)
+
+
+def application_thread(sock, application, time_dict):
     time_dict['app_start'] = time.time()
     cloudlet_client.run_application(application)
     time_dict['app_end'] = time.time()
 
 
 def main(argv=None):
+    global batch_mode
     settings, args = process_command_line(sys.argv[1:])
     if settings.server_ip:
         cloudlet_server_ip = settings.server_ip
     else:
         cloudlet_server_ip = "cloudlet.krha.kr"
+    if settings.batch:
+        batch_mode = True
+
     cloudlet_server_port = 8021
     synthesis(cloudlet_server_ip, cloudlet_server_port, settings.application)
 
