@@ -767,7 +767,7 @@ def run_snapshot(conn, disk_image, mem_snapshot, **kwargs):
     return machine
 
 
-def connect_vnc(machine):
+def connect_vnc(machine, no_wait=False):
     # Get VNC port
     vnc_port = 5900
     try:
@@ -782,6 +782,9 @@ def connect_vnc(machine):
     vnc_process = subprocess.Popen("gvncviewer localhost:%d" % vnc_port, 
             stdout=subprocess.PIPE, stderr=subprocess.PIPE,
             shell=True)
+    if no_wait == True:
+        return
+
     print "[INFO] waiting for finishing VNC interaction"
     try:
         vnc_process.wait()

@@ -98,8 +98,6 @@ def network_worker(handler, overlay_urls, demanding_queue, out_queue, time_queue
             out_of_order_count += 1
             #print "send urgent request: %s (size:%d)" % (urgent_overlay_url, len(json_ret))
 
-        #print "reading %d, %s" % (index, overlay_url)
-
         # read header
         blob_size = struct.unpack("!I", read_stream.read(4))[0]
         blob_name_size = struct.unpack("!H", read_stream.read(2))[0]
@@ -349,15 +347,18 @@ class SynthesisTCPHandler(SocketServer.StreamRequestHandler):
         time_start_resume = time.time()
         resumed_VM.start()
         time_end_resume = time.time()
-        self.ret_success()
 
         # start processes
         download_process.start()
         decomp_process.start()
         delta_proc.start()
         fuse_thread.start()
-        fuse_thread.join()
 
+
+        resumed_VM.join()
+        self.ret_success()
+
+        fuse_thread.join()
         end_time = time.time()
         total_time = (end_time-start_time)
 
@@ -367,7 +368,7 @@ class SynthesisTCPHandler(SocketServer.StreamRequestHandler):
                 print_out=Log, resume_time=(time_end_resume-time_start_resume))
 
         # terminate
-        resumed_VM.join()
+        #cloudlet.connect_vnc(resumed_VM.machine, no_wait=True)
 
         # exit status
         if Server_Const.EXIT_BY_CLIENT:
@@ -384,19 +385,16 @@ class SynthesisTCPHandler(SocketServer.StreamRequestHandler):
             Log.write(pformat(client_data))
             Log.write("\n")
         else:
-            #cloudlet.connect_vnc(resumed_VM.machine)
             while True:
                 user_input = raw_input("q to quit: ")
                 if user_input == 'q':
                     break
 
         # TO BE DELETED - save execution pattern
-        '''
         mem_access_list = resumed_VM.monitor.mem_access_chunk_list
         mem_access_str = [str(item) for item in mem_access_list]
         filename = "exec_patter_%s" % (app_url.split("/")[-2])
         open(filename, "w+a").write('\n'.join(mem_access_str))
-        '''
 
         # printout synthesis statistics
         mem_access_list = resumed_VM.monitor.mem_access_chunk_list
