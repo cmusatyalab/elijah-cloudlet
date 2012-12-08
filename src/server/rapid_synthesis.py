@@ -79,31 +79,37 @@ def network_worker(handler, overlay_urls, demanding_queue, out_queue, time_queue
     out_of_order_count = 0
     total_urls_count = len(overlay_urls)
     while len(finished_url) < total_urls_count:
+        # find overlay to request
         urgent_overlay_url = None
         while not demanding_queue.empty():
             # demanding_queue can have multiple same request
             demanding_url = demanding_queue.get()
-            #print "getting from demading queue %s" % demanding_url
             if demanding_url not in finished_url:
+                print "getting from demading queue %s" % demanding_url
                 urgent_overlay_url = demanding_url
                 break
-
+        requesting_overlay = None
         if urgent_overlay_url != None:
-            # process urgent overlay first
-            json_ret = json.dumps({"command":SynthesisProtocol.RET_BLOB_REQUEST, "blob_url":urgent_overlay_url})
-            json_size = struct.pack("!I", len(json_ret))
-            handler.request.send(json_size)
-            handler.wfile.write(json_ret)
-            handler.wfile.flush()
-            out_of_order_count += 1
-            #print "send urgent request: %s (size:%d)" % (urgent_overlay_url, len(json_ret))
+            requesting_overlay = urgent_overlay_url
+            overlay_urls.remove(requesting_overlay)
+        else:
+            requesting_overlay = overlay_urls.pop(0)
+
+        # request overlay blob to client
+        json_ret = json.dumps({"command":SynthesisProtocol.RET_BLOB_REQUEST, "blob_url":requesting_overlay})
+        json_size = struct.pack("!I", len(json_ret))
+        handler.request.send(json_size)
+        handler.wfile.write(json_ret)
+        handler.wfile.flush()
+        out_of_order_count += 1
+        print "requesting %s" % (requesting_overlay)
 
         # read header
         blob_size = struct.unpack("!I", read_stream.read(4))[0]
         blob_name_size = struct.unpack("!H", read_stream.read(2))[0]
         blob_url = struct.unpack("!%ds" % blob_name_size , read_stream.read(blob_name_size))[0]
         finished_url.append(blob_url)
-        #print "receiving %s(%d)" % (blob_url, blob_size)
+        print "receiving %s(%d)" % (blob_url, blob_size)
         read_count = 0
         while read_count < blob_size:
             read_min_size = min(chunk_size, blob_size-read_count)
@@ -353,22 +359,23 @@ class SynthesisTCPHandler(SocketServer.StreamRequestHandler):
         resumed_VM.start()
         time_end_resume = time.time()
 
+        # --> early success return
+        # return success after resuming VM
+        # before receiving all chunks
+        self.ret_success()
+
         # start processes
         download_process.start()
         decomp_process.start()
         delta_proc.start()
         fuse_thread.start()
 
-
-        # --> early success return
-        # return success after resuming VM
-        # before receiving all chunks
-        resumed_VM.join()
-        self.ret_success()
-
         fuse_thread.join()
+
         end_time = time.time()
         total_time = (end_time-start_time)
+
+        resumed_VM.join()
 
         # printout result
         SynthesisTCPHandler.print_statistics(start_time, end_time, \

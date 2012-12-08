@@ -32,6 +32,10 @@ application = ['moped', 'moped_random', 'face', 'mar', 'speech', 'speech_random'
 
 batch_mode = False
 
+
+class RapidClientError(Exception):
+    pass
+
 class BlobHeader(object):
     def __init__(self, blob_url, blob_size):
         self.blob_url = blob_url
@@ -139,7 +143,6 @@ def start_cloudlet(sock, application, start_time):
         filename = os.path.basename(blob['overlay_name'])
         url = "http://%s/overlay/%s/%s" % (local_ip, application, filename)
         blob['overlay_name'] = url
-        blob_left_list.append(url)
 
     # send header
     header = msgpack.packb(meta_info)
@@ -149,6 +152,9 @@ def start_cloudlet(sock, application, start_time):
 
     application_name = application.split("_")[0]
     app_thread = None
+
+    total_blob_count = len(meta_info['overlay_files'])
+    sent_blob_list = list()
 
     while True:
         inputready, outputready, exceptrdy = select.select([sock], [sock], [], 0.01)
@@ -171,39 +177,36 @@ def start_cloudlet(sock, application, start_time):
                 elif command == 0x02:   # RET_FAIL
                     print "Synthesis Failed"
                 elif command == 0x03:    # request blob
-                    #print "Request: %s" % (json_ret.get("blob_url"))
+                    print "Request: %s" % (json_ret.get("blob_url"))
                     blob_request_list.append(str(json_ret.get("blob_url")))
                 else:
                     print "protocol error:%d" % (command)
 
         # send data
         for i in outputready:
-            if i == sock and len(blob_left_list) > 0:
+            if (i == sock) and (len(sent_blob_list) < total_blob_count):
                 # check request list
                 requested_url = None
-                while len(blob_request_list) != 0:
-                    requested_url = blob_request_list.pop(0)
-                    if requested_url in blob_request_list:
-                        break
+                if len(blob_request_list) == 0:
+                    continue
 
-                if requested_url in blob_left_list:
-                    sending_blob_url = requested_url
-                    blob_left_list.remove(sending_blob_url)
-                    #print "found urgent : %s" % (sending_blob_url)
+                requested_url = blob_request_list.pop(0)
+                if requested_url not in sent_blob_list:
+                    sent_blob_list.append(requested_url)
                 else:
-                    sending_blob_url = blob_left_list.pop(0)
+                    raise RapidClientError("sending duplicated blob: %s" % requested_url)
 
-                filename = os.path.basename(sending_blob_url)
+                filename = os.path.basename(requested_url)
                 blob_path = os.path.join(os.path.dirname(overlay_meta_path), filename)
-                #print "sending %s" % blob_path
                 blob_data = open(blob_path, "rb").read()
-                blob_header = BlobHeader(sending_blob_url, os.path.getsize(blob_path))
+                blob_header = BlobHeader(requested_url, os.path.getsize(blob_path))
 
                 sock.sendall(blob_header.get_serialized())
                 sock.sendall(blob_data)
 
                 if len(blob_left_list) == 0:
                     time_dict['send_end_time'] = time.time()
+                time.sleep(0.01)
 
         # check condition
         if (app_thread != None) and (app_thread.isAlive() == False) and len(blob_left_list) == 0:
@@ -212,20 +215,20 @@ def start_cloudlet(sock, application, start_time):
     app_thread.join()
     time_dict.update(app_time_dict)
 
-    if batch_mode:
+    send_end = time_dict['send_end_time']
+    recv_end = time_dict['recv_success_time']
+    app_start_time = time_dict['app_start']
+    app_end_time = time_dict['app_end']
+    client_info = {'Transfer':(send_end-start_time), \
+            'Response': (recv_end-start_time), \
+            'App end': (app_end_time-start_time), \
+            'App run': (app_end_time-app_start_time)}
+    pprint(client_info)
 
-        send_end = time_dict['send_end_time']
-        recv_end = time_dict['recv_success_time']
-        app_start_time = time_dict['app_start']
-        app_end_time = time_dict['app_end']
-        client_info = {'Transfer':(send_end-start_time), \
-                'Response': (recv_end-start_time), \
-                'App end': (app_end_time-start_time), \
-                'App run': (app_end_time-app_start_time)}
+    if batch_mode:
         header = msgpack.packb(client_info)
         sock.sendall(struct.pack("!I", len(header)))
         sock.sendall(header)
-        pprint(client_info)
 
 
 def application_thread(sock, application, time_dict):
