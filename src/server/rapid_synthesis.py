@@ -75,40 +75,55 @@ def network_worker(handler, overlay_urls, overlay_urls_size, demanding_queue, ou
     total_read_size = 0
     counter = 0
     index = 0 
-    finished_url = list()
+    finished_url = dict()
+    requesting_list = list()
+    MAX_REQUEST_SIZE = 1024*1024 # 1MB
     out_of_order_count = 0
     total_urls_count = len(overlay_urls)
     while len(finished_url) < total_urls_count:
-        # find overlay to request
-        urgent_overlay_url = None
-        while not demanding_queue.empty():
-            # demanding_queue can have multiple same request
-            demanding_url = demanding_queue.get()
-            if demanding_url not in finished_url:
-                #print "getting from demading queue %s" % demanding_url
-                urgent_overlay_url = demanding_url
-                break
-        requesting_overlay = None
-        if urgent_overlay_url != None:
-            requesting_overlay = urgent_overlay_url
-            overlay_urls.remove(requesting_overlay)
-        else:
-            requesting_overlay = overlay_urls.pop(0)
 
-        # request overlay blob to client
-        json_ret = json.dumps({"command":SynthesisProtocol.RET_BLOB_REQUEST, "blob_url":requesting_overlay})
-        json_size = struct.pack("!I", len(json_ret))
-        handler.request.send(json_size)
-        handler.wfile.write(json_ret)
-        handler.wfile.flush()
-        out_of_order_count += 1
-        #print "requesting %s" % (requesting_overlay)
+        #request to client until it becomes more than MAX_REQUEST_SIZE
+        while True:
+            requesting_size = sum([overlay_urls_size[item] for item in requesting_list])
+            if requesting_size > MAX_REQUEST_SIZE or len(overlay_urls) == 0:
+                # Enough requesting list or nothing left to request
+                break;
+
+            # find overlay to request
+            urgent_overlay_url = None
+            while not demanding_queue.empty():
+                # demanding_queue can have multiple same request
+                demanding_url = demanding_queue.get()
+                if (finished_url.get(demanding_url, False) == False) and \
+                        (demanding_url not in requesting_list):
+                    #print "getting from demading queue %s" % demanding_url
+                    urgent_overlay_url = demanding_url
+                    break
+
+            requesting_overlay = None
+            if urgent_overlay_url != None:
+                requesting_overlay = urgent_overlay_url
+                if requesting_overlay in overlay_urls:
+                    overlay_urls.remove(requesting_overlay)
+            else:
+                requesting_overlay = overlay_urls.pop(0)
+
+            # request overlay blob to client
+            json_ret = json.dumps({"command":SynthesisProtocol.RET_BLOB_REQUEST, "blob_url":requesting_overlay})
+            json_size = struct.pack("!I", len(json_ret))
+            handler.request.send(json_size)
+            handler.wfile.write(json_ret)
+            handler.wfile.flush()
+            out_of_order_count += 1
+            requesting_list.append(requesting_overlay)
+            #print "requesting %s" % (requesting_overlay)
 
         # read header
         blob_size = struct.unpack("!I", read_stream.read(4))[0]
         blob_name_size = struct.unpack("!H", read_stream.read(2))[0]
         blob_url = struct.unpack("!%ds" % blob_name_size , read_stream.read(blob_name_size))[0]
-        finished_url.append(blob_url)
+        finished_url[blob_url] = True
+        requesting_list.remove(blob_url)
         read_count = 0
         while read_count < blob_size:
             read_min_size = min(chunk_size, blob_size-read_count)
