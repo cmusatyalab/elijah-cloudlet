@@ -69,7 +69,7 @@ def recv_all(request, size):
         data += request.recv(size - len(data))
     return data
 
-def network_worker(handler, overlay_urls, demanding_queue, out_queue, time_queue, chunk_size):
+def network_worker(handler, overlay_urls, overlay_urls_size, demanding_queue, out_queue, time_queue, chunk_size):
     read_stream = handler.rfile
     start_time= time.time()
     total_read_size = 0
@@ -85,7 +85,7 @@ def network_worker(handler, overlay_urls, demanding_queue, out_queue, time_queue
             # demanding_queue can have multiple same request
             demanding_url = demanding_queue.get()
             if demanding_url not in finished_url:
-                print "getting from demading queue %s" % demanding_url
+                #print "getting from demading queue %s" % demanding_url
                 urgent_overlay_url = demanding_url
                 break
         requesting_overlay = None
@@ -102,14 +102,13 @@ def network_worker(handler, overlay_urls, demanding_queue, out_queue, time_queue
         handler.wfile.write(json_ret)
         handler.wfile.flush()
         out_of_order_count += 1
-        print "requesting %s" % (requesting_overlay)
+        #print "requesting %s" % (requesting_overlay)
 
         # read header
         blob_size = struct.unpack("!I", read_stream.read(4))[0]
         blob_name_size = struct.unpack("!H", read_stream.read(2))[0]
         blob_url = struct.unpack("!%ds" % blob_name_size , read_stream.read(blob_name_size))[0]
         finished_url.append(blob_url)
-        print "receiving %s(%d)" % (blob_url, blob_size)
         read_count = 0
         while read_count < blob_size:
             read_min_size = min(chunk_size, blob_size-read_count)
@@ -124,6 +123,7 @@ def network_worker(handler, overlay_urls, demanding_queue, out_queue, time_queue
             read_count += read_size
         total_read_size += read_count
         index += 1
+        #print "received %s(%d)" % (blob_url, blob_size)
 
     out_queue.put(Server_Const.END_OF_FILE)
     end_time = time.time()
@@ -305,9 +305,12 @@ class SynthesisTCPHandler(SocketServer.StreamRequestHandler):
         base_path, meta_info = self._check_validity(self.request)
         url_manager = Manager()
         overlay_urls = url_manager.list()
+        overlay_urls_size = url_manager.dict()
         for blob in meta_info[Const.META_OVERLAY_FILES]:
             url = blob[Const.META_OVERLAY_FILE_NAME]
+            size = blob[Const.META_OVERLAY_FILE_SIZE]
             overlay_urls.append(url)
+            overlay_urls_size[url] = size
         app_url = str(overlay_urls[0])
         Log.write("Base VM     : %s\n" % base_path)
         Log.write("Application : %s\n" % str(overlay_urls[0]))
@@ -338,7 +341,7 @@ class SynthesisTCPHandler(SocketServer.StreamRequestHandler):
         download_process = Process(target=network_worker, 
                 args=(
                     self,
-                    overlay_urls, demanding_queue, 
+                    overlay_urls, overlay_urls_size, demanding_queue, 
                     download_queue, time_transfer, Server_Const.TRANSFER_SIZE, 
                     )
                 )
@@ -359,23 +362,22 @@ class SynthesisTCPHandler(SocketServer.StreamRequestHandler):
         resumed_VM.start()
         time_end_resume = time.time()
 
-        # --> early success return
-        # return success after resuming VM
-        # before receiving all chunks
-        self.ret_success()
-
         # start processes
         download_process.start()
         decomp_process.start()
         delta_proc.start()
         fuse_thread.start()
 
+        # --> early success return
+        # return success after resuming VM
+        # before receiving all chunks
+        resumed_VM.join()
+        self.ret_success()
+
         fuse_thread.join()
 
         end_time = time.time()
         total_time = (end_time-start_time)
-
-        resumed_VM.join()
 
         # printout result
         SynthesisTCPHandler.print_statistics(start_time, end_time, \
