@@ -64,6 +64,7 @@ class CloudletLog(object):
         sys.stdout.write(log)
 
     def flush(self):
+        self.logfile.flush()
         sys.stdout.flush()
 
 

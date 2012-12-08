@@ -122,7 +122,13 @@ def network_worker(handler, overlay_urls, demanding_queue, out_queue, time_queue
     out_queue.put(Server_Const.END_OF_FILE)
     end_time = time.time()
     time_delta= end_time-start_time
-    time_queue.put({'start_time':start_time, 'end_time':end_time})
+
+    if time_delta > 0:
+        bw = total_read_size*8.0/time_delta/1024/1024
+    else:
+        bw = 1
+
+    time_queue.put({'start_time':start_time, 'end_time':end_time, "bw_mbps":bw})
     print "[Transfer] out-of-order fetching : %d / %d == %5.2f %%" % \
             (out_of_order_count, total_urls_count, \
             100.0*out_of_order_count/total_urls_count)
@@ -343,7 +349,6 @@ class SynthesisTCPHandler(SocketServer.StreamRequestHandler):
 
         # resume VM
         resumed_VM = cloudlet.ResumedVM(modified_img, modified_mem, fuse)
-
         time_start_resume = time.time()
         resumed_VM.start()
         time_end_resume = time.time()
@@ -355,6 +360,9 @@ class SynthesisTCPHandler(SocketServer.StreamRequestHandler):
         fuse_thread.start()
 
 
+        # --> early success return
+        # return success after resuming VM
+        # before receiving all chunks
         resumed_VM.join()
         self.ret_success()
 
@@ -391,10 +399,12 @@ class SynthesisTCPHandler(SocketServer.StreamRequestHandler):
                     break
 
         # TO BE DELETED - save execution pattern
+        '''
         mem_access_list = resumed_VM.monitor.mem_access_chunk_list
         mem_access_str = [str(item) for item in mem_access_list]
         filename = "exec_patter_%s" % (app_url.split("/")[-2])
         open(filename, "w+a").write('\n'.join(mem_access_str))
+        '''
 
         # printout synthesis statistics
         mem_access_list = resumed_VM.monitor.mem_access_chunk_list
@@ -411,6 +421,7 @@ class SynthesisTCPHandler(SocketServer.StreamRequestHandler):
         if os.path.exists(overlay_pipe):
             os.unlink(overlay_pipe)
         shutil.rmtree(tmp_dir)
+        Log.flush()
 
     @staticmethod
     def print_statistics(start_time, end_time, \
@@ -423,6 +434,7 @@ class SynthesisTCPHandler(SocketServer.StreamRequestHandler):
         fuse_time = time_fuse.get()
         transfer_start_time = transfer_time['start_time']
         transfer_end_time = transfer_time['end_time']
+        transfer_bw = transfer_time.get('bw_mbps', -1)
         decomp_start_time = decomp_time['start_time']
         decomp_end_time = decomp_time['end_time']
         delta_start_time = delta_time['start_time']
@@ -442,6 +454,8 @@ class SynthesisTCPHandler(SocketServer.StreamRequestHandler):
         message += "%011.06f\t" % (delta_diff)
         message += "%011.06f\t" % (resume_time)
         message += "%011.06f\t" % (end_time-start_time)
+        message += "\n"
+        message += "Transmission BW : %f" % transfer_bw
         message += "\n"
         print_out.write(message)
 
