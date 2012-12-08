@@ -105,7 +105,6 @@ def synthesis(address, port, application, batch=False, wait_time=0):
 
 def start_cloudlet(sock, application, start_time):
     global batch_mode
-    blob_left_list = list()
     blob_request_list = list()
 
     time_dict = dict()
@@ -177,7 +176,7 @@ def start_cloudlet(sock, application, start_time):
                 elif command == 0x02:   # RET_FAIL
                     print "Synthesis Failed"
                 elif command == 0x03:    # request blob
-                    print "Request: %s" % (json_ret.get("blob_url"))
+                    #print "Request: %s" % (json_ret.get("blob_url"))
                     blob_request_list.append(str(json_ret.get("blob_url")))
                 else:
                     print "protocol error:%d" % (command)
@@ -204,12 +203,11 @@ def start_cloudlet(sock, application, start_time):
                 sock.sendall(blob_header.get_serialized())
                 sock.sendall(blob_data)
 
-                if len(blob_left_list) == 0:
+                if len(sent_blob_list) == total_blob_count:
                     time_dict['send_end_time'] = time.time()
-                time.sleep(0.01)
 
         # check condition
-        if (app_thread != None) and (app_thread.isAlive() == False) and len(blob_left_list) == 0:
+        if (app_thread != None) and (app_thread.isAlive() == False) and (len(sent_blob_list) == total_blob_count):
             break
 
     app_thread.join()

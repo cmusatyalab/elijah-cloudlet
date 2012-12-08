@@ -448,11 +448,13 @@ def main(argv=None):
     # Print out measurement
     vm_time = vm_end_time-vm_start_time
     app_time = app_end_time-app_start_time
+    first_response_time = app_end_time-vm_start_time
     #summary, cdf = convert_to_CDF(output_file)
     message = "-------------------------------------\n"
     message += "VM_time\tApp_time\n"
     message += "%f\t%f\n" % (vm_time, app_time)
     print message
+    print "first response time: %f\n", (first_response_time)
     open(output_file + ".log", "w").write(message)
     return 0
 
