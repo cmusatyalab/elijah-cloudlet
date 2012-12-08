@@ -136,11 +136,10 @@ def start_cloudlet(sock, application, start_time):
 
     print "Overlay Meta: %s" % (overlay_meta_path)
     # modify overlay path
-    local_ip = sock.getsockname()[0]
     meta_info = msgpack.unpackb(open(overlay_meta_path, "r").read())
     for blob in meta_info['overlay_files']:
         filename = os.path.basename(blob['overlay_name'])
-        url = "http://%s/overlay/%s/%s" % (local_ip, application, filename)
+        url = "%s/%s" % (application, filename)
         blob['overlay_name'] = url
 
     # send header
