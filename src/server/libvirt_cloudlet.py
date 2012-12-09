@@ -1273,8 +1273,7 @@ def main(argv):
         overlay_path = os.path.join(output_dir, "overlay")
         meta_info = decomp_overlay(meta, overlay_path)
 
-        blob_size_list = [16, 1024, 1024*1024]
-        #blob_size_list = [16]
+        blob_size_list = [32, 64, 1024, 1024*1024]
         for order_type in ("access", "linear"):
             delta_list = DeltaList.fromfile(overlay_path)
             sub_dir1 = os.path.join(output_dir, order_type)

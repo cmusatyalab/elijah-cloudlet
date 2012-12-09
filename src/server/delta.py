@@ -699,7 +699,7 @@ def reorder_deltalist(access_list, chunk_size, delta_list):
 
 def _save_blob(start_index, delta_list, self_ref_dict, blob_name, blob_size, statistics=None):
     # mode = 2 indicates LZMA_SYNC_FLUSH, which show all output right after input
-    comp_option = {'format':'xz', 'level':9}
+    comp_option = {'format':'xz', 'level':1}
     comp = LZMACompressor(options=comp_option)
     disk_offset_list = list()
     memory_offset_list= list()

@@ -77,7 +77,7 @@ def network_worker(handler, overlay_urls, overlay_urls_size, demanding_queue, ou
     index = 0 
     finished_url = dict()
     requesting_list = list()
-    MAX_REQUEST_SIZE = 1024*1024 # 1MB
+    MAX_REQUEST_SIZE = 1024*512 # 512 KB
     out_of_order_count = 0
     total_urls_count = len(overlay_urls)
     while len(finished_url) < total_urls_count:
@@ -383,16 +383,19 @@ class SynthesisTCPHandler(SocketServer.StreamRequestHandler):
         delta_proc.start()
         fuse_thread.start()
 
+
         # --> early success return
         # return success after resuming VM
         # before receiving all chunks
         resumed_VM.join()
         self.ret_success()
 
-        fuse_thread.join()
 
+
+        fuse_thread.join()
         end_time = time.time()
         total_time = (end_time-start_time)
+
 
         # printout result
         SynthesisTCPHandler.print_statistics(start_time, end_time, \
