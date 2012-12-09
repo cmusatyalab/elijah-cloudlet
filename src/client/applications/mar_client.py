@@ -63,7 +63,8 @@ def send_request(address, port, inputs):
     try:
         print "Connecting to (%s, %d).." % (address, port)
         sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-        sock.setblocking(True)
+        #sock.setblocking(True)
+        #sock.settimeout(120.0)
         sock.connect((address, port))
     except socket.error, msg:
         sys.stderr.write("Error, %s\n" % msg[1])

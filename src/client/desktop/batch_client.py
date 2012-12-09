@@ -20,7 +20,8 @@ import rapid_client
 
 WAIT_TIME = 10
 
-cloudlet_server_ip = "cloudlet.krha.kr"
+#cloudlet_server_ip = "cloudlet.krha.kr"
+cloudlet_server_ip = "192.168.2.2"
 cloudlet_server_port = 8021
 
 rapid_client.synthesis(cloudlet_server_ip, cloudlet_server_port, "moped_access_16", batch=True, wait_time=WAIT_TIME)
@@ -30,6 +31,64 @@ rapid_client.synthesis(cloudlet_server_ip, cloudlet_server_port, "moped_linear_1
 rapid_client.synthesis(cloudlet_server_ip, cloudlet_server_port, "moped_linear_1024", batch=True, wait_time=WAIT_TIME)
 rapid_client.synthesis(cloudlet_server_ip, cloudlet_server_port, "moped_linear_1048576", batch=True, wait_time=WAIT_TIME)
 
+rapid_client.synthesis(cloudlet_server_ip, cloudlet_server_port, "moped_access_16", batch=True, wait_time=WAIT_TIME)
+rapid_client.synthesis(cloudlet_server_ip, cloudlet_server_port, "moped_access_1024", batch=True, wait_time=WAIT_TIME)
+rapid_client.synthesis(cloudlet_server_ip, cloudlet_server_port, "moped_access_1048576", batch=True, wait_time=WAIT_TIME)
+rapid_client.synthesis(cloudlet_server_ip, cloudlet_server_port, "moped_linear_16", batch=True, wait_time=WAIT_TIME)
+rapid_client.synthesis(cloudlet_server_ip, cloudlet_server_port, "moped_linear_1024", batch=True, wait_time=WAIT_TIME)
+rapid_client.synthesis(cloudlet_server_ip, cloudlet_server_port, "moped_linear_1048576", batch=True, wait_time=WAIT_TIME)
+
+rapid_client.synthesis(cloudlet_server_ip, cloudlet_server_port, "moped_access_16", batch=True, wait_time=WAIT_TIME)
+rapid_client.synthesis(cloudlet_server_ip, cloudlet_server_port, "moped_access_1024", batch=True, wait_time=WAIT_TIME)
+rapid_client.synthesis(cloudlet_server_ip, cloudlet_server_port, "moped_access_1048576", batch=True, wait_time=WAIT_TIME)
+rapid_client.synthesis(cloudlet_server_ip, cloudlet_server_port, "moped_linear_16", batch=True, wait_time=WAIT_TIME)
+rapid_client.synthesis(cloudlet_server_ip, cloudlet_server_port, "moped_linear_1024", batch=True, wait_time=WAIT_TIME)
+rapid_client.synthesis(cloudlet_server_ip, cloudlet_server_port, "moped_linear_1048576", batch=True, wait_time=WAIT_TIME)
+
+rapid_client.synthesis(cloudlet_server_ip, cloudlet_server_port, "moped_access_16", batch=True, wait_time=WAIT_TIME)
+rapid_client.synthesis(cloudlet_server_ip, cloudlet_server_port, "moped_access_1024", batch=True, wait_time=WAIT_TIME)
+rapid_client.synthesis(cloudlet_server_ip, cloudlet_server_port, "moped_access_1048576", batch=True, wait_time=WAIT_TIME)
+rapid_client.synthesis(cloudlet_server_ip, cloudlet_server_port, "moped_linear_16", batch=True, wait_time=WAIT_TIME)
+rapid_client.synthesis(cloudlet_server_ip, cloudlet_server_port, "moped_linear_1024", batch=True, wait_time=WAIT_TIME)
+rapid_client.synthesis(cloudlet_server_ip, cloudlet_server_port, "moped_linear_1048576", batch=True, wait_time=WAIT_TIME)
+
+rapid_client.synthesis(cloudlet_server_ip, cloudlet_server_port, "moped_access_16", batch=True, wait_time=WAIT_TIME)
+rapid_client.synthesis(cloudlet_server_ip, cloudlet_server_port, "moped_access_1024", batch=True, wait_time=WAIT_TIME)
+rapid_client.synthesis(cloudlet_server_ip, cloudlet_server_port, "moped_access_1048576", batch=True, wait_time=WAIT_TIME)
+rapid_client.synthesis(cloudlet_server_ip, cloudlet_server_port, "moped_linear_16", batch=True, wait_time=WAIT_TIME)
+rapid_client.synthesis(cloudlet_server_ip, cloudlet_server_port, "moped_linear_1024", batch=True, wait_time=WAIT_TIME)
+rapid_client.synthesis(cloudlet_server_ip, cloudlet_server_port, "moped_linear_1048576", batch=True, wait_time=WAIT_TIME)
+
+
+
+
+rapid_client.synthesis(cloudlet_server_ip, cloudlet_server_port, "face_access_16", batch=True, wait_time=WAIT_TIME)
+rapid_client.synthesis(cloudlet_server_ip, cloudlet_server_port, "face_access_1024", batch=True, wait_time=WAIT_TIME)
+rapid_client.synthesis(cloudlet_server_ip, cloudlet_server_port, "face_access_1048576", batch=True, wait_time=WAIT_TIME)
+rapid_client.synthesis(cloudlet_server_ip, cloudlet_server_port, "face_linear_16", batch=True, wait_time=WAIT_TIME)
+rapid_client.synthesis(cloudlet_server_ip, cloudlet_server_port, "face_linear_1024", batch=True, wait_time=WAIT_TIME)
+rapid_client.synthesis(cloudlet_server_ip, cloudlet_server_port, "face_linear_1048576", batch=True, wait_time=WAIT_TIME)
+
+rapid_client.synthesis(cloudlet_server_ip, cloudlet_server_port, "face_access_16", batch=True, wait_time=WAIT_TIME)
+rapid_client.synthesis(cloudlet_server_ip, cloudlet_server_port, "face_access_1024", batch=True, wait_time=WAIT_TIME)
+rapid_client.synthesis(cloudlet_server_ip, cloudlet_server_port, "face_access_1048576", batch=True, wait_time=WAIT_TIME)
+rapid_client.synthesis(cloudlet_server_ip, cloudlet_server_port, "face_linear_16", batch=True, wait_time=WAIT_TIME)
+rapid_client.synthesis(cloudlet_server_ip, cloudlet_server_port, "face_linear_1024", batch=True, wait_time=WAIT_TIME)
+rapid_client.synthesis(cloudlet_server_ip, cloudlet_server_port, "face_linear_1048576", batch=True, wait_time=WAIT_TIME)
+
+rapid_client.synthesis(cloudlet_server_ip, cloudlet_server_port, "face_access_16", batch=True, wait_time=WAIT_TIME)
+rapid_client.synthesis(cloudlet_server_ip, cloudlet_server_port, "face_access_1024", batch=True, wait_time=WAIT_TIME)
+rapid_client.synthesis(cloudlet_server_ip, cloudlet_server_port, "face_access_1048576", batch=True, wait_time=WAIT_TIME)
+rapid_client.synthesis(cloudlet_server_ip, cloudlet_server_port, "face_linear_16", batch=True, wait_time=WAIT_TIME)
+rapid_client.synthesis(cloudlet_server_ip, cloudlet_server_port, "face_linear_1024", batch=True, wait_time=WAIT_TIME)
+rapid_client.synthesis(cloudlet_server_ip, cloudlet_server_port, "face_linear_1048576", batch=True, wait_time=WAIT_TIME)
+
+rapid_client.synthesis(cloudlet_server_ip, cloudlet_server_port, "face_access_16", batch=True, wait_time=WAIT_TIME)
+rapid_client.synthesis(cloudlet_server_ip, cloudlet_server_port, "face_access_1024", batch=True, wait_time=WAIT_TIME)
+rapid_client.synthesis(cloudlet_server_ip, cloudlet_server_port, "face_access_1048576", batch=True, wait_time=WAIT_TIME)
+rapid_client.synthesis(cloudlet_server_ip, cloudlet_server_port, "face_linear_16", batch=True, wait_time=WAIT_TIME)
+rapid_client.synthesis(cloudlet_server_ip, cloudlet_server_port, "face_linear_1024", batch=True, wait_time=WAIT_TIME)
+rapid_client.synthesis(cloudlet_server_ip, cloudlet_server_port, "face_linear_1048576", batch=True, wait_time=WAIT_TIME)
 
 rapid_client.synthesis(cloudlet_server_ip, cloudlet_server_port, "face_access_16", batch=True, wait_time=WAIT_TIME)
 rapid_client.synthesis(cloudlet_server_ip, cloudlet_server_port, "face_access_1024", batch=True, wait_time=WAIT_TIME)
@@ -39,6 +98,36 @@ rapid_client.synthesis(cloudlet_server_ip, cloudlet_server_port, "face_linear_10
 rapid_client.synthesis(cloudlet_server_ip, cloudlet_server_port, "face_linear_1048576", batch=True, wait_time=WAIT_TIME)
 
 
+
+
+rapid_client.synthesis(cloudlet_server_ip, cloudlet_server_port, "speech_access_16", batch=True, wait_time=WAIT_TIME)
+rapid_client.synthesis(cloudlet_server_ip, cloudlet_server_port, "speech_access_1024", batch=True, wait_time=WAIT_TIME)
+rapid_client.synthesis(cloudlet_server_ip, cloudlet_server_port, "speech_access_1048576", batch=True, wait_time=WAIT_TIME)
+rapid_client.synthesis(cloudlet_server_ip, cloudlet_server_port, "speech_linear_16", batch=True, wait_time=WAIT_TIME)
+rapid_client.synthesis(cloudlet_server_ip, cloudlet_server_port, "speech_linear_1024", batch=True, wait_time=WAIT_TIME)
+rapid_client.synthesis(cloudlet_server_ip, cloudlet_server_port, "speech_linear_1048576", batch=True, wait_time=WAIT_TIME)
+
+rapid_client.synthesis(cloudlet_server_ip, cloudlet_server_port, "speech_access_16", batch=True, wait_time=WAIT_TIME)
+rapid_client.synthesis(cloudlet_server_ip, cloudlet_server_port, "speech_access_1024", batch=True, wait_time=WAIT_TIME)
+rapid_client.synthesis(cloudlet_server_ip, cloudlet_server_port, "speech_access_1048576", batch=True, wait_time=WAIT_TIME)
+rapid_client.synthesis(cloudlet_server_ip, cloudlet_server_port, "speech_linear_16", batch=True, wait_time=WAIT_TIME)
+rapid_client.synthesis(cloudlet_server_ip, cloudlet_server_port, "speech_linear_1024", batch=True, wait_time=WAIT_TIME)
+rapid_client.synthesis(cloudlet_server_ip, cloudlet_server_port, "speech_linear_1048576", batch=True, wait_time=WAIT_TIME)
+
+rapid_client.synthesis(cloudlet_server_ip, cloudlet_server_port, "speech_access_16", batch=True, wait_time=WAIT_TIME)
+rapid_client.synthesis(cloudlet_server_ip, cloudlet_server_port, "speech_access_1024", batch=True, wait_time=WAIT_TIME)
+rapid_client.synthesis(cloudlet_server_ip, cloudlet_server_port, "speech_access_1048576", batch=True, wait_time=WAIT_TIME)
+rapid_client.synthesis(cloudlet_server_ip, cloudlet_server_port, "speech_linear_16", batch=True, wait_time=WAIT_TIME)
+rapid_client.synthesis(cloudlet_server_ip, cloudlet_server_port, "speech_linear_1024", batch=True, wait_time=WAIT_TIME)
+rapid_client.synthesis(cloudlet_server_ip, cloudlet_server_port, "speech_linear_1048576", batch=True, wait_time=WAIT_TIME)
+
+rapid_client.synthesis(cloudlet_server_ip, cloudlet_server_port, "speech_access_16", batch=True, wait_time=WAIT_TIME)
+rapid_client.synthesis(cloudlet_server_ip, cloudlet_server_port, "speech_access_1024", batch=True, wait_time=WAIT_TIME)
+rapid_client.synthesis(cloudlet_server_ip, cloudlet_server_port, "speech_access_1048576", batch=True, wait_time=WAIT_TIME)
+rapid_client.synthesis(cloudlet_server_ip, cloudlet_server_port, "speech_linear_16", batch=True, wait_time=WAIT_TIME)
+rapid_client.synthesis(cloudlet_server_ip, cloudlet_server_port, "speech_linear_1024", batch=True, wait_time=WAIT_TIME)
+rapid_client.synthesis(cloudlet_server_ip, cloudlet_server_port, "speech_linear_1048576", batch=True, wait_time=WAIT_TIME)
+
 rapid_client.synthesis(cloudlet_server_ip, cloudlet_server_port, "speech_access_16", batch=True, wait_time=WAIT_TIME)
 rapid_client.synthesis(cloudlet_server_ip, cloudlet_server_port, "speech_access_1024", batch=True, wait_time=WAIT_TIME)
 rapid_client.synthesis(cloudlet_server_ip, cloudlet_server_port, "speech_access_1048576", batch=True, wait_time=WAIT_TIME)
@@ -47,10 +136,76 @@ rapid_client.synthesis(cloudlet_server_ip, cloudlet_server_port, "speech_linear_
 rapid_client.synthesis(cloudlet_server_ip, cloudlet_server_port, "speech_linear_1048576", batch=True, wait_time=WAIT_TIME)
 
 
+
 rapid_client.synthesis(cloudlet_server_ip, cloudlet_server_port, "graphics_access_16", batch=True, wait_time=WAIT_TIME)
 rapid_client.synthesis(cloudlet_server_ip, cloudlet_server_port, "graphics_access_1024", batch=True, wait_time=WAIT_TIME)
 rapid_client.synthesis(cloudlet_server_ip, cloudlet_server_port, "graphics_access_1048576", batch=True, wait_time=WAIT_TIME)
 rapid_client.synthesis(cloudlet_server_ip, cloudlet_server_port, "graphics_linear_16", batch=True, wait_time=WAIT_TIME)
 rapid_client.synthesis(cloudlet_server_ip, cloudlet_server_port, "graphics_linear_1024", batch=True, wait_time=WAIT_TIME)
 rapid_client.synthesis(cloudlet_server_ip, cloudlet_server_port, "graphics_linear_1048576", batch=True, wait_time=WAIT_TIME)
+
+rapid_client.synthesis(cloudlet_server_ip, cloudlet_server_port, "graphics_access_16", batch=True, wait_time=WAIT_TIME)
+rapid_client.synthesis(cloudlet_server_ip, cloudlet_server_port, "graphics_access_1024", batch=True, wait_time=WAIT_TIME)
+rapid_client.synthesis(cloudlet_server_ip, cloudlet_server_port, "graphics_access_1048576", batch=True, wait_time=WAIT_TIME)
+rapid_client.synthesis(cloudlet_server_ip, cloudlet_server_port, "graphics_linear_16", batch=True, wait_time=WAIT_TIME)
+rapid_client.synthesis(cloudlet_server_ip, cloudlet_server_port, "graphics_linear_1024", batch=True, wait_time=WAIT_TIME)
+rapid_client.synthesis(cloudlet_server_ip, cloudlet_server_port, "graphics_linear_1048576", batch=True, wait_time=WAIT_TIME)
+
+rapid_client.synthesis(cloudlet_server_ip, cloudlet_server_port, "graphics_access_16", batch=True, wait_time=WAIT_TIME)
+rapid_client.synthesis(cloudlet_server_ip, cloudlet_server_port, "graphics_access_1024", batch=True, wait_time=WAIT_TIME)
+rapid_client.synthesis(cloudlet_server_ip, cloudlet_server_port, "graphics_access_1048576", batch=True, wait_time=WAIT_TIME)
+rapid_client.synthesis(cloudlet_server_ip, cloudlet_server_port, "graphics_linear_16", batch=True, wait_time=WAIT_TIME)
+rapid_client.synthesis(cloudlet_server_ip, cloudlet_server_port, "graphics_linear_1024", batch=True, wait_time=WAIT_TIME)
+rapid_client.synthesis(cloudlet_server_ip, cloudlet_server_port, "graphics_linear_1048576", batch=True, wait_time=WAIT_TIME)
+
+rapid_client.synthesis(cloudlet_server_ip, cloudlet_server_port, "graphics_access_16", batch=True, wait_time=WAIT_TIME)
+rapid_client.synthesis(cloudlet_server_ip, cloudlet_server_port, "graphics_access_1024", batch=True, wait_time=WAIT_TIME)
+rapid_client.synthesis(cloudlet_server_ip, cloudlet_server_port, "graphics_access_1048576", batch=True, wait_time=WAIT_TIME)
+rapid_client.synthesis(cloudlet_server_ip, cloudlet_server_port, "graphics_linear_16", batch=True, wait_time=WAIT_TIME)
+rapid_client.synthesis(cloudlet_server_ip, cloudlet_server_port, "graphics_linear_1024", batch=True, wait_time=WAIT_TIME)
+rapid_client.synthesis(cloudlet_server_ip, cloudlet_server_port, "graphics_linear_1048576", batch=True, wait_time=WAIT_TIME)
+
+rapid_client.synthesis(cloudlet_server_ip, cloudlet_server_port, "graphics_access_16", batch=True, wait_time=WAIT_TIME)
+rapid_client.synthesis(cloudlet_server_ip, cloudlet_server_port, "graphics_access_1024", batch=True, wait_time=WAIT_TIME)
+rapid_client.synthesis(cloudlet_server_ip, cloudlet_server_port, "graphics_access_1048576", batch=True, wait_time=WAIT_TIME)
+rapid_client.synthesis(cloudlet_server_ip, cloudlet_server_port, "graphics_linear_16", batch=True, wait_time=WAIT_TIME)
+rapid_client.synthesis(cloudlet_server_ip, cloudlet_server_port, "graphics_linear_1024", batch=True, wait_time=WAIT_TIME)
+rapid_client.synthesis(cloudlet_server_ip, cloudlet_server_port, "graphics_linear_1048576", batch=True, wait_time=WAIT_TIME)
+
+
+
+rapid_client.synthesis(cloudlet_server_ip, cloudlet_server_port, "mar_access_16", batch=True, wait_time=WAIT_TIME)
+rapid_client.synthesis(cloudlet_server_ip, cloudlet_server_port, "mar_access_1024", batch=True, wait_time=WAIT_TIME)
+rapid_client.synthesis(cloudlet_server_ip, cloudlet_server_port, "mar_access_1048576", batch=True, wait_time=WAIT_TIME)
+rapid_client.synthesis(cloudlet_server_ip, cloudlet_server_port, "mar_linear_16", batch=True, wait_time=WAIT_TIME)
+rapid_client.synthesis(cloudlet_server_ip, cloudlet_server_port, "mar_linear_1024", batch=True, wait_time=WAIT_TIME)
+rapid_client.synthesis(cloudlet_server_ip, cloudlet_server_port, "mar_linear_1048576", batch=True, wait_time=WAIT_TIME)
+
+rapid_client.synthesis(cloudlet_server_ip, cloudlet_server_port, "mar_access_16", batch=True, wait_time=WAIT_TIME)
+rapid_client.synthesis(cloudlet_server_ip, cloudlet_server_port, "mar_access_1024", batch=True, wait_time=WAIT_TIME)
+rapid_client.synthesis(cloudlet_server_ip, cloudlet_server_port, "mar_access_1048576", batch=True, wait_time=WAIT_TIME)
+rapid_client.synthesis(cloudlet_server_ip, cloudlet_server_port, "mar_linear_16", batch=True, wait_time=WAIT_TIME)
+rapid_client.synthesis(cloudlet_server_ip, cloudlet_server_port, "mar_linear_1024", batch=True, wait_time=WAIT_TIME)
+rapid_client.synthesis(cloudlet_server_ip, cloudlet_server_port, "mar_linear_1048576", batch=True, wait_time=WAIT_TIME)
+
+rapid_client.synthesis(cloudlet_server_ip, cloudlet_server_port, "mar_access_16", batch=True, wait_time=WAIT_TIME)
+rapid_client.synthesis(cloudlet_server_ip, cloudlet_server_port, "mar_access_1024", batch=True, wait_time=WAIT_TIME)
+rapid_client.synthesis(cloudlet_server_ip, cloudlet_server_port, "mar_access_1048576", batch=True, wait_time=WAIT_TIME)
+rapid_client.synthesis(cloudlet_server_ip, cloudlet_server_port, "mar_linear_16", batch=True, wait_time=WAIT_TIME)
+rapid_client.synthesis(cloudlet_server_ip, cloudlet_server_port, "mar_linear_1024", batch=True, wait_time=WAIT_TIME)
+rapid_client.synthesis(cloudlet_server_ip, cloudlet_server_port, "mar_linear_1048576", batch=True, wait_time=WAIT_TIME)
+
+rapid_client.synthesis(cloudlet_server_ip, cloudlet_server_port, "mar_access_16", batch=True, wait_time=WAIT_TIME)
+rapid_client.synthesis(cloudlet_server_ip, cloudlet_server_port, "mar_access_1024", batch=True, wait_time=WAIT_TIME)
+rapid_client.synthesis(cloudlet_server_ip, cloudlet_server_port, "mar_access_1048576", batch=True, wait_time=WAIT_TIME)
+rapid_client.synthesis(cloudlet_server_ip, cloudlet_server_port, "mar_linear_16", batch=True, wait_time=WAIT_TIME)
+rapid_client.synthesis(cloudlet_server_ip, cloudlet_server_port, "mar_linear_1024", batch=True, wait_time=WAIT_TIME)
+rapid_client.synthesis(cloudlet_server_ip, cloudlet_server_port, "mar_linear_1048576", batch=True, wait_time=WAIT_TIME)
+
+rapid_client.synthesis(cloudlet_server_ip, cloudlet_server_port, "mar_access_16", batch=True, wait_time=WAIT_TIME)
+rapid_client.synthesis(cloudlet_server_ip, cloudlet_server_port, "mar_access_1024", batch=True, wait_time=WAIT_TIME)
+rapid_client.synthesis(cloudlet_server_ip, cloudlet_server_port, "mar_access_1048576", batch=True, wait_time=WAIT_TIME)
+rapid_client.synthesis(cloudlet_server_ip, cloudlet_server_port, "mar_linear_16", batch=True, wait_time=WAIT_TIME)
+rapid_client.synthesis(cloudlet_server_ip, cloudlet_server_port, "mar_linear_1024", batch=True, wait_time=WAIT_TIME)
+rapid_client.synthesis(cloudlet_server_ip, cloudlet_server_port, "mar_linear_1048576", batch=True, wait_time=WAIT_TIME)
 
