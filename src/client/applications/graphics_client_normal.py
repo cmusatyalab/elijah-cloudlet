@@ -30,7 +30,6 @@ sender_time_stamps = {}
 receiver_time_stamps = {}   # recored corresponding receive time for a sent acc
 receiver_time_list = []    # All time stamp whenever it received new frame data
 
-
 def recv_all(sock, size):
     data = ''
     while len(data) < size:
@@ -58,7 +57,7 @@ def process_command_line(argv):
     return settings, args
 
 
-def recv_data(sock, last_client_id, exception_callback):
+def recv_data(sock, last_client_id):
     global token_id
     global receiver_time_stamps
     global receiver_time_list
@@ -91,9 +90,6 @@ def recv_data(sock, last_client_id, exception_callback):
         #if server_token_id%100 == 0:
         #    print "id: %d, FPS: %4.2f" % (token_id, token_id/(time.time()-start_time))
 
-        # TODO: DELTE THIS. THIS is only for measuring first reponse
-        if client_id >= 0:
-            exception_callback()
         
         if not ret_size == 0:
             ret_data = recv_all(sock, ret_size)
@@ -155,11 +151,6 @@ def send_request(sock, input_data):
     sock.close()
 
 
-def exception_callback():
-    print "first reponse time"
-    os._exit(0)
-
-
 def connect(address, port, input_data):
     # connection
     try:
@@ -173,7 +164,7 @@ def connect(address, port, input_data):
         sys.exit(1)
 
     sender = Thread(target=send_request, args=(sock,input_data))
-    recv = Thread(target=recv_data, args=(sock,len(input_data), exception_callback))
+    recv = Thread(target=recv_data, args=(sock,len(input_data)))
 
     start_client_time = time.time()
     sender.start()
