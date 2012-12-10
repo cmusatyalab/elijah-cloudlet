@@ -1231,21 +1231,37 @@ def main(argv):
             print "Application First Response time: %f" % (end_time-start_time)
 
         import cloudlet_client
+        import socket
         from threading import Thread
-        if len(args) != 3:
+        import struct
+        if len(args) != 2:
             parser.error("Resume VM and wait for first run\n \
                     1) Base disk path\n \
                     2) application name\n")
             sys.exit(1)
         # create overlay
         disk_path = args[1]
-        app_name = args[2]
+
+        # waiting for socket command
+        port = 10111
+        serversock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        serversock.bind(("0.0.0.0", port))
+        serversock.listen(1)
+        print "Waiting for client connection at %d.." % (port)
+        (client_socket, address) = serversock.accept()
+        app_name_size = struct.unpack("!I", client_socket.recv(4))[0]
+        app_name = struct.unpack("!%ds" % app_name_size, client_socket.recv(app_name_size))[0]
+
+        print "start application: %s" % app_name
+        '''
+        # start application & VM
         app_thread = Thread(target=_app_thread, args=(app_name, start_time))
         app_thread.start()
         overlay_files = create_overlay(disk_path, False)
         print "[INFO] overlay metafile : %s" % overlay_files[0]
         print "[INFO] overlay : %s" % str(overlay_files[1])
         print "[INFO] overlay creation time: %f" % (time()-start_time())
+        '''
     elif mode == 'dedup_source':
         if len(args) != 4:
             parser.error("analyzing deduplication source need 3 arguments\n \
