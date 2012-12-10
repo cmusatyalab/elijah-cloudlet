@@ -65,53 +65,50 @@ def recv_data(sock, last_client_id):
 
     # recv
     print "index\tstart\tend\tduration\tjitter\tout"
-    try:
-        # recv initial simulation variable
-        while True:
-            data = recv_all(sock, 8)
-            if not data:
-                print "recved data is null"
-                time.sleep(0.1)
-                continue
-            else:
-                recv_data = struct.unpack("!II", data)
-                #print "container size : (%d %d)" % (recv_data[0], recv_data[1])
-                break;
+    # recv initial simulation variable
+    while True:
+        data = recv_all(sock, 8)
+        if not data:
+            print "recved data is null"
+            time.sleep(0.1)
+            continue
+        else:
+            recv_data = struct.unpack("!II", data)
+            #print "container size : (%d %d)" % (recv_data[0], recv_data[1])
+            break;
 
-        start_time = time.time()
-        while True:
-            data = sock.recv(4)
-            client_id = struct.unpack("!I", data)[0]
-            data = sock.recv(4)
-            server_token_id = struct.unpack("!I", data)[0]
-            data = sock.recv(4)
-            ret_size = struct.unpack("!I", data)[0]
-            #print "Client ID : %d, Server_token: %d, Recv size : %d" % (client_id, server_token_id, ret_size)
-            token_id = server_token_id
-            #if server_token_id%100 == 0:
-            #    print "id: %d, FPS: %4.2f" % (token_id, token_id/(time.time()-start_time))
-            
-            if not ret_size == 0:
-                ret_data = recv_all(sock, ret_size)
-                recv_time = time.time() * 1000
-                if not receiver_time_stamps.get(client_id):
-                    #print "Add client id to time_stamp list %d" % (client_id)
-                    receiver_time_stamps[client_id] = recv_time
-                else:
-                    overlapped_acc_ack += 1
-                receiver_time_list.append(recv_time)
-                if not ret_size == len(ret_data):
-                    sys.stderr.write("Error, returned value size : %d" % (len(ret_data)))
-                    sys.exit(1)
+    start_time = time.time()
+    while True:
+        data = sock.recv(4)
+        client_id = struct.unpack("!I", data)[0]
+        data = sock.recv(4)
+        server_token_id = struct.unpack("!I", data)[0]
+        data = sock.recv(4)
+        ret_size = struct.unpack("!I", data)[0]
+        #print "Client ID : %d, Server_token: %d, Recv size : %d" % (client_id, server_token_id, ret_size)
+        token_id = server_token_id
+        #if server_token_id%100 == 0:
+        #    print "id: %d, FPS: %4.2f" % (token_id, token_id/(time.time()-start_time))
+        
+        if not ret_size == 0:
+            ret_data = recv_all(sock, ret_size)
+            recv_time = time.time() * 1000
+            if not receiver_time_stamps.get(client_id):
+                #print "Add client id to time_stamp list %d" % (client_id)
+                receiver_time_stamps[client_id] = recv_time
             else:
-                sys.stderr.write("Error, return size must not be zero")
+                overlapped_acc_ack += 1
+            receiver_time_list.append(recv_time)
+            if not ret_size == len(ret_data):
+                sys.stderr.write("Error, returned value size : %d" % (len(ret_data)))
                 sys.exit(1)
+        else:
+            sys.stderr.write("Error, return size must not be zero")
+            sys.exit(1)
 
-            if client_id == last_client_id:
-                break
+        if client_id == last_client_id:
+            break
 
-    except socket.error:
-        print "Socket Closed and Closing Recv Thread"
 
 
 
@@ -126,25 +123,30 @@ def send_request(sock, input_data):
 
     index = 0
     last_sent_time = 0
-    while True:
-        read_ready, write_ready, others = select([sock], [sock], [])
-        if sock in write_ready:
-            if index == loop_length-1:
-                break;
+    try:
+        while True:
+            read_ready, write_ready, others = select([sock], [sock], [])
+            if sock in write_ready:
+                if index == loop_length-1:
+                    break;
 
-            # send acc data
-            if (time.time() - last_sent_time) > 0.020:
-                if len(input_data[index].split("  ")) != 3:
-                    print "Error input : %s" % input_data[index]
-                    continue
-                x_acc = float(input_data[index].split("  ")[1])
-                y_acc = float(input_data[index].split("  ")[2])
+                # send acc data
+                if (time.time() - last_sent_time) > 0.020:
+                    if len(input_data[index].split("  ")) != 3:
+                        print "Error input : %s" % input_data[index]
+                        continue
+                    x_acc = float(input_data[index].split("  ")[1])
+                    y_acc = float(input_data[index].split("  ")[2])
 
-                sender_time_stamps[index] = time.time()*1000
-                sock.send(struct.pack("!IIff", index, token_id, x_acc, y_acc))
-                last_sent_time = time.time()
-                index += 1
-                #print "[%03d/%d] Sent ACK(%d), acc (%f, %f)" % (index, loop_length, token_id, x_acc, y_acc)
+                    sender_time_stamps[index] = time.time()*1000
+                    sock.send(struct.pack("!IIff", index, token_id, x_acc, y_acc))
+                    last_sent_time = time.time()
+                    index += 1
+                    #print "[%03d/%d] Sent ACK(%d), acc (%f, %f)" % (index, loop_length, token_id, x_acc, y_acc)
+    except Exception, e:
+        sock.close()
+        sys.exit(1)
+
     sock.close()
 
 
@@ -176,6 +178,10 @@ def connect(address, port, input_data):
     current_duration = -1
     missed_sending_id = 0
     index = 0
+    if len(receiver_time_stamps) == 0:
+        sys.stderr.write("failed connection")
+        sys.exit(1)
+
     for client_id, start_time in sender_time_stamps.items():
         end_time = receiver_time_stamps.get(client_id)
         if not end_time:
@@ -220,9 +226,8 @@ def main(argv=None):
     if settings.input_file and os.path.exists(settings.input_file):
         input_accs = open(settings.input_file, "r").read().split("\n")
     else:
-        input_accs = []
-        for i in xrange(1000):
-            input_accs.append("time  -9.0  -1.0")
+        sys.stderr.write("invalid input file : %s" % settings.input_file)
+        return 1
 
     connect(settings.server_address, settings.server_port, input_accs)
 

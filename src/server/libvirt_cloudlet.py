@@ -1223,7 +1223,29 @@ def main(argv):
         memory_blob_list = delta.divide_blobs(memory_delta_list, memory_overlay_path, 
                 Const.OVERLAY_BLOB_SIZE_KB, Const.CHUNK_SIZE,
                 Memory.Memory.RAM_PAGE_SIZE, print_out=sys.stdout)
+    elif mode == "first_run":   #overlay VM creation
+        start_time = time()
+        def _app_thread(application_name, start_time):
+            cloudlet_client.run_application(application_name)
+            end_time = time()
+            print "Application First Response time: %f" % (end_time-start_time)
 
+        import cloudlet_client
+        from threading import Thread
+        if len(args) != 3:
+            parser.error("Resume VM and wait for first run\n \
+                    1) Base disk path\n \
+                    2) application name\n")
+            sys.exit(1)
+        # create overlay
+        disk_path = args[1]
+        app_name = args[2]
+        app_thread = Thread(target=_app_thread, args=(app_name, start_time))
+        app_thread.start()
+        overlay_files = create_overlay(disk_path, False)
+        print "[INFO] overlay metafile : %s" % overlay_files[0]
+        print "[INFO] overlay : %s" % str(overlay_files[1])
+        print "[INFO] overlay creation time: %f" % (time()-start_time())
     elif mode == 'dedup_source':
         if len(args) != 4:
             parser.error("analyzing deduplication source need 3 arguments\n \
