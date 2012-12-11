@@ -20,6 +20,7 @@ import socket
 import struct
 import sys
 import cloudlet_client
+import subprocess
 
 def main(argv):
     start_time = time.time()
@@ -42,7 +43,25 @@ def main(argv):
     client_socket.sendall(struct.pack("!I", len(app_name)))
     client_socket.sendall(struct.pack("%ds" % len(app_name), app_name))
 
+    # run installation script
+    if app_name == "moped":
+        script = "/var/www/download/moped_inst.sh"
+    elif app_name == "speech":
+        script = "/var/www/download/speech_inst.sh"
+    elif app_name == "graphics":
+        script = "/var/www/download/graphics_inst.sh"
+    else:
+        sys.stderr.write("No valid application name : %s" % app_name)
+        sys.exit(1)
+
+    '''
+    _PIPE = subprocess.PIPE
+    proc = subprocess.Popen(script, stdin=_PIPE, shell=True)
+    proc.wait()
+    '''
+
     cloudlet_client.run_application(app_name)
+    print "first response time for %s is %f" % (app_name, time.time()-start_time)
 
 
 if __name__ == "__main__":

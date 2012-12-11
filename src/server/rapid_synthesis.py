@@ -383,18 +383,19 @@ class SynthesisTCPHandler(SocketServer.StreamRequestHandler):
         delta_proc.start()
         fuse_thread.start()
 
-        fuse_thread.join()
-        end_time = time.time()
-        total_time = (end_time-start_time)
-
-
         # --> early success return
+
         # return success after resuming VM
         # before receiving all chunks
         resumed_VM.join()
         self.ret_success()
 
 
+
+
+        fuse_thread.join()
+        end_time = time.time()
+        total_time = (end_time-start_time)
 
 
         # printout result
