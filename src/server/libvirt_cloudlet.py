@@ -54,6 +54,9 @@ class CloudletGenerationError(Exception):
 class CloudletLog(object):
     def __init__(self, filename=None):
         if filename != None:
+            self.logdir = os.path.dirname(filename)
+            if os.path.exists(self.logdir) == False:
+                os.makedirs(self.logdir)
             self.logfile = open(filename, "w+")
         else:
             self.logfile = open(Const.OVERLAY_LOG, "w+")

@@ -4,6 +4,7 @@ image/
 *.qcow2
 *.mem
 *.pyc
+synthesis_log
 free_mem_scan/.cproject
 free_mem_scan/.project
 free_mem_scan/free_page_scan

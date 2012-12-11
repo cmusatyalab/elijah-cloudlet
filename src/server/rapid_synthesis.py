@@ -37,7 +37,7 @@ from lzma import LZMADecompressor
 import shutil
 from datetime import datetime
 
-Log = cloudlet.CloudletLog("log_synthesis-%s" % str(datetime.now()).split(" ")[1])
+Log = cloudlet.CloudletLog("./synthesis_log/log_synthesis-%s" % str(datetime.now()).split(" ")[1])
 
 application = ['moped', 'face']
 BaseVM_list = []
