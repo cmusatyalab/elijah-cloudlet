@@ -15,7 +15,6 @@
 # for more details.
 #
 
-import libvirt
 import sys
 import os
 import subprocess
@@ -29,6 +28,7 @@ import xray
 import hashlib
 import msgpack
 import copy
+import libvirt
 from Const import Const
 from delta import DeltaList
 from delta import DeltaItem

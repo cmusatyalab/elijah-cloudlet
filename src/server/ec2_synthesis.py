@@ -26,7 +26,7 @@ from datetime import datetime
 import subprocess
 import sys
 import tempfile
-from synthesis import network_worker, decomp_worker, delta_worker
+from lib_synthesis import network_worker, decomp_worker, delta_worker
 
 CHUNK_SIZE = 1024*16
 
