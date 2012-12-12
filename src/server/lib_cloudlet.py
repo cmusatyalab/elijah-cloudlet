@@ -91,6 +91,13 @@ def convert_xml(xml, conn, vm_name=None, disk_path=None, uuid=None, logfile=None
         uuid_element = xml.find('uuid')
         uuid_element.text = str(uuid)
 
+    # Use custom QEMU
+    qemu_emulator = xml.find('devices/emulator')
+    if qemu_emulator == None:
+        print ElementTree.tostring(xml)
+        raise CloudletGenerationError("Cannot find VMM path at XML")
+    qemu_emulator.text = Const.QEMU_BIN_PATH
+
     # disk path is required
     if not disk_path:
         raise CloudletGenerationError("Need disk_path to run new VM")

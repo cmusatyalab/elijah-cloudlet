@@ -23,15 +23,12 @@ import tool
 import mmap
 import vmnetx
 import subprocess
-import time
+from Const import Const
 from progressbar import AnimatedProgressBar
-import delta
 from delta import DeltaItem
 from delta import DeltaList
 from hashlib import sha256
-from operator import itemgetter
 from optparse import OptionParser
-from delta import DeltaList
 from delta import Recovered_delta
 
 #GLOBAL
@@ -459,7 +456,7 @@ def get_free_pfn_dict(snapshot_path, mem_size, mem_offset_infile):
 
 def _get_free_pfn_list(snapshot_path, pglist_addr, pgn0_addr, mem_size_gb):
     # get list of free memory page number
-    BIN_PATH = "./free_mem_scan/free_page_scan"
+    BIN_PATH = Const.FREE_MEMORY_BIN_PATH
     cmd = "%s %s %s %s %d" % (BIN_PATH, snapshot_path, pglist_addr, pgn0_addr, mem_size_gb)
     _PIPE = subprocess.PIPE
     proc = subprocess.Popen(cmd, shell=True, stdin=_PIPE, stdout=_PIPE, stderr=_PIPE)

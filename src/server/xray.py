@@ -6,14 +6,15 @@ import sys
 import subprocess
 import os
 from tempfile import NamedTemporaryFile
+from Const import Const
 
-XRAY_BIN = "./xray/disk_analyzer"
 
 class xrayError(Exception):
     pass
 
 
 def _analyze_fs(disk_path, bson_path):
+    XRAY_BIN = Const.XRAY_BIN_PATH
     if os.path.exists(XRAY_BIN) == False:
          raise xrayError("Cannot find binary at %s" % XRAY_BIN);
     cmd = "%s %s %s" % (os.path.abspath(XRAY_BIN), os.path.abspath(disk_path), bson_path)
