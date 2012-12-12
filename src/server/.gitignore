@@ -1,9 +1,4 @@
-image/
-*.a
-*.lzma
-*.qcow2
-*.mem
-*.pyc
+log_synthesis/
 synthesis_log
 free_mem_scan/.cproject
 free_mem_scan/.project
