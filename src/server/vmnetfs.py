@@ -320,29 +320,6 @@ class FuseFeedingThread(threading.Thread):
                 (start_time, end_time, (end_time-start_time), count)
         self.fuse.fuse_write("END_OF_TRANSMISSION")
 
-    # pylint is confused by the values returned from Popen.communicate()
-    # pylint: disable=E1103
-    def launch(self):
-        read, write = os.pipe()
-        try:
-            self.proc = subprocess.Popen([self.vmnetfs_path], stdin=read,
-                    stdout=subprocess.PIPE, stderr=subprocess.PIPE,
-                    close_fds=True)
-            self._pipe = os.fdopen(write, 'w')
-            self._pipe.write(self._args)
-            self._pipe.flush()
-            out = self.proc.stdout.readline()
-            self.mountpoint = out.strip()
-        except:
-            if self._pipe is not None:
-                self._pipe.close()
-            else:
-                os.close(write)
-            raise
-        finally:
-            pass
-            #os.close(read)
-    # pylint: enable=E1103
 
     def terminate(self):
         self.stop.set()

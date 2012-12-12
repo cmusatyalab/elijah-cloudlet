@@ -297,29 +297,30 @@ class DeltaList(object):
         total_memory_count = (memory_count + mem_discarded)
         total_disk_count = (disk_count + disk_discarded)
 
-        print_out.write("-"*50 + "\n")
-        print_out.write("[INFO] Total Modified Disk #     : %ld\t( 100 %%, %f MB )\n" % 
-                (total_disk_count, disk_overlay_size/1024.0/1024))
-        print_out.write("[INFO] TRIM discard              : %ld\t( %f %% )\n" % 
-                (disk_discarded, disk_discarded*100.0/total_disk_count))
-        print_out.write("[INFO] Zero pages                : %ld\t( %f %% )\n" % 
-                (disk_from_zeros, disk_from_zeros*100.0/total_disk_count))
-        print_out.write("[INFO] Shared with Base Disk     : %ld\t( %f %% )\n" % 
-                (disk_from_base_disk, disk_from_base_disk*100.0/total_disk_count))
-        print_out.write("[INFO] Shared with Base Mem      : %ld\t( %f %% )\n" % 
-                (disk_from_base_mem, disk_from_base_mem*100.0/total_disk_count))
-        print_out.write("[INFO] Shared within Self        : %ld\t( %f %% )\n" % 
-                (disk_from_self, disk_from_self*100.0/total_disk_count))
-        print_out.write("[INFO] Shared with Overlay Disk  : %ld\t( %f %% )\n" % 
-                (disk_from_overlay_disk, disk_from_overlay_disk*100.0/total_disk_count))
-        print_out.write("[INFO] Shared with Overlay Mem   : %ld\t( %f %% )\n" % 
-                (disk_from_overlay_mem, disk_from_overlay_mem*100.0/total_disk_count))
-        print_out.write("[INFO] xdelta                    : %ld\t( %f %%, real_size: %.0f KB )\n" %
-                (disk_from_xdelta, disk_from_xdelta*100.0/total_disk_count, xdelta_size))
-        print_out.write("[INFO] raw                       : %ld\t( %f %%, real_size: %.0f KB )\n" % 
-                (disk_from_raw, disk_from_raw*100.0/total_disk_count, raw_size))
-        print_out.write("-"*50 + "\n")
         try:
+            print_out.write("-"*50 + "\n")
+            print_out.write("[INFO] Total Modified Disk #     : %ld\t( 100 %%, %f MB )\n" % 
+                    (total_disk_count, disk_overlay_size/1024.0/1024))
+            print_out.write("[INFO] TRIM discard              : %ld\t( %f %% )\n" % 
+                    (disk_discarded, disk_discarded*100.0/total_disk_count))
+            print_out.write("[INFO] Zero pages                : %ld\t( %f %% )\n" % 
+                    (disk_from_zeros, disk_from_zeros*100.0/total_disk_count))
+            print_out.write("[INFO] Shared with Base Disk     : %ld\t( %f %% )\n" % 
+                    (disk_from_base_disk, disk_from_base_disk*100.0/total_disk_count))
+            print_out.write("[INFO] Shared with Base Mem      : %ld\t( %f %% )\n" % 
+                    (disk_from_base_mem, disk_from_base_mem*100.0/total_disk_count))
+            print_out.write("[INFO] Shared within Self        : %ld\t( %f %% )\n" % 
+                    (disk_from_self, disk_from_self*100.0/total_disk_count))
+            print_out.write("[INFO] Shared with Overlay Disk  : %ld\t( %f %% )\n" % 
+                    (disk_from_overlay_disk, disk_from_overlay_disk*100.0/total_disk_count))
+            print_out.write("[INFO] Shared with Overlay Mem   : %ld\t( %f %% )\n" % 
+                    (disk_from_overlay_mem, disk_from_overlay_mem*100.0/total_disk_count))
+            print_out.write("[INFO] xdelta                    : %ld\t( %f %%, real_size: %.0f KB )\n" %
+                    (disk_from_xdelta, disk_from_xdelta*100.0/total_disk_count, xdelta_size))
+            print_out.write("[INFO] raw                       : %ld\t( %f %%, real_size: %.0f KB )\n" % 
+                    (disk_from_raw, disk_from_raw*100.0/total_disk_count, raw_size))
+            print_out.write("-"*50 + "\n")
+
             print_out.write("[INFO] Total Modified Memory #  : %ld\t( 100 %%, %f MB)\n" % 
                     (total_memory_count, mem_overlay_size/1024.0/1024))
             print_out.write("[INFO] FREE discard             : %ld\t( %f %% )\n" % 
@@ -749,7 +750,7 @@ def _save_blob(start_index, delta_list, self_ref_dict, blob_name, blob_size, sta
                         raise DeltaError("Delta should be either memory or disk")
             
         if len(comp_data) >= blob_size:
-            print "savefile for %s(%ld delta item) %ld --> %ld" % \
+            print "[DEBUG] savefile for %s(%ld delta item) %ld --> %ld" % \
                     (blob_name, item_count, original_length, len(comp_data))
             comp_data += comp.flush()
             blob_file = open(blob_name, "w+b")

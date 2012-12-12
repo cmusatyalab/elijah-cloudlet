@@ -30,8 +30,8 @@ import sys
 import tempfile
 from tempfile import NamedTemporaryFile
 import msgpack
-import libvirt_cloudlet as cloudlet
-import rapid_synthesis as synthesis
+import lib_cloudlet as cloudlet
+import lib_synthesis as synthesis
 from Const import Const
 from multiprocessing import JoinableQueue, Queue, Manager
 

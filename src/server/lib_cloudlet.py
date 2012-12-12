@@ -313,12 +313,12 @@ def create_overlay(base_image, disk_only=False):
     free_pfn_counter = long(free_memory_dict.get("freed_counter", 0))
 
     # 3. Reorder transfer order & Compression
+    Log.write("[DEBUG][REORDER] change chunk ordering by offset\n")
+    delta.reorder_deltalist_linear(Const.CHUNK_SIZE, merged_deltalist)
+    '''
     Log.write("[DEBUG][REORDER] change chunk ordering by mem access\n")
     mem_access_list = monitor.mem_access_chunk_list
     delta.reorder_deltalist(mem_access_list, Const.CHUNK_SIZE, merged_deltalist)
-    '''
-    Log.write("[DEBUG][REORDER] change chunk ordering by offset\n")
-    delta.reorder_deltalist_linear(Const.CHUNK_SIZE, merged_deltalist)
     '''    
     Log.write("[DEBUG][LZMA] Compressing overlay blobs\n")
     blob_list = delta.divide_blobs(merged_deltalist, overlay_path, 
@@ -1174,7 +1174,7 @@ def main(argv):
         overlay_files = create_overlay(disk_path, disk_only)
         print "[INFO] overlay metafile : %s" % overlay_files[0]
         print "[INFO] overlay : %s" % str(overlay_files[1])
-        print "[INFO] overlay creation time: %f" % (time()-start_time())
+        print "[INFO] overlay creation time: %f" % (time()-start_time)
     elif mode == MODE[2]:   #synthesis
         if len(args) < 3:
             parser.error("Synthesis requires 2 arguments\n \

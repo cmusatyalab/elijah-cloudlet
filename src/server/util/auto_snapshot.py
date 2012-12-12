@@ -46,7 +46,7 @@ def create_base_with_libvirt(image_file, base_image, base_mem):
     BaseVM_xml = "./cloudlet_base.xml"
 
     # make new disk not to modify input disk
-    libvirt_cloudlet.copy_disk(image_file, base_image)
+    lib_cloudlet.copy_disk(image_file, base_image)
 
     # edit default XML to use give disk image
     domxml = ElementTree.fromstring(open(BaseVM_xml, "r").read())
@@ -60,11 +60,11 @@ def create_base_with_libvirt(image_file, base_image, base_mem):
     disk_element.set("file", os.path.abspath(base_image))
 
     # launch VM & vnc console
-    conn = libvirt_cloudlet.get_libvirt_connection()
-    machine = libvirt_cloudlet.run_vm(conn, ElementTree.tostring(domxml), vnc_disable=True)
+    conn = lib_cloudlet.get_libvirt_connection()
+    machine = lib_cloudlet.run_vm(conn, ElementTree.tostring(domxml), vnc_disable=True)
     print "waiting for %d seconds" % base_wait_time 
     time.sleep(base_wait_time)
-    libvirt_cloudlet.save_mem_snapshot(machine, base_mem)
+    lib_cloudlet.save_mem_snapshot(machine, base_mem)
 
     # make hashing info
     base_disk_hash = tool.extract_hashlist(open(base_image, "rb"))
@@ -107,20 +107,20 @@ def create_overlay_with_libvirt(base_disk, base_mem, overlay_diskpath, overlay_m
     #make modified disk
     modified_disk = base_disk + ".modi"
     modified_mem = base_mem + ".modi"
-    libvirt_cloudlet.copy_disk(base_disk, modified_disk)
+    lib_cloudlet.copy_disk(base_disk, modified_disk)
 
     #resume with modified disk
-    conn = libvirt_cloudlet.get_libvirt_connection()
-    machine = libvirt_cloudlet.run_snapshot(conn, modified_disk, base_mem, vnc_disable=True)
+    conn = lib_cloudlet.get_libvirt_connection()
+    machine = lib_cloudlet.run_snapshot(conn, modified_disk, base_mem, vnc_disable=True)
     print "waiting for %d seconds" % overlay_wait_time
     time.sleep(overlay_wait_time)
 
-    libvirt_cloudlet.save_mem_snapshot(machine, modified_mem)
+    lib_cloudlet.save_mem_snapshot(machine, modified_mem)
     output_list = []
     output_list.append((base_disk, modified_disk, overlay_diskpath))
     output_list.append((base_mem, modified_mem, overlay_mempath))
 
-    ret_files = libvirt_cloudlet.run_delta_compression(output_list, custom_delta=custom_delta)
+    ret_files = lib_cloudlet.run_delta_compression(output_list, custom_delta=custom_delta)
     return ret_files
 
 
@@ -130,7 +130,7 @@ if __name__ == "__main__":
 
     sys.path.append(library_path)
     import cloudlet
-    import libvirt_cloudlet
+    import lib_cloudlet
     import tool
 
     disk1, mem1 = create_base_with_kvm(image, "./kvm_base_disk", "./kvm_base_mem")

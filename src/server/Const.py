@@ -46,9 +46,10 @@ class Const(object):
     META_OVERLAY_FILE_DISK_CHUNKS       = "disk_chunk"
     META_OVERLAY_FILE_MEMORY_CHUNKS     = "memory_chunk"
 
-    TEMPLATE_XML = "./config/VM_TEMPLATE.xml"
-    TEMPLATE_OVF = "./config/ovftransport.iso"
-    VMNETFS_PATH = "../vmnetx/vmnetfs/vmnetfs"
+    MODULE_DIR = os.path.dirname(os.path.abspath(__file__))
+    TEMPLATE_XML = os.path.join(MODULE_DIR,  "./config/VM_TEMPLATE.xml")
+    TEMPLATE_OVF = os.path.join(MODULE_DIR, "./config/ovftransport.iso")
+    VMNETFS_PATH = os.path.join(MODULE_DIR, "../vmnetx/vmnetfs/vmnetfs")
     CHUNK_SIZE=4096
 
     @staticmethod
