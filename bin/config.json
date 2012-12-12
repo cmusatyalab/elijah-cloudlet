@@ -1,0 +1,21 @@
+{
+   "python-script":"/home/krha/cloudlet/src/server/rapid.py",
+   "VM":[
+      {
+         "name":"Ubuntu12.04.01-server-i386",
+         "sha256":"4304c473a9f98480c7d6387f01158881d3440bb81c8a9452b1abdef794e56f03", 
+         "type":"baseVM",
+         "OS":"Linux",
+         "OS-version":"Ubuntu12.04-server-i386",
+         "path":"../image/ubuntu-12.04.1-server-i386/precise.raw"
+      },
+      {
+         "name":"window7",
+         "sha256":"f8936e32decf0a0bb698421b1c9ff3e887140bbf84c6e6832208e5c9747826db",
+         "type":"baseVM",
+         "OS":"Window",
+         "OS-version":"Window7-enterprise-x86",
+         "path":"../image/window7-enterprise-x86/window7.raw"
+      }
+   ]
+}

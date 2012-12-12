@@ -26,7 +26,6 @@ import urllib2
 import urllib
 import json
 import subprocess
-import paramiko
 from threading import Thread
 
 WATTS_BIN = "~/cloudlet/src/measurement/power/wattsup"
@@ -344,6 +343,7 @@ def server_run(address, port, command, server_output_file):
     return 0
 
 def energy_measurement(address, port, power_out_file):
+    import paramiko
     global is_stop_thread
     global last_average_power
 

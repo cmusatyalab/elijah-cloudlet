@@ -23,12 +23,12 @@ import socket
 import json
 import time
 from optparse import OptionParser
-from threading import Thread, Lock
+from threading import Thread
 from pprint import pprint
 import cloudlet_client
 import select
 
-application = ['moped', 'moped_random', 'face', 'mar', 'speech', 'speech_random', 'graphics']
+application = ['moped', 'face', 'mar', 'speech', 'graphics']
 
 batch_mode = False
 

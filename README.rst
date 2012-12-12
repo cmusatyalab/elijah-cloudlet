@@ -39,7 +39,7 @@ To install:
 
 2. Disable security module.
    Example at Ubuntu 12::
-     $ sudo aa-complain /usr/sbin/libvirtd``
+     $ sudo aa-complain /usr/sbin/libvirtd
 
 
 How to use

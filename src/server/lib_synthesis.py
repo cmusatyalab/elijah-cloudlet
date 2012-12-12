@@ -43,6 +43,7 @@ class Synthesis_Const(object):
     TRANSFER_SIZE = 1024*16
     END_OF_FILE = "!!Overlay Transfer End Marker"
     EXIT_BY_CLIENT = False
+    SHOW_VNC = False
 
     # Web server for Andorid Client
     LOCAL_IPADDRESS = 'localhost'
@@ -322,9 +323,7 @@ class SynthesisHandler(SocketServer.StreamRequestHandler):
         resumed_VM.join()
         self.ret_success()
 
-
-
-
+        # --> No ealy start return
         fuse_thread.join()
         end_time = time.time()
         total_time = (end_time-start_time)
@@ -336,7 +335,8 @@ class SynthesisHandler(SocketServer.StreamRequestHandler):
                 print_out=Log, resume_time=(time_end_resume-time_start_resume))
 
         # terminate
-        #cloudlet.connect_vnc(resumed_VM.machine, no_wait=True)
+        if Synthesis_Const.SHOW_VNC:
+            cloudlet.connect_vnc(resumed_VM.machine, no_wait=True)
 
         # exit status
         if Synthesis_Const.EXIT_BY_CLIENT:
@@ -437,6 +437,7 @@ class SynthesisServer(SocketServer.TCPServer):
 
         Synthesis_Const.LOCAL_IPADDRESS = "0.0.0.0"
         Synthesis_Const.EXIT_BY_CLIENT = settings.batch
+        Synthesis_Const.SHOW_VNC = settings.is_vnc
         server_address = (Synthesis_Const.LOCAL_IPADDRESS, Synthesis_Const.SERVER_PORT_NUMBER)
         print "Open TCP Server (%s)\n" % (str(server_address))
 
@@ -456,8 +457,11 @@ class SynthesisServer(SocketServer.TCPServer):
                 '-c', '--config', action='store', type='string', dest='config_filename',
                 help='Set configuration file, which has base VM information, to work as a server mode.')
         parser.add_option(
-                '-b', '--batch', action='store_true', dest='batch',
+                '-b', '--batch', action='store_true', dest='batch', default=False,
                 help='Automatic exit triggered by client')
+        parser.add_option(
+                '-d', '--display', action='store_true', dest='is_vnc', default=False,
+                help='Show VNC for resumed VM')
         settings, args = parser.parse_args(argv)
         if (settings.config_filename == None):
             parser.error('program need configuration file for running mode')
