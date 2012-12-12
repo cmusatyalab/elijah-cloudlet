@@ -1128,7 +1128,7 @@ class ResumedVM(threading.Thread):
 
 
 def validate_congifuration():
-    cmd = "kvm --version"
+    cmd = "%s --version" % Const.QEMU_BIN_PATH
     proc = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, shell=True)
     out, err = proc.communicate()
     if len(err) > 0:
