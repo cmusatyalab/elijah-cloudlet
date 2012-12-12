@@ -1,4 +1,5 @@
 log_synthesis/
+.overlay-log
 synthesis_log
 free_mem_scan/.cproject
 free_mem_scan/.project

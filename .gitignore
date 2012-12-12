@@ -1,4 +1,5 @@
 image/
+cloudlet_env/
 *.a
 *.o
 *.cproject
