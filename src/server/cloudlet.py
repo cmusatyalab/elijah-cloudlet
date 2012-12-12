@@ -19,21 +19,7 @@ import lib_cloudlet as lib_cloudlet
 import sys
 import os
 import time
-import subprocess
 from optparse import OptionParser
-
-def validate_congifuration():
-    cmd = "kvm --version"
-    proc = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, shell=True)
-    out, err = proc.communicate()
-    if len(err) > 0:
-        print "KVM validation Error: %s" % (err)
-        return False
-    if out.find("Cloudlet") < 0:
-        print "KVM validation Error, Incorrect Version:\n%s" % (out)
-        return False
-    return True
-
 
 def process_command_line(argv, commands):
     USAGE = 'Usage: %prog ' + ("[%s]" % "|".join(commands)) + " [base VM] [option]\n"
@@ -65,7 +51,7 @@ def process_command_line(argv, commands):
 
 
 def main(argv):
-    if not validate_congifuration():
+    if not lib_cloudlet.validate_congifuration():
         sys.stderr.write("failed to validate configuration\n")
         sys.exit(1)
 
