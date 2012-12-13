@@ -44,9 +44,33 @@ To install:
 
 How to use
 --------------
-1. Creating new ``base vm``
-2. Creating new ``overlay vm`` from ``base vm``
+
+1. Creating new ``base vm``.
+* You will first create ``base vm``, which will be a template for rest of overlay VMs.
+  To create ``base vm``, you need regular VM disk image as a raw format.
+   ::
+   cd ./bin
+   ./cloudlet base /path/to/vm.image
+* When you close VNC connetion, it will automatically create memory snapshot
+  and relevant information for ``base vm``
+
+
+2. Creating new ``overlay vm`` from ``base vm``.
+* Now you can create your customized VM based onpon ``base vm``
+  You can modify VM with VNC connection and close it when you're ready.
+   ::
+   cd ./bin
+   ./cloudlet overlay /path/to/vm.image
+* Again, it will create ``overlay`` vm at the same directory where ``base vm`` exist.
+* You will keep only 1) overlay_blob file and 2) overlay-meta file as your ``overlay vm``
+
+
 3. Synthesizing ``overlay vm``
+* You can resume your ``overlay vm``
+  ::
+  cd ./bin
+  ./cloudlet synthesis /path/to/base.image /path/to/overlay-meta
+
 
 
 Compiling external library that Cloudlet uses
