@@ -31,19 +31,6 @@
 		<acpi/>
 	</features>
 	<qemu:commandline>
-		<qemu:arg value='-redir'/>
-		<qemu:arg value='tcp:2222::22' />
-		<qemu:arg value='-redir'/>
-		<qemu:arg value='tcp:9876::9876' />
-		<qemu:arg value='-redir'/>
-		<qemu:arg value='tcp:9092::9092' />
-		<qemu:arg value='-redir'/>
-		<qemu:arg value='tcp:9093::9093' />
-		<qemu:arg value='-redir'/>
-		<qemu:arg value='tcp:9094::9094' />
-		<qemu:arg value='-redir'/>
-		<qemu:arg value='tcp:6789::6789' />
-		<qemu:arg value='-redir'/>
-		<qemu:arg value='tcp:10191::10191' />
+		<qemu:arg value='-usb'/>
 	</qemu:commandline>
 </domain>

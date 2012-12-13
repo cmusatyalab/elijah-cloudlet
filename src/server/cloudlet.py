@@ -22,7 +22,7 @@ import time
 from optparse import OptionParser
 
 def process_command_line(argv, commands):
-    USAGE = 'Usage: %prog ' + ("[%s]" % "|".join(commands)) + " [base VM] [option]\n"
+    USAGE = 'Usage: %prog ' + ("[%s]" % "|".join(commands)) + " [base VM] [option] -- [qemu-options]\n"
     USAGE += "  EX) cloudlet.py base /path/to/disk.img"
     VERSION = '%prog 0.7'
     DESCRIPTION = 'Cloudlet Overlay Generation & Synthesis'
@@ -47,6 +47,7 @@ def process_command_line(argv, commands):
     if os.path.exists(base_path) != True:
         parser.error("%s does not exist. Need valid path for base disk" % (base_path))
 
+
     return mode, base_path, args[2:], settings
 
 
@@ -60,11 +61,13 @@ def main(argv):
     CMD_SYNTEHSIS           = "synthesis"
 
     command = (CMD_BASE_CREATION, CMD_OVERLAY_CREATION, CMD_SYNTEHSIS)
-    mode, base_path, args, settings = process_command_line(sys.argv[1:], command)
+    mode, base_path, left_args, settings = process_command_line(sys.argv[1:], command)
 
     if mode == CMD_BASE_CREATION:
         # creat base VM
         disk_image_path = base_path
+        if len(left_args) != 0:
+            sys.stderr("Warning, qemu argument won't be applied to creating base vm")
         disk_path, mem_path = lib_cloudlet.create_baseVM(disk_image_path)
         print "Base VM is created from %s" % disk_image_path
         print "Disk: %s" % disk_path
@@ -74,18 +77,21 @@ def main(argv):
         # create overlay
         start_time = time.time()
         disk_path = base_path
-        overlay_files = lib_cloudlet.create_overlay(disk_path, settings.disk_only)
+        qemu_args = left_args
+        overlay_files = lib_cloudlet.create_overlay(disk_path, settings.disk_only, qemu_args=qemu_args)
         print "[INFO] overlay metafile : %s" % overlay_files[0]
         print "[INFO] overlay : %s" % str(overlay_files[1])
-        print "[INFO] overlay creation time: %f" % (time.time()-start_time)
+        #print "[INFO] overlay creation time: %f" % (time.time()-start_time)
     elif mode == CMD_SYNTEHSIS:
-        if len(args) != 1:
+        if len(left_args) < 1:
             sys.stderr.write("Synthesis requires at least 2 arguments\n \
                     1) base-disk path\n \
                     2) overlay meta path\n")
             sys.exit(1)
-        meta = args[0]
-        lib_cloudlet.synthesis(base_path, meta, settings.disk_only)
+        meta = left_args[0]
+        qemu_args = left_args[1:]
+
+        lib_cloudlet.synthesis(base_path, meta, settings.disk_only, qemu_args=qemu_args)
 
     return 0
 

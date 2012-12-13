@@ -80,7 +80,8 @@ def copy_disk(in_path, out_path):
         raise IOError("Copy failed: from %s to %s " % (in_path, out_path))
 
 
-def convert_xml(xml, conn, vm_name=None, disk_path=None, uuid=None, logfile=None):
+def convert_xml(xml, conn, vm_name=None, disk_path=None, uuid=None, \
+        logfile=None, qemu_args=None):
     if vm_name:
         name_element = xml.find('name')
         if not name_element:
@@ -134,6 +135,17 @@ def convert_xml(xml, conn, vm_name=None, disk_path=None, uuid=None, logfile=None
             #raise CloudletGenerationError(msg)
         qemu_element.append(Element("{%s}arg" % qemu_xmlns, {'value':'-cloudlet'}))
         qemu_element.append(Element("{%s}arg" % qemu_xmlns, {'value':"logfile=%s" % logfile}))
+
+    # append user qemu argument
+    if qemu_args:
+        qemu_xmlns="http://libvirt.org/schemas/domain/qemu/1.0"
+        qemu_element = xml.find("{%s}commandline" % qemu_xmlns)
+        if qemu_element == None:
+            qemu_element = Element("{%s}commandline" % qemu_xmlns)
+            xml.append(qemu_element)
+        for each_argument in qemu_args:
+            qemu_element.append(Element("{%s}arg" % qemu_xmlns, {'value':each_argument}))
+
 
     return ElementTree.tostring(xml)
 
@@ -212,7 +224,7 @@ def create_baseVM(disk_image_path):
     return disk_image_path, base_mempath
 
 
-def create_overlay(base_image, disk_only=False):
+def create_overlay(base_image, disk_only=False, qemu_args=None):
     # create user customized overlay.
     # First resume VM, then let user edit its VM
     # Finally, return disk/memory binary as an overlay
@@ -255,7 +267,7 @@ def create_overlay(base_image, disk_only=False):
 
     # 1-1. resume & get modified disk
     conn = get_libvirt_connection()
-    machine = run_snapshot(conn, modified_disk, base_mem_fuse, qemu_logfile=qemu_logfile.name)
+    machine = run_snapshot(conn, modified_disk, base_mem_fuse, qemu_logfile=qemu_logfile.name, qemu_args=qemu_args)
     connect_vnc(machine)
     Log.write("[TIME] user interaction time for creating overlay: %f\n" % (time()-start_time))
 
@@ -745,6 +757,7 @@ def run_snapshot(conn, disk_image, mem_snapshot, **kwargs):
     # resume_time       :   write back the resumed_time
     resume_time = kwargs.get('resume_time', None)
     logfile = kwargs.get('qemu_logfile', None)
+    qemu_args = kwargs.get('qemu_args', None)
     if resume_time != None:
         start_resume_time = time()
 
@@ -752,7 +765,7 @@ def run_snapshot(conn, disk_image, mem_snapshot, **kwargs):
     hdr = vmnetx._QemuMemoryHeader(open(mem_snapshot))
     xml = ElementTree.fromstring(hdr.xml)
     new_xml_string = convert_xml(xml, conn, disk_path=disk_image, 
-            uuid=uuid4(), logfile=logfile)
+            uuid=uuid4(), logfile=logfile, qemu_args=qemu_args)
 
     overwrite_xml(mem_snapshot, new_xml_string)
 
@@ -885,7 +898,7 @@ def copy_with_xml(in_path, out_path, xml):
     fout.write(fin.read())
 
 
-def synthesis(base_disk, meta, disk_only=False):
+def synthesis(base_disk, meta, disk_only=False, qemu_args=None):
     # VM Synthesis and run recoverd VM
     # param base_disk : path to base disk
     # param meta : path to meta file for overlay
@@ -903,7 +916,8 @@ def synthesis(base_disk, meta, disk_only=False):
             recover_launchVM(base_disk, meta_info, overlay_filename.name, log=Log)
 
     # resume VM
-    resumed_VM = ResumedVM(modified_img, modified_mem, fuse, disk_only=disk_only)
+    resumed_VM = ResumedVM(modified_img, modified_mem, fuse, 
+            disk_only=disk_only, qemu_args=qemu_args)
     resumed_VM.start()
 
     delta_proc.start()
@@ -1062,13 +1076,14 @@ def synthesis_statistics(meta_info, decomp_overlay_file,
 
 
 class ResumedVM(threading.Thread):
-    def __init__(self, modified_img, modified_mem, fuse, disk_only=False, **kwargs):
+    def __init__(self, modified_img, modified_mem, fuse, disk_only=False, qemu_args=None, **kwargs):
         # kwargs
-        # qemu_logfile      :   log file for QEMU-KVM
+        #   qemu_logfile      :   log file for QEMU-KVM
 
         # monitor modified chunks
         self.machine = None
         self.disk_only = disk_only
+        self.qemu_args = qemu_args
         self.fuse = fuse
         self.modified_img = modified_img
         self.modified_mem = modified_mem
@@ -1096,11 +1111,13 @@ class ResumedVM(threading.Thread):
                 # edit default XML to have new disk path
                 conn = get_libvirt_connection()
                 xml = ElementTree.fromstring(open(Const.TEMPLATE_XML, "r").read())
-                new_xml_string = convert_xml(xml, conn, disk_path=self.residue_img, uuid=str(uuid4()))
+                new_xml_string = convert_xml(xml, conn, disk_path=self.residue_img, \
+                        uuid=str(uuid4()), qemu_args=self.qemu_args)
                 self.machine = run_vm(conn, new_xml_string, vnc_disable=True)
             else:
                 self.machine=run_snapshot(conn, self.residue_img, self.residue_mem, 
-                        qemu_logfile=self.qemu_logfile.name, resume_time=self.resume_time)
+                        qemu_logfile=self.qemu_logfile.name, resume_time=self.resume_time,
+                        qemu_args=self.qemu_args)
         except Exception as e:
             sys.stdout.write(str(e)+"\n")
 
