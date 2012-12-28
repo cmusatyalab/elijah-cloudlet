@@ -40,10 +40,12 @@ BaseVM_list = []
 
 class Synthesis_Const(object):
     # PIPLINING
-    TRANSFER_SIZE = 1024*16
-    END_OF_FILE = "!!Overlay Transfer End Marker"
-    EXIT_BY_CLIENT = False
-    SHOW_VNC = False
+    TRANSFER_SIZE           = 1024*16
+    END_OF_FILE             = "!!Overlay Transfer End Marker"
+    EXIT_BY_CLIENT          = False
+    SHOW_VNC                = False
+    IS_EARLY_START          = False
+    IS_PRINT_STATISTICS     = False
 
     # Web server for Andorid Client
     LOCAL_IPADDRESS = 'localhost'
@@ -319,19 +321,23 @@ class SynthesisHandler(SocketServer.StreamRequestHandler):
         delta_proc.start()
         fuse_thread.start()
 
-        # --> early success return
+        if Synthesis_Const.IS_EARLY_START:
+            # return success right after resuming VM
+            # before receiving all chunks
+            resumed_VM.join()
+            self.ret_success()
+            # then wait fuse end
+            fuse_thread.join()
+            end_time = time.time()
 
-        # --> No ealy start return
-        fuse_thread.join()
-        end_time = time.time()
+        else:
+            # first wait for fuse end
+            fuse_thread.join()
+            end_time = time.time()
+            # then return success to client
+            resumed_VM.join()
+            self.ret_success()
         total_time = (end_time-start_time)
-
-        # return success after resuming VM
-        # before receiving all chunks
-        resumed_VM.join()
-        self.ret_success()
-
-
 
         # printout result
         SynthesisHandler.print_statistics(start_time, end_time, \
@@ -371,11 +377,12 @@ class SynthesisHandler(SocketServer.StreamRequestHandler):
         '''
 
         # printout synthesis statistics
-        mem_access_list = resumed_VM.monitor.mem_access_chunk_list
-        disk_access_list = resumed_VM.monitor.disk_access_chunk_list
-        cloudlet.synthesis_statistics(meta_info, temp_overlay_filepath, \
-                mem_access_list, disk_access_list, \
-                print_out=Log)
+        if Synthesis_Const.IS_PRINT_STATISTICS:
+            mem_access_list = resumed_VM.monitor.mem_access_chunk_list
+            disk_access_list = resumed_VM.monitor.disk_access_chunk_list
+            cloudlet.synthesis_statistics(meta_info, temp_overlay_filepath, \
+                    mem_access_list, disk_access_list, \
+                    print_out=Log)
 
         delta_proc.join()
         delta_proc.finish()
@@ -442,14 +449,22 @@ class SynthesisServer(SocketServer.TCPServer):
         Synthesis_Const.LOCAL_IPADDRESS = "0.0.0.0"
         Synthesis_Const.EXIT_BY_CLIENT = settings.batch
         Synthesis_Const.SHOW_VNC = settings.is_vnc
+        Synthesis_Const.IS_EARLY_START = settings.is_early_start
+        Synthesis_Const.IS_PRINT_STATISTICS = settings.is_print_statistics
         server_address = (Synthesis_Const.LOCAL_IPADDRESS, Synthesis_Const.SERVER_PORT_NUMBER)
-        print "Open TCP Server (%s)" % (str(server_address))
 
         SocketServer.TCPServer.__init__(self, server_address, SynthesisHandler)
         self.allow_reuse_address = True
         self.socket.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
         self.socket.setsockopt(socket.IPPROTO_TCP, socket.TCP_NODELAY, 1)
-        print "No delay: %d" % self.socket.getsockopt(socket.IPPROTO_TCP, socket.TCP_NODELAY)
+        print "* Server configuration"
+        print " - Open TCP Server at %s" % (str(server_address))
+        print " - Disable Nalge(No TCP delay)  : %s" \
+                % str(self.socket.getsockopt(socket.IPPROTO_TCP, socket.TCP_NODELAY))
+        print " - Display Resumed VM (VNC)     : %s" % str(Synthesis_Const.SHOW_VNC)
+        print " - Ealy VM Start option         : %s" % str(Synthesis_Const.IS_EARLY_START)
+        print " - Print Synthesis Statistics   : %s" % str(Synthesis_Const.IS_PRINT_STATISTICS)
+        print "-"*50
 
     def handle_error(self, request, client_address):
         SocketServer.TCPServer.handle_error(self, request, client_address)
@@ -463,7 +478,7 @@ class SynthesisServer(SocketServer.TCPServer):
     def process_command_line(argv):
         global operation_mode
 
-        parser = OptionParser(usage="usage: %prog" + " [option]",
+        parser = OptionParser(usage="usage: %prog -c config_file" + " [option]",
                 version="Rapid VM Synthesis(piping) 0.1")
         parser.add_option(
                 '-c', '--config', action='store', type='string', dest='config_filename',
@@ -472,8 +487,14 @@ class SynthesisServer(SocketServer.TCPServer):
                 '-b', '--batch', action='store_true', dest='batch', default=False,
                 help='Automatic exit triggered by client')
         parser.add_option(
-                '-d', '--display', action='store_true', dest='is_vnc', default=False,
-                help='Show VNC for resumed VM')
+                '-d', '--display', action='store_false', dest='is_vnc', default=True,
+                help='Turn off VNC display of VM')
+        parser.add_option(
+                '-e', '--early_start', action='store_true', dest='is_early_start', default=False,
+                help='Turn on early start mode for faster application execution')
+        parser.add_option(
+                '-s', '--statistics', action='store_true', dest='is_print_statistics', default=False,
+                help='print synthesis statistics including overlay accessed ratio')
         settings, args = parser.parse_args(argv)
         if (settings.config_filename == None):
             parser.error('program need configuration file')
@@ -496,8 +517,8 @@ class SynthesisServer(SocketServer.TCPServer):
 
 
         VM_list = json_data['VM']
-        print "-------------------------------"
-        print "* VM Configuration Infomation"
+        print "-"*50
+        print "* Base VM Configuration"
         for vm_info in VM_list:
             # check file location
             base_path = os.path.abspath(vm_info['path'])
@@ -513,10 +534,10 @@ class SynthesisServer(SocketServer.TCPServer):
 
             if vm_info['type'].lower() == 'basevm':
                 BaseVM_list.append(vm_info)
-                print "%s - (Base Disk %d MB, Base Mem %d MB)" % \
+                print " - %s : (Disk %d MB, Memory %d MB)" % \
                         (vm_info['name'], os.path.getsize(vm_info['path'])/1024/1024, \
                         os.path.getsize(base_mempath)/1024/1024)
-        print "-------------------------------"
+        print "-"*50
 
         return json_data, None
 
