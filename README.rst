@@ -34,7 +34,7 @@ To install:
 
 1. install library dependency
    Example at ubuntu 12 LTS x86::
-     $ sudo apt-get install qemu-kvm libvirt-bin gvncviewer python-libvirt python-xdelta3 python-dev liblzma-dev apparmor-utils
+     $ sudo apt-get install qemu-kvm libvirt-bin gvncviewer python-libvirt python-xdelta3 python-dev liblzma-dev apparmor-utils python-pip
      $ sudo pip install msgpack-python bson pyliblzma
 
 2. Disable security module.
