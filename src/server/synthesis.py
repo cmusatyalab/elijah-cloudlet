@@ -15,26 +15,36 @@
 # for more details.
 #
 import sys
+import signal
 from lib_synthesis import SynthesisServer, RapidSynthesisError
 from lib_cloudlet import validate_congifuration
 
 
-if __name__ == "__main__":
-    if not validate_congifuration():
-        sys.stderr.write("failed to validate configuration\n")
-        sys.exit(1)
+def sigint_handler(signum, frame):
+    sys.stdout.write("Exit by user\n")
+    server.terminate()
+    sys.exit(0)
 
-    try:
-        server = SynthesisServer(sys.argv[1:])
-    except RapidSynthesisError as e:
-        sys.stderr.write(str(e))
-        sys.exit(1)
 
-    try:
-        server.serve_forever()
-    except KeyboardInterrupt:
-        sys.stdout.write("Exit by user interaction\n")
-        server.socket.close()
-        sys.exit(0)
+if not validate_congifuration():
+    sys.stderr.write("failed to validate configuration\n")
+    sys.exit(1)
+
+# handling keyboard interrupt
+signal.signal(signal.SIGINT, sigint_handler)
+
+try:
+    server = SynthesisServer(sys.argv[1:])
+    server.serve_forever()
+except RapidSynthesisError as e:
+    sys.stderr.write(str(e))
+    server.termiate()
+    sys.exit(1)
+else:
+    server.terminate()
+    sys.exit(0)
+
+
+
 
 

@@ -218,6 +218,9 @@ class SynthesisHandler(SocketServer.StreamRequestHandler):
     def _check_validity(self, request):
         # self.request is the TCP socket connected to the clinet
         data = request.recv(4)
+        if data == None or len(data) != 4:
+            raise RapidSynthesisError("Failed to receive first byte of header")
+
         msgpack_size = struct.unpack("!I", data)[0]
 
         # recv MSGPACK header
@@ -318,15 +321,16 @@ class SynthesisHandler(SocketServer.StreamRequestHandler):
 
         # --> early success return
 
+        # --> No ealy start return
+        fuse_thread.join()
+        end_time = time.time()
+        total_time = (end_time-start_time)
+
         # return success after resuming VM
         # before receiving all chunks
         resumed_VM.join()
         self.ret_success()
 
-        # --> No ealy start return
-        fuse_thread.join()
-        end_time = time.time()
-        total_time = (end_time-start_time)
 
 
         # printout result
@@ -439,13 +443,21 @@ class SynthesisServer(SocketServer.TCPServer):
         Synthesis_Const.EXIT_BY_CLIENT = settings.batch
         Synthesis_Const.SHOW_VNC = settings.is_vnc
         server_address = (Synthesis_Const.LOCAL_IPADDRESS, Synthesis_Const.SERVER_PORT_NUMBER)
-        print "Open TCP Server (%s)\n" % (str(server_address))
+        print "Open TCP Server (%s)" % (str(server_address))
 
         SocketServer.TCPServer.__init__(self, server_address, SynthesisHandler)
         self.allow_reuse_address = True
         self.socket.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
         self.socket.setsockopt(socket.IPPROTO_TCP, socket.TCP_NODELAY, 1)
         print "No delay: %d" % self.socket.getsockopt(socket.IPPROTO_TCP, socket.TCP_NODELAY)
+
+    def handle_error(self, request, client_address):
+        SocketServer.TCPServer.handle_error(self, request, client_address)
+        sys.stderr.write("handling error from client %s\n" % (str(client_address)))
+
+    def terminate(self):
+        self.socket.close()
+        sys.stderr.write("terminate client connection\n")
 
     @staticmethod
     def process_command_line(argv):
@@ -464,7 +476,7 @@ class SynthesisServer(SocketServer.TCPServer):
                 help='Show VNC for resumed VM')
         settings, args = parser.parse_args(argv)
         if (settings.config_filename == None):
-            parser.error('program need configuration file for running mode')
+            parser.error('program need configuration file')
 
         return settings, args
 
@@ -507,23 +519,4 @@ class SynthesisServer(SocketServer.TCPServer):
         print "-------------------------------"
 
         return json_data, None
-
-
-if __name__ == "__main__":
-    if not cloudlet.validate_congifuration():
-        sys.stderr.write("failed to validate configuration\n")
-        sys.exit(1)
-    try:
-        server = SynthesisServer(sys.argv[1:])
-    except RapidSynthesisError as e:
-        sys.stderr.write(str(e))
-        sys.exit(1)
-
-    try:
-        server.serve_forever()
-    except KeyboardInterrupt:
-        sys.stdout.write("Exit by user interaction\n")
-        server.socket.close()
-        sys.exit(0)
-
 
