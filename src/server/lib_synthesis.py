@@ -200,9 +200,6 @@ def decomp_worker(in_queue, pipe_filepath, time_queue, temp_overlay_file=None):
 
 class SynthesisHandler(SocketServer.StreamRequestHandler):
 
-    def finish(self):
-        pass
-
     def ret_fail(self, message):
         print "Error, %s" % str(message)
         json_ret = json.dumps({"command":SynthesisProtocol.RET_FAIL, "Error":message})
@@ -252,147 +249,178 @@ class SynthesisHandler(SocketServer.StreamRequestHandler):
 
     def handle(self):
         # check_base VM
-        Log.write("\n\n----------------------- New Connection --------------\n")
-        start_time = time.time()
-        header_start_time = time.time()
-        base_path, meta_info = self._check_validity(self.request)
-        url_manager = Manager()
-        overlay_urls = url_manager.list()
-        overlay_urls_size = url_manager.dict()
-        for blob in meta_info[Const.META_OVERLAY_FILES]:
-            url = blob[Const.META_OVERLAY_FILE_NAME]
-            size = blob[Const.META_OVERLAY_FILE_SIZE]
-            overlay_urls.append(url)
-            overlay_urls_size[url] = size
-        app_url = str(overlay_urls[0])
-        Log.write("Base VM     : %s\n" % base_path)
-        Log.write("Application : %s\n" % str(overlay_urls[0]))
-        Log.write("Blob count  : %d\n" % len(overlay_urls))
-        if base_path == None or meta_info == None or overlay_urls == None:
-            message = "Failed, Invalid header information"
-            print message
-            self.wfile.write(message)            
-            self.ret_fail()
-            return
-        (base_diskmeta, base_mem, base_memmeta) = \
-                Const.get_basepath(base_path, check_exist=True)
-        header_end_time = time.time()
+        try:
+            Log.write("\n\n----------------------- New Connection --------------\n")
+            start_time = time.time()
+            header_start_time = time.time()
+            base_path, meta_info = self._check_validity(self.request)
+            url_manager = Manager()
+            overlay_urls = url_manager.list()
+            overlay_urls_size = url_manager.dict()
+            for blob in meta_info[Const.META_OVERLAY_FILES]:
+                url = blob[Const.META_OVERLAY_FILE_NAME]
+                size = blob[Const.META_OVERLAY_FILE_SIZE]
+                overlay_urls.append(url)
+                overlay_urls_size[url] = size
+            app_url = str(overlay_urls[0])
+            Log.write("Base VM     : %s\n" % base_path)
+            Log.write("Application : %s\n" % str(overlay_urls[0]))
+            Log.write("Blob count  : %d\n" % len(overlay_urls))
+            if base_path == None or meta_info == None or overlay_urls == None:
+                message = "Failed, Invalid header information"
+                print message
+                self.wfile.write(message)            
+                self.ret_fail()
+                return
+            (base_diskmeta, base_mem, base_memmeta) = \
+                    Const.get_basepath(base_path, check_exist=True)
+            header_end_time = time.time()
 
-        # read overlay files
-        # create named pipe to convert queue to stream
-        time_transfer = Queue(); time_decomp = Queue();
-        time_delta = Queue(); time_fuse = Queue();
-        tmp_dir = tempfile.mkdtemp()
-        temp_overlay_filepath = os.path.join(tmp_dir, "overlay_file")
-        temp_overlay_file = open(temp_overlay_filepath, "w+b")
-        overlay_pipe = os.path.join(tmp_dir, 'overlay_pipe')
-        os.mkfifo(overlay_pipe)
+            # read overlay files
+            # create named pipe to convert queue to stream
+            time_transfer = Queue(); time_decomp = Queue();
+            time_delta = Queue(); time_fuse = Queue();
+            self.tmp_overlay_dir = tempfile.mkdtemp()
+            temp_overlay_filepath = os.path.join(self.tmp_overlay_dir, "overlay_file")
+            temp_overlay_file = open(temp_overlay_filepath, "w+b")
+            self.overlay_pipe = os.path.join(self.tmp_overlay_dir, 'overlay_pipe')
+            os.mkfifo(self.overlay_pipe)
 
-        # overlay
-        demanding_queue = Queue()
-        download_queue = JoinableQueue()
-        download_process = Process(target=network_worker, 
-                args=(
-                    self,
-                    overlay_urls, overlay_urls_size, demanding_queue, 
-                    download_queue, time_transfer, Synthesis_Const.TRANSFER_SIZE, 
+            # overlay
+            demanding_queue = Queue()
+            download_queue = JoinableQueue()
+            download_process = Process(target=network_worker, 
+                    args=(
+                        self,
+                        overlay_urls, overlay_urls_size, demanding_queue, 
+                        download_queue, time_transfer, Synthesis_Const.TRANSFER_SIZE, 
+                        )
                     )
-                )
-        decomp_process = Process(target=decomp_worker,
-                args=(
-                    download_queue, overlay_pipe, time_decomp, temp_overlay_file,
+            decomp_process = Process(target=decomp_worker,
+                    args=(
+                        download_queue, self.overlay_pipe, time_decomp, temp_overlay_file,
+                        )
                     )
-                )
-        modified_img, modified_mem, fuse, delta_proc, fuse_thread = \
-                cloudlet.recover_launchVM(base_path, meta_info, overlay_pipe, 
-                        log=sys.stdout, demanding_queue=demanding_queue)
-        delta_proc.time_queue = time_delta
-        fuse_thread.time_queue = time_fuse
+            modified_img, modified_mem, self.fuse, self.delta_proc, self.fuse_thread = \
+                    cloudlet.recover_launchVM(base_path, meta_info, self.overlay_pipe, 
+                            log=sys.stdout, demanding_queue=demanding_queue)
+            self.delta_proc.time_queue = time_delta
+            self.fuse_thread.time_queue = time_fuse
 
-        # resume VM
-        resumed_VM = cloudlet.ResumedVM(modified_img, modified_mem, fuse)
-        time_start_resume = time.time()
-        resumed_VM.start()
-        time_end_resume = time.time()
+            # resume VM
+            self.resumed_VM = cloudlet.ResumedVM(modified_img, modified_mem, self.fuse)
+            time_start_resume = time.time()
+            self.resumed_VM.start()
+            time_end_resume = time.time()
 
-        # start processes
-        download_process.start()
-        decomp_process.start()
-        delta_proc.start()
-        fuse_thread.start()
+            # start processes
+            download_process.start()
+            decomp_process.start()
+            self.delta_proc.start()
+            self.fuse_thread.start()
 
-        if Synthesis_Const.IS_EARLY_START:
-            # return success right after resuming VM
-            # before receiving all chunks
-            resumed_VM.join()
-            self.ret_success()
-            # then wait fuse end
-            fuse_thread.join()
-            end_time = time.time()
+            if Synthesis_Const.IS_EARLY_START:
+                # return success right after resuming VM
+                # before receiving all chunks
+                self.resumed_VM.join()
+                self.ret_success()
+                # then wait fuse end
+                self.fuse_thread.join()
+                end_time = time.time()
 
-        else:
-            # first wait for fuse end
-            fuse_thread.join()
-            end_time = time.time()
-            # then return success to client
-            resumed_VM.join()
-            self.ret_success()
-        total_time = (end_time-start_time)
+            else:
+                # first wait for fuse end
+                self.fuse_thread.join()
+                end_time = time.time()
+                # then return success to client
+                self.resumed_VM.join()
+                self.ret_success()
+            total_time = (end_time-start_time)
 
-        # printout result
-        SynthesisHandler.print_statistics(start_time, end_time, \
-                time_transfer, time_decomp, time_delta, time_fuse, \
-                print_out=Log, resume_time=(time_end_resume-time_start_resume))
+            # printout result
+            SynthesisHandler.print_statistics(start_time, end_time, \
+                    time_transfer, time_decomp, time_delta, time_fuse, \
+                    print_out=Log, resume_time=(time_end_resume-time_start_resume))
 
-        # terminate
-        if Synthesis_Const.SHOW_VNC:
-            cloudlet.connect_vnc(resumed_VM.machine, no_wait=True)
+            if Synthesis_Const.SHOW_VNC:
+                cloudlet.connect_vnc(self.resumed_VM.machine, no_wait=True)
 
-        # exit status
-        if Synthesis_Const.EXIT_BY_CLIENT:
-            Log.write("[SOCKET] waiting for client exit message\n")
-            data = self.request.recv(4)
-            msgpack_size = struct.unpack("!I", data)[0]
-            # recv MSGPACK header
-            msgpack_data = self.request.recv(msgpack_size)
-            while len(msgpack_data) < msgpack_size:
-                msgpack_data += self.request.recv(msgpack_size- len(msgpack_data))
-            client_data = msgpack.unpackb(msgpack_data)
-            Log.write("-----------------------------\n")
-            Log.write("Client data\n")
-            Log.write(pformat(client_data))
-            Log.write("\n")
-        else:
-            while True:
-                user_input = raw_input("q to quit: ")
-                if user_input == 'q':
-                    break
+            # exit status
+            if Synthesis_Const.EXIT_BY_CLIENT:
+                Log.write("[SOCKET] waiting for client exit message\n")
+                data = self.request.recv(4)
+                msgpack_size = struct.unpack("!I", data)[0]
+                # recv MSGPACK header
+                msgpack_data = self.request.recv(msgpack_size)
+                while len(msgpack_data) < msgpack_size:
+                    msgpack_data += self.request.recv(msgpack_size- len(msgpack_data))
+                client_data = msgpack.unpackb(msgpack_data)
+                Log.write("-----------------------------\n")
+                Log.write("Client data\n")
+                Log.write(pformat(client_data))
+                Log.write("\n")
+            else:
+                while True:
+                    user_input = raw_input("q to quit: ")
+                    if user_input == 'q':
+                        break
 
-        # TO BE DELETED - save execution pattern
-        '''
-        mem_access_list = resumed_VM.monitor.mem_access_chunk_list
-        mem_access_str = [str(item) for item in mem_access_list]
-        filename = "exec_patter_%s" % (app_url.split("/")[-2])
-        open(filename, "w+a").write('\n'.join(mem_access_str))
-        '''
+            # TO BE DELETED - save execution pattern
+            '''
+            mem_access_list = self.resumed_VM.monitor.mem_access_chunk_list
+            mem_access_str = [str(item) for item in mem_access_list]
+            filename = "exec_patter_%s" % (app_url.split("/")[-2])
+            open(filename, "w+a").write('\n'.join(mem_access_str))
+            '''
 
-        # printout synthesis statistics
-        if Synthesis_Const.IS_PRINT_STATISTICS:
-            mem_access_list = resumed_VM.monitor.mem_access_chunk_list
-            disk_access_list = resumed_VM.monitor.disk_access_chunk_list
-            cloudlet.synthesis_statistics(meta_info, temp_overlay_filepath, \
-                    mem_access_list, disk_access_list, \
-                    print_out=Log)
+            # printout synthesis statistics
+            if Synthesis_Const.IS_PRINT_STATISTICS:
+                mem_access_list = self.resumed_VM.monitor.mem_access_chunk_list
+                disk_access_list = self.resumed_VM.monitor.disk_access_chunk_list
+                cloudlet.synthesis_statistics(meta_info, temp_overlay_filepath, \
+                        mem_access_list, disk_access_list, \
+                        print_out=Log)
+        except Exception, e:
+            sys.stderr.write("handler raises exception\n")
+            self.terminate()
 
-        delta_proc.join()
-        delta_proc.finish()
-        resumed_VM.terminate()
-        fuse.terminate()
 
-        if os.path.exists(overlay_pipe):
-            os.unlink(overlay_pipe)
-        shutil.rmtree(tmp_dir)
+    def finish(self):
+        print "handler finishes"
+        if self.delta_proc != None:
+            self.delta_proc.join()
+            self.delta_proc.finish()
+        if self.resumed_VM != None:
+            self.resumed_VM.terminate()
+        if self.fuse != None:
+            self.fuse.terminate()
+
+        if os.path.exists(self.overlay_pipe):
+            os.unlink(self.overlay_pipe)
+        if os.path.exists(self.tmp_overlay_dir):
+            shutil.rmtree(self.tmp_overlay_dir)
         Log.flush()
+
+    def terminate(self):
+        # force terminate
+        # do not wait for joinining
+        if self.delta_proc != None:
+            self.delta_proc.finish()
+            if self.delta_proc.is_alive():
+                self.delta_proc.terminate()
+            self.delta_proc = None
+        if self.resumed_VM != None:
+            self.resumed_VM.terminate()
+            self.resumed_VM = None
+        if self.fuse != None:
+            self.fuse.terminate()
+            self.fuse = None
+        if os.path.exists(self.overlay_pipe):
+            os.unlink(self.overlay_pipe)
+        if os.path.exists(self.tmp_overlay_dir):
+            shutil.rmtree(self.tmp_overlay_dir)
+        Log.flush()
+
 
     @staticmethod
     def print_statistics(start_time, end_time, \
@@ -467,11 +495,12 @@ class SynthesisServer(SocketServer.TCPServer):
         print "-"*50
 
     def handle_error(self, request, client_address):
-        SocketServer.TCPServer.handle_error(self, request, client_address)
+        #SocketServer.TCPServer.handle_error(self, request, client_address)
         sys.stderr.write("handling error from client %s\n" % (str(client_address)))
 
     def terminate(self):
-        self.socket.close()
+        if self.socket != -1:
+            self.socket.close()
         sys.stderr.write("terminate client connection\n")
 
     @staticmethod

@@ -16,13 +16,14 @@
 #
 import sys
 import signal
-from lib_synthesis import SynthesisServer, RapidSynthesisError
+from lib_synthesis import SynthesisServer
 from lib_cloudlet import validate_congifuration
 
 
 def sigint_handler(signum, frame):
     sys.stdout.write("Exit by user\n")
-    server.terminate()
+    if server != None:
+        server.terminate()
     sys.exit(0)
 
 
@@ -31,20 +32,21 @@ if not validate_congifuration():
     sys.exit(1)
 
 # handling keyboard interrupt
-signal.signal(signal.SIGINT, sigint_handler)
+#signal.signal(signal.SIGINT, sigint_handler)
 
+server = SynthesisServer(sys.argv[1:])
 try:
-    server = SynthesisServer(sys.argv[1:])
     server.serve_forever()
-except RapidSynthesisError as e:
-    sys.stderr.write(str(e))
-    server.termiate()
+except Exception as e:
+    #sys.stderr.write(str(e))
+    server.terminate()
+    sys.exit(1)
+except KeyboardInterrupt as e:
+    sys.stdout.write("Exit by user\n")
+    server.terminate()
     sys.exit(1)
 else:
     server.terminate()
     sys.exit(0)
-
-
-
 
 
