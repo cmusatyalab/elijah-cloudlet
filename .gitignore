@@ -1,5 +1,6 @@
 image/
 cloudlet_env/
+test/memory_snapshot/
 *.a
 *.o
 *.cproject
