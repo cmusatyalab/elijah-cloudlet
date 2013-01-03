@@ -60,7 +60,7 @@ class CloudletLog(object):
             self.logfile = open(filename, "w+")
         else:
             self.logfile = open(Const.OVERLAY_LOG, "w+")
-        self.mute = open("/dev/null", "wrb")
+        self.mute = open("/dev/null", "w+b")
 
     def write(self, log):
         self.logfile.write(log)
@@ -252,7 +252,7 @@ def create_overlay(base_image, options, qemu_args=None):
     # make FUSE disk & memory
     fuse = run_fuse(Const.VMNETFS_PATH, Const.CHUNK_SIZE, 
             base_image, os.path.getsize(base_image),
-            base_mem, os.path.getsize(base_mem))
+            base_mem, os.path.getsize(base_mem), print_out=Log)
     modified_disk = os.path.join(fuse.mountpoint, 'disk', 'image')
     base_mem_fuse = os.path.join(fuse.mountpoint, 'memory', 'image')
     modified_mem = NamedTemporaryFile(prefix="cloudlet-mem-", delete=False)
@@ -611,7 +611,7 @@ def recover_launchVM(base_image, meta_info, overlay_file, **kwargs):
     # nova_util = nova_util is executioin wrapper for nova framework
     #           You should use nova_util in OpenStack, or subprocess 
     #           will be returned without finishing their work
-    log = kwargs.get('log', open("/dev/null", "wrb"))
+    log = kwargs.get('log', open("/dev/null", "w+b"))
     nova_util = kwargs.get('nova_util', None)
 
     (base_diskmeta, base_mem, base_memmeta) = \
@@ -634,11 +634,12 @@ def recover_launchVM(base_image, meta_info, overlay_file, **kwargs):
 
     # make FUSE disk & memory
     kwargs['meta_info'] = meta_info
+    kwargs['print_out'] = log
     fuse = run_fuse(Const.VMNETFS_PATH, Const.CHUNK_SIZE, 
             base_image, vm_disk_size, base_mem, vm_memory_size,
             modified_img.name,  disk_overlay_map,
             modified_mem.name, memory_overlay_map, **kwargs)
-    print "[INFO] Start FUSE"
+    log.write("[INFO] Start FUSE\n")
 
     # Recover Modified Memory
     pipe_parent, pipe_child = Pipe()
@@ -647,7 +648,7 @@ def recover_launchVM(base_image, meta_info, overlay_file, **kwargs):
             modified_img.name, vm_disk_size, Const.CHUNK_SIZE, 
             out_pipe=pipe_child)
     fuse_thread = vmnetfs.FuseFeedingThread(fuse, 
-            pipe_parent, delta.Recovered_delta.END_OF_PIPE)
+            pipe_parent, delta.Recovered_delta.END_OF_PIPE, print_out=log)
     return [modified_img.name, modified_mem.name, fuse, delta_proc, fuse_thread]
 
 

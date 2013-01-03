@@ -210,7 +210,7 @@ class DeltaList(object):
     @staticmethod
     def statistics(delta_list, print_out=sys.stdout, mem_discarded=0, disk_discarded=0):
         if len(delta_list) == 0:
-            print "[Debug] Nothing to compare. Length is 0"
+            print_out.write("[Debug] Nothing to compare. Length is 0\n")
             delta_list.sort(key=itemgetter('offset'))
             return
         if type(delta_list[0]) != DeltaItem:
@@ -427,11 +427,14 @@ class Recovered_delta(multiprocessing.Process):
     def __init__(self, base_disk, base_mem, overlay_path, 
             output_mem_path, output_mem_size, 
             output_disk_path, output_disk_size, chunk_size,
-            out_pipe=None, time_queue=None):
+            out_pipe=None, time_queue=None, print_out=None):
         # recover delta list using base disk/memory
         # You have to specify parent to indicate whether you're recover memory or disk 
         # optionally you can use overlay_memory to recover overlay disk which is
         # de-duplicated with overlay memory
+        self.print_out = print_out
+        if self.print_out == None:
+            self.print_out = open("/dev/null", "w+b")
 
         if base_disk == None and base_mem == None:
             raise MemoryError("Need either base_disk or base_memory")
@@ -518,8 +521,8 @@ class Recovered_delta(multiprocessing.Process):
 
         if self.time_queue != None: 
             self.time_queue.put({'start_time':start_time, 'end_time':end_time})
-        print "[Delta] : (%s)-(%s)=(%s), delta %ld chunks" % \
-                (start_time, end_time, (end_time-start_time), count)
+        self.print_out.write("[Delta] : (%s)-(%s)=(%s), delta %ld chunks\n" % \
+                (start_time, end_time, (end_time-start_time), count))
 
     def recover_item(self, delta_item):
         if type(delta_item) != DeltaItem:
@@ -580,7 +583,7 @@ class Recovered_delta(multiprocessing.Process):
             self.raw_mem.close()
         if self.raw_mem_overlay:
             self.raw_mem_overlay.close()
-        print "[DEBUG] Recover finishes"
+        self.print_out.write("[DEBUG] Recover finishes\n")
 
 
 def create_overlay(memory_deltalist, memory_chunk_size,

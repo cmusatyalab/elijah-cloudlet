@@ -39,6 +39,7 @@ class VMNetFS(threading.Thread):
     FUSE_TYPE_MEMORY    =   "memory"
 
     def __init__(self, bin_path, args, **kwargs):
+        self.print_out = kwargs.get("print_out", open("/dev/null", "w+b"))
         self.vmnetfs_path = bin_path
         self._args = '%d\n%s\n' % (len(args),
                 '\n'.join(a.replace('\n', '') for a in args))
@@ -102,12 +103,12 @@ class VMNetFS(threading.Thread):
             total_wait_time = 0.0
             for item in wait_statistics:
                 total_wait_time += item['time']
-            print "[INFO] %d chunks waited for synthesizing for avg %f s, total: %f s" % \
-                    (len(wait_statistics), total_wait_time/len(wait_statistics), total_wait_time)
+            self.print_out.write("[INFO] %d chunks waited for synthesizing for avg %f s, total: %f s\n" % \
+                    (len(wait_statistics), total_wait_time/len(wait_statistics), total_wait_time))
         else:
-            print "[INFO] NO chunks has been waited at FUSE"
+            self.print_out.write("[INFO] NO chunks has been waited at FUSE\n")
         self._running = False
-        print "[INFO] close Fuse Exec thread"
+        self.print_out.write("[INFO] close Fuse Exec thread\n")
 
     def fuse_write(self, data):
         self._pipe.write(data + "\n")
@@ -140,7 +141,7 @@ class VMNetFS(threading.Thread):
     def terminate(self):
         self.stop.set()
         if self._pipe is not None:
-            print "[INFO] Fuse close pipe"
+            self.print_out.write("[INFO] Fuse close pipe\n")
             self._pipe.close()
             self._pipe = None
 
@@ -290,7 +291,8 @@ class FileMonitor(threading.Thread):
 
 class FuseFeedingThread(threading.Thread):
 
-    def __init__(self, fuse, input_pipe, END_OF_PIPE):
+    def __init__(self, fuse, input_pipe, END_OF_PIPE, **kwargs):
+        self.print_out = kwargs.get("print_out", open("/dev/null", "w+b"))
         self.fuse = fuse
         self.input_pipe = input_pipe
         self.END_OF_PIPE = END_OF_PIPE
@@ -316,8 +318,8 @@ class FuseFeedingThread(threading.Thread):
         end_time = time.time()
         if self.time_queue != None: 
             self.time_queue.put({'start_time':start_time, 'end_time':end_time})
-        print "[FUSE] : (%s)-(%s)=(%s), send total (%ld) chunks" % \
-                (start_time, end_time, (end_time-start_time), count)
+        self.print_out.write("[FUSE] : (%s)-(%s)=(%s), send total (%ld) chunks\n" % \
+                (start_time, end_time, (end_time-start_time), count))
         self.fuse.fuse_write("END_OF_TRANSMISSION")
 
 

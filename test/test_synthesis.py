@@ -30,7 +30,8 @@ class TestSynthesisFunction(unittest.TestCase):
     def test_memory_synthesis(self):
         from tool import decomp_overlay
         from lib_cloudlet import recover_launchVM
-        Log = open("/dev/null", "rwb")
+        Log = open("/dev/null", "w+b")
+        #Log = sys.stdout
 
         meta = Const.OVERLAY_MEMA_FILE
         base_disk = Const.BASE_DISK_PATH

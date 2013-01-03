@@ -239,7 +239,7 @@ def decomp_overlay(meta, output_path, print_out=sys.stdout):
         decomp_data = decompressor.decompress(comp_data)
         decomp_data += decompressor.flush()
         overlay_file.write(decomp_data)
-    print_out.write("[Debug] Overlay decomp time for %d files: %f at %s\n" % 
+    print_out.write("[Debug] Overlay decomp time for %d files: %f at %s\n" % \
             (len(comp_overlay_files), (time()-decomp_start_time), output_path))
     overlay_file.close()
 
