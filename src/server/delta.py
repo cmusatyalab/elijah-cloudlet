@@ -22,7 +22,7 @@ import mmap
 import tool
 import os
 import random
-from Const import Const
+from Configuration import Const
 from operator import itemgetter
 from hashlib import sha256
 import multiprocessing 

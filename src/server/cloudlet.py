@@ -19,6 +19,7 @@ import lib_cloudlet as lib_cloudlet
 import sys
 import os
 import time
+from Configuration import Options
 from optparse import OptionParser
 
 def process_command_line(argv, commands):
@@ -30,8 +31,13 @@ def process_command_line(argv, commands):
     parser = OptionParser(usage=USAGE, version=VERSION, description=DESCRIPTION)
 
     parser.add_option(
-            '-c', '--config', action='store', type='string', dest='config_filename',
-            help='Set configuration file, which has base VM information, to work as a server mode.')
+            '-t', '--no-trim', action='store_true', dest='disable_trim_support', default=False,
+            help='This will disable TRIM Support, mainly for test purposes. \
+                    Normal user does not need to care about this option')
+    parser.add_option(
+            '-m', '--no-free-memory', action='store_true', dest='disable_free_support', default=False,
+            help='This will disable extracting Free memory, mainly for test purposes. \
+                    Normal user does not need to care about this option')
     parser.add_option(
             '-d', '--disk', action='store_true', dest='disk_only', default=False,
             help='[overlay_creation] create only disk overlay only')
@@ -78,7 +84,12 @@ def main(argv):
         start_time = time.time()
         disk_path = base_path
         qemu_args = left_args
-        overlay_files = lib_cloudlet.create_overlay(disk_path, settings.disk_only, qemu_args=qemu_args)
+        options = Options()
+        options.TRIM_SUPPORT = not settings.disable_trim_support
+        options.FREE_SUPPORT = not settings.disable_free_support
+        options.DISK_ONLY = settings.disk_only
+
+        overlay_files = lib_cloudlet.create_overlay(disk_path, options, qemu_args=qemu_args)
         print "[INFO] overlay metafile : %s" % overlay_files[0]
         print "[INFO] overlay : %s" % str(overlay_files[1])
         #print "[INFO] overlay creation time: %f" % (time.time()-start_time)

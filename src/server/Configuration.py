@@ -17,16 +17,21 @@
 
 import os
 
-class ConstError(Exception):
+class ConfigurationError(Exception):
     pass
 
 
-class Const(object):
-    SEPERATE_DEDUP_REDUCING_SEMANTICS    = False
-    TRIM_SUPPORT            = True
-    FREE_SUPPORT            = True
-    XRAY_SUPPORT            = False
+class Options(object):
+    ## see the effect of dedup and reducing semantic by generating two indenpendent overlay
+    SEPERATE_DEDUP_REDUCING_SEMANTICS   = False     
 
+    TRIM_SUPPORT                        = True
+    FREE_SUPPORT                        = True
+    XRAY_SUPPORT                        = False
+    DISK_ONLY                           = False
+
+
+class Const(object):
     BASE_DISK               = ".base-img"
     BASE_MEM                = ".base-mem"
     BASE_DISK_HASH          = ".base-img-hash"
@@ -59,13 +64,13 @@ class Const(object):
     def _check_path(name, path):
         if not os.path.exists(path):
             message = "Cannot find name at %s" % (path)
-            raise ConstError(message)
+            raise ConfigurationError(message)
 
     @staticmethod
     def get_basepath(base_disk_path, check_exist=False):
         Const._check_path('base disk', base_disk_path)
 
-        image_name = os.path.splitext(base_disk_path)[0]
+        image_name = os.path.splitext(os.path.basename(base_disk_path))[0]
         dir_path = os.path.dirname(base_disk_path)
         diskmeta = os.path.join(dir_path, image_name+Const.BASE_DISK_META)
         mempath = os.path.join(dir_path, image_name+Const.BASE_MEM)

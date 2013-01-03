@@ -57,7 +57,7 @@ class VMNetFS(threading.Thread):
         if (self.meta_info != None) and (self.demanding_queue != None):
             memory_overlay_dict = dict()
             disk_overlay_dict = dict()
-            from Const import Const
+            from Configuration import Const
             for blob in self.meta_info[Const.META_OVERLAY_FILES]:
                 overlay_url = blob[Const.META_OVERLAY_FILE_NAME]
                 memory_chunks = blob[Const.META_OVERLAY_FILE_MEMORY_CHUNKS]

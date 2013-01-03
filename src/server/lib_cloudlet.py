@@ -29,7 +29,7 @@ import hashlib
 import msgpack
 import copy
 import libvirt
-from Const import Const
+from Configuration import Const, Options
 from delta import DeltaList
 from delta import DeltaItem
 from xml.etree import ElementTree
@@ -224,7 +224,7 @@ def create_baseVM(disk_image_path):
     return disk_image_path, base_mempath
 
 
-def create_overlay(base_image, disk_only=False, qemu_args=None):
+def create_overlay(base_image, options, qemu_args=None):
     # create user customized overlay.
     # First resume VM, then let user edit its VM
     # Finally, return disk/memory binary as an overlay
@@ -232,6 +232,9 @@ def create_overlay(base_image, disk_only=False, qemu_args=None):
     start_time = time()
     log_path = os.path.join(os.path.dirname(base_image), os.path.basename(base_image) + Const.OVERLAY_LOG)
     Log = CloudletLog(log_path)
+
+    if (options == None) or (isinstance(options, Options) == False):
+        raise CloudletGenerationError("give option class is invalid")
 
     (base_diskmeta, base_mem, base_memmeta) = \
             Const.get_basepath(base_image, check_exist=True)
@@ -266,6 +269,10 @@ def create_overlay(base_image, disk_only=False, qemu_args=None):
     qemu_monitor.start()
 
     # 1-1. resume & get modified disk
+    Log.write("[INFO] * Overlay creation configuration\n")
+    Log.write("[INFO]  - Use TRIM Support          : %s\n" % (str(options.TRIM_SUPPORT)))
+    Log.write("[INFO]  - Use Free memory Support   : %s\n" % (str(options.FREE_SUPPORT)))
+    Log.write("[INFO]  - Create only disk overlay  : %s\n" % (str(options.DISK_ONLY)))
     conn = get_libvirt_connection()
     machine = run_snapshot(conn, modified_disk, base_mem_fuse, qemu_logfile=qemu_logfile.name, qemu_args=qemu_args)
     connect_vnc(machine)
@@ -275,7 +282,7 @@ def create_overlay(base_image, disk_only=False, qemu_args=None):
     #      and get modified memory
     monitor.del_path(vmnetfs.StreamMonitor.MEMORY_ACCESS)
     # TODO: support stream of modified memory rather than tmp file
-    if not disk_only:
+    if not options.DISK_ONLY:
         save_mem_snapshot(machine, modified_mem.name)
 
     # 1-3. get hashlist of base memory and disk
@@ -283,7 +290,7 @@ def create_overlay(base_image, disk_only=False, qemu_args=None):
     basedisk_hashlist = Disk.base_hashlist(base_diskmeta)
 
     # 1-4. get dma & discard information
-    if Const.TRIM_SUPPORT:
+    if options.TRIM_SUPPORT:
         dma_dict, trim_dict = Disk.parse_qemu_log(qemu_logfile.name, Const.CHUNK_SIZE, print_out=Log)
         if len(trim_dict) == 0:
             print "[WARNING] No TRIM Discard, Check /etc/fstab configuration"
@@ -294,14 +301,14 @@ def create_overlay(base_image, disk_only=False, qemu_args=None):
 
     # 1-5. get used sector information from x-ray
     used_blocks_dict = None
-    if Const.XRAY_SUPPORT:
+    if options.XRAY_SUPPORT:
         used_blocks_dict = xray.get_used_blocks(modified_disk)
 
     # 2-1. get memory overlay
-    if not disk_only:
+    if not options.DISK_ONLY:
         mem_deltalist= Memory.create_memory_deltalist(modified_mem.name, 
                 basemem_meta=base_memmeta, basemem_path=base_mem,
-                apply_free_memory=Const.FREE_SUPPORT,
+                apply_free_memory=options.FREE_SUPPORT,
                 free_memory_info=free_memory_dict,
                 print_out=Log)
     else:
@@ -349,7 +356,7 @@ def create_overlay(base_image, disk_only=False, qemu_args=None):
             mem_discarded=free_pfn_counter,
             disk_discarded=disk_discarded_count)
 
-    if Const.XRAY_SUPPORT:
+    if options.XRAY_SUPPORT:
         # 3-1. list-up all the files that is associated with overlay sectors
         xray_start_time = time()
         xray_log = open("./xray_log", "wrb")
@@ -375,7 +382,7 @@ def create_overlay(base_image, disk_only=False, qemu_args=None):
 
     # 4. create metadata
     overlay_metafile = os.path.join(dir_path, image_name+Const.OVERLAY_META)
-    if not disk_only:
+    if not options.DISK_ONLY:
         _create_overlay_meta(base_hash_value, overlay_metafile, 
                 modified_disk, modified_mem.name, blob_list)
     else:
@@ -383,7 +390,7 @@ def create_overlay(base_image, disk_only=False, qemu_args=None):
                 modified_disk, base_mem, blob_list)
 
     # TO be deleted
-    if Const.SEPERATE_DEDUP_REDUCING_SEMANTICS:
+    if options.SEPERATE_DEDUP_REDUCING_SEMANTICS:
         free_memory_dict_new = dict()
         disk_statistics_new = dict()
         disk_deltalist_copy = Disk.create_disk_deltalist(modified_disk,
@@ -395,7 +402,7 @@ def create_overlay(base_image, disk_only=False, qemu_args=None):
                 used_blocks_dict=used_blocks_dict,
                 ret_statistics=disk_statistics_new,
                 print_out=Log)
-        if not disk_only:
+        if not options.DISK_ONLY:
             mem_deltalist_copy = Memory.create_memory_deltalist(modified_mem.name, 
                     basemem_meta=base_memmeta, basemem_path=base_mem,
                     apply_free_memory=False,

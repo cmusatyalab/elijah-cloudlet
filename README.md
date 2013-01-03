@@ -1,4 +1,4 @@
-Elijah: Cloudlet Infrastructure for Mobile Computing
+Eijah: Cloudlet Infrastructure for Mobile Computing
 ========================================================
 A cloudlet is a new architectural element that arises from the convergence of
 mobile computing and cloud computing. It represents the middle tier of a

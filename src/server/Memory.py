@@ -23,7 +23,7 @@ import tool
 import mmap
 import vmnetx
 import subprocess
-from Const import Const
+from Configuration import Const
 from progressbar import AnimatedProgressBar
 from delta import DeltaItem
 from delta import DeltaList
@@ -107,11 +107,10 @@ class Memory(object):
                     if (free_pfn_dict != None) and \
                             (free_pfn_dict.get(long(ram_offset/Memory.RAM_PAGE_SIZE), None) == 1):
                         is_free_memory = True
-                        freed_page_counter += 1
 
                     if is_free_memory and apply_free_memory:
                         # Do not compare. It is free memory
-                        pass
+                        freed_page_counter += 1
                     else:
                         #get xdelta comparing self.raw
                         source_data = self.get_raw_data(ram_offset, len(data))
@@ -228,15 +227,22 @@ class Memory(object):
             print "end offset: %ld" % (ram_end_offset)
             raise MemoryError("ram header+data is not aligned with page size")
 
-        mem_size_mb = ram_info.get('pc.ram').get('length')/1024/1024
-        mem_offset_infile = ram_info.get('pc.ram').get('offset')
-        self.free_pfn_dict = get_free_pfn_dict(filepath, mem_size_mb, mem_offset_infile)
-        # get free memory list
         if diff:
+            # case for getting modified memory list
+            if apply_free_memory == True:
+                # get free memory list
+                mem_size_mb = ram_info.get('pc.ram').get('length')/1024/1024
+                mem_offset_infile = ram_info.get('pc.ram').get('offset')
+                self.free_pfn_dict = get_free_pfn_dict(filepath, mem_size_mb, mem_offset_infile)
+            else:
+                self.free_pfn_dict = None
+
             freed_counter = self._get_mem_hash(fin, 0, file_size, hash_list, \
                     diff=diff, free_pfn_dict=self.free_pfn_dict, \
                     apply_free_memory=apply_free_memory, print_out=print_out)
+
         else:
+            # case for generating base memory hash list
             freed_counter = self._get_mem_hash(fin, 0, file_size, hash_list, \
                     diff=diff, free_pfn_dict=None, print_out=print_out)
 

@@ -26,7 +26,7 @@ from hashlib import sha256
 import mmap
 import struct
 import msgpack 
-from Const import Const
+from Configuration import Const
 from lzma import LZMACompressor
 from lzma import LZMADecompressor
 
