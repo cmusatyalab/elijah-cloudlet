@@ -3,6 +3,7 @@
 import unittest
 import sys
 import os
+import threading
 from hashlib import sha1
 from tempfile import NamedTemporaryFile
 
@@ -18,8 +19,52 @@ class Const(object):
     file_list = [BASE_DISK_PATH, BASE_MEMORY_PATH, MODIFIED_MEMORY_SNAPSHOT, OVERLAY_MEMA_FILE]
 
 
-def _overlay_install(ssh_port):
-    pass
+class App_installer(threading.Thread):
+    def __init__(self, ssh_ip, ssh_port):
+        self.ssh_ip = ssh_ip
+        self.ssh_port = ssh_port
+        threading.Thread.__init__(self, target=self.run)
+
+    def run(self):
+        import paramiko
+        import socket
+        import time
+
+        ssh = paramiko.SSHClient()
+        ssh.set_missing_host_key_policy(paramiko.AutoAddPolicy())
+        counter = 0
+        while counter < 60:
+            try:
+                ssh.connect(self.ssh_ip, port=self.ssh_port, username='cloudlet', password='cloudlet')
+                break
+            except socket.error:
+                counter += 1
+                sys.stdout.write(".")
+                sys.stdout.flush()
+                time.sleep(1)
+        sys.stdout.write("\n")
+        sys.stdout.flush()
+        stdin, stdout, stderr = ssh.exec_command("dd if=/dev/urandom of=./test bs=1M count=100")
+        stdin, stdout, stderr = ssh.exec_command("sync")
+        #self.wait_until_finish(stdout, stderr)
+        ssh.close()
+
+    @staticmethod
+    def wait_until_finish(stdout, stderr, max_time=20):
+        import sys
+        import time
+        for x in xrange(max_time):
+            ret1 = stdout.readline()
+            ret2 = stderr.readline()
+            sys.stdout.write(ret1)
+            sys.stderr.write(ret2)
+            sys.stdout.flush()
+            sys.stderr.flush()
+
+            if len(ret1) == 0:
+                break
+            time.sleep(0.01)
+
 
 class TestSynthesisFunction(unittest.TestCase):
 
@@ -46,13 +91,16 @@ class TestSynthesisFunction(unittest.TestCase):
         options.disk_only = False
         options.TRIM_SUPPORT = False
         options.FREE_SUPPORT = False 
+        options.MEMORY_SAVE_PATH = Const.MODIFIED_MEMORY_SNAPSHOT
         overlay = cloudlet.VM_Overlay(disk_path, options)
+        app_installer = App_installer('localhost', 2222)
         overlay.start()
+        app_installer.start()
+        app_installer.join()
         overlay.join()
 
         print "[INFO] overlay metafile : %s" % overlay.overlay_metafile
         print "[INFO] overlay : %s" % str(overlay.overlay_files[0])
-        
 
     def perform_synthesis(self):
         from tool import decomp_overlay

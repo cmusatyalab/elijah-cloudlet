@@ -22,13 +22,15 @@ class ConfigurationError(Exception):
 
 
 class Options(object):
-    ## see the effect of dedup and reducing semantic by generating two indenpendent overlay
-    SEPERATE_DEDUP_REDUCING_SEMANTICS   = False     
-
     TRIM_SUPPORT                        = True
     FREE_SUPPORT                        = True
     XRAY_SUPPORT                        = False
     DISK_ONLY                           = False
+
+    ## see the effect of dedup and reducing semantic by generating two indenpendent overlay
+    SEPERATE_DEDUP_REDUCING_SEMANTICS   = False     
+    ## for test purposes, we can optionally save modified memory snapshot
+    MEMORY_SAVE_PATH                    = None
 
 
     def __str__(self):

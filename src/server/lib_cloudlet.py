@@ -29,6 +29,7 @@ import hashlib
 import msgpack
 import copy
 import libvirt
+import shutil
 from Configuration import Const, Options
 from delta import DeltaList
 from delta import DeltaItem
@@ -479,12 +480,15 @@ class VM_Overlay(threading.Thread):
         qemu_monitor.terminate()
         monitor.join()
         qemu_monitor.join()
-        os.unlink(modified_mem.name)
+        if self.options.MEMORY_SAVE_PATH:
+            Log.write("[INFO] moving memory sansphost to %s\n" % self.options.MEMORY_SAVE_PATH)
+            shutil.move(modified_mem.name, self.options.MEMORY_SAVE_PATH)
+        else:
+            os.unlink(modified_mem.name)
         
         if os.path.exists(qemu_logfile.name):
             os.unlink(qemu_logfile.name)
 
-        import pdb; pdb.set_trace()
         self.overlay_files = [item[Const.META_OVERLAY_FILE_NAME] for item in blob_list]
 
 
