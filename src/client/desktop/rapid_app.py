@@ -28,6 +28,11 @@ from pprint import pprint
 import cloudlet_client
 import select
 
+application = ['moped', 'face', 'mar', 'speech', 'graphics']
+
+batch_mode = False
+
+
 class RapidClientError(Exception):
     pass
 
@@ -49,22 +54,23 @@ def process_command_line(argv):
     global command_type
     global application_names
 
-    parser = OptionParser(usage="usage: ./cloudlet_client.py -o overlay_path -s cloudlet_server_ip [option]",
-            version="Desktop Client for Cloudlet")
+    parser = OptionParser(usage="usage: ./cloudlet_client.py [option]",\
+            version="Desktop Cloudlet Client")
     parser.add_option(
-            '-o', '--overlay-path', action='store', type='string', dest='overlay_path',
-            help="Set overlay path (overlay meta path)")
+            '-a', '--app', action='store', type='string', dest='application',
+            help="Set base VM name")
+    parser.add_option(
+            '-b', '--batch', action='store_true', dest='batch', default=False,
+            help='Automatic exit triggered by client')
     parser.add_option(
             '-s', '--server', action='store', type='string', dest='server_ip',
             help="Set cloudlet server's IP address")
     settings, args = parser.parse_args(argv)
-
-    if settings.overlay_path == None:
-        parser.error("Need path to overlay-meta file")
-    if settings.server_ip == None:
-        parser.error("Need Cloudlet's server IP")
     if not len(args) == 0:
         parser.error('program takes no command-line arguments; "%s" ignored.' % (args,))
+
+    if not settings.application:
+        parser.error("Need application among [%s]" % ('|'.join(application)))
     
     return settings, args
 
@@ -76,11 +82,9 @@ def recv_all(sock, size):
     return data
 
 
-def synthesis(address, port, overlay_path, wait_time=0):
-    if os.path.exists(overlay_path) == False:
-        sys.stderr.write("Invalid overlay path: %s\n" % overlay_path)
-        sys.exit(1)
-
+def synthesis(address, port, application, batch=False, wait_time=0):
+    global batch_mode
+    batch_mode = batch
     # connection
     start_time = time.time()
     try:
@@ -94,24 +98,48 @@ def synthesis(address, port, overlay_path, wait_time=0):
         sys.stderr.write("Error, %s\n" % msg)
         sys.exit(1)
 
-    start_cloudlet(sock, overlay_path, start_time)
+    start_cloudlet(sock, application, start_time)
     print "finished"
     time.sleep(wait_time)
 
 
-def start_cloudlet(sock, overlay_meta_path, start_time):
+def start_cloudlet(sock, application, start_time):
+    global batch_mode
     blob_request_list = list()
 
     time_dict = dict()
     app_time_dict = dict()
 
-    print "Overlay Meta: %s" % (overlay_meta_path)
+    overlay_meta_path = None
+    if application == 'moped':
+        overlay_meta_path = '/home/krha/cloudlet/image/overlay/moped/overlay-meta'
+    elif application == 'moped_random':
+        overlay_meta_path = '/home/krha/cloudlet/image/overlay/moped_random/overlay-meta'
+    elif application == 'mar':
+        overlay_meta_path = '/home/krha/cloudlet/image/overlay/mar/overlay-meta'
+    elif application == 'speech':
+        overlay_meta_path = '/home/krha/cloudlet/image/overlay/speech/overlay-meta'
+    elif application == 'speech_random':
+        overlay_meta_path = '/home/krha/cloudlet/image/overlay/speech_random/overlay-meta'
+    elif application == 'face':
+        overlay_meta_path = '/home/krha/cloudlet/image/overlay/face/overlay-meta'
+    elif application == 'graphics':
+        overlay_meta_path = '/home/krha/cloudlet/image/overlay/graphics/overlay-meta'
 
+    if len(application.split("_")) > 1:
+        app_name, order, blob_size = application.split("_")
+        overlay_meta_path = "/home/krha/cloudlet/image/overlay/%s/%s/%s/overlay-meta" % \
+                (app_name, order, blob_size)
+
+    if overlay_meta_path == None:
+        raise Exception("NO valid application name: %s" % application)
+
+    print "Overlay Meta: %s" % (overlay_meta_path)
     # modify overlay path
     meta_info = msgpack.unpackb(open(overlay_meta_path, "r").read())
     for blob in meta_info['overlay_files']:
         filename = os.path.basename(blob['overlay_name'])
-        uri = "%s" % (filename)
+        uri = "%s/%s" % (application, filename)
         blob['overlay_name'] = uri
 
     # send header
@@ -120,7 +148,9 @@ def start_cloudlet(sock, overlay_meta_path, start_time):
     sock.sendall(header)
     time_dict['send_end_time'] = time.time()
 
+    application_name = application.split("_")[0]
     app_thread = None
+
     total_blob_count = len(meta_info['overlay_files'])
     sent_blob_list = list()
 
@@ -138,8 +168,9 @@ def start_cloudlet(sock, overlay_meta_path, start_time):
                 if command ==  0x01:    # RET_SUCCESS
                     print "Synthesis SUCCESS"
                     time_dict['recv_success_time'] = time.time()
-                    #run user input waiting thread 
-                    app_thread = Thread(target=application_thread, args=(sock, app_time_dict))
+                    #run application thread
+                    print "app started"
+                    app_thread = Thread(target=application_thread, args=(sock, application_name, app_time_dict))
                     app_thread.start()
                 elif command == 0x02:   # RET_FAIL
                     print "Synthesis Failed"
@@ -183,30 +214,43 @@ def start_cloudlet(sock, overlay_meta_path, start_time):
 
     send_end = time_dict['send_end_time']
     recv_end = time_dict['recv_success_time']
+    app_start_time = time_dict['app_start']
+    app_end_time = time_dict['app_end']
     client_info = {'Transfer':(send_end-start_time), \
-            'Synthesis Success': (recv_end-start_time)}
+            'Response': (recv_end-start_time), \
+            'App end': (app_end_time-start_time), \
+            'App run': (app_end_time-app_start_time)}
     pprint(client_info)
 
-    # send close signal to cloudlet server
     header = msgpack.packb(client_info)
     sock.sendall(struct.pack("!I", len(header)))
     sock.sendall(header)
 
 
-def application_thread(sock, time_dict):
+def application_thread(sock, application, time_dict):
+    global batch_mode
     time_dict['app_start'] = time.time()
-    while True:
-        user_input = raw_input("type 'q' to quit : ")
-        if user_input.strip() == 'q':
-            break;
+    cloudlet_client.run_application(application)
     time_dict['app_end'] = time.time()
+    print "Application Finished"
+
+    if batch_mode == False:
+        # wait for user input to quit
+        while True:
+            user_input = raw_input("type 'q' to quit : ")
+            if user_input.strip() == 'q':
+                break;
 
 
 def main(argv=None):
     settings, args = process_command_line(sys.argv[1:])
+    if settings.server_ip:
+        cloudlet_server_ip = settings.server_ip
+    else:
+        cloudlet_server_ip = "cloudlet.krha.kr"
 
-    port = 8021
-    synthesis(settings.server_ip, port, settings.overlay_path)
+    cloudlet_server_port = 8021
+    synthesis(cloudlet_server_ip, cloudlet_server_port, settings.application, batch=settings.batch)
 
 
 if __name__ == "__main__":

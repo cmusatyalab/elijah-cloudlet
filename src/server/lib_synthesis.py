@@ -15,6 +15,7 @@
 # for more details.
 #
 import os
+import traceback
 import sys
 import time
 import SocketServer
@@ -28,7 +29,7 @@ import json
 import tempfile
 import struct
 import lib_cloudlet as cloudlet
-from Const import Const
+from Configuration import Const as Cloudlet_Const
 from lzma import LZMADecompressor
 import shutil
 from datetime import datetime
@@ -102,18 +103,18 @@ def network_worker(handler, overlay_urls, overlay_urls_size, demanding_queue, ou
             requesting_overlay = None
             if urgent_overlay_url != None:
                 requesting_overlay = urgent_overlay_url
+                out_of_order_count += 1
                 if requesting_overlay in overlay_urls:
                     overlay_urls.remove(requesting_overlay)
             else:
                 requesting_overlay = overlay_urls.pop(0)
 
             # request overlay blob to client
-            json_ret = json.dumps({"command":SynthesisProtocol.RET_BLOB_REQUEST, "blob_url":requesting_overlay})
+            json_ret = json.dumps({"command":SynthesisProtocol.RET_BLOB_REQUEST, "blob_uri":requesting_overlay})
             json_size = struct.pack("!I", len(json_ret))
             handler.request.send(json_size)
             handler.wfile.write(json_ret)
             handler.wfile.flush()
-            out_of_order_count += 1
             requesting_list.append(requesting_overlay)
             #print "requesting %s" % (requesting_overlay)
 
@@ -229,7 +230,7 @@ class SynthesisHandler(SocketServer.StreamRequestHandler):
         header = msgpack.unpackb(msgpack_data)
 
         try:
-            base_hashvalue = header.get(Const.META_BASE_VM_SHA256, None)
+            base_hashvalue = header.get(Cloudlet_Const.META_BASE_VM_SHA256, None)
         except KeyError:
             message = 'No key is in JSON'
             print message
@@ -257,9 +258,9 @@ class SynthesisHandler(SocketServer.StreamRequestHandler):
             url_manager = Manager()
             overlay_urls = url_manager.list()
             overlay_urls_size = url_manager.dict()
-            for blob in meta_info[Const.META_OVERLAY_FILES]:
-                url = blob[Const.META_OVERLAY_FILE_NAME]
-                size = blob[Const.META_OVERLAY_FILE_SIZE]
+            for blob in meta_info[Cloudlet_Const.META_OVERLAY_FILES]:
+                url = blob[Cloudlet_Const.META_OVERLAY_FILE_NAME]
+                size = blob[Cloudlet_Const.META_OVERLAY_FILE_SIZE]
                 overlay_urls.append(url)
                 overlay_urls_size[url] = size
             app_url = str(overlay_urls[0])
@@ -273,7 +274,7 @@ class SynthesisHandler(SocketServer.StreamRequestHandler):
                 self.ret_fail()
                 return
             (base_diskmeta, base_mem, base_memmeta) = \
-                    Const.get_basepath(base_path, check_exist=True)
+                    Cloudlet_Const.get_basepath(base_path, check_exist=True)
             header_end_time = time.time()
 
             # read overlay files
@@ -355,9 +356,7 @@ class SynthesisHandler(SocketServer.StreamRequestHandler):
                 while len(msgpack_data) < msgpack_size:
                     msgpack_data += self.request.recv(msgpack_size- len(msgpack_data))
                 client_data = msgpack.unpackb(msgpack_data)
-                Log.write("-----------------------------\n")
-                Log.write("Client data\n")
-                Log.write(pformat(client_data))
+                Log.write("  - %s" % str(pformat(client_data)))
                 Log.write("\n")
             else:
                 while True:
@@ -381,12 +380,13 @@ class SynthesisHandler(SocketServer.StreamRequestHandler):
                         mem_access_list, disk_access_list, \
                         print_out=Log)
         except Exception, e:
+            sys.stderr.write(traceback.format_exc())
+            sys.stderr.write("%s" % str(e))
             sys.stderr.write("handler raises exception\n")
             self.terminate()
 
 
     def finish(self):
-        print "handler finishes"
         if self.delta_proc != None:
             self.delta_proc.join()
             self.delta_proc.finish()
@@ -513,8 +513,8 @@ class SynthesisServer(SocketServer.TCPServer):
                 '-c', '--config', action='store', type='string', dest='config_filename',
                 help='Set configuration file, which has base VM information, to work as a server mode.')
         parser.add_option(
-                '-b', '--batch', action='store_true', dest='batch', default=False,
-                help='Automatic exit triggered by client')
+                '-b', '--batch', action='store_true', dest='batch', default=True,
+                help='VM close triggered by client')
         parser.add_option(
                 '-d', '--display', action='store_false', dest='is_vnc', default=True,
                 help='Turn off VNC display of VM')
@@ -552,7 +552,7 @@ class SynthesisServer(SocketServer.TCPServer):
             # check file location
             base_path = os.path.abspath(vm_info['path'])
             (base_diskmeta, base_mempath, base_memmeta) = \
-                    Const.get_basepath(base_path)
+                    Cloudlet_Const.get_basepath(base_path)
             vm_info['path'] = os.path.abspath(vm_info['path'])
             if not os.path.exists(base_path):
                 print "Error, disk image (%s) is not exist" % (vm_info['path'])
