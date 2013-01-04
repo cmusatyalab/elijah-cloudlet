@@ -29,7 +29,7 @@ You will need:
 * apparmor-utils (for disable apparmor for libvirt)
 * python library
     - msgpack-python
-	- bson
+    - bson
 	- pyliblzma
 
 To install:
@@ -59,47 +59,36 @@ Therefore we currently recommend you to use __Ubuntu 12.04 LTS 64-bit__
 How to use
 --------------			
 
-1. Creating ``base vm``.
+1. Creating ``base vm``.  
+    You will first create ``base vm`` from a regular VM disk image. This ``base vm`` will be a template VM for overlay VMs. To create ``base vm``, you need regular VM disk image as a raw format.  
 
-  - You will first create ``base vm`` from a regular VM disk image.
+        > $ cd ./bin
+        > $ ./cloudlet base /path/to/vm.image
 
-This ``base vm`` will be a template VM for overlay VMs. To create ``base vm``,
-you need regular VM disk image as a raw format.
-
-    > $ cd ./bin
-	> $ ./cloudlet base /path/to/vm.image
-
-  - This will launch remote connection(VNC) to guest OS and cloudlet module 
-  will automatically start creating ``base vm`` when you close VNC window.
+    This will launch remote connection(VNC) to guest OS and cloudlet module will automatically start creating ``base vm`` when you close VNC window.
 
 
-2. Creating ``overlay vm`` on top of ``base vm``.
-  - Now you can create your customized VM based on top of ``base vm``
+2. Creating ``overlay vm`` on top of ``base vm``.  
+    Now you can create your customized VM based on top of ``base vm``  
   
-    > $ cd ./bin
-    > $ ./cloudlet overlay /path/to/vm.image
+        > $ cd ./bin
+        > $ ./cloudlet overlay /path/to/vm.image
 
-  - This will launch VNC again and we can install(and execute) your custom
-  server, which will finally be your overlay.
+    This will launch VNC again and we can install(and execute) your custom server, which will finally be your overlay.
 
-  - overlay VM will be 2 files; 1) ``overlay-meta file`` ends with overlay-meta
-  2) compressed ``overlay blob files`` ends xz
+    ``overlay VM`` is composed of 2 files; 1) ``overlay-meta file`` ends with .overlay-meta, 2) compressed ``overlay blob files`` ends .xz
 
 
-3. Synthesizing ``overlay vm``
+3. Synthesizing ``overlay vm``  
+    Here, we'll show 3 ways to perform VM synthesis using ``overlay vm``; 1) verifying synthesis using command line interface, 2) synthesize over network using desktop client, and 3) synthesize over network using Android client.  
 
-  - Here, we'll show 3 ways to perform VM synthesis using ``overlay vm``; 1)
-  verifying synthesis using command line interface, 2) synthesize over network
-  using desktop client, and 3) synthesize over network using Android client.  
+    1) Command line interface: You can resume your ``overlay vm`` using 
 
-  1) Command line interface: You can resume your ``overlay vm`` using 
-
-    > $ cd ./bin
-    > $ ./cloudlet synthesis /path/to/base.image /path/to/overlay-meta
+        > $ cd ./bin
+        > $ ./cloudlet synthesis /path/to/base.image /path/to/overlay-meta
     
-  2) network client(desktop client)  
-
-  You first need to change configuration file to inform ``base vms'``
+    2) network client(desktop client)  
+    You first need to change configuration file to inform ``base vms'``
   information to synthesis server. It is basically json formatted file and it
   should have ``name``, ``sha256``, ``path`` keys for each ``base vm`` (Please
   see the example configuration file at bin directory). ``sha256`` represents
@@ -107,21 +96,22 @@ you need regular VM disk image as a raw format.
   in ``base vm`` directory. For ``path``, you can fill a path to ``base disk``
   of the ``base vm``.
   
-    > $ cd ./bin
-    > % Run server
-    > $ ./synthesis -c config.json    
+        > $ cd ./bin
+        > % Run server
+        > $ ./synthesis -c config.json    
     
-    > % Run client (at different machine or different terminal)
-    > $ ./rapid_client.py -s [cloudlet ip address] -o [/path/to/overlay-meta]
-    
-  3) network client(Android client)
+        > % Run client (at different machine or different terminal)
+        > $ ./rapid_client.py -s [cloudlet ip address] -o [/path/to/overlay-meta]
 
+    
+    3) network client(Android client)  
     > TO BE WRITTEN
 
 
 
 Compiling external library that Cloudlet uses
 ----------------------------------------------
+
 You will need:
  * qemu-kvm 1.1.1 (for Free memory and TRIM support)
  * libc6-dev-i386 (for Free memory support)
