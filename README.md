@@ -2,7 +2,7 @@ Eijah: Cloudlet Infrastructure for Mobile Computing
 ========================================================
 A cloudlet is a new architectural element that arises from the convergence of
 mobile computing and cloud computing. It represents the middle tier of a
-3-tier hierarchy:  mobile device --- cloudlet --- cloud.   A cloudlet can be
+3-tier hierarchy:  mobile device - cloudlet - cloud.   A cloudlet can be
 viewed as a "data center in a box" whose  goal is to "bring the cloud closer".
 A cloudlet has four key attributes: 
 
@@ -13,8 +13,10 @@ Please visit our website at <http://elijah.cs.cmu.edu/>.
 Cloudlet is licensed under the GNU General Public License, version 2.
 
 
+
 Installing
 ----------
+
 You will need:
 
 * qemu-kvm
@@ -26,7 +28,7 @@ You will need:
 * liblzma-dev (for pyliblzma)
 * apparmor-utils (for disable apparmor for libvirt)
 * python library
-	- msgpack-python
+    - msgpack-python
 	- bson
 	- pyliblzma
 
@@ -42,40 +44,79 @@ To install:
      $ sudo aa-complain /usr/sbin/libvirtd
 
 
-How to use
---------------
 
-1. Creating new ``base vm``.
-* You will first create ``base vm`` from a regular VM disk image.
-  This ``base vm`` will be a template VM for overlay VMs.
-  To create ``base vm``, you need regular VM disk image as a raw format.
-   ::
-   cd ./bin
-   ./cloudlet base /path/to/vm.image
-* This will launch remote connection(VNC) to guest OS and cloudlet module 
+Recommended platform
+---------------------
+
+We have tested at __Ubuntu 12.04 LTS 64-bit__
+
+This version of Cloudlet code have several dependencies on other project for
+further optimization, and currently we include dependent codes as a binary.
+Therefore we currently recommend you to use __Ubuntu 12.04 LTS 64-bit__
+
+
+
+How to use
+--------------			
+
+1. Creating ``base vm``.
+
+  - You will first create ``base vm`` from a regular VM disk image.
+
+This ``base vm`` will be a template VM for overlay VMs. To create ``base vm``,
+you need regular VM disk image as a raw format.
+
+    > $ cd ./bin
+	> $ ./cloudlet base /path/to/vm.image
+
+  - This will launch remote connection(VNC) to guest OS and cloudlet module 
   will automatically start creating ``base vm`` when you close VNC window.
 
 
-2. Creating new ``overlay vm`` from ``base vm``.
-* Now you can create your customized VM based on top of ``base vm``
-   ::
-   cd ./bin
-   ./cloudlet overlay /path/to/vm.image
+2. Creating ``overlay vm`` on top of ``base vm``.
+  - Now you can create your customized VM based on top of ``base vm``
+  
+    > $ cd ./bin
+    > $ ./cloudlet overlay /path/to/vm.image
 
-* This will launch VNC again and we can install and start your custom server ,
-which will finally be your overlay.  For example, you can install your own face
-recognition server if you want make an overlay VM for face recognition server.
+  - This will launch VNC again and we can install(and execute) your custom
+  server, which will finally be your overlay.
 
-* Again, it will create ``overlay`` vm at the same directory where ``base vm`` exist.
-
-* You will keep only 1) overlay_blob file and 2) overlay-meta file as your ``overlay vm``
+  - overlay VM will be 2 files; 1) ``overlay-meta file`` ends with overlay-meta
+  2) compressed ``overlay blob files`` ends xz
 
 
 3. Synthesizing ``overlay vm``
-* You can resume your ``overlay vm``
-  ::
-  cd ./bin
-  ./cloudlet synthesis /path/to/base.image /path/to/overlay-meta
+
+  - Here, we'll show 3 ways to perform VM synthesis using ``overlay vm``; 1)
+  verifying synthesis using command line interface, 2) synthesize over network
+  using desktop client, and 3) synthesize over network using Android client.  
+
+  1) Command line interface: You can resume your ``overlay vm`` using 
+
+    > $ cd ./bin
+    > $ ./cloudlet synthesis /path/to/base.image /path/to/overlay-meta
+    
+  2) network client(desktop client)  
+
+  You first need to change configuration file to inform ``base vms'``
+  information to synthesis server. It is basically json formatted file and it
+  should have ``name``, ``sha256``, ``path`` keys for each ``base vm`` (Please
+  see the example configuration file at bin directory). ``sha256`` represents
+  hash value of the ``base VM`` and you can find it at ``*.base-img-hash`` file
+  in ``base vm`` directory. For ``path``, you can fill a path to ``base disk``
+  of the ``base vm``.
+  
+    > $ cd ./bin
+    > % Run server
+    > $ ./synthesis -c config.json    
+    
+    > % Run client (at different machine or different terminal)
+    > $ ./rapid_client.py -s [cloudlet ip address] -o [/path/to/overlay-meta]
+    
+  3) network client(Android client)
+
+    > TO BE WRITTEN
 
 
 

@@ -561,11 +561,10 @@ class SynthesisServer(SocketServer.TCPServer):
                 print "Error, memory snapshot (%s) is not exist" % (base_mempath)
                 sys.exit(2)
 
-            if vm_info['type'].lower() == 'basevm':
-                BaseVM_list.append(vm_info)
-                print " - %s : (Disk %d MB, Memory %d MB)" % \
-                        (vm_info['name'], os.path.getsize(vm_info['path'])/1024/1024, \
-                        os.path.getsize(base_mempath)/1024/1024)
+            BaseVM_list.append(vm_info)
+            print " - %s : (Disk %d MB, Memory %d MB)" % \
+                    (vm_info['name'], os.path.getsize(vm_info['path'])/1024/1024, \
+                    os.path.getsize(base_mempath)/1024/1024)
         print "-"*50
 
         return json_data, None
