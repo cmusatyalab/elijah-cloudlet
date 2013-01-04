@@ -31,6 +31,10 @@ class Options(object):
     DISK_ONLY                           = False
 
 
+    def __str__(self):
+        import pprint
+        return pprint.pformat(self.__dict__)
+
 class Const(object):
     BASE_DISK               = ".base-img"
     BASE_MEM                = ".base-mem"
@@ -87,7 +91,7 @@ class Const(object):
     @staticmethod
     def get_basehash_path(base_disk_path, check_exist=False):
         Const._check_path('base disk', base_disk_path)
-        image_name = os.path.splitext(base_disk_path)[0]
+        image_name = os.path.splitext(os.path.basename(base_disk_path))[0]
         dir_path = os.path.dirname(base_disk_path)
         diskhash = os.path.join(dir_path, image_name+Const.BASE_DISK_HASH)
         if check_exist == True:

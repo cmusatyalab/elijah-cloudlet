@@ -18,6 +18,9 @@ class Const(object):
     file_list = [BASE_DISK_PATH, BASE_MEMORY_PATH, MODIFIED_MEMORY_SNAPSHOT, OVERLAY_MEMA_FILE]
 
 
+def _overlay_install(ssh_port):
+    pass
+
 class TestSynthesisFunction(unittest.TestCase):
 
     def setUp(self):
@@ -27,9 +30,33 @@ class TestSynthesisFunction(unittest.TestCase):
                         os.path.abspath(each_file))
                 sys.exit(1)
 
-    def test_memory_synthesis(self):
+    def test_synthesis(self):
+        #self.create_base()
+        self.create_overlay()
+        #self.perform_synthesis()
+
+    def create_base(self):
+        pass
+
+    def create_overlay(self):
+        from Configuration import Options
+
+        disk_path = Const.BASE_DISK_PATH
+        options = Options()
+        options.disk_only = False
+        options.TRIM_SUPPORT = False
+        options.FREE_SUPPORT = False 
+        overlay = cloudlet.VM_Overlay(disk_path, options)
+        overlay.start()
+        overlay.join()
+
+        print "[INFO] overlay metafile : %s" % overlay.overlay_metafile
+        print "[INFO] overlay : %s" % str(overlay.overlay_files[0])
+        
+
+    def perform_synthesis(self):
         from tool import decomp_overlay
-        from lib_cloudlet import recover_launchVM
+
         Log = open("/dev/null", "w+b")
         #Log = sys.stdout
 
@@ -41,7 +68,7 @@ class TestSynthesisFunction(unittest.TestCase):
 
         # recover modified VM
         modified_img, modified_mem, fuse, delta_proc, fuse_thread = \
-                recover_launchVM(base_disk, meta_info, overlay_filename.name, log=Log)
+                cloudlet.recover_launchVM(base_disk, meta_info, overlay_filename.name, log=Log)
 
         delta_proc.start()
         fuse_thread.start()
@@ -70,4 +97,5 @@ class TestSynthesisFunction(unittest.TestCase):
 
 if __name__ == "__main__":
     sys.path.append(SRC_PATH)
+    import lib_cloudlet as cloudlet
     unittest.main()

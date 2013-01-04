@@ -89,9 +89,11 @@ def main(argv):
         options.FREE_SUPPORT = not settings.disable_free_support
         options.DISK_ONLY = settings.disk_only
 
-        overlay_files = lib_cloudlet.create_overlay(disk_path, options, qemu_args=qemu_args)
-        print "[INFO] overlay metafile : %s" % overlay_files[0]
-        print "[INFO] overlay : %s" % str(overlay_files[1])
+        overlay = lib_cloudlet.VM_Overlay(disk_path, options)
+        overlay.start()
+        overlay.join()
+        print "[INFO] overlay metafile : %s" % overlay.overlay_metafile
+        print "[INFO] overlay : %s" % str(overlay.overlay_files[0])
         #print "[INFO] overlay creation time: %f" % (time.time()-start_time)
     elif mode == CMD_SYNTEHSIS:
         if len(left_args) < 1:

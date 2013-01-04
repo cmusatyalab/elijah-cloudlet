@@ -224,262 +224,268 @@ def create_baseVM(disk_image_path):
     return disk_image_path, base_mempath
 
 
-def create_overlay(base_image, options, qemu_args=None):
-    # create user customized overlay.
-    # First resume VM, then let user edit its VM
-    # Finally, return disk/memory binary as an overlay
-    # base_image: path to base disk
-    start_time = time()
-    log_path = os.path.join(os.path.dirname(base_image), os.path.basename(base_image) + Const.OVERLAY_LOG)
-    Log = CloudletLog(log_path)
+class VM_Overlay(threading.Thread):
 
-    if (options == None) or (isinstance(options, Options) == False):
-        raise CloudletGenerationError("give option class is invalid")
+    def __init__(self, base_image, options, qemu_args=None):
+        # create user customized overlay.
+        # First resume VM, then let user edit its VM
+        # Finally, return disk/memory binary as an overlay
+        # base_image: path to base disk
+        self.base_image = base_image
+        self.options = options
+        self.qemu_args = qemu_args
+        threading.Thread.__init__(self, target=self.create_overlay)
 
-    (base_diskmeta, base_mem, base_memmeta) = \
-            Const.get_basepath(base_image, check_exist=True)
-    base_hash_path = Const.get_basehash_path(base_image)
-    base_hash_value = open(base_hash_path, "rb").read()
-    
-    # filename for overlay VM
-    qemu_logfile = NamedTemporaryFile(prefix="cloudlet-qemu-log-", delete=False)
-    image_name = os.path.basename(base_image).split(".")[0]
-    dir_path = os.path.dirname(base_mem)
-    overlay_path = os.path.join(dir_path, image_name+Const.OVERLAY_FILE_PREFIX)
-    overlay_path_semantic = overlay_path + ".semantic_only"
-    overlay_path_dedup = overlay_path + ".dedup_only"
-    
-    # make FUSE disk & memory
-    fuse = run_fuse(Const.VMNETFS_PATH, Const.CHUNK_SIZE, 
-            base_image, os.path.getsize(base_image),
-            base_mem, os.path.getsize(base_mem), print_out=Log)
-    modified_disk = os.path.join(fuse.mountpoint, 'disk', 'image')
-    base_mem_fuse = os.path.join(fuse.mountpoint, 'memory', 'image')
-    modified_mem = NamedTemporaryFile(prefix="cloudlet-mem-", delete=False)
-    # monitor modified chunks
-    stream_modified = os.path.join(fuse.mountpoint, 'disk', 'streams', 'chunks_modified')
-    stream_access = os.path.join(fuse.mountpoint, 'disk', 'streams', 'chunks_accessed')
-    memory_access = os.path.join(fuse.mountpoint, 'memory', 'streams', 'chunks_accessed')
-    monitor = vmnetfs.StreamMonitor()
-    monitor.add_path(stream_modified, vmnetfs.StreamMonitor.DISK_MODIFY)
-    monitor.add_path(stream_access, vmnetfs.StreamMonitor.DISK_ACCESS)
-    monitor.add_path(memory_access, vmnetfs.StreamMonitor.MEMORY_ACCESS)
-    monitor.start()
-    qemu_monitor = vmnetfs.FileMonitor(qemu_logfile.name, vmnetfs.FileMonitor.QEMU_LOG)
-    qemu_monitor.start()
+    def create_overlay(self):
+        start_time = time()
+        log_path = os.path.join(os.path.dirname(self.base_image), os.path.basename(self.base_image) + Const.OVERLAY_LOG)
+        Log = CloudletLog(log_path)
 
-    # 1-1. resume & get modified disk
-    Log.write("[INFO] * Overlay creation configuration\n")
-    Log.write("[INFO]  - Use TRIM Support          : %s\n" % (str(options.TRIM_SUPPORT)))
-    Log.write("[INFO]  - Use Free memory Support   : %s\n" % (str(options.FREE_SUPPORT)))
-    Log.write("[INFO]  - Create only disk overlay  : %s\n" % (str(options.DISK_ONLY)))
-    conn = get_libvirt_connection()
-    machine = run_snapshot(conn, modified_disk, base_mem_fuse, qemu_logfile=qemu_logfile.name, qemu_args=qemu_args)
-    connect_vnc(machine)
-    Log.write("[TIME] user interaction time for creating overlay: %f\n" % (time()-start_time))
+        if (self.options == None) or (isinstance(self.options, Options) == False):
+            raise CloudletGenerationError("Given option class is invalid: %s" % str(self.options))
 
-    # 1-2. Stop monitoring for memory access (snapshot will create a lot of access)
-    #      and get modified memory
-    monitor.del_path(vmnetfs.StreamMonitor.MEMORY_ACCESS)
-    # TODO: support stream of modified memory rather than tmp file
-    if not options.DISK_ONLY:
-        save_mem_snapshot(machine, modified_mem.name)
+        (base_diskmeta, base_mem, base_memmeta) = \
+                Const.get_basepath(self.base_image, check_exist=True)
+        base_hash_path = Const.get_basehash_path(self.base_image)
+        base_hash_value = open(base_hash_path, "rb").read()
+        
+        # filename for overlay VM
+        qemu_logfile = NamedTemporaryFile(prefix="cloudlet-qemu-log-", delete=False)
+        image_name = os.path.basename(self.base_image).split(".")[0]
+        dir_path = os.path.dirname(base_mem)
+        overlay_path = os.path.join(dir_path, image_name+Const.OVERLAY_FILE_PREFIX)
+        overlay_path_semantic = overlay_path + ".semantic_only"
+        overlay_path_dedup = overlay_path + ".dedup_only"
+        
+        # make FUSE disk & memory
+        fuse = run_fuse(Const.VMNETFS_PATH, Const.CHUNK_SIZE, 
+                self.base_image, os.path.getsize(self.base_image),
+                base_mem, os.path.getsize(base_mem), print_out=Log)
+        modified_disk = os.path.join(fuse.mountpoint, 'disk', 'image')
+        base_mem_fuse = os.path.join(fuse.mountpoint, 'memory', 'image')
+        modified_mem = NamedTemporaryFile(prefix="cloudlet-mem-", delete=False)
+        # monitor modified chunks
+        stream_modified = os.path.join(fuse.mountpoint, 'disk', 'streams', 'chunks_modified')
+        stream_access = os.path.join(fuse.mountpoint, 'disk', 'streams', 'chunks_accessed')
+        memory_access = os.path.join(fuse.mountpoint, 'memory', 'streams', 'chunks_accessed')
+        monitor = vmnetfs.StreamMonitor()
+        monitor.add_path(stream_modified, vmnetfs.StreamMonitor.DISK_MODIFY)
+        monitor.add_path(stream_access, vmnetfs.StreamMonitor.DISK_ACCESS)
+        monitor.add_path(memory_access, vmnetfs.StreamMonitor.MEMORY_ACCESS)
+        monitor.start()
+        qemu_monitor = vmnetfs.FileMonitor(qemu_logfile.name, vmnetfs.FileMonitor.QEMU_LOG)
+        qemu_monitor.start()
 
-    # 1-3. get hashlist of base memory and disk
-    basemem_hashlist = Memory.base_hashlist(base_memmeta)
-    basedisk_hashlist = Disk.base_hashlist(base_diskmeta)
+        # 1-1. resume & get modified disk
+        Log.write("[INFO] * Overlay creation configuration\n")
+        Log.write("[INFO]  - %s\n" % str(self.options))
+        conn = get_libvirt_connection()
+        machine = run_snapshot(conn, modified_disk, base_mem_fuse, qemu_logfile=qemu_logfile.name, qemu_args=self.qemu_args)
+        connect_vnc(machine)
+        Log.write("[TIME] user interaction time for creating overlay: %f\n" % (time()-start_time))
 
-    # 1-4. get dma & discard information
-    if options.TRIM_SUPPORT:
-        dma_dict, trim_dict = Disk.parse_qemu_log(qemu_logfile.name, Const.CHUNK_SIZE, print_out=Log)
-        if len(trim_dict) == 0:
-            print "[WARNING] No TRIM Discard, Check /etc/fstab configuration"
-    else:
-        dma_dict = dict()
-        trim_dict = dict()
-    free_memory_dict = dict()
+        # 1-2. Stop monitoring for memory access (snapshot will create a lot of access)
+        #      and get modified memory
+        monitor.del_path(vmnetfs.StreamMonitor.MEMORY_ACCESS)
+        # TODO: support stream of modified memory rather than tmp file
+        if not self.options.DISK_ONLY:
+            save_mem_snapshot(machine, modified_mem.name)
 
-    # 1-5. get used sector information from x-ray
-    used_blocks_dict = None
-    if options.XRAY_SUPPORT:
-        used_blocks_dict = xray.get_used_blocks(modified_disk)
+        # 1-3. get hashlist of base memory and disk
+        basemem_hashlist = Memory.base_hashlist(base_memmeta)
+        basedisk_hashlist = Disk.base_hashlist(base_diskmeta)
 
-    # 2-1. get memory overlay
-    if not options.DISK_ONLY:
-        mem_deltalist= Memory.create_memory_deltalist(modified_mem.name, 
-                basemem_meta=base_memmeta, basemem_path=base_mem,
-                apply_free_memory=options.FREE_SUPPORT,
-                free_memory_info=free_memory_dict,
-                print_out=Log)
-    else:
-        mem_deltalist = list()
+        # 1-4. get dma & discard information
+        if self.options.TRIM_SUPPORT:
+            dma_dict, trim_dict = Disk.parse_qemu_log(qemu_logfile.name, Const.CHUNK_SIZE, print_out=Log)
+            if len(trim_dict) == 0:
+                print "[WARNING] No TRIM Discard, Check /etc/fstab configuration"
+        else:
+            dma_dict = dict()
+            trim_dict = dict()
+        free_memory_dict = dict()
 
-    # 2-2. get disk overlay
-    m_chunk_dict = monitor.modified_chunk_dict
-    disk_statistics = dict()
-    disk_deltalist = Disk.create_disk_deltalist(modified_disk,
-        m_chunk_dict, Const.CHUNK_SIZE,
-        basedisk_hashlist=basedisk_hashlist, basedisk_path=base_image,
-        trim_dict=trim_dict,
-        apply_discard = True,
-        dma_dict=dma_dict,
-        used_blocks_dict=used_blocks_dict,
-        ret_statistics=disk_statistics,
-        print_out=Log)
+        # 1-5. get used sector information from x-ray
+        used_blocks_dict = None
+        if self.options.XRAY_SUPPORT:
+            used_blocks_dict = xray.get_used_blocks(modified_disk)
 
-    # 2-3. Merge disk & memory delta_list to generate overlay file
-    # deduplication
-    merged_deltalist = delta.create_overlay(
-            mem_deltalist, Memory.Memory.RAM_PAGE_SIZE,
-            disk_deltalist, Const.CHUNK_SIZE,
-            basedisk_hashlist=basedisk_hashlist,
-            basemem_hashlist=basemem_hashlist,
-            print_out=Log)
-
-    free_pfn_counter = long(free_memory_dict.get("freed_counter", 0))
-
-    # 3. Reorder transfer order & Compression
-    Log.write("[DEBUG][REORDER] change chunk ordering by offset\n")
-    delta.reorder_deltalist_linear(Const.CHUNK_SIZE, merged_deltalist)
-    '''
-    Log.write("[DEBUG][REORDER] change chunk ordering by mem access\n")
-    mem_access_list = monitor.mem_access_chunk_list
-    delta.reorder_deltalist(mem_access_list, Const.CHUNK_SIZE, merged_deltalist)
-    '''    
-    Log.write("[DEBUG][LZMA] Compressing overlay blobs\n")
-    blob_list = delta.divide_blobs(merged_deltalist, overlay_path, 
-            Const.OVERLAY_BLOB_SIZE_KB, Const.CHUNK_SIZE,
-            Memory.Memory.RAM_PAGE_SIZE, print_out=Log)
-
-    disk_discarded_count = disk_statistics.get('trimed', 0)
-    DeltaList.statistics(merged_deltalist, print_out=Log, 
-            mem_discarded=free_pfn_counter,
-            disk_discarded=disk_discarded_count)
-
-    if options.XRAY_SUPPORT:
-        # 3-1. list-up all the files that is associated with overlay sectors
-        xray_start_time = time()
-        xray_log = open("./xray_log", "wrb")
-        import pprint
-        sectors = [item.offset/512 for item in disk_deltalist]
-        sec_file_dict = xray.get_files_from_sectors(modified_disk, sectors)
-        pprint.pprint(sec_file_dict, xray_log)
-
-        # 3-2. To be deleted
-        xray_log.write("-------TRIM VS XRAY\n")
-        trim_chunk_set = set(disk_statistics.get('trimed_list', list()))
-        xray_chunk_set = set(disk_statistics.get('xrayed_list', list()))
-        xray_log.write("trimed - xray:\n%s\n" % str(trim_chunk_set-xray_chunk_set))
-        xray_log.write("xray - trimed:\n%s\n" % str(xray_chunk_set-trim_chunk_set))
-        diff_list = list(xray_chunk_set-trim_chunk_set)
-        diff_sectors = [item/8 for item in diff_list]
-        sec_file_dict = xray.get_files_from_sectors(modified_disk, diff_sectors)
-        pprint.pprint(sec_file_dict, xray_log)
-        xray_log.write("trim(%ld) == xray(%ld)\n" % (disk_statistics.get('trimed', 0), disk_statistics.get('xrayed', 0)))
-        xray_log.write("-------END\n")
-        xray_end_time = time()
-        Log.write("[Debug] WASTED TIME FOR XRAY LOGGING: %f\n" % (xray_end_time-xray_start_time))
-
-    # 4. create metadata
-    overlay_metafile = os.path.join(dir_path, image_name+Const.OVERLAY_META)
-    if not options.DISK_ONLY:
-        _create_overlay_meta(base_hash_value, overlay_metafile, 
-                modified_disk, modified_mem.name, blob_list)
-    else:
-        _create_overlay_meta(base_hash_value, overlay_metafile, 
-                modified_disk, base_mem, blob_list)
-
-    # TO be deleted
-    if options.SEPERATE_DEDUP_REDUCING_SEMANTICS:
-        free_memory_dict_new = dict()
-        disk_statistics_new = dict()
-        disk_deltalist_copy = Disk.create_disk_deltalist(modified_disk,
-                m_chunk_dict, Const.CHUNK_SIZE,
-                basedisk_hashlist=basedisk_hashlist, basedisk_path=base_image,
-                trim_dict=trim_dict,
-                apply_discard = False,
-                dma_dict=dma_dict,
-                used_blocks_dict=used_blocks_dict,
-                ret_statistics=disk_statistics_new,
-                print_out=Log)
-        if not options.DISK_ONLY:
-            mem_deltalist_copy = Memory.create_memory_deltalist(modified_mem.name, 
+        # 2-1. get memory overlay
+        if not self.options.DISK_ONLY:
+            mem_deltalist= Memory.create_memory_deltalist(modified_mem.name, 
                     basemem_meta=base_memmeta, basemem_path=base_mem,
-                    apply_free_memory=False,
-                    free_memory_info=free_memory_dict_new,
+                    apply_free_memory=self.options.FREE_SUPPORT,
+                    free_memory_info=free_memory_dict,
                     print_out=Log)
         else:
-            mem_deltalist_copy = list()
+            mem_deltalist = list()
 
-        merged_modified_list = list()
-        for item in mem_deltalist_copy:
-            copied_item = DeltaItem(item.delta_type, item.offset, item.offset_len, \
-                    copy.deepcopy(item.hash_value), copy.deepcopy(item.ref_id),
-                    data_len=copy.deepcopy(item.data_len), 
-                    data=copy.deepcopy(item.data))
-            merged_modified_list.append(copied_item)
-        for item in disk_deltalist_copy:
-            copied_item = DeltaItem(item.delta_type, item.offset, item.offset_len, \
-                    copy.deepcopy(item.hash_value), copy.deepcopy(item.ref_id),
-                    data_len=copy.deepcopy(item.data_len), 
-                    data=copy.deepcopy(item.data))
-            merged_modified_list.append(copied_item)
+        # 2-2. get disk overlay
+        m_chunk_dict = monitor.modified_chunk_dict
+        disk_statistics = dict()
+        disk_deltalist = Disk.create_disk_deltalist(modified_disk,
+            m_chunk_dict, Const.CHUNK_SIZE,
+            basedisk_hashlist=basedisk_hashlist, basedisk_path=self.base_image,
+            trim_dict=trim_dict,
+            apply_discard = True,
+            dma_dict=dma_dict,
+            used_blocks_dict=used_blocks_dict,
+            ret_statistics=disk_statistics,
+            print_out=Log)
 
-        free_pfn_counter_new = long(free_memory_dict_new.get("freed_counter", 0))
-        free_pfn_dict_new = free_memory_dict_new.get("free_pfn_dict", None)
-        disk_discarded_count_new = disk_statistics_new.get('trimed', 0)
-
-        merged_deltalist_copy = delta.create_overlay(
-                mem_deltalist_copy, Memory.Memory.RAM_PAGE_SIZE,
-                disk_deltalist_copy, Const.CHUNK_SIZE,
+        # 2-3. Merge disk & memory delta_list to generate overlay file
+        # deduplication
+        merged_deltalist = delta.create_overlay(
+                mem_deltalist, Memory.Memory.RAM_PAGE_SIZE,
+                disk_deltalist, Const.CHUNK_SIZE,
                 basedisk_hashlist=basedisk_hashlist,
                 basemem_hashlist=basemem_hashlist,
                 print_out=Log)
 
-        delta.reorder_deltalist(mem_access_list, Const.CHUNK_SIZE, merged_modified_list)
-        delta.reorder_deltalist(mem_access_list, Const.CHUNK_SIZE, merged_deltalist_copy)
+        free_pfn_counter = long(free_memory_dict.get("freed_counter", 0))
 
-        # merged_delta_copy has only dedup optimization
-        Log.write("\n================DEDUP ONLY===========================\n")
-        blob_list_dedup = delta.divide_blobs(merged_deltalist_copy, overlay_path_dedup,
+        # 3. Reorder transfer order & Compression
+        Log.write("[DEBUG][REORDER] change chunk ordering by offset\n")
+        delta.reorder_deltalist_linear(Const.CHUNK_SIZE, merged_deltalist)
+        '''
+        Log.write("[DEBUG][REORDER] change chunk ordering by mem access\n")
+        mem_access_list = monitor.mem_access_chunk_list
+        delta.reorder_deltalist(mem_access_list, Const.CHUNK_SIZE, merged_deltalist)
+        '''    
+        Log.write("[DEBUG][LZMA] Compressing overlay blobs\n")
+        blob_list = delta.divide_blobs(merged_deltalist, overlay_path, 
                 Const.OVERLAY_BLOB_SIZE_KB, Const.CHUNK_SIZE,
                 Memory.Memory.RAM_PAGE_SIZE, print_out=Log)
-        DeltaList.statistics(merged_deltalist_copy, print_out=Log)
-        overlay_metafile_dedup = overlay_path_dedup + "-meta"
-        _create_overlay_meta(base_hash_value, overlay_metafile_dedup, 
-                modified_disk, modified_mem.name, blob_list_dedup)
-        Log.write("=======================================================\n")
 
-        # Apply semantics
-        # merged_modified_list has no optimization
-        Log.write("\n===============SEMANTIC ONLY ========================\n")
         disk_discarded_count = disk_statistics.get('trimed', 0)
-        delta.discard_free_chunks(merged_modified_list, Const.CHUNK_SIZE, 
-                trim_dict, free_pfn_dict_new)
-        blob_list_semantic = delta.divide_blobs(merged_modified_list, overlay_path_semantic,
-                Const.OVERLAY_BLOB_SIZE_KB, Const.CHUNK_SIZE,
-                Memory.Memory.RAM_PAGE_SIZE, print_out=Log)
-        DeltaList.statistics(merged_modified_list, print_out=Log, 
-                mem_discarded=free_pfn_counter_new,
-                disk_discarded=disk_discarded_count_new)
-        overlay_metafile_semantic = overlay_path_semantic + "-meta"
-        _create_overlay_meta(base_hash_value, overlay_metafile_semantic, 
-                modified_disk, modified_mem.name, blob_list_semantic)
-        Log.write("=======================================================\n")
+        DeltaList.statistics(merged_deltalist, print_out=Log, 
+                mem_discarded=free_pfn_counter,
+                disk_discarded=disk_discarded_count)
 
-    # 4. terminting
-    fuse.terminate()
-    monitor.terminate()
-    qemu_monitor.terminate()
-    monitor.join()
-    qemu_monitor.join()
-    os.unlink(modified_mem.name)
-    
-    if os.path.exists(qemu_logfile.name):
-        os.unlink(qemu_logfile.name)
+        if self.options.XRAY_SUPPORT:
+            # 3-1. list-up all the files that is associated with overlay sectors
+            xray_start_time = time()
+            xray_log = open("./xray_log", "wrb")
+            import pprint
+            sectors = [item.offset/512 for item in disk_deltalist]
+            sec_file_dict = xray.get_files_from_sectors(modified_disk, sectors)
+            pprint.pprint(sec_file_dict, xray_log)
 
-    blob_files = [item[Const.META_OVERLAY_FILE_NAME] for item in blob_list]
-    return (overlay_metafile, blob_files)
+            # 3-2. To be deleted
+            xray_log.write("-------TRIM VS XRAY\n")
+            trim_chunk_set = set(disk_statistics.get('trimed_list', list()))
+            xray_chunk_set = set(disk_statistics.get('xrayed_list', list()))
+            xray_log.write("trimed - xray:\n%s\n" % str(trim_chunk_set-xray_chunk_set))
+            xray_log.write("xray - trimed:\n%s\n" % str(xray_chunk_set-trim_chunk_set))
+            diff_list = list(xray_chunk_set-trim_chunk_set)
+            diff_sectors = [item/8 for item in diff_list]
+            sec_file_dict = xray.get_files_from_sectors(modified_disk, diff_sectors)
+            pprint.pprint(sec_file_dict, xray_log)
+            xray_log.write("trim(%ld) == xray(%ld)\n" % (disk_statistics.get('trimed', 0), disk_statistics.get('xrayed', 0)))
+            xray_log.write("-------END\n")
+            xray_end_time = time()
+            Log.write("[Debug] WASTED TIME FOR XRAY LOGGING: %f\n" % (xray_end_time-xray_start_time))
+
+        # 4. create metadata
+        self.overlay_metafile = os.path.join(dir_path, image_name+Const.OVERLAY_META)
+        if not self.options.DISK_ONLY:
+            _create_overlay_meta(base_hash_value, self.overlay_metafile, 
+                    modified_disk, modified_mem.name, blob_list)
+        else:
+            _create_overlay_meta(base_hash_value, self.overlay_metafile, 
+                    modified_disk, base_mem, blob_list)
+
+        # TO be deleted
+        if self.options.SEPERATE_DEDUP_REDUCING_SEMANTICS:
+            free_memory_dict_new = dict()
+            disk_statistics_new = dict()
+            disk_deltalist_copy = Disk.create_disk_deltalist(modified_disk,
+                    m_chunk_dict, Const.CHUNK_SIZE,
+                    basedisk_hashlist=basedisk_hashlist, basedisk_path=base_image,
+                    trim_dict=trim_dict,
+                    apply_discard = False,
+                    dma_dict=dma_dict,
+                    used_blocks_dict=used_blocks_dict,
+                    ret_statistics=disk_statistics_new,
+                    print_out=Log)
+            if not self.options.DISK_ONLY:
+                mem_deltalist_copy = Memory.create_memory_deltalist(modified_mem.name, 
+                        basemem_meta=base_memmeta, basemem_path=base_mem,
+                        apply_free_memory=False,
+                        free_memory_info=free_memory_dict_new,
+                        print_out=Log)
+            else:
+                mem_deltalist_copy = list()
+
+            merged_modified_list = list()
+            for item in mem_deltalist_copy:
+                copied_item = DeltaItem(item.delta_type, item.offset, item.offset_len, \
+                        copy.deepcopy(item.hash_value), copy.deepcopy(item.ref_id),
+                        data_len=copy.deepcopy(item.data_len), 
+                        data=copy.deepcopy(item.data))
+                merged_modified_list.append(copied_item)
+            for item in disk_deltalist_copy:
+                copied_item = DeltaItem(item.delta_type, item.offset, item.offset_len, \
+                        copy.deepcopy(item.hash_value), copy.deepcopy(item.ref_id),
+                        data_len=copy.deepcopy(item.data_len), 
+                        data=copy.deepcopy(item.data))
+                merged_modified_list.append(copied_item)
+
+            free_pfn_counter_new = long(free_memory_dict_new.get("freed_counter", 0))
+            free_pfn_dict_new = free_memory_dict_new.get("free_pfn_dict", None)
+            disk_discarded_count_new = disk_statistics_new.get('trimed', 0)
+
+            merged_deltalist_copy = delta.create_overlay(
+                    mem_deltalist_copy, Memory.Memory.RAM_PAGE_SIZE,
+                    disk_deltalist_copy, Const.CHUNK_SIZE,
+                    basedisk_hashlist=basedisk_hashlist,
+                    basemem_hashlist=basemem_hashlist,
+                    print_out=Log)
+
+            delta.reorder_deltalist(mem_access_list, Const.CHUNK_SIZE, merged_modified_list)
+            delta.reorder_deltalist(mem_access_list, Const.CHUNK_SIZE, merged_deltalist_copy)
+
+            # merged_delta_copy has only dedup optimization
+            Log.write("\n================DEDUP ONLY===========================\n")
+            blob_list_dedup = delta.divide_blobs(merged_deltalist_copy, overlay_path_dedup,
+                    Const.OVERLAY_BLOB_SIZE_KB, Const.CHUNK_SIZE,
+                    Memory.Memory.RAM_PAGE_SIZE, print_out=Log)
+            DeltaList.statistics(merged_deltalist_copy, print_out=Log)
+            overlay_metafile_dedup = overlay_path_dedup + "-meta"
+            _create_overlay_meta(base_hash_value, overlay_metafile_dedup, 
+                    modified_disk, modified_mem.name, blob_list_dedup)
+            Log.write("=======================================================\n")
+
+            # Apply semantics
+            # merged_modified_list has no optimization
+            Log.write("\n===============SEMANTIC ONLY ========================\n")
+            disk_discarded_count = disk_statistics.get('trimed', 0)
+            delta.discard_free_chunks(merged_modified_list, Const.CHUNK_SIZE, 
+                    trim_dict, free_pfn_dict_new)
+            blob_list_semantic = delta.divide_blobs(merged_modified_list, overlay_path_semantic,
+                    Const.OVERLAY_BLOB_SIZE_KB, Const.CHUNK_SIZE,
+                    Memory.Memory.RAM_PAGE_SIZE, print_out=Log)
+            DeltaList.statistics(merged_modified_list, print_out=Log, 
+                    mem_discarded=free_pfn_counter_new,
+                    disk_discarded=disk_discarded_count_new)
+            overlay_metafile_semantic = overlay_path_semantic + "-meta"
+            _create_overlay_meta(base_hash_value, overlay_metafile_semantic, 
+                    modified_disk, modified_mem.name, blob_list_semantic)
+            Log.write("=======================================================\n")
+
+        # 4. terminting
+        fuse.terminate()
+        monitor.terminate()
+        qemu_monitor.terminate()
+        monitor.join()
+        qemu_monitor.join()
+        os.unlink(modified_mem.name)
+        
+        if os.path.exists(qemu_logfile.name):
+            os.unlink(qemu_logfile.name)
+
+        import pdb; pdb.set_trace()
+        self.overlay_files = [item[Const.META_OVERLAY_FILE_NAME] for item in blob_list]
 
 
 def _create_overlay_meta(base_hash, overlay_metafile, modified_disk, modified_mem, 
@@ -1190,23 +1196,6 @@ def main(argv):
         print "Base VM is created from %s" % disk_image_path
         print "Disk: %s" % disk_path
         print "Mem: %s" % mem_path
-    elif mode == MODE[1]:   #overlay VM creation
-        if len(args) < 2:
-            parser.error("Overlay Creation requires 1 arguments\n \
-                    1) Base disk path\n \
-                    2) disk if disk only")
-            sys.exit(1)
-        # create overlay
-        start_time = time()
-        disk_path = args[1]
-        if len(args) == 3 and args[2] == 'disk':
-            disk_only = True
-        else:
-            disk_only = False
-        overlay_files = create_overlay(disk_path, disk_only)
-        print "[INFO] overlay metafile : %s" % overlay_files[0]
-        print "[INFO] overlay : %s" % str(overlay_files[1])
-        print "[INFO] overlay creation time: %f" % (time()-start_time)
     elif mode == MODE[2]:   #synthesis
         if len(args) < 3:
             parser.error("Synthesis requires 2 arguments\n \
@@ -1283,9 +1272,13 @@ def main(argv):
 
         print "start VM resume for application: %s" % app_name
         # start application & VM
-        overlay_files = create_overlay(disk_path, False)
-        print "[INFO] overlay metafile : %s" % overlay_files[0]
-        print "[INFO] overlay : %s" % str(overlay_files[1])
+        options = Options()
+        options.DISK_ONLY = False
+        overlay = VM_Overlay(disk_path, options)
+        overlay.start()
+        overlay.join()
+        print "[INFO] overlay metafile : %s" % overlay.overlay_metafile
+        print "[INFO] overlay : %s" % str(overlay.overlay_files[0])
         print "[INFO] overlay creation time: %f" % (time()-start_time())
 
     elif mode == 'dedup_source':
