@@ -1,4 +1,4 @@
-private/
+nonpublic/
 image/
 cloudlet_env/
 test/memory_snapshot/

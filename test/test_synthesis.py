@@ -16,7 +16,7 @@ class Const(object):
     MODIFIED_MEMORY_SNAPSHOT        = "./memory_snapshot/modified-memory"
     OVERLAY_MEMA_FILE               = "./memory_snapshot/precise.overlay-meta"
 
-    file_list = [BASE_DISK_PATH, BASE_MEMORY_PATH, MODIFIED_MEMORY_SNAPSHOT, OVERLAY_MEMA_FILE]
+    file_list = [BASE_DISK_PATH, BASE_MEMORY_PATH]
 
 
 class App_installer(threading.Thread):
