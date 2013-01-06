@@ -1,4 +1,4 @@
-Eijah: Cloudlet Infrastructure for Mobile Computing
+Ejah: Cloudlet Infrastructure for Mobile Computing
 ========================================================
 A cloudlet is a new architectural element that arises from the convergence of
 mobile computing and cloud computing. It represents the middle tier of a
@@ -35,13 +35,20 @@ You will need:
 To install:
 
 1. install library dependency
-   Example at ubuntu 12 LTS x86::
-     $ sudo apt-get install qemu-kvm libvirt-bin gvncviewer python-libvirt python-xdelta3 python-dev liblzma-dev apparmor-utils python-pip
-     $ sudo pip install msgpack-python bson pyliblzma
+   Example at ubuntu 12 LTS x86.
+
+	> $ sudo apt-get install qemu-kvm libvirt-bin gvncviewer python-libvirt python-xdelta3 python-dev liblzma-dev apparmor-utils python-pip
+	> $ sudo pip install msgpack-python bson pyliblzma
 
 2. Disable security module.
-   Example at Ubuntu 12::
-     $ sudo aa-complain /usr/sbin/libvirtd
+   Example at Ubuntu 12
+
+	> $ sudo aa-complain /usr/sbin/libvirtd
+
+3. add current user to kvm, libvirtd group.
+
+	> $ sudo adduser [user_name] kvm
+	> $ sudo adduser [user_name] libvirtd
 
 
 
