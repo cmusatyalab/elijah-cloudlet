@@ -96,10 +96,10 @@ def main(argv):
         print "[INFO] overlay : %s" % str(overlay.overlay_files[0])
         #print "[INFO] overlay creation time: %f" % (time.time()-start_time)
     elif mode == CMD_SYNTEHSIS:
+        import pdb; pdb.set_trace()
         if len(left_args) < 1:
-            sys.stderr.write("Synthesis requires at least 2 arguments\n \
-                    1) base-disk path\n \
-                    2) overlay meta path\n")
+            sys.stderr.write("Synthesis requires path to overlay-meta\n \
+                    Ex) ./cloudlet synthesis [base path] /path/to/precise.overlay-meta \n")
             sys.exit(1)
         meta = left_args[0]
         qemu_args = left_args[1:]
