@@ -33,6 +33,7 @@ from operator import itemgetter
 class DiskError(Exception):
     pass
 
+
 def hashing(disk_path, meta_path, chunk_size=4096, window_size=512, print_out=None):
     # TODO: need more efficient implementation, e.g. bisect
     # generate hash of base disk
@@ -54,6 +55,9 @@ def hashing(disk_path, meta_path, chunk_size=4096, window_size=512, print_out=No
     if (not data) or len(data) < chunk_size:
         raise DiskError("invalid raw disk size")
 
+    entire_hashing = sha256()
+    entire_hashing.update(data)
+
     s_offset = 0
     data_len = len(data)
     hash_dic = dict()
@@ -74,12 +78,15 @@ def hashing(disk_path, meta_path, chunk_size=4096, window_size=512, print_out=No
             break
         s_offset += window_size
         data = data[window_size:] + added_data
+        entire_hashing.update(added_data)
 
     for hashed_data, s_offset, data_len in list(hash_dic.values()):
         out_file.write(struct.pack("!QI%ds" % len(hashed_data), 
             s_offset, data_len, hashed_data))
     disk_file.close()
     out_file.close()
+
+    return entire_hashing.hexdigest()
 
 
 def _pack_hashlist(hash_list):

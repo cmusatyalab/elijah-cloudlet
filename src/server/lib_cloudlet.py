@@ -25,7 +25,6 @@ import vmnetx
 import stat
 import delta
 import xray
-import hashlib
 import msgpack
 import copy
 import libvirt
@@ -207,8 +206,7 @@ def create_baseVM(disk_image_path):
 
         # generate disk hashing
         # TODO: need more efficient implementation, e.g. bisect
-        Disk.hashing(disk_image_path, base_diskmeta, print_out=sys.stdout)
-        base_hashvalue = hashlib.sha256(open(disk_image_path, "rb").read()).hexdigest()
+        base_hashvalue = Disk.hashing(disk_image_path, base_diskmeta, print_out=sys.stdout)
         open(base_hashpath, "wrb").write(base_hashvalue)
     except Exception as e:
         sys.stderr.write(str(e)+"\n")

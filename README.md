@@ -79,6 +79,13 @@ How to use
     ``overlay VM`` is composed of 2 files; 1) ``overlay-meta file`` ends with .overlay-meta, 2) compressed ``overlay blob files`` ends .xz
 
 
+    Note: if you want to make a portforward from host to VM, you can use -redir parameter as below. 
+
+        > $ ./cloudlet overlay /path/to/vm.image -- -redir tcp:2222:22 -redir tcp:8080::80
+
+    This will forward client connection at host port 2222 to VM's 22 and 8080 to 80, respectively.
+
+
 3. Synthesizing ``overlay vm``  
     Here, we'll show 3 ways to perform VM synthesis using ``overlay vm``; 1) verifying synthesis using command line interface, 2) synthesize over network using desktop client, and 3) synthesize over network using Android client.  
 
@@ -105,7 +112,7 @@ How to use
 
     
     3) network client(Android client)  
-    > TO BE WRITTEN
+        > TO BE WRITTEN
 
 
 
@@ -113,5 +120,6 @@ Compiling external library that Cloudlet uses
 ----------------------------------------------
 
 You will need:
- * qemu-kvm 1.1.1 (for Free memory and TRIM support)
- * libc6-dev-i386 (for Free memory support)
+
+* qemu-kvm 1.1.1 (for Free memory and TRIM support)
+* libc6-dev-i386 (for Free memory support)
