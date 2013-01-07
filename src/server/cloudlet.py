@@ -96,7 +96,6 @@ def main(argv):
         print "[INFO] overlay : %s" % str(overlay.overlay_files[0])
         #print "[INFO] overlay creation time: %f" % (time.time()-start_time)
     elif mode == CMD_SYNTEHSIS:
-        import pdb; pdb.set_trace()
         if len(left_args) < 1:
             sys.stderr.write("Synthesis requires path to overlay-meta\n \
                     Ex) ./cloudlet synthesis [base path] /path/to/precise.overlay-meta \n")

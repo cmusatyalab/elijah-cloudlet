@@ -46,24 +46,7 @@ class App_installer(threading.Thread):
         sys.stdout.flush()
         stdin, stdout, stderr = ssh.exec_command("dd if=/dev/urandom of=./test bs=1M count=100")
         stdin, stdout, stderr = ssh.exec_command("sync")
-        #self.wait_until_finish(stdout, stderr)
         ssh.close()
-
-    @staticmethod
-    def wait_until_finish(stdout, stderr, max_time=20):
-        import sys
-        import time
-        for x in xrange(max_time):
-            ret1 = stdout.readline()
-            ret2 = stderr.readline()
-            sys.stdout.write(ret1)
-            sys.stderr.write(ret2)
-            sys.stdout.flush()
-            sys.stderr.flush()
-
-            if len(ret1) == 0:
-                break
-            time.sleep(0.01)
 
 
 class TestSynthesisFunction(unittest.TestCase):
@@ -78,7 +61,7 @@ class TestSynthesisFunction(unittest.TestCase):
     def test_synthesis(self):
         #self.create_base()
         self.create_overlay()
-        #self.perform_synthesis()
+        self.perform_synthesis()
 
     def create_base(self):
         pass
