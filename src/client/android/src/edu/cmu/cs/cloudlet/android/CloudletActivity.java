@@ -15,35 +15,27 @@ package edu.cmu.cs.cloudlet.android;
 // for more details.
 //package edu.cmu.cs.cloudlet.android;
 
-import java.security.acl.LastOwnerException;
+import java.io.ByteArrayOutputStream;
+import java.io.File;
+import java.io.FileInputStream;
+import java.io.IOException;
 import java.util.ArrayList;
-
-import org.teleal.cling.android.AndroidUpnpServiceImpl;
 
 import edu.cmu.cs.cloudlet.android.application.CloudletCameraActivity;
 import edu.cmu.cs.cloudlet.android.application.face.batch.FaceAndroidBatchClientActivity;
-import edu.cmu.cs.cloudlet.android.application.face.ui.FaceRecClientCameraPreview;
 import edu.cmu.cs.cloudlet.android.application.graphics.GraphicsClientActivity;
-import edu.cmu.cs.cloudlet.android.application.speech.ClientActivity;
 import edu.cmu.cs.cloudlet.android.application.speech.SpeechAndroidBatchClientActivity;
 import edu.cmu.cs.cloudlet.android.data.VMInfo;
 import edu.cmu.cs.cloudlet.android.network.CloudletConnector;
-import edu.cmu.cs.cloudlet.android.network.HTTPCommandSender;
 import edu.cmu.cs.cloudlet.android.network.HTTPTriggerClient;
-import edu.cmu.cs.cloudlet.android.upnp.DeviceDisplay;
-import edu.cmu.cs.cloudlet.android.upnp.UPnPDiscovery;
 import edu.cmu.cs.cloudlet.android.util.CloudletEnv;
-import edu.cmu.cs.cloudlet.android.util.KLog;
 
 import android.app.Activity;
 import android.app.AlertDialog;
-import android.content.Context;
 import android.content.DialogInterface;
 import android.content.Intent;
-import android.content.ServiceConnection;
 import android.os.Bundle;
-import android.os.Handler;
-import android.os.Message;
+import android.os.Environment;
 import android.util.Log;
 import android.view.KeyEvent;
 import android.view.View;
@@ -54,7 +46,6 @@ public class CloudletActivity extends Activity {
 	public static final int SYNTHESIS_PORT = 8021;					// Cloudlet port for VM Synthesis
 	public static final int ISR_TRIGGER_PORT = 9091;
 	
-
 	public static final String[] applications = { "MOPED", "GRAPHICS", "FACE", "Speech", "NULL" };
 	public static final int TEST_CLOUDLET_APP_MOPED_PORT = 9092; // 19092
 	public static final int TEST_CLOUDLET_APP_GRAPHICS_PORT = 9093;
@@ -90,12 +81,26 @@ public class CloudletActivity extends Activity {
 		findViewById(R.id.testISRMobile).setOnClickListener(clickListener);
 		findViewById(R.id.runApplication).setOnClickListener(clickListener);
 
+
 	}
 
+	public byte[] readData(File path) throws IOException {
+        ByteArrayOutputStream bo = new ByteArrayOutputStream();
+        FileInputStream input = new FileInputStream(path);
+        byte[] buffer = new byte[32*1024];
+        while(true) {
+            int count = input.read(buffer);
+            if(count < 0) {
+                break;
+            }
+            bo.write(buffer, 0, count);
+        }
+        return bo.toByteArray();
+    }
 	private void showDialogSelectOverlay(final ArrayList<VMInfo> vmList) {
 		String[] nameList = new String[vmList.size()];
 		for (int i = 0; i < nameList.length; i++) {
-			nameList[i] = new String(vmList.get(i).getInfo(VMInfo.JSON_KEY_NAME));
+			nameList[i] = new String(vmList.get(i).getAppName());
 		}
 
 		AlertDialog.Builder ab = new AlertDialog.Builder(this);

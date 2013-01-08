@@ -15,6 +15,8 @@
 package edu.cmu.cs.cloudlet.android.util;
 
 import java.io.File;
+import java.io.FileFilter;
+import java.io.IOException;
 import java.util.ArrayList;
 
 import edu.cmu.cs.cloudlet.android.data.VMInfo;
@@ -148,21 +150,60 @@ public class CloudletEnv {
 		// Get information From overlay directory
 		File env_dir = new File(SD_ROOT + File.separator + env_root);
 		File overay_root = new File(env_dir.getAbsolutePath() + File.separator + overlay_dir);
-		File[] baseVMDirs = overay_root.listFiles();
+		File[] overlayVMDirs = overay_root.listFiles();
 		
 		// Enumerate base VMs
-		for(int i = 0; i < baseVMDirs.length; i++){
-			File baseVMDir = baseVMDirs[i];
-			File[] overlayDirs = baseVMDir.listFiles();
-			// Enumerate multiple Version of Overlay
-			for(int j = 0; j < overlayDirs.length; j++){
-				File overlayDir = overlayDirs[j];
-				VMInfo newVM = new VMInfo(overlayDir, baseVMDir.getName(), overlayDir.getName());
-				this.overlayVMList.add(newVM);
+		for(int i = 0; i < overlayVMDirs.length; i++){
+			File overlayDir = overlayVMDirs[i];
+			File overlayMetaFile = findOverlayMetaFile(overlayDir);
+			if(overlayMetaFile != null){
+				try {
+					VMInfo newVM = new VMInfo(overlayMetaFile);
+					this.overlayVMList.add(newVM);
+				} catch (IOException e) {
+					e.printStackTrace();
+				}				
 			}
 		}
 		
 		return this.overlayVMList;
+	}
+
+	private File findOverlayMetaFile(File overlayDir) {
+		if(overlayDir.isDirectory() != true){
+			return null;
+		}
+		File[] candidateMetaFiles = overlayDir.listFiles(new FileFilter() {		
+			@Override
+			public boolean accept(File pathname) {
+				if(pathname.getName().endsWith("xz") == true){
+					return false;
+				}else{
+					return true;
+				}
+			}
+		});
+	
+		// Unpacking messagepack take a long time. Do lazy checking when we transfer overlay.				
+		/*
+		for(File candiateFile : candidateMetaFiles){
+			long start_time = System.currentTimeMillis();
+			if(MessagePackUtils.isValidOverlayMeta(candiateFile) == true){
+				Log.v("krha", "measuremed time : " + (System.currentTimeMillis() - start_time));
+				return candiateFile;
+			}
+		}
+		return null;
+		*/
+		if(candidateMetaFiles.length == 1){
+			return candidateMetaFiles[0];
+		}else if(candidateMetaFiles.length == 0){
+			KLog.printErr("Cannot find valid meta file.");
+			return null;			
+		}else{
+			KLog.printErr("Multiple overlay-meta files.");
+			return null;			
+		}
 	}
 
 	public void resetOverlayList() {
