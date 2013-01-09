@@ -165,6 +165,8 @@ public class CloudletConnector {
 			activity.runStandAlone(this.requestBaseVMInfo.getInfo(VMInfo.JSON_KEY_NAME));			
 		} catch (JSONException e) {
 			KLog.printErr(e.toString());
+		} catch (IOException e) {
+			KLog.printErr(e.toString());
 		}
 	}
 	

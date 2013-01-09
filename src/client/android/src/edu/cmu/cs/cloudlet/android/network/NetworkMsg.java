@@ -56,13 +56,6 @@ public class NetworkMsg {
 		
 		// JSON Creation
 		JSONObject json = NetworkMsg.generateJSON(baseVMList);
-		try {
-			json.put(JSON_PROTOCOL_VERSION, NetworkMsg.JSON_PROTOCOL_VERSION);
-			json.put(JSON_COMMAND_TYPE, COMMAND_REQ_TRANSFER_START);
-			json.put("Request_synthesis_core", "4");
-		} catch (JSONException e) {
-			e.printStackTrace();
-		}
 
 		NetworkMsg msg = new NetworkMsg(json);
 		msg.setOverlayInfo(selecteOverlayInfo);
@@ -95,23 +88,6 @@ public class NetworkMsg {
 		}
 	}
 	
-	/*
-	 * JSON Generation 
-	 */
-	private static JSONObject generateJSON(ArrayList<VMInfo> overlays) {
-		JSONObject rootObject = new JSONObject();
-		JSONArray vmArray = new JSONArray();
-		try {
-			for(VMInfo vm : overlays){
-				vmArray.put(vm.toJSON());
-			}
-			rootObject.put("VM", vmArray);
-		} catch (JSONException e) {
-			e.printStackTrace();
-		}
-
-		return rootObject;
-	}
 	
 	public String toString(){
 		return jsonToString(4);

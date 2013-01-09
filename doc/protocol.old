@@ -33,7 +33,8 @@ to avoid platform and language dependency.
 	        "base_name": "Ubuntu_10.04"
 	        "diskimg_size": "96958895"
 	        "memory_snapshot_size": "19827612"
-	      }
+	        and you have enabled ```Early VM Start``` option at server-side.
+	        }
 	    ]
 	  }
 

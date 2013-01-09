@@ -72,14 +72,25 @@ public class HTTPCommandSender extends Thread {
 
 	public void initSetup(String url) {
 		httpURL = "http://" + CloudletActivity.SYNTHESIS_SERVER_IP + ":" + CloudletActivity.SYNTHESIS_PORT + "/" + url;
-		mDialog = ProgressDialog.show(context, "Info", "Connecting to " + httpURL + "\nwaiting for " + overlayVM.getInfo(VMInfo.JSON_KEY_NAME) + " to run at " + command, true);		
+		try {
+			mDialog = ProgressDialog.show(context, "Info", "Connecting to " + httpURL + "\nwaiting for " + overlayVM.getInfo(VMInfo.JSON_KEY_NAME) + " to run at " + command, true);
+		} catch (IOException e) {
+			// TODO Auto-generated catch block
+			e.printStackTrace();
+		}		
 		mDialog.show();
 	}
 	
 	Handler networkHandler = new Handler() {
 		public void handleMessage(Message msg) {			
 			if (msg.what == HTTPCommandSender.SUCCESS) {
-				String applicationName = ((VMInfo)msg.obj).getInfo(VMInfo.JSON_KEY_NAME);
+				String applicationName = null;
+				try {
+					applicationName = ((VMInfo)msg.obj).getInfo(VMInfo.JSON_KEY_NAME);
+				} catch (IOException e) {
+					// TODO Auto-generated catch block
+					e.printStackTrace();
+				}
 				activity.runStandAlone(applicationName);
 			}else if(msg.what == HTTPCommandSender.FAIL){
 				String ret = (String)msg.obj;
@@ -179,6 +190,9 @@ public class HTTPCommandSender extends Thread {
 			jsonRoot.put("VM", jsonVMArray);			
 		} catch (JSONException e) {
 			KLog.printErr(e.toString());
+		} catch (IOException e) {
+			// TODO Auto-generated catch block
+			e.printStackTrace();
 		}
 		
 		return jsonRoot;

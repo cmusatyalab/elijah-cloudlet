@@ -20,12 +20,11 @@ import msgpack
 import struct
 import sys
 import socket
-import json
 import time
+from synthesis_protocol import Protocol as protocol
 from optparse import OptionParser
 from threading import Thread
 from pprint import pprint
-import cloudlet_client
 import select
 
 class RapidClientError(Exception):
@@ -109,15 +108,22 @@ def start_cloudlet(sock, overlay_meta_path, start_time):
 
     # modify overlay path
     meta_info = msgpack.unpackb(open(overlay_meta_path, "r").read())
+    '''
     for blob in meta_info['overlay_files']:
         filename = os.path.basename(blob['overlay_name'])
         uri = "%s" % (filename)
         blob['overlay_name'] = uri
+    '''
 
     # send header
-    header = msgpack.packb(meta_info)
+    header = msgpack.packb({
+        protocol.KEY_COMMAND : protocol.MESSAGE_COMMAND_SEND_META,
+        protocol.KEY_META_SIZE : os.path.getsize(overlay_meta_path)
+        })
+    #import pdb; pdb.set_trace()
     sock.sendall(struct.pack("!I", len(header)))
     sock.sendall(header)
+    sock.sendall(open(overlay_meta_path, "r").read())
     time_dict['send_end_time'] = time.time()
 
     app_thread = None
@@ -131,21 +137,21 @@ def start_cloudlet(sock, overlay_meta_path, start_time):
                 data = sock.recv(4)
                 if not data:
                     break
-                ret_size = struct.unpack("!I", data)[0]
-                ret_data = recv_all(sock, ret_size);
-                json_ret = json.loads(ret_data)
-                command = json_ret.get("command")
-                if command ==  0x01:    # RET_SUCCESS
+                msg_size = struct.unpack("!I", data)[0]
+                msg_data = recv_all(sock, msg_size);
+                message = msgpack.unpackb(msg_data)
+                command = message.get(protocol.KEY_COMMAND)
+                if command ==  protocol.MESSAGE_COMMAND_SUCCESS:    # RET_SUCCESS
                     print "Synthesis SUCCESS"
                     time_dict['recv_success_time'] = time.time()
                     #run user input waiting thread 
                     app_thread = Thread(target=application_thread, args=(sock, app_time_dict))
                     app_thread.start()
-                elif command == 0x02:   # RET_FAIL
+                elif command == protocol.MESSAGE_COMMAND_FAIELD:   # RET_FAIL
                     print "Synthesis Failed"
-                elif command == 0x03:    # request blob
-                    #print "Request: %s" % (json_ret.get("blob_uri"))
-                    blob_request_list.append(str(json_ret.get("blob_uri")))
+                elif command == protocol.MESSAGE_COMMAND_ON_DEMAND:    # request blob
+                    print "Request: %s" % (message.get(protocol.KEY_REQUEST_SEGMENT))
+                    blob_request_list.append(str(message.get(protocol.KEY_REQUEST_SEGMENT)))
                 else:
                     print "protocol error:%d" % (command)
 

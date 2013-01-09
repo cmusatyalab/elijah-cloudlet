@@ -25,7 +25,6 @@ import msgpack
 from pprint import pformat
 from optparse import OptionParser
 from multiprocessing import Process, JoinableQueue, Queue, Manager
-import json
 import tempfile
 import struct
 import lib_cloudlet as cloudlet
@@ -53,10 +52,19 @@ class Synthesis_Const(object):
     SERVER_PORT_NUMBER = 8021
 
 
-class SynthesisProtocol(object):
-    RET_SUCESS          = 0x01
-    RET_FAIL            = 0x02
-    RET_BLOB_REQUEST    = 0x03
+class Protocol(object):
+    KEY_COMMAND                 = "command"
+    KEY_META_SIZE               = "meta_size"
+    KEY_REQUEST_SEGMENT         = "blob_uri"
+    KEY_FAILED_REAONS           = "reasons"
+
+    # client -> server
+    MESSAGE_COMMAND_SEND_META   = 0x11
+
+    # server -> client
+    MESSAGE_COMMAND_SUCCESS     = 0x01
+    MESSAGE_COMMAND_FAIELD      = 0x02
+    MESSAGE_COMMAND_ON_DEMAND   = 0x03
 
 
 class RapidSynthesisError(Exception):
@@ -110,10 +118,13 @@ def network_worker(handler, overlay_urls, overlay_urls_size, demanding_queue, ou
                 requesting_overlay = overlay_urls.pop(0)
 
             # request overlay blob to client
-            json_ret = json.dumps({"command":SynthesisProtocol.RET_BLOB_REQUEST, "blob_uri":requesting_overlay})
-            json_size = struct.pack("!I", len(json_ret))
-            handler.request.send(json_size)
-            handler.wfile.write(json_ret)
+            message = msgpack.packb({
+                Protocol.KEY_COMMAND : Protocol.MESSAGE_COMMAND_ON_DEMAND,
+                Protocol.KEY_REQUEST_SEGMENT:requesting_overlay
+                })
+            message_size = struct.pack("!I", len(message))
+            handler.request.send(message_size)
+            handler.wfile.write(message)
             handler.wfile.flush()
             requesting_list.append(requesting_overlay)
             #print "requesting %s" % (requesting_overlay)
@@ -203,17 +214,22 @@ class SynthesisHandler(SocketServer.StreamRequestHandler):
 
     def ret_fail(self, message):
         print "Error, %s" % str(message)
-        json_ret = json.dumps({"command":SynthesisProtocol.RET_FAIL, "Error":message})
-        json_size = struct.pack("!I", len(json_ret))
-        self.request.send(json_size)
-        self.wfile.write(json_ret)
+        message = msgpack.packb({
+            Protocol.KEY_COMMAND : Protocol.MESSAGE_COMMAND_FAIELD,
+            Protocol.KEY_FAILED_REAONS : message
+            })
+        message_size = struct.pack("!I", len(message))
+        self.request.send(message_size)
+        self.wfile.write(message)
 
     def ret_success(self):
-        json_ret = json.dumps({"command":SynthesisProtocol.RET_SUCESS, "return":"SUCCESS", "LaunchVM-IP":Synthesis_Const.LOCAL_IPADDRESS})
+        message = msgpack.packb({
+            Protocol.KEY_COMMAND : Protocol.MESSAGE_COMMAND_SUCCESS
+            })
         print "SUCCESS to launch VM"
-        json_size = struct.pack("!I", len(json_ret))
-        self.request.send(json_size)
-        self.wfile.write(json_ret)
+        message_size = struct.pack("!I", len(message))
+        self.request.send(message_size)
+        self.wfile.write(message)
 
     def _check_validity(self, request):
         # self.request is the TCP socket connected to the clinet
@@ -221,28 +237,31 @@ class SynthesisHandler(SocketServer.StreamRequestHandler):
         if data == None or len(data) != 4:
             raise RapidSynthesisError("Failed to receive first byte of header")
 
-        msgpack_size = struct.unpack("!I", data)[0]
+        # recv Message 
+        message_size = struct.unpack("!I", data)[0]
+        msgpack_data = request.recv(message_size)
+        while len(msgpack_data) < message_size:
+            msgpack_data += request.recv(message_size-len(msgpack_data))
+        message = msgpack.unpackb(msgpack_data)
 
-        # recv MSGPACK header
-        msgpack_data = request.recv(msgpack_size)
-        while len(msgpack_data) < msgpack_size:
-            msgpack_data += request.recv(msgpack_size- len(msgpack_data))
-        header = msgpack.unpackb(msgpack_data)
+        if (message.get(Protocol.KEY_COMMAND, None) == Protocol.MESSAGE_COMMAND_SEND_META) and \
+                (message.get(Protocol.KEY_META_SIZE, 0) > 0):
+            # receive overlay meta file
+            meta_file_size = message.get(Protocol.KEY_META_SIZE)
+            header_data = request.recv(meta_file_size)
+            while len(header_data) < meta_file_size:
+                header_data += request.recv(meta_file_size- len(header_data))
+            header = msgpack.unpackb(header_data)
 
-        try:
             base_hashvalue = header.get(Cloudlet_Const.META_BASE_VM_SHA256, None)
-        except KeyError:
-            message = 'No key is in JSON'
-            print message
-            self.ret_fail(message)
-            return
-        # check base VM
-        for base_vm in BaseVM_list:
-            if base_hashvalue == base_vm.get('sha256', None):
-                base_path = base_vm['path']
-                print "[INFO] New client request %s VM" \
-                        % (base_path)
-                return [base_path, header]
+            # check base VM
+            for base_vm in BaseVM_list:
+                if base_hashvalue == base_vm.get('sha256', None):
+                    base_path = base_vm['path']
+                    print "[INFO] New client request %s VM" \
+                            % (base_path)
+                    return [base_path, header]
+
         message = "Cannot find matching Base VM\nsha256: %s" % (base_hashvalue)
         print message
         self.ret_fail(message)
@@ -263,7 +282,6 @@ class SynthesisHandler(SocketServer.StreamRequestHandler):
                 size = blob[Cloudlet_Const.META_OVERLAY_FILE_SIZE]
                 overlay_urls.append(url)
                 overlay_urls_size[url] = size
-            app_url = str(overlay_urls[0])
             Log.write("Base VM     : %s\n" % base_path)
             Log.write("Application : %s\n" % str(overlay_urls[0]))
             Log.write("Blob count  : %d\n" % len(overlay_urls))
@@ -366,6 +384,7 @@ class SynthesisHandler(SocketServer.StreamRequestHandler):
 
             # TO BE DELETED - save execution pattern
             '''
+            app_url = str(overlay_urls[0])
             mem_access_list = self.resumed_VM.monitor.mem_access_chunk_list
             mem_access_str = [str(item) for item in mem_access_list]
             filename = "exec_patter_%s" % (app_url.split("/")[-2])
@@ -534,6 +553,7 @@ class SynthesisServer(SocketServer.TCPServer):
     @staticmethod
     def parse_configfile(filename):
         global BaseVM_list
+        import json
         if not os.path.exists(filename):
             return None, "configuration file is not exist : " + filename
 

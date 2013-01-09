@@ -125,8 +125,15 @@ public class NetworkClientSender extends Thread {
 				// Send overlay binary
 				VMInfo overlayVMInfo = networkCommand.getOverlayInfo();
 				if(overlayVMInfo != null){
-					File image = new File(overlayVMInfo.getInfo(VMInfo.JSON_KEY_DISKIMAGE_PATH));
-					File mem = new File(overlayVMInfo.getInfo(VMInfo.JSON_KEY_MEMORYSNAPSHOT_PATH));
+					File image = null;
+					File mem = null;
+					try {
+						image = new File(overlayVMInfo.getInfo(VMInfo.JSON_KEY_DISKIMAGE_PATH));
+						mem = new File(overlayVMInfo.getInfo(VMInfo.JSON_KEY_MEMORYSNAPSHOT_PATH));
+					} catch (IOException e) {
+						// TODO Auto-generated catch block
+						e.printStackTrace();
+					}
 					Measure.setOverlaySize(image.length(), mem.length());
 					Measure.put(Measure.OVERLAY_TRANSFER_START);
 					this.sendOverlayImage(image, mem);
