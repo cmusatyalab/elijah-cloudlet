@@ -20,6 +20,11 @@ import java.io.File;
 import java.io.FileInputStream;
 import java.io.IOException;
 import java.util.ArrayList;
+import java.util.HashMap;
+import java.util.Map;
+
+import org.msgpack.MessagePack;
+import org.msgpack.packer.BufferPacker;
 
 import edu.cmu.cs.cloudlet.android.application.CloudletCameraActivity;
 import edu.cmu.cs.cloudlet.android.application.face.batch.FaceAndroidBatchClientActivity;
@@ -27,7 +32,6 @@ import edu.cmu.cs.cloudlet.android.application.graphics.GraphicsClientActivity;
 import edu.cmu.cs.cloudlet.android.application.speech.SpeechAndroidBatchClientActivity;
 import edu.cmu.cs.cloudlet.android.data.VMInfo;
 import edu.cmu.cs.cloudlet.android.network.CloudletConnector;
-import edu.cmu.cs.cloudlet.android.network.HTTPTriggerClient;
 import edu.cmu.cs.cloudlet.android.util.CloudletEnv;
 
 import android.app.Activity;
@@ -42,7 +46,7 @@ import android.view.View;
 import android.widget.Button;
 
 public class CloudletActivity extends Activity {
-	public static final String SYNTHESIS_SERVER_IP = "cage.coda.cs.cmu.edu"; // Cloudlet
+	public static final String SYNTHESIS_SERVER_IP = "192.168.2.2"; // Cloudlet
 	public static final int SYNTHESIS_PORT = 8021;					// Cloudlet port for VM Synthesis
 	public static final int ISR_TRIGGER_PORT = 9091;
 	
@@ -202,9 +206,11 @@ public class CloudletActivity extends Activity {
 	}
 
 	protected void runHTTPConnection(String command, String application, String url) {
+		/*
 		HTTPTriggerClient commandSender = new HTTPTriggerClient(this, CloudletActivity.this, command, application);
 		commandSender.initSetup(url); 
 		commandSender.start();
+		*/
 	}
 
 	/*
@@ -267,27 +273,6 @@ public class CloudletActivity extends Activity {
 		}
 	}
 
-	/*
-	 * Service Discovery Handler
-	 */
-	/*
-	Handler discoveryHandler = new Handler() {
-		public void handleMessage(Message msg) {
-			if (msg.what == UPnPDiscovery.DEVICE_SELECTED) {
-				DeviceDisplay device = (DeviceDisplay) msg.obj;
-				String ipAddress = device.getIPAddress();
-				int port = device.getPort();
-				KLog.println("ip : " + ipAddress + ", port : " + port);
-
-				// connector.startConnection(ipAddress, 9090);
-				// connector.startConnection("128.2.212.207", 9090);
-
-			} else if (msg.what == UPnPDiscovery.USER_CANCELED) {
-				showAlert("Info", "Select UPnP Server for Cloudlet Service");
-			}
-		}
-	};
-	*/
 
 	View.OnClickListener clickListener = new View.OnClickListener() {
 		@Override
@@ -330,6 +315,20 @@ public class CloudletActivity extends Activity {
 				String ret = data.getExtras().getString("message");
 			}
 		}
+		
+		// send close VM message
+		/*
+		HashMap<String, String> messageMap = new HashMap<String, String>();
+		MessagePack msgpack = new MessagePack();
+		BufferPacker packer = msgpack.createBufferPacker();
+		packer.writeMapBegin(message.size());
+		for (Map.Entry<K, V> e : ((Map<K, V>) message).entrySet()) {
+			packer.write(e.getKey());
+			packer.write(e.getValue());
+		}
+		packer.writeMapEnd();
+		this.networkBytes = packer.toByteArray();
+		*/
 	}
 
 	public boolean onKeyDown(int keyCode, KeyEvent event) {
@@ -352,4 +351,27 @@ public class CloudletActivity extends Activity {
 		this.connector.close();
 		super.onDestroy();
 	}
+	
+
+	/*
+	 * Service Discovery Handler
+	 */
+	/*
+	Handler discoveryHandler = new Handler() {
+		public void handleMessage(Message msg) {
+			if (msg.what == UPnPDiscovery.DEVICE_SELECTED) {
+				DeviceDisplay device = (DeviceDisplay) msg.obj;
+				String ipAddress = device.getIPAddress();
+				int port = device.getPort();
+				KLog.println("ip : " + ipAddress + ", port : " + port);
+
+				// connector.startConnection(ipAddress, 9090);
+				// connector.startConnection("128.2.212.207", 9090);
+
+			} else if (msg.what == UPnPDiscovery.USER_CANCELED) {
+				showAlert("Info", "Select UPnP Server for Cloudlet Service");
+			}
+		}
+	};
+	*/
 }

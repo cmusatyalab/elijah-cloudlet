@@ -74,18 +74,18 @@ public class NetworkClientReceiver extends Thread {
 	}
 
 	private ByteArrayBuffer receiveMsg(DataInputStream reader) throws EOFException, IOException {
-		int jsonLength = reader.readInt();
-		if(jsonLength == -1){
+		int messageLength = reader.readInt();
+		if(messageLength == -1){
 			return null;
 		}
-		KLog.println("Received JSON Header size : " + jsonLength);
-		byte[] jsonByte = new byte[jsonLength];
-		reader.read(jsonByte, 0, jsonByte.length);
+		KLog.println("Received message size : " + messageLength);
+		byte[] msgpackByte = new byte[messageLength];
+		reader.read(msgpackByte, 0, msgpackByte.length);
 		
-		ByteArrayBuffer jsonByteArray = new ByteArrayBuffer(jsonLength);
-		jsonByteArray.append(jsonByte, 0, jsonByte.length);
+		ByteArrayBuffer msgPackBuffer = new ByteArrayBuffer(messageLength);
+		msgPackBuffer.append(msgpackByte, 0, msgpackByte.length);
 	
-		return jsonByteArray;
+		return msgPackBuffer;
 	}
 
 	/*

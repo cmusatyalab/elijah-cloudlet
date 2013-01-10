@@ -45,37 +45,37 @@ public class NetworkClientSender extends Thread {
 
 	private String Server_ipAddress;
 	private int Server_port;
-	
+
 	private NetworkClientReceiver receiver;
-	private Vector<NetworkMsg> commandQueue = new Vector<NetworkMsg>();		//thread safe
+	private Vector<NetworkMsg> commandQueue = new Vector<NetworkMsg>(); // thread
+																		// safe
 	private Socket mClientSocket;
 	private DataOutputStream networkWriter;
-	
-	private byte[] imageSendingBuffer = new byte[3*1024*1024];
+
+	private byte[] imageSendingBuffer = new byte[3 * 1024 * 1024];
 	private CloudletConnector connector;
 
 	public NetworkClientSender(Context context, Handler handler) {
 		mContext = context;
 		mHandler = handler;
 	}
-	
+
 	// this is only for sending status of VM transfer.
 	// I know this is bad approach, but make my life easier.
 	// Do not use this method for other usage.
-	public void setConnector(CloudletConnector connector){
+	public void setConnector(CloudletConnector connector) {
 		this.connector = connector;
 	}
 
-	public void setConnection(String ip, int port){
+	public void setConnection(String ip, int port) {
 		this.Server_ipAddress = ip;
 		this.Server_port = port;
 	}
 
-
 	private boolean initConnection(String server_ipAddress2, int server_port2) {
 		try {
 			mClientSocket = new Socket();
-			mClientSocket.connect(new InetSocketAddress(this.Server_ipAddress, this.Server_port), 10*1000);
+			mClientSocket.connect(new InetSocketAddress(this.Server_ipAddress, this.Server_port), 10 * 1000);
 			networkWriter = new DataOutputStream(mClientSocket.getOutputStream());
 			receiver = new NetworkClientReceiver(new DataInputStream(mClientSocket.getInputStream()), mHandler);
 		} catch (UnknownHostException e) {
@@ -95,129 +95,109 @@ public class NetworkClientSender extends Thread {
 			mHandler.sendMessage(msg);
 			return false;
 		}
-		
+
 		return true;
 	}
-	
+
 	public void run() {
 		boolean ret = this.initConnection(this.Server_ipAddress, this.Server_port);
-		if(ret == false)
+		if (ret == false)
 			return;
-		
-		// Socket Receiver Thread Start 
+
+		// Socket Receiver Thread Start
 		this.receiver.start();
-		
-		while(isThreadRun == true){
-			if(commandQueue.size() == 0){
+
+		while (isThreadRun == true) {
+			if (commandQueue.size() == 0) {
 				try {
-					Thread.sleep(100);
+					Thread.sleep(10);
 				} catch (InterruptedException e) {
 					e.printStackTrace();
 				}
 				continue;
 			}
-			
+
 			NetworkMsg networkCommand = commandQueue.remove(0);
 			this.sendCommand(networkCommand);
-			
-			switch(networkCommand.getCommandType()){
-			case NetworkMsg.COMMAND_REQ_TRANSFER_START:
-				// Send overlay binary
-				VMInfo overlayVMInfo = networkCommand.getOverlayInfo();
-				if(overlayVMInfo != null){
-					File image = null;
-					File mem = null;
-					try {
-						image = new File(overlayVMInfo.getInfo(VMInfo.JSON_KEY_DISKIMAGE_PATH));
-						mem = new File(overlayVMInfo.getInfo(VMInfo.JSON_KEY_MEMORYSNAPSHOT_PATH));
-					} catch (IOException e) {
-						// TODO Auto-generated catch block
-						e.printStackTrace();
-					}
-					Measure.setOverlaySize(image.length(), mem.length());
-					Measure.put(Measure.OVERLAY_TRANSFER_START);
-					this.sendOverlayImage(image, mem);
-					Measure.put(Measure.OVERLAY_TRANSFER_END);
-				}
-				
+
+			switch (networkCommand.getCommandType()) {
+			case NetworkMsg.MESSAGE_COMMAND_SEND_META:
+				// Send overlay meta file
+				File metaFile = networkCommand.getSelectedFile();
+				Measure.put(Measure.OVERLAY_TRANSFER_START);
+				this.sendBinaryFile(metaFile);
+//				Measure.put(Measure.OVERLAY_TRANSFER_END);
 				Measure.put(Measure.NET_REQ_OVERLAY_TRASFER);
-				break;				
+				break;
+			case NetworkMsg.MESSAGE_COMMAND_SEND_OVERLAY:
+				// Send overlay file
+				File overlayFile = networkCommand.getSelectedFile();
+				this.sendBinaryFile(overlayFile);
+				break;
 			}
 		}
 	}
-	
+
 	private void sendCommand(NetworkMsg msg) {
 		try {
 			byte[] byteMsg = msg.toNetworkByte();
-			networkWriter.write(byteMsg);
-			networkWriter.flush(); 		// flush everytime for accurate time measure
-//			KLog.println("Send Message " + msg);
+			if (byteMsg != null) {
+				networkWriter.write(byteMsg);
+				networkWriter.flush(); // flush everytime for accurate time
+										// measure
+			}
+			// KLog.println("Send Message " + msg);
 		} catch (IOException e) {
 			e.printStackTrace();
 		}
 	}
 
-
-	private void sendOverlayImage(File image, File mem) {
-		try {			
+	private void sendBinaryFile(File image) {
+		try {
 			int sendByte = -1, totalByte = 0;
-			//sending disk image
+			// sending disk image
 			BufferedInputStream bi = new BufferedInputStream(new FileInputStream(image));
-			while((sendByte = bi.read(imageSendingBuffer, 0, imageSendingBuffer.length)) > 0){
+			while ((sendByte = bi.read(imageSendingBuffer, 0, imageSendingBuffer.length)) > 0) {
 				networkWriter.write(imageSendingBuffer, 0, sendByte);
 				totalByte += sendByte;
-				String statusMsg = "Sending Disk.. " + (int)(100.0*totalByte/image.length()) + "%, (" + totalByte + "/" + image.length() + ")";
-//				KLog.println(statusMsg);
+				String statusMsg = "Sending overlay.. " + (int) (100.0 * totalByte / image.length()) + "%, (" + totalByte
+						+ "/" + image.length() + ")";
+				// KLog.println(statusMsg);
 				this.notifyTransferStatus("Step 2. Sending overlay VM ..\n" + statusMsg);
 			}
 			bi.close();
-
-			//sending memory snapshot
-			totalByte = 0;
-			bi = new BufferedInputStream(new FileInputStream(mem));
-			while((sendByte = bi.read(imageSendingBuffer, 0, imageSendingBuffer.length)) > 0){
-				networkWriter.write(imageSendingBuffer, 0, sendByte);
-				totalByte += sendByte;
-				String statusMsg = "Sending Memory.. " + (int)(100.0*totalByte/mem.length()) + "%, (" + totalByte + "/" + mem.length() + ")";
-//				KLog.println(statusMsg);
-				this.notifyTransferStatus("Step 2. Sending overlay VM ..\n" + statusMsg);
-			}
-			bi.close();
-
 			networkWriter.flush();
 		} catch (FileNotFoundException e) {
 			KLog.printErr(e.toString());
 		} catch (IOException e) {
 			KLog.printErr(e.toString());
 		}
-		
 	}
 
 	private void notifyTransferStatus(final String messageString) {
-		if(this.connector != null){
-			mHandler.post(new Runnable(){
+		if (this.connector != null) {
+			mHandler.post(new Runnable() {
 				@Override
 				public void run() {
 					connector.updateMessage(messageString);
-					
-				}				
+				}
 			});
 		}
 	}
-	
-	public void requestCommand(NetworkMsg command){
+
+	public void requestCommand(NetworkMsg command) {
 		this.commandQueue.add(command);
 	}
 
 	public void close() {
 		try {
 			this.isThreadRun = false;
-			
-			if(this.receiver != null)
+
+			if (this.receiver != null)
 				this.receiver.close();
-			if(this.networkWriter != null)
+			if (this.networkWriter != null)
 				this.networkWriter.close();
-			if(this.mClientSocket != null)
+			if (this.mClientSocket != null)
 				this.mClientSocket.close();
 		} catch (IOException e) {
 			KLog.printErr(e.toString());

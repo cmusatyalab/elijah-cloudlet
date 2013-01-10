@@ -84,9 +84,13 @@ public class CloudletCameraActivity extends Activity implements TextToSpeech.OnI
 		mPreview = (Preview) findViewById(R.id.camera_preview);
 		
 		Bundle extras = getIntent().getExtras();
-		server_ipaddress = extras.getString("address");
-		server_port = extras.getInt("port");
-		
+		if (extras != null){
+			server_ipaddress = extras.getString("address");
+			server_port = extras.getInt("port", CloudletActivity.TEST_CLOUDLET_APP_MOPED_PORT);
+		}else{
+			server_ipaddress = CloudletActivity.SYNTHESIS_SERVER_IP;
+			server_port = CloudletActivity.TEST_CLOUDLET_APP_MOPED_PORT;
+		}
 
 		// buttons
 		mSendButton = (Button) findViewById(R.id.sendButton);
@@ -103,7 +107,6 @@ public class CloudletCameraActivity extends Activity implements TextToSpeech.OnI
 
 		// TextToSpeech.OnInitListener
 		mTTS = new TextToSpeech(this, this);
-		
 		
 		// For OSDI Test, just start sending data
 		File testFile = new File(TEST_IMAGE_PATH);
@@ -138,12 +141,12 @@ public class CloudletCameraActivity extends Activity implements TextToSpeech.OnI
 //				mDialog = ProgressDialog.show(CloudletCameraActivity.this, "", "Processing...", true);
 			} 
 		};
-
-		this.textView = (TextView) this.findViewById(R.id.cameraLogView);
-	    this.scrollView = (ScrollView) this.findViewById(R.id.cameraLogScroll);
+		
+//		this.textView = (TextView) this.findViewById(R.id.cameraLogView);
+//	    this.scrollView = (ScrollView) this.findViewById(R.id.cameraLogScroll);
 	    
-		Timer startTiemr = new Timer();
-		startTiemr.schedule(autoStart, 1000);
+//		Timer startTiemr = new Timer();
+//		startTiemr.schedule(autoStart, 1000);
 	}
 	
 
@@ -152,7 +155,9 @@ public class CloudletCameraActivity extends Activity implements TextToSpeech.OnI
 	 */
 	Handler networkHandler = new Handler() {
 		public void handleMessage(Message msg) {
-			if (msg.what == NetworkClient.FEEDBACK_RECEIVED) {
+			if (msg.what == NetworkClient.FEEDBACK) {
+				// Automatic measurement from image list
+				
 				// Dissmiss Dialog
 				if(mDialog != null && mDialog.isShowing())
 					mDialog.dismiss();
@@ -162,11 +167,7 @@ public class CloudletCameraActivity extends Activity implements TextToSpeech.OnI
 				updateLog(message + "\n");
 				
 				// Run TTS
-				/*
-				Bundle data = msg.getData();
-				String ttsString = data.getString("objects");
-				TTSFeedback(ttsString);
-				*/
+				TTSFeedback(message);
 			}
 		}
 	};
@@ -176,14 +177,16 @@ public class CloudletCameraActivity extends Activity implements TextToSpeech.OnI
 	 * Upload Log 
 	 */
 	public void updateLog(String msg){
-		this.textView.append(msg);
-		this.scrollView.post(new Runnable()
-	    {
-	        public void run()
-	        {
-	            scrollView.fullScroll(View.FOCUS_DOWN);
-	        }
-	    });
+		if (this.textView != null){
+			this.textView.append(msg);
+			this.scrollView.post(new Runnable()
+		    {
+		        public void run()
+		        {
+		            scrollView.fullScroll(View.FOCUS_DOWN);
+		        }
+		    });
+		}
 	}
 
 	/*
@@ -216,7 +219,7 @@ public class CloudletCameraActivity extends Activity implements TextToSpeech.OnI
 				}
 			}
 			Log.d("krha", "tts string : " + sb.toString());
-			mTTS.setSpeechRate(0.8f);
+			mTTS.setSpeechRate(1f);
 			mTTS.speak("We found " + sb.toString(), TextToSpeech.QUEUE_FLUSH, null);
 		}
 		
@@ -258,7 +261,9 @@ public class CloudletCameraActivity extends Activity implements TextToSpeech.OnI
 
 	public void saveImage(byte[] data) {
 		// check network connection
-		mDialog = ProgressDialog.show(CloudletCameraActivity.this, "", "Processing...", true);		
+		mDialog = ProgressDialog.show(CloudletCameraActivity.this, "", "Processing..\n", true);
+		
+		// upload image
 		if(client == null){
 			client = new NetworkClient(this, CloudletCameraActivity.this, networkHandler);
 			try {				
@@ -271,14 +276,7 @@ public class CloudletCameraActivity extends Activity implements TextToSpeech.OnI
 				mDialog.dismiss();
 			}
 		}
-
-
-		/*
-		// upload image
-		if(client !=null){
-//			client.uploadImage(data);
-		}
-		*/
+		client.uploadImage(data);
 	}
 	
 	Camera.AutoFocusCallback cb = new Camera.AutoFocusCallback() {
@@ -328,9 +326,9 @@ public class CloudletCameraActivity extends Activity implements TextToSpeech.OnI
             setResult(RESULT_OK, caller); 
             finish();
             
-			Intent intent = new Intent(CloudletCameraActivity.this, CloudletActivity.class);
-			startActivity(intent); 
-			finish();
+//			Intent intent = new Intent(CloudletCameraActivity.this, CloudletActivity.class);
+//			startActivity(intent); 
+//			finish();
 		}
 		return super.onKeyDown(keyCode, event);
 	}
@@ -349,5 +347,4 @@ public class CloudletCameraActivity extends Activity implements TextToSpeech.OnI
 		}
 		super.onDestroy();
 	}
-
 }

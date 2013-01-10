@@ -16,28 +16,21 @@ package edu.cmu.cs.cloudlet.android.data;
 
 import java.io.File;
 import java.io.IOException;
-import java.util.HashMap;
 import java.util.Iterator;
 import java.util.Map;
-import java.util.Set;
 import java.util.TreeMap;
 
-import org.json.JSONException;
 import org.json.JSONObject;
 import org.msgpack.MessagePack;
 import org.msgpack.type.Value;
 import org.msgpack.unpacker.BufferUnpacker;
 
-import android.annotation.SuppressLint;
-import android.util.Log;
-import edu.cmu.cs.cloudlet.android.util.KLog;
 import edu.cmu.cs.cloudlet.android.util.MessagePackUtils;
 
 public class VMInfo {
 	protected TreeMap<String, Value> data = new TreeMap<String, Value>();
 
 	private String appName = "No application name";
-
 	private File overlayMetaFile;
 
 	public static final String META_BASE_VM_SHA256 = "base_vm_sha256";
@@ -48,25 +41,6 @@ public class VMInfo {
 	public static final String META_OVERLAY_FILE_SIZE = "overlay_size";
 	public static final String META_OVERLAY_FILE_DISK_CHUNKS = "disk_chunk";
 	public static final String META_OVERLAY_FILE_MEMORY_CHUNKS = "memory_chunk";
-
-	// legacy for synthesis using http - start
-	public static final String JSON_KEY_BASE_NAME = "base_name";
-	public static final String JSON_KEY_NAME = "overlay_name";
-	public static final String JSON_KEY_TYPE = "type";
-	public static final String JSON_KEY_UUID = "uuid";
-	public static final String JSON_KEY_DISKIMAGE_PATH = "diskimg_path";
-	public static final String JSON_KEY_DISKIMAGE_SIZE = "diskimg_size";
-	public static final String JSON_KEY_MEMORYSNAPSHOT_PATH = "memory_snapshot_path";
-	public static final String JSON_KEY_MEMORYSNAPSHOT_SIZE = "memory_snapshot_size";
-	public static final String JSON_KEY_VERSION = "version";
-	public static final String JSON_KEY_ERROR = "Error";
-	public static final String JSON_KEY_CLOUDLET_CPU_CLOCK = "CPU-Clock";
-	public static final String JSON_KEY_CLOUDLET_CPU_CORE = "CPU-Core";
-	public static final String JSON_KEY_CLOUDLET_MEMORY_SIZE = "Memory-Size";
-	public static final String JSON_KEY_LAUNCH_VM_IP = "LaunchVM-IP";
-	public static final String JSON_VALUE_VM_TYPE_BASE = "baseVM";
-	public static final String JSON_VALUE_VM_TYPE_OVERLAY = "overlay";
-	// legacy for synthesis using http - end
 
 	public VMInfo(File overlayMetaFile) throws IOException {
 	
@@ -92,6 +66,10 @@ public class VMInfo {
 			this.data.put(key.toString(), value);
 		}
 	}
+	
+	public File getMetaFile(){
+		return this.overlayMetaFile;
+	}
 
 	public String getAppName() {
 		return this.appName;
@@ -108,5 +86,14 @@ public class VMInfo {
 		}
 		Value value = this.data.get(key);
 		return value.toString();
+	}
+
+	public File getOverlayFile(String overlayFileName) throws IOException {
+		File dirPath = overlayMetaFile.getParentFile();
+		File overlayFile = new File(dirPath + File.separator + overlayFileName);
+		if (overlayFile.canRead() != true){
+			throw new IOException("Cannot find overlay file : " + overlayFile.getCanonicalPath());
+		}
+		return overlayFile;
 	}
 }

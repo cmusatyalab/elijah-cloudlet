@@ -171,11 +171,18 @@ def start_cloudlet(sock, overlay_meta_path, start_time):
 
                 filename = os.path.basename(requested_uri)
                 blob_path = os.path.join(os.path.dirname(overlay_meta_path), filename)
-                blob_data = open(blob_path, "rb").read()
-                blob_header = BlobHeader(requested_uri, os.path.getsize(blob_path))
+                segment_info = {
+                        protocol.KEY_COMMAND : protocol.MESSAGE_COMMAND_SEND_OVERLAY,
+                        protocol.KEY_REQUEST_SEGMENT : requested_uri,
+                        protocol.KEY_REQUEST_SEGMENT_SIZE : os.path.getsize(blob_path)
+                        }
 
-                sock.sendall(blob_header.get_serialized())
-                sock.sendall(blob_data)
+                # send close signal to cloudlet server
+                header = msgpack.packb(segment_info)
+                sock.sendall(struct.pack("!I", len(header)))
+                sock.sendall(header)
+                sock.sendall(open(blob_path, "rb").read())
+
 
                 if len(sent_blob_list) == total_blob_count:
                     time_dict['send_end_time'] = time.time()
@@ -189,8 +196,11 @@ def start_cloudlet(sock, overlay_meta_path, start_time):
 
     send_end = time_dict['send_end_time']
     recv_end = time_dict['recv_success_time']
-    client_info = {'Transfer':(send_end-start_time), \
-            'Synthesis Success': (recv_end-start_time)}
+    client_info = {
+            protocol.KEY_COMMAND : protocol.MESSAGE_COMMAND_FINISH,
+            'Transfer':(send_end-start_time), \
+            'Synthesis Success': (recv_end-start_time)
+            }
     pprint(client_info)
 
     # send close signal to cloudlet server

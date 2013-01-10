@@ -52,24 +52,26 @@ class Synthesis_Const(object):
     SERVER_PORT_NUMBER = 8021
 
 
+class RapidSynthesisError(Exception):
+    pass
+
+
 class Protocol(object):
     KEY_COMMAND                 = "command"
     KEY_META_SIZE               = "meta_size"
     KEY_REQUEST_SEGMENT         = "blob_uri"
+    KEY_REQUEST_SEGMENT_SIZE    = "blob_size"
     KEY_FAILED_REAONS           = "reasons"
 
     # client -> server
-    MESSAGE_COMMAND_SEND_META   = 0x11
+    MESSAGE_COMMAND_SEND_META       = 0x11
+    MESSAGE_COMMAND_SEND_OVERLAY    = 0x12
+    MESSAGE_COMMAND_FINISH          = 0x13
 
     # server -> client
     MESSAGE_COMMAND_SUCCESS     = 0x01
     MESSAGE_COMMAND_FAIELD      = 0x02
     MESSAGE_COMMAND_ON_DEMAND   = 0x03
-
-
-class RapidSynthesisError(Exception):
-    pass
-
 
 def recv_all(request, size):
     data = ''
@@ -130,9 +132,14 @@ def network_worker(handler, overlay_urls, overlay_urls_size, demanding_queue, ou
             #print "requesting %s" % (requesting_overlay)
 
         # read header
-        blob_size = struct.unpack("!I", read_stream.read(4))[0]
-        blob_name_size = struct.unpack("!H", read_stream.read(2))[0]
-        blob_url = struct.unpack("!%ds" % blob_name_size , read_stream.read(blob_name_size))[0]
+        blob_header_size = struct.unpack("!I", read_stream.read(4))[0]
+        blob_header_data = read_stream.read(blob_header_size)
+        blob_header = msgpack.unpackb(blob_header_data)
+        blob_size = blob_header.get(Protocol.KEY_REQUEST_SEGMENT_SIZE, 0)
+        blob_url = blob_header.get(Protocol.KEY_REQUEST_SEGMENT, None)
+        if blob_size == 0 or blob_url == None:
+            raise RapidSynthesisError("Invalid header for overlay segment")
+
         finished_url[blob_url] = True
         requesting_list.remove(blob_url)
         read_count = 0
@@ -308,7 +315,8 @@ class SynthesisHandler(SocketServer.StreamRequestHandler):
             # overlay
             demanding_queue = Queue()
             download_queue = JoinableQueue()
-            download_process = Process(target=network_worker, 
+            import threading
+            download_process = threading.Thread(target=network_worker, 
                     args=(
                         self,
                         overlay_urls, overlay_urls_size, demanding_queue, 
