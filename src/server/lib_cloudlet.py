@@ -1241,6 +1241,8 @@ def main(argv):
                 memory_delta_list.append(delta_item)
             elif delta_item.delta_type == DeltaItem.DELTA_DISK:
                 disk_delta_list.append(delta_item)
+            else:
+                raise CloudletGenerationError("No delta type exist")
         disk_overlay_path = os.path.join(output_dir, "disk_overlay")
         memory_overlay_path = os.path.join(output_dir, "memory_overlay")
         disk_blob_list = delta.divide_blobs(disk_delta_list, disk_overlay_path, 
@@ -1249,6 +1251,7 @@ def main(argv):
         memory_blob_list = delta.divide_blobs(memory_delta_list, memory_overlay_path, 
                 Const.OVERLAY_BLOB_SIZE_KB, Const.CHUNK_SIZE,
                 Memory.Memory.RAM_PAGE_SIZE, print_out=sys.stdout)
+        import pdb; pdb.set_trace()
     elif mode == "first_run":   #overlay VM creation
         import socket
         import struct

@@ -719,6 +719,8 @@ def _save_blob(start_index, delta_list, self_ref_dict, blob_name, blob_size, sta
         delta_item = delta_list[index]
 
         if delta_item.ref_id != DeltaItem.REF_SELF:
+            # Those deduped chunks will be put right after original data
+            # using deduped_list
             delta_bytes = delta_item.get_serialized()
             original_length += len(delta_bytes)
             comp_delta_bytes = comp.compress(delta_bytes)
@@ -785,6 +787,8 @@ def divide_blobs(delta_list, overlay_path, blob_size_kb,
     start_time = time.time()
 
     # build reference table
+    # Those deduped chunks will be put right after original data
+    # using deduped_list
     self_ref_dict = dict()
     for delta_item in delta_list:
         if delta_item.ref_id == DeltaItem.REF_SELF:
