@@ -1243,6 +1243,44 @@ def main(argv):
                 disk_delta_list.append(delta_item)
             else:
                 raise CloudletGenerationError("No delta type exist")
+
+        disk_uncomp_data = ''
+        memory_uncomp_data = ''
+        for disk_delta_item in disk_delta_list:
+            disk_uncomp_data += (disk_delta_item.get_serialized())
+        for mem_delta_item in memory_delta_list:
+            memory_uncomp_data += (mem_delta_item.get_serialized())
+
+        total_size = len(disk_delta_list)+len(memory_delta_list)
+
+        print "Delta Item #\tDisk: %d / %d = %f, Memory: %d / %d = %f" % \
+                (len(disk_delta_list), total_size, 100.0*len(disk_delta_list)/total_size, \
+                len(memory_delta_list), total_size, 100.0*len(memory_delta_list)/total_size)
+
+        disk_uncomp_size = len(disk_uncomp_data)
+        memory_uncomp_size = len(memory_uncomp_data)
+        total_size = disk_uncomp_size+memory_uncomp_size
+        print "Uncomp Size\tDisk: %d / %d = %f, Memory: %d / %d = %f" % \
+                (disk_uncomp_size, total_size, 100.0*disk_uncomp_size/total_size, \
+                memory_uncomp_size, total_size, 100.0*memory_uncomp_size/total_size)
+                
+        from lzma import LZMACompressor
+        disk_comp_option = {'format':'xz', 'level':9}
+        mem_comp_option = {'format':'xz', 'level':9}
+        disk_comp = LZMACompressor(options=disk_comp_option)
+        mem_comp = LZMACompressor(options=mem_comp_option)
+        disk_comp_data = disk_comp.compress(disk_uncomp_data)
+        disk_comp_data += disk_comp.flush()
+        mem_comp_data = mem_comp.compress(memory_uncomp_data)
+        mem_comp_data += mem_comp.flush()
+
+        disk_comp_size = len(disk_comp_data)
+        memory_comp_size = len(mem_comp_data)
+        total_size = disk_comp_size+memory_comp_size
+        print "Comp Size\tDisk: %d / %d = %f, Memory: %d / %d = %f" % \
+                (disk_comp_size, total_size, 100.0*disk_comp_size/total_size, \
+                memory_comp_size, total_size, 100.0*memory_comp_size/total_size)
+        '''
         disk_overlay_path = os.path.join(output_dir, "disk_overlay")
         memory_overlay_path = os.path.join(output_dir, "memory_overlay")
         disk_blob_list = delta.divide_blobs(disk_delta_list, disk_overlay_path, 
@@ -1251,7 +1289,7 @@ def main(argv):
         memory_blob_list = delta.divide_blobs(memory_delta_list, memory_overlay_path, 
                 Const.OVERLAY_BLOB_SIZE_KB, Const.CHUNK_SIZE,
                 Memory.Memory.RAM_PAGE_SIZE, print_out=sys.stdout)
-        import pdb; pdb.set_trace()
+        '''
     elif mode == "first_run":   #overlay VM creation
         import socket
         import struct
