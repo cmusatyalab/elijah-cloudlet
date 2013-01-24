@@ -23,7 +23,7 @@ import socket
 import time
 from synthesis_protocol import Protocol as protocol
 from optparse import OptionParser
-from threading import Thread
+import threading
 from pprint import pprint
 import select
 
@@ -81,7 +81,7 @@ def recv_all(sock, size):
     return data
 
 
-def synthesis(address, port, overlay_path, synthesis_option):
+def synthesis(address, port, overlay_path, app_function, synthesis_option):
     if os.path.exists(overlay_path) == False:
         sys.stderr.write("Invalid overlay path: %s\n" % overlay_path)
         sys.exit(1)
@@ -99,11 +99,11 @@ def synthesis(address, port, overlay_path, synthesis_option):
         sys.stderr.write("Error, %s\n" % msg)
         sys.exit(1)
 
-    start_cloudlet(sock, overlay_path, start_time, synthesis_option)
+    start_cloudlet(sock, overlay_path, app_function, start_time, synthesis_option)
     print "finished"
 
 
-def start_cloudlet(sock, overlay_meta_path, start_time, synthesis_options=dict()):
+def start_cloudlet(sock, overlay_meta_path, app_function, start_time, synthesis_options=dict()):
     blob_request_list = list()
 
     time_dict = dict()
@@ -144,7 +144,7 @@ def start_cloudlet(sock, overlay_meta_path, start_time, synthesis_options=dict()
                     print "Synthesis SUCCESS"
                     time_dict['recv_success_time'] = time.time()
                     #run user input waiting thread 
-                    app_thread = Thread(target=application_thread, args=(sock, app_time_dict))
+                    app_thread = client_thread(app_function)
                     app_thread.start()
                 elif command == protocol.MESSAGE_COMMAND_FAIELD:   # RET_FAIL
                     print "Synthesis Failed"
@@ -191,14 +191,19 @@ def start_cloudlet(sock, overlay_meta_path, start_time, synthesis_options=dict()
             break
 
     app_thread.join()
+    time_dict.update(app_thread.time_dict)
     time_dict.update(app_time_dict)
 
     send_end = time_dict['send_end_time']
     recv_end = time_dict['recv_success_time']
+    app_start = time_dict['app_start']
+    app_end = time_dict['app_end']
     client_info = {
             protocol.KEY_COMMAND : protocol.MESSAGE_COMMAND_FINISH,
-            'Transfer':(send_end-start_time), \
-            'Synthesis Success': (recv_end-start_time)
+            'Transfer End':(send_end-start_time), 
+            'Synthesis Success': (recv_end-start_time),
+            'App Start': (app_start-start_time),
+            'App End': (app_end-start_time)
             }
     pprint(client_info)
 
@@ -216,14 +221,23 @@ def start_cloudlet(sock, overlay_meta_path, start_time, synthesis_options=dict()
     if command != protocol.MESSAGE_COMMAND_FINISH_SUCCESS:
         raise RapidClientError("finish sucess errror: %d" % command)
 
+class client_thread(threading.Thread):
+    def __init__(self, client_method):
+        self.client_method = client_method
+        threading.Thread.__init__(self, target=self.start_app)
+        self.time_dict = dict()
 
-def application_thread(sock, time_dict):
-    time_dict['app_start'] = time.time()
+    def start_app(self):
+        self.time_dict['app_start'] = time.time()
+        self.client_method()
+        self.time_dict['app_end'] = time.time()
+
+
+def default_app_function():
     while True:
         user_input = raw_input("type 'q' to quit : ")
         if user_input.strip() == 'q':
             break;
-    time_dict['app_end'] = time.time()
 
 
 def main(argv=None):
@@ -233,8 +247,8 @@ def main(argv=None):
     synthesis_options = dict()
     synthesis_options[protocol.SYNTHESIS_OPTION_DISPLAY_VNC] = settings.display_vnc
     synthesis_options[protocol.SYNTHESIS_OPTION_EARLY_START] = settings.early_start
-
-    synthesis(settings.server_ip, port, settings.overlay_path, synthesis_options)
+    app_function = default_app_function
+    synthesis(settings.server_ip, port, settings.overlay_path, app_function, synthesis_options)
     return 0
 
 

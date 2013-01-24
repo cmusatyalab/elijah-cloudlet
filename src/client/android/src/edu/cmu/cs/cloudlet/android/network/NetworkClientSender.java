@@ -126,8 +126,6 @@ public class NetworkClientSender extends Thread {
 				File metaFile = networkCommand.getSelectedFile();
 				Measure.put(Measure.OVERLAY_TRANSFER_START);
 				this.sendBinaryFile(metaFile);
-//				Measure.put(Measure.OVERLAY_TRANSFER_END);
-				Measure.put(Measure.NET_REQ_OVERLAY_TRASFER);
 				break;
 			case NetworkMsg.MESSAGE_COMMAND_SEND_OVERLAY:
 				// Send overlay file

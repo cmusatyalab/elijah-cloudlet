@@ -168,6 +168,11 @@ def synthesis_from_cloud(url, app_name):
 
 
 def run_application(app_name):
+    cmd, output_file = get_app_cmd(app_name)
+    return exec_application(cmd), output_file
+
+
+def get_app_cmd(app_name):
     global application_names
     cmd = ''
     output_file = ''
@@ -193,7 +198,10 @@ def run_application(app_name):
         return 0, output_file
     elif app_name == application_names[6]:  # webserver
         cmd = "wget %s:9092/vmtest.ko" % delivery_server
+    return cmd, output_file
 
+
+def exec_application(cmd):
     print "Run client : %s" % (cmd)
     while True:
         proc = subprocess.Popen(cmd, shell=True, stdin=subprocess.PIPE, stdout=subprocess.PIPE)
@@ -210,7 +218,7 @@ def run_application(app_name):
         else:
             time.sleep(0.1)
 
-    return proc.returncode, output_file
+    return proc.returncode
 
 
 def get_overlay_info(app_name):
