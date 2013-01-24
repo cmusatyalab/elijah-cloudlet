@@ -56,6 +56,12 @@ def process_command_line(argv):
     parser.add_option(
             '-s', '--server', action='store', type='string', dest='server_ip',
             help="Set cloudlet server's IP address")
+    parser.add_option(
+            '-d', '--display', action='store_false', dest='display_vnc', default=True,
+            help='Turn on VNC display of VM (Default True)')
+    parser.add_option(
+            '-e', '--early_start', action='store_true', dest='early_start', default=False,
+            help='Turn on early start mode for faster application execution (Default False)')
     settings, args = parser.parse_args(argv)
 
     if settings.overlay_path == None:
@@ -75,7 +81,7 @@ def recv_all(sock, size):
     return data
 
 
-def synthesis(address, port, overlay_path, wait_time=0):
+def synthesis(address, port, overlay_path, synthesis_option):
     if os.path.exists(overlay_path) == False:
         sys.stderr.write("Invalid overlay path: %s\n" % overlay_path)
         sys.exit(1)
@@ -93,34 +99,27 @@ def synthesis(address, port, overlay_path, wait_time=0):
         sys.stderr.write("Error, %s\n" % msg)
         sys.exit(1)
 
-    start_cloudlet(sock, overlay_path, start_time)
+    start_cloudlet(sock, overlay_path, start_time, synthesis_option)
     print "finished"
-    time.sleep(wait_time)
 
 
-def start_cloudlet(sock, overlay_meta_path, start_time):
+def start_cloudlet(sock, overlay_meta_path, start_time, synthesis_options=dict()):
     blob_request_list = list()
 
     time_dict = dict()
     app_time_dict = dict()
 
     print "Overlay Meta: %s" % (overlay_meta_path)
-
-    # modify overlay path
     meta_info = msgpack.unpackb(open(overlay_meta_path, "r").read())
-    '''
-    for blob in meta_info['overlay_files']:
-        filename = os.path.basename(blob['overlay_name'])
-        uri = "%s" % (filename)
-        blob['overlay_name'] = uri
-    '''
 
     # send header
-    header = msgpack.packb({
+    header_dict = {
         protocol.KEY_COMMAND : protocol.MESSAGE_COMMAND_SEND_META,
-        protocol.KEY_META_SIZE : os.path.getsize(overlay_meta_path)
-        })
-    #import pdb; pdb.set_trace()
+        protocol.KEY_META_SIZE : os.path.getsize(overlay_meta_path),
+        }
+    if len(synthesis_options) > 0:
+        header_dict[protocol.KEY_SYNTHESIS_OPTION] = synthesis_options
+    header = msgpack.packb(header_dict)
     sock.sendall(struct.pack("!I", len(header)))
     sock.sendall(header)
     sock.sendall(open(overlay_meta_path, "r").read())
@@ -208,6 +207,15 @@ def start_cloudlet(sock, overlay_meta_path, start_time):
     sock.sendall(struct.pack("!I", len(header)))
     sock.sendall(header)
 
+    # recv finish success (as well as residue) from server
+    data = recv_all(sock, 4)
+    msg_size = struct.unpack("!I", data)[0]
+    msg_data = recv_all(sock, msg_size);
+    message = msgpack.unpackb(msg_data)
+    command = message.get(protocol.KEY_COMMAND)
+    if command != protocol.MESSAGE_COMMAND_FINISH_SUCCESS:
+        raise RapidClientError("finish sucess errror: %d" % command)
+
 
 def application_thread(sock, time_dict):
     time_dict['app_start'] = time.time()
@@ -222,7 +230,12 @@ def main(argv=None):
     settings, args = process_command_line(sys.argv[1:])
 
     port = 8021
-    synthesis(settings.server_ip, port, settings.overlay_path)
+    synthesis_options = dict()
+    synthesis_options[protocol.SYNTHESIS_OPTION_DISPLAY_VNC] = settings.display_vnc
+    synthesis_options[protocol.SYNTHESIS_OPTION_EARLY_START] = settings.early_start
+
+    synthesis(settings.server_ip, port, settings.overlay_path, synthesis_options)
+    return 0
 
 
 if __name__ == "__main__":

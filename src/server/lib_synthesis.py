@@ -21,28 +21,27 @@ import time
 import SocketServer
 import socket
 import msgpack
+import tempfile
+import struct
+import lib_cloudlet as cloudlet
+import shutil
 
 from pprint import pformat
 from optparse import OptionParser
 from multiprocessing import Process, JoinableQueue, Queue, Manager
-import tempfile
-import struct
-import lib_cloudlet as cloudlet
 from Configuration import Const as Cloudlet_Const
 from lzma import LZMADecompressor
-import shutil
 from datetime import datetime
+from synthesis_protocol import Protocol as Protocol
 
 Log = cloudlet.CloudletLog("./log_synthesis/log_synthesis-%s" % str(datetime.now()).split(" ")[1])
 
-application = ['moped', 'face']
 BaseVM_list = []
 
 class Synthesis_Const(object):
     # PIPLINING
     TRANSFER_SIZE           = 1024*16
     END_OF_FILE             = "!!Overlay Transfer End Marker"
-    EXIT_BY_CLIENT          = False
     SHOW_VNC                = False
     IS_EARLY_START          = False
     IS_PRINT_STATISTICS     = False
@@ -55,23 +54,6 @@ class Synthesis_Const(object):
 class RapidSynthesisError(Exception):
     pass
 
-
-class Protocol(object):
-    KEY_COMMAND                 = "command"
-    KEY_META_SIZE               = "meta_size"
-    KEY_REQUEST_SEGMENT         = "blob_uri"
-    KEY_REQUEST_SEGMENT_SIZE    = "blob_size"
-    KEY_FAILED_REAONS           = "reasons"
-
-    # client -> server
-    MESSAGE_COMMAND_SEND_META       = 0x11
-    MESSAGE_COMMAND_SEND_OVERLAY    = 0x12
-    MESSAGE_COMMAND_FINISH          = 0x13
-
-    # server -> client
-    MESSAGE_COMMAND_SUCCESS     = 0x01
-    MESSAGE_COMMAND_FAIELD      = 0x02
-    MESSAGE_COMMAND_ON_DEMAND   = 0x03
 
 def recv_all(request, size):
     data = ''
@@ -218,6 +200,11 @@ def decomp_worker(in_queue, pipe_filepath, time_queue, temp_overlay_file=None):
 
 
 class SynthesisHandler(SocketServer.StreamRequestHandler):
+    synthesis_option = {
+            Protocol.SYNTHESIS_OPTION_DISPLAY_VNC : False,
+            Protocol.SYNTHESIS_OPTION_EARLY_START : False,
+            Protocol.SYNTHESIS_OPTION_SHOW_STATISTICS : False
+            }
 
     def ret_fail(self, message):
         print "Error, %s" % str(message)
@@ -253,6 +240,11 @@ class SynthesisHandler(SocketServer.StreamRequestHandler):
 
         if (message.get(Protocol.KEY_COMMAND, None) == Protocol.MESSAGE_COMMAND_SEND_META) and \
                 (message.get(Protocol.KEY_META_SIZE, 0) > 0):
+            # check header option
+            client_syn_option = message.get(Protocol.KEY_SYNTHESIS_OPTION, None)
+            if client_syn_option != None and len(client_syn_option) > 0:
+                self.synthesis_option.update(client_syn_option)
+
             # receive overlay meta file
             meta_file_size = message.get(Protocol.KEY_META_SIZE)
             header_data = request.recv(meta_file_size)
@@ -289,9 +281,9 @@ class SynthesisHandler(SocketServer.StreamRequestHandler):
                 size = blob[Cloudlet_Const.META_OVERLAY_FILE_SIZE]
                 overlay_urls.append(url)
                 overlay_urls_size[url] = size
-            Log.write("Base VM     : %s\n" % base_path)
-            Log.write("Application : %s\n" % str(overlay_urls[0]))
-            Log.write("Blob count  : %d\n" % len(overlay_urls))
+            Log.write("  - %s\n" % str(pformat(self.synthesis_option)))
+            Log.write("  - Base VM     : %s\n" % base_path)
+            Log.write("  - Blob count  : %d\n" % len(overlay_urls))
             if base_path == None or meta_info == None or overlay_urls == None:
                 message = "Failed, Invalid header information"
                 print message
@@ -346,7 +338,7 @@ class SynthesisHandler(SocketServer.StreamRequestHandler):
             self.delta_proc.start()
             self.fuse_thread.start()
 
-            if Synthesis_Const.IS_EARLY_START:
+            if self.synthesis_option.get(Protocol.SYNTHESIS_OPTION_EARLY_START, False):
                 # return success right after resuming VM
                 # before receiving all chunks
                 self.resumed_VM.join()
@@ -369,26 +361,19 @@ class SynthesisHandler(SocketServer.StreamRequestHandler):
                     time_transfer, time_decomp, time_delta, time_fuse, \
                     print_out=Log, resume_time=(time_end_resume-time_start_resume))
 
-            if Synthesis_Const.SHOW_VNC:
+            if self.synthesis_option.get(Protocol.SYNTHESIS_OPTION_DISPLAY_VNC, False):
                 cloudlet.connect_vnc(self.resumed_VM.machine, no_wait=True)
 
-            # exit status
-            if Synthesis_Const.EXIT_BY_CLIENT:
-                Log.write("[SOCKET] waiting for client exit message\n")
-                data = self.request.recv(4)
-                msgpack_size = struct.unpack("!I", data)[0]
-                # recv MSGPACK header
-                msgpack_data = self.request.recv(msgpack_size)
-                while len(msgpack_data) < msgpack_size:
-                    msgpack_data += self.request.recv(msgpack_size- len(msgpack_data))
-                client_data = msgpack.unpackb(msgpack_data)
-                Log.write("  - %s" % str(pformat(client_data)))
-                Log.write("\n")
-            else:
-                while True:
-                    user_input = raw_input("q to quit: ")
-                    if user_input == 'q':
-                        break
+            # wait for finish message from client
+            Log.write("[SOCKET] waiting for client exit message\n")
+            data = self.request.recv(4)
+            msgpack_size = struct.unpack("!I", data)[0]
+            msgpack_data = self.request.recv(msgpack_size)
+            while len(msgpack_data) < msgpack_size:
+                msgpack_data += self.request.recv(msgpack_size- len(msgpack_data))
+            client_data = msgpack.unpackb(msgpack_data)
+            Log.write("  - %s" % str(pformat(client_data)))
+            Log.write("\n")
 
             # TO BE DELETED - save execution pattern
             '''
@@ -400,7 +385,7 @@ class SynthesisHandler(SocketServer.StreamRequestHandler):
             '''
 
             # printout synthesis statistics
-            if Synthesis_Const.IS_PRINT_STATISTICS:
+            if self.synthesis_option.get(Protocol.SYNTHESIS_OPTION_SHOW_STATISTICS):
                 mem_access_list = self.resumed_VM.monitor.mem_access_chunk_list
                 disk_access_list = self.resumed_VM.monitor.disk_access_chunk_list
                 cloudlet.synthesis_statistics(meta_info, temp_overlay_filepath, \
@@ -427,6 +412,17 @@ class SynthesisHandler(SocketServer.StreamRequestHandler):
         if os.path.exists(self.tmp_overlay_dir):
             shutil.rmtree(self.tmp_overlay_dir)
         Log.flush()
+
+        # return finish sucess to client
+        message = msgpack.packb({
+            Protocol.KEY_COMMAND : Protocol.MESSAGE_COMMAND_FINISH_SUCCESS
+            })
+        message_size = struct.pack("!I", len(message))
+        self.request.send(message_size)
+        self.wfile.write(message)
+        self.wfile.flush()
+
+        Log.write("[FINISH] Close client\n")
 
     def terminate(self):
         # force terminate
@@ -502,10 +498,6 @@ class SynthesisServer(SocketServer.TCPServer):
             raise RapidSynthesisError(error_msg)
 
         Synthesis_Const.LOCAL_IPADDRESS = "0.0.0.0"
-        Synthesis_Const.EXIT_BY_CLIENT = settings.batch
-        Synthesis_Const.SHOW_VNC = settings.is_vnc
-        Synthesis_Const.IS_EARLY_START = settings.is_early_start
-        Synthesis_Const.IS_PRINT_STATISTICS = settings.is_print_statistics
         server_address = (Synthesis_Const.LOCAL_IPADDRESS, Synthesis_Const.SERVER_PORT_NUMBER)
 
         SocketServer.TCPServer.__init__(self, server_address, SynthesisHandler)
@@ -516,9 +508,6 @@ class SynthesisServer(SocketServer.TCPServer):
         print " - Open TCP Server at %s" % (str(server_address))
         print " - Disable Nalge(No TCP delay)  : %s" \
                 % str(self.socket.getsockopt(socket.IPPROTO_TCP, socket.TCP_NODELAY))
-        print " - Display Resumed VM (VNC)     : %s" % str(Synthesis_Const.SHOW_VNC)
-        print " - Ealy VM Start option         : %s" % str(Synthesis_Const.IS_EARLY_START)
-        print " - Print Synthesis Statistics   : %s" % str(Synthesis_Const.IS_PRINT_STATISTICS)
         print "-"*50
 
     def handle_error(self, request, client_address):
@@ -539,15 +528,6 @@ class SynthesisServer(SocketServer.TCPServer):
         parser.add_option(
                 '-c', '--config', action='store', type='string', dest='config_filename',
                 help='Set configuration file, which has base VM information, to work as a server mode.')
-        parser.add_option(
-                '-b', '--batch', action='store_true', dest='batch', default=True,
-                help='VM close triggered by client')
-        parser.add_option(
-                '-d', '--display', action='store_false', dest='is_vnc', default=True,
-                help='Turn off VNC display of VM')
-        parser.add_option(
-                '-e', '--early_start', action='store_true', dest='is_early_start', default=False,
-                help='Turn on early start mode for faster application execution')
         parser.add_option(
                 '-s', '--statistics', action='store_true', dest='is_print_statistics', default=False,
                 help='print synthesis statistics including overlay accessed ratio')
