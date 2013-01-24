@@ -16,6 +16,7 @@
 #
 
 import sys
+import time
 import os
 from rapid_client import synthesis
 from optparse import OptionParser
@@ -73,6 +74,44 @@ def exec_mar():
     return cmd, output_file
 
 
+def app_synthesis(ip, port, app_name, options=None):
+    #synthesis option
+    synthesis_options = dict()
+    if options == None:
+        synthesis_options[protocol.SYNTHESIS_OPTION_DISPLAY_VNC] = True
+        synthesis_options[protocol.SYNTHESIS_OPTION_EARLY_START] = False
+    else:
+        synthesis_options.update(options)
+
+    #overlay path
+    OVERLAY_ROOT = "../../../image/overlay/"
+    overlay_meta_path = None
+    if len(app_name.split("_")) > 1:
+        app_name, order, blob_size = app_name.split("_")
+        overlay_meta_path = "%s/%s/%s/%s/overlay-meta" % \
+                (OVERLAY_ROOT, app_name, order, blob_size)
+
+    if os.path.exists(overlay_meta_path) == False:
+        sys.stderr.write("Cannot find overlay at %s\n" % overlay_meta_path)
+        sys.exit(1)
+
+    #application method
+    app_function = None
+    if app_name== "moped": 
+        app_function = exec_moped
+    elif app_name == "face":
+        app_function = exec_face
+    elif app_name == "speech":
+        app_function = exec_speech
+    elif app_name == "mar":
+        app_function = exec_mar
+    elif app_name == "graphics":
+        app_function = exec_graphics
+
+    synthesis(ip, port, overlay_meta_path, app_function, synthesis_options)
+    time.sleep(10)
+
+
 def main(argv=None):
     settings, args = process_command_line(sys.argv[1:])
     if settings.server_ip:
@@ -81,32 +120,8 @@ def main(argv=None):
         cloudlet_server_ip = "cloudlet.krha.kr"
     cloudlet_server_port = 8021
 
-    #synthesis option
-    synthesis_options = dict()
-    synthesis_options[protocol.SYNTHESIS_OPTION_DISPLAY_VNC] = True
-    synthesis_options[protocol.SYNTHESIS_OPTION_EARLY_START] = False
-
-    #overlay path
-    OVERLAY_ROOT = "../../../image/overlay/"
-    overlay_path = os.path.join(OVERLAY_ROOT, settings.application, "access", "1048576", "overlay-meta")
-    if os.path.exists(overlay_path) == False:
-        sys.stderr.write("Cannot find overlay at %s\n" % overlay_path)
-        sys.exit(1)
-
-    #application method
-    app_function = None
-    if settings.application == "moped": 
-        app_function = exec_moped
-    elif settings.application == "face":
-        app_function = exec_face
-    elif settings.application == "speech":
-        app_function = exec_speech
-    elif settings.application == "mar":
-        app_function = exec_mar
-    elif settings.application == "graphics":
-        app_function = exec_graphics
-
-    synthesis(cloudlet_server_ip, cloudlet_server_port, overlay_path, app_function, synthesis_options)
+    app_name = "%s_access_1024" % settings.application
+    app_synthesis(cloudlet_server_ip, cloudlet_server_port, app_name)
 
 
 if __name__ == "__main__":

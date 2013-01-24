@@ -141,18 +141,18 @@ def start_cloudlet(sock, overlay_meta_path, app_function, start_time, synthesis_
                 message = msgpack.unpackb(msg_data)
                 command = message.get(protocol.KEY_COMMAND)
                 if command ==  protocol.MESSAGE_COMMAND_SUCCESS:    # RET_SUCCESS
-                    print "Synthesis SUCCESS"
+                    sys.stdout.write("Synthesis SUCCESS\n")
                     time_dict['recv_success_time'] = time.time()
                     #run user input waiting thread 
                     app_thread = client_thread(app_function)
                     app_thread.start()
                 elif command == protocol.MESSAGE_COMMAND_FAIELD:   # RET_FAIL
-                    print "Synthesis Failed"
+                    sys.stderr.write("Synthesis Failed\n")
                 elif command == protocol.MESSAGE_COMMAND_ON_DEMAND:    # request blob
-                    print "Request: %s" % (message.get(protocol.KEY_REQUEST_SEGMENT))
+                    #sys.stdout.write("Request: %s\n" % (message.get(protocol.KEY_REQUEST_SEGMENT)))
                     blob_request_list.append(str(message.get(protocol.KEY_REQUEST_SEGMENT)))
                 else:
-                    print "protocol error:%d" % (command)
+                    sys.stderr.write("protocol error:%d\n" % (command))
 
         # send data
         for i in outputready:

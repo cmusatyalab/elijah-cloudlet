@@ -15,197 +15,56 @@
 # for more details.
 #
 
-import time
-from rapid_app import synthesis
+from synthesis_protocol import Protocol as protocol
+from rapid_app import app_synthesis
 
-WAIT_TIME = 10
+ip = "cloudlet.krha.kr"
+#ip = "192.168.2.2"
+port = 8021
+options = {
+        protocol.SYNTHESIS_OPTION_DISPLAY_VNC: False,
+        protocol.SYNTHESIS_OPTION_EARLY_START: False
+        }
 
-cloudlet_server_ip = "cloudlet.krha.kr"
-#cloudlet_server_ip = "192.168.2.2"
-cloudlet_server_port = 8021
+app_synthesis(ip, port, "moped_access_32", options=options)
+app_synthesis(ip, port, "moped_access_1024", options=options)
+app_synthesis(ip, port, "moped_access_1048576", options=options)
+app_synthesis(ip, port, "moped_linear_32", options=options)
+app_synthesis(ip, port, "moped_linear_1024", options=options)
+app_synthesis(ip, port, "moped_linear_1048576", options=options)
 
-synthesis(cloudlet_server_ip, cloudlet_server_port, "moped_access_32", batch=True, wait_time=WAIT_TIME)
-synthesis(cloudlet_server_ip, cloudlet_server_port, "moped_access_1024", batch=True, wait_time=WAIT_TIME)
-synthesis(cloudlet_server_ip, cloudlet_server_port, "moped_access_1048576", batch=True, wait_time=WAIT_TIME)
-synthesis(cloudlet_server_ip, cloudlet_server_port, "moped_linear_32", batch=True, wait_time=WAIT_TIME)
-synthesis(cloudlet_server_ip, cloudlet_server_port, "moped_linear_1024", batch=True, wait_time=WAIT_TIME)
-synthesis(cloudlet_server_ip, cloudlet_server_port, "moped_linear_1048576", batch=True, wait_time=WAIT_TIME)
+app_synthesis(ip, port, "face_access_32", options=options)
+app_synthesis(ip, port, "face_access_1024", options=options)
+app_synthesis(ip, port, "face_access_1048576", options=options)
+app_synthesis(ip, port, "face_linear_32", options=options)
+app_synthesis(ip, port, "face_linear_1024", options=options)
+app_synthesis(ip, port, "face_linear_1048576", options=options)
 
-synthesis(cloudlet_server_ip, cloudlet_server_port, "moped_access_32", batch=True, wait_time=WAIT_TIME)
-synthesis(cloudlet_server_ip, cloudlet_server_port, "moped_access_1024", batch=True, wait_time=WAIT_TIME)
-synthesis(cloudlet_server_ip, cloudlet_server_port, "moped_access_1048576", batch=True, wait_time=WAIT_TIME)
-synthesis(cloudlet_server_ip, cloudlet_server_port, "moped_linear_32", batch=True, wait_time=WAIT_TIME)
-synthesis(cloudlet_server_ip, cloudlet_server_port, "moped_linear_1024", batch=True, wait_time=WAIT_TIME)
-synthesis(cloudlet_server_ip, cloudlet_server_port, "moped_linear_1048576", batch=True, wait_time=WAIT_TIME)
+app_synthesis(ip, port, "speech_access_32", options=options)
+app_synthesis(ip, port, "speech_access_1024", options=options)
+app_synthesis(ip, port, "speech_access_1048576", options=options)
+app_synthesis(ip, port, "speech_linear_32", options=options)
+app_synthesis(ip, port, "speech_linear_1024", options=options)
+app_synthesis(ip, port, "speech_linear_1048576", options=options)
 
-synthesis(cloudlet_server_ip, cloudlet_server_port, "moped_access_32", batch=True, wait_time=WAIT_TIME)
-synthesis(cloudlet_server_ip, cloudlet_server_port, "moped_access_1024", batch=True, wait_time=WAIT_TIME)
-synthesis(cloudlet_server_ip, cloudlet_server_port, "moped_access_1048576", batch=True, wait_time=WAIT_TIME)
-synthesis(cloudlet_server_ip, cloudlet_server_port, "moped_linear_32", batch=True, wait_time=WAIT_TIME)
-synthesis(cloudlet_server_ip, cloudlet_server_port, "moped_linear_1024", batch=True, wait_time=WAIT_TIME)
-synthesis(cloudlet_server_ip, cloudlet_server_port, "moped_linear_1048576", batch=True, wait_time=WAIT_TIME)
+app_synthesis(ip, port, "graphics_access_32", options=options)
+app_synthesis(ip, port, "graphics_access_1024", options=options)
+app_synthesis(ip, port, "graphics_access_1048576", options=options)
+app_synthesis(ip, port, "graphics_linear_32", options=options)
+app_synthesis(ip, port, "graphics_linear_1024", options=options)
+app_synthesis(ip, port, "graphics_linear_1048576", options=options)
 
-synthesis(cloudlet_server_ip, cloudlet_server_port, "moped_access_32", batch=True, wait_time=WAIT_TIME)
-synthesis(cloudlet_server_ip, cloudlet_server_port, "moped_access_1024", batch=True, wait_time=WAIT_TIME)
-synthesis(cloudlet_server_ip, cloudlet_server_port, "moped_access_1048576", batch=True, wait_time=WAIT_TIME)
-synthesis(cloudlet_server_ip, cloudlet_server_port, "moped_linear_32", batch=True, wait_time=WAIT_TIME)
-synthesis(cloudlet_server_ip, cloudlet_server_port, "moped_linear_1024", batch=True, wait_time=WAIT_TIME)
-synthesis(cloudlet_server_ip, cloudlet_server_port, "moped_linear_1048576", batch=True, wait_time=WAIT_TIME)
+app_synthesis(ip, port, "graphics_access_32", options=options)
+app_synthesis(ip, port, "graphics_access_1024", options=options)
+app_synthesis(ip, port, "graphics_access_1048576", options=options)
+app_synthesis(ip, port, "graphics_linear_32", options=options)
+app_synthesis(ip, port, "graphics_linear_1024", options=options)
+app_synthesis(ip, port, "graphics_linear_1048576", options=options)
 
-synthesis(cloudlet_server_ip, cloudlet_server_port, "moped_access_32", batch=True, wait_time=WAIT_TIME)
-synthesis(cloudlet_server_ip, cloudlet_server_port, "moped_access_1024", batch=True, wait_time=WAIT_TIME)
-synthesis(cloudlet_server_ip, cloudlet_server_port, "moped_access_1048576", batch=True, wait_time=WAIT_TIME)
-synthesis(cloudlet_server_ip, cloudlet_server_port, "moped_linear_32", batch=True, wait_time=WAIT_TIME)
-synthesis(cloudlet_server_ip, cloudlet_server_port, "moped_linear_1024", batch=True, wait_time=WAIT_TIME)
-synthesis(cloudlet_server_ip, cloudlet_server_port, "moped_linear_1048576", batch=True, wait_time=WAIT_TIME)
-
-
-
-
-synthesis(cloudlet_server_ip, cloudlet_server_port, "face_access_32", batch=True, wait_time=WAIT_TIME)
-synthesis(cloudlet_server_ip, cloudlet_server_port, "face_access_1024", batch=True, wait_time=WAIT_TIME)
-synthesis(cloudlet_server_ip, cloudlet_server_port, "face_access_1048576", batch=True, wait_time=WAIT_TIME)
-synthesis(cloudlet_server_ip, cloudlet_server_port, "face_linear_32", batch=True, wait_time=WAIT_TIME)
-synthesis(cloudlet_server_ip, cloudlet_server_port, "face_linear_1024", batch=True, wait_time=WAIT_TIME)
-synthesis(cloudlet_server_ip, cloudlet_server_port, "face_linear_1048576", batch=True, wait_time=WAIT_TIME)
-
-synthesis(cloudlet_server_ip, cloudlet_server_port, "face_access_32", batch=True, wait_time=WAIT_TIME)
-synthesis(cloudlet_server_ip, cloudlet_server_port, "face_access_1024", batch=True, wait_time=WAIT_TIME)
-synthesis(cloudlet_server_ip, cloudlet_server_port, "face_access_1048576", batch=True, wait_time=WAIT_TIME)
-synthesis(cloudlet_server_ip, cloudlet_server_port, "face_linear_32", batch=True, wait_time=WAIT_TIME)
-synthesis(cloudlet_server_ip, cloudlet_server_port, "face_linear_1024", batch=True, wait_time=WAIT_TIME)
-synthesis(cloudlet_server_ip, cloudlet_server_port, "face_linear_1048576", batch=True, wait_time=WAIT_TIME)
-
-synthesis(cloudlet_server_ip, cloudlet_server_port, "face_access_32", batch=True, wait_time=WAIT_TIME)
-synthesis(cloudlet_server_ip, cloudlet_server_port, "face_access_1024", batch=True, wait_time=WAIT_TIME)
-synthesis(cloudlet_server_ip, cloudlet_server_port, "face_access_1048576", batch=True, wait_time=WAIT_TIME)
-synthesis(cloudlet_server_ip, cloudlet_server_port, "face_linear_32", batch=True, wait_time=WAIT_TIME)
-synthesis(cloudlet_server_ip, cloudlet_server_port, "face_linear_1024", batch=True, wait_time=WAIT_TIME)
-synthesis(cloudlet_server_ip, cloudlet_server_port, "face_linear_1048576", batch=True, wait_time=WAIT_TIME)
-
-synthesis(cloudlet_server_ip, cloudlet_server_port, "face_access_32", batch=True, wait_time=WAIT_TIME)
-synthesis(cloudlet_server_ip, cloudlet_server_port, "face_access_1024", batch=True, wait_time=WAIT_TIME)
-synthesis(cloudlet_server_ip, cloudlet_server_port, "face_access_1048576", batch=True, wait_time=WAIT_TIME)
-synthesis(cloudlet_server_ip, cloudlet_server_port, "face_linear_32", batch=True, wait_time=WAIT_TIME)
-synthesis(cloudlet_server_ip, cloudlet_server_port, "face_linear_1024", batch=True, wait_time=WAIT_TIME)
-synthesis(cloudlet_server_ip, cloudlet_server_port, "face_linear_1048576", batch=True, wait_time=WAIT_TIME)
-
-synthesis(cloudlet_server_ip, cloudlet_server_port, "face_access_32", batch=True, wait_time=WAIT_TIME)
-synthesis(cloudlet_server_ip, cloudlet_server_port, "face_access_1024", batch=True, wait_time=WAIT_TIME)
-synthesis(cloudlet_server_ip, cloudlet_server_port, "face_access_1048576", batch=True, wait_time=WAIT_TIME)
-synthesis(cloudlet_server_ip, cloudlet_server_port, "face_linear_32", batch=True, wait_time=WAIT_TIME)
-synthesis(cloudlet_server_ip, cloudlet_server_port, "face_linear_1024", batch=True, wait_time=WAIT_TIME)
-synthesis(cloudlet_server_ip, cloudlet_server_port, "face_linear_1048576", batch=True, wait_time=WAIT_TIME)
-
-
-
-
-synthesis(cloudlet_server_ip, cloudlet_server_port, "speech_access_32", batch=True, wait_time=WAIT_TIME)
-synthesis(cloudlet_server_ip, cloudlet_server_port, "speech_access_1024", batch=True, wait_time=WAIT_TIME)
-synthesis(cloudlet_server_ip, cloudlet_server_port, "speech_access_1048576", batch=True, wait_time=WAIT_TIME)
-synthesis(cloudlet_server_ip, cloudlet_server_port, "speech_linear_32", batch=True, wait_time=WAIT_TIME)
-synthesis(cloudlet_server_ip, cloudlet_server_port, "speech_linear_1024", batch=True, wait_time=WAIT_TIME)
-synthesis(cloudlet_server_ip, cloudlet_server_port, "speech_linear_1048576", batch=True, wait_time=WAIT_TIME)
-
-synthesis(cloudlet_server_ip, cloudlet_server_port, "speech_access_32", batch=True, wait_time=WAIT_TIME)
-synthesis(cloudlet_server_ip, cloudlet_server_port, "speech_access_1024", batch=True, wait_time=WAIT_TIME)
-synthesis(cloudlet_server_ip, cloudlet_server_port, "speech_access_1048576", batch=True, wait_time=WAIT_TIME)
-synthesis(cloudlet_server_ip, cloudlet_server_port, "speech_linear_32", batch=True, wait_time=WAIT_TIME)
-synthesis(cloudlet_server_ip, cloudlet_server_port, "speech_linear_1024", batch=True, wait_time=WAIT_TIME)
-synthesis(cloudlet_server_ip, cloudlet_server_port, "speech_linear_1048576", batch=True, wait_time=WAIT_TIME)
-
-synthesis(cloudlet_server_ip, cloudlet_server_port, "speech_access_32", batch=True, wait_time=WAIT_TIME)
-synthesis(cloudlet_server_ip, cloudlet_server_port, "speech_access_1024", batch=True, wait_time=WAIT_TIME)
-synthesis(cloudlet_server_ip, cloudlet_server_port, "speech_access_1048576", batch=True, wait_time=WAIT_TIME)
-synthesis(cloudlet_server_ip, cloudlet_server_port, "speech_linear_32", batch=True, wait_time=WAIT_TIME)
-synthesis(cloudlet_server_ip, cloudlet_server_port, "speech_linear_1024", batch=True, wait_time=WAIT_TIME)
-synthesis(cloudlet_server_ip, cloudlet_server_port, "speech_linear_1048576", batch=True, wait_time=WAIT_TIME)
-
-synthesis(cloudlet_server_ip, cloudlet_server_port, "speech_access_32", batch=True, wait_time=WAIT_TIME)
-synthesis(cloudlet_server_ip, cloudlet_server_port, "speech_access_1024", batch=True, wait_time=WAIT_TIME)
-synthesis(cloudlet_server_ip, cloudlet_server_port, "speech_access_1048576", batch=True, wait_time=WAIT_TIME)
-synthesis(cloudlet_server_ip, cloudlet_server_port, "speech_linear_32", batch=True, wait_time=WAIT_TIME)
-synthesis(cloudlet_server_ip, cloudlet_server_port, "speech_linear_1024", batch=True, wait_time=WAIT_TIME)
-synthesis(cloudlet_server_ip, cloudlet_server_port, "speech_linear_1048576", batch=True, wait_time=WAIT_TIME)
-
-synthesis(cloudlet_server_ip, cloudlet_server_port, "speech_access_32", batch=True, wait_time=WAIT_TIME)
-synthesis(cloudlet_server_ip, cloudlet_server_port, "speech_access_1024", batch=True, wait_time=WAIT_TIME)
-synthesis(cloudlet_server_ip, cloudlet_server_port, "speech_access_1048576", batch=True, wait_time=WAIT_TIME)
-synthesis(cloudlet_server_ip, cloudlet_server_port, "speech_linear_32", batch=True, wait_time=WAIT_TIME)
-synthesis(cloudlet_server_ip, cloudlet_server_port, "speech_linear_1024", batch=True, wait_time=WAIT_TIME)
-synthesis(cloudlet_server_ip, cloudlet_server_port, "speech_linear_1048576", batch=True, wait_time=WAIT_TIME)
-
-
-
-synthesis(cloudlet_server_ip, cloudlet_server_port, "graphics_access_32", batch=True, wait_time=WAIT_TIME)
-synthesis(cloudlet_server_ip, cloudlet_server_port, "graphics_access_1024", batch=True, wait_time=WAIT_TIME)
-synthesis(cloudlet_server_ip, cloudlet_server_port, "graphics_access_1048576", batch=True, wait_time=WAIT_TIME)
-synthesis(cloudlet_server_ip, cloudlet_server_port, "graphics_linear_32", batch=True, wait_time=WAIT_TIME)
-synthesis(cloudlet_server_ip, cloudlet_server_port, "graphics_linear_1024", batch=True, wait_time=WAIT_TIME)
-synthesis(cloudlet_server_ip, cloudlet_server_port, "graphics_linear_1048576", batch=True, wait_time=WAIT_TIME)
-
-synthesis(cloudlet_server_ip, cloudlet_server_port, "graphics_access_32", batch=True, wait_time=WAIT_TIME)
-synthesis(cloudlet_server_ip, cloudlet_server_port, "graphics_access_1024", batch=True, wait_time=WAIT_TIME)
-synthesis(cloudlet_server_ip, cloudlet_server_port, "graphics_access_1048576", batch=True, wait_time=WAIT_TIME)
-synthesis(cloudlet_server_ip, cloudlet_server_port, "graphics_linear_32", batch=True, wait_time=WAIT_TIME)
-synthesis(cloudlet_server_ip, cloudlet_server_port, "graphics_linear_1024", batch=True, wait_time=WAIT_TIME)
-synthesis(cloudlet_server_ip, cloudlet_server_port, "graphics_linear_1048576", batch=True, wait_time=WAIT_TIME)
-
-synthesis(cloudlet_server_ip, cloudlet_server_port, "graphics_access_32", batch=True, wait_time=WAIT_TIME)
-synthesis(cloudlet_server_ip, cloudlet_server_port, "graphics_access_1024", batch=True, wait_time=WAIT_TIME)
-synthesis(cloudlet_server_ip, cloudlet_server_port, "graphics_access_1048576", batch=True, wait_time=WAIT_TIME)
-synthesis(cloudlet_server_ip, cloudlet_server_port, "graphics_linear_32", batch=True, wait_time=WAIT_TIME)
-synthesis(cloudlet_server_ip, cloudlet_server_port, "graphics_linear_1024", batch=True, wait_time=WAIT_TIME)
-synthesis(cloudlet_server_ip, cloudlet_server_port, "graphics_linear_1048576", batch=True, wait_time=WAIT_TIME)
-
-synthesis(cloudlet_server_ip, cloudlet_server_port, "graphics_access_32", batch=True, wait_time=WAIT_TIME)
-synthesis(cloudlet_server_ip, cloudlet_server_port, "graphics_access_1024", batch=True, wait_time=WAIT_TIME)
-synthesis(cloudlet_server_ip, cloudlet_server_port, "graphics_access_1048576", batch=True, wait_time=WAIT_TIME)
-synthesis(cloudlet_server_ip, cloudlet_server_port, "graphics_linear_32", batch=True, wait_time=WAIT_TIME)
-synthesis(cloudlet_server_ip, cloudlet_server_port, "graphics_linear_1024", batch=True, wait_time=WAIT_TIME)
-synthesis(cloudlet_server_ip, cloudlet_server_port, "graphics_linear_1048576", batch=True, wait_time=WAIT_TIME)
-
-synthesis(cloudlet_server_ip, cloudlet_server_port, "graphics_access_32", batch=True, wait_time=WAIT_TIME)
-synthesis(cloudlet_server_ip, cloudlet_server_port, "graphics_access_1024", batch=True, wait_time=WAIT_TIME)
-synthesis(cloudlet_server_ip, cloudlet_server_port, "graphics_access_1048576", batch=True, wait_time=WAIT_TIME)
-synthesis(cloudlet_server_ip, cloudlet_server_port, "graphics_linear_32", batch=True, wait_time=WAIT_TIME)
-synthesis(cloudlet_server_ip, cloudlet_server_port, "graphics_linear_1024", batch=True, wait_time=WAIT_TIME)
-synthesis(cloudlet_server_ip, cloudlet_server_port, "graphics_linear_1048576", batch=True, wait_time=WAIT_TIME)
-
-
-
-synthesis(cloudlet_server_ip, cloudlet_server_port, "mar_access_32", batch=True, wait_time=WAIT_TIME)
-synthesis(cloudlet_server_ip, cloudlet_server_port, "mar_access_1024", batch=True, wait_time=WAIT_TIME)
-synthesis(cloudlet_server_ip, cloudlet_server_port, "mar_access_1048576", batch=True, wait_time=WAIT_TIME)
-synthesis(cloudlet_server_ip, cloudlet_server_port, "mar_linear_32", batch=True, wait_time=WAIT_TIME)
-synthesis(cloudlet_server_ip, cloudlet_server_port, "mar_linear_1024", batch=True, wait_time=WAIT_TIME)
-synthesis(cloudlet_server_ip, cloudlet_server_port, "mar_linear_1048576", batch=True, wait_time=WAIT_TIME)
-
-synthesis(cloudlet_server_ip, cloudlet_server_port, "mar_access_32", batch=True, wait_time=WAIT_TIME)
-synthesis(cloudlet_server_ip, cloudlet_server_port, "mar_access_1024", batch=True, wait_time=WAIT_TIME)
-synthesis(cloudlet_server_ip, cloudlet_server_port, "mar_access_1048576", batch=True, wait_time=WAIT_TIME)
-synthesis(cloudlet_server_ip, cloudlet_server_port, "mar_linear_32", batch=True, wait_time=WAIT_TIME)
-synthesis(cloudlet_server_ip, cloudlet_server_port, "mar_linear_1024", batch=True, wait_time=WAIT_TIME)
-synthesis(cloudlet_server_ip, cloudlet_server_port, "mar_linear_1048576", batch=True, wait_time=WAIT_TIME)
-
-synthesis(cloudlet_server_ip, cloudlet_server_port, "mar_access_32", batch=True, wait_time=WAIT_TIME)
-synthesis(cloudlet_server_ip, cloudlet_server_port, "mar_access_1024", batch=True, wait_time=WAIT_TIME)
-synthesis(cloudlet_server_ip, cloudlet_server_port, "mar_access_1048576", batch=True, wait_time=WAIT_TIME)
-synthesis(cloudlet_server_ip, cloudlet_server_port, "mar_linear_32", batch=True, wait_time=WAIT_TIME)
-synthesis(cloudlet_server_ip, cloudlet_server_port, "mar_linear_1024", batch=True, wait_time=WAIT_TIME)
-synthesis(cloudlet_server_ip, cloudlet_server_port, "mar_linear_1048576", batch=True, wait_time=WAIT_TIME)
-
-synthesis(cloudlet_server_ip, cloudlet_server_port, "mar_access_32", batch=True, wait_time=WAIT_TIME)
-synthesis(cloudlet_server_ip, cloudlet_server_port, "mar_access_1024", batch=True, wait_time=WAIT_TIME)
-synthesis(cloudlet_server_ip, cloudlet_server_port, "mar_access_1048576", batch=True, wait_time=WAIT_TIME)
-synthesis(cloudlet_server_ip, cloudlet_server_port, "mar_linear_32", batch=True, wait_time=WAIT_TIME)
-synthesis(cloudlet_server_ip, cloudlet_server_port, "mar_linear_1024", batch=True, wait_time=WAIT_TIME)
-synthesis(cloudlet_server_ip, cloudlet_server_port, "mar_linear_1048576", batch=True, wait_time=WAIT_TIME)
-
-synthesis(cloudlet_server_ip, cloudlet_server_port, "mar_access_32", batch=True, wait_time=WAIT_TIME)
-synthesis(cloudlet_server_ip, cloudlet_server_port, "mar_access_1024", batch=True, wait_time=WAIT_TIME)
-synthesis(cloudlet_server_ip, cloudlet_server_port, "mar_access_1048576", batch=True, wait_time=WAIT_TIME)
-synthesis(cloudlet_server_ip, cloudlet_server_port, "mar_linear_32", batch=True, wait_time=WAIT_TIME)
-synthesis(cloudlet_server_ip, cloudlet_server_port, "mar_linear_1024", batch=True, wait_time=WAIT_TIME)
-synthesis(cloudlet_server_ip, cloudlet_server_port, "mar_linear_1048576", batch=True, wait_time=WAIT_TIME)
+app_synthesis(ip, port, "mar_access_32", options=options)
+app_synthesis(ip, port, "mar_access_1024", options=options)
+app_synthesis(ip, port, "mar_access_1048576", options=options)
+app_synthesis(ip, port, "mar_linear_32", options=options)
+app_synthesis(ip, port, "mar_linear_1024", options=options)
+app_synthesis(ip, port, "mar_linear_1048576", options=options)
 
