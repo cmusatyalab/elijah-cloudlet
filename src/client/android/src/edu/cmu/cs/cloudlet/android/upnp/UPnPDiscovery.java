@@ -89,7 +89,7 @@ public class UPnPDiscovery{
 	
 	public void showDialogSelectOption() {		
 		AlertDialog.Builder ab = new AlertDialog.Builder(this.context);
-		ab.setTitle("Title");
+		ab.setTitle("Cloudlet Discovery");
 		ab.setIcon(R.drawable.ic_launcher);
 		ab.setSingleChoiceItems(listAdapter, 0, new DialogInterface.OnClickListener() {
 			public void onClick(DialogInterface dialog, int position) {

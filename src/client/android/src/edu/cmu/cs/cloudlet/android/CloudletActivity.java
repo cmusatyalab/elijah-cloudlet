@@ -1,5 +1,3 @@
-package edu.cmu.cs.cloudlet.android;
-
 //
 // Copyright (C) 2011-2012 Carnegie Mellon University
 //
@@ -13,94 +11,78 @@ package edu.cmu.cs.cloudlet.android;
 // WITHOUT ANY WARRANTY; without even the implied warranty of MERCHANTABILITY
 // or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU General Public License
 // for more details.
-//package edu.cmu.cs.cloudlet.android;
-
-import java.io.ByteArrayOutputStream;
-import java.io.File;
-import java.io.FileInputStream;
-import java.io.IOException;
+package edu.cmu.cs.cloudlet.android;
 import java.util.ArrayList;
-import java.util.HashMap;
-import java.util.Map;
 
-import org.msgpack.MessagePack;
-import org.msgpack.packer.BufferPacker;
+import org.teleal.cling.android.AndroidUpnpServiceImpl;
 
 import edu.cmu.cs.cloudlet.android.application.CloudletCameraActivity;
 import edu.cmu.cs.cloudlet.android.application.face.batch.FaceAndroidBatchClientActivity;
+import edu.cmu.cs.cloudlet.android.application.face.batch.FacePreferenceActivity;
 import edu.cmu.cs.cloudlet.android.application.graphics.GraphicsClientActivity;
 import edu.cmu.cs.cloudlet.android.application.speech.SpeechAndroidBatchClientActivity;
 import edu.cmu.cs.cloudlet.android.data.VMInfo;
 import edu.cmu.cs.cloudlet.android.network.CloudletConnector;
+import edu.cmu.cs.cloudlet.android.upnp.DeviceDisplay;
+import edu.cmu.cs.cloudlet.android.upnp.UPnPDiscovery;
 import edu.cmu.cs.cloudlet.android.util.CloudletEnv;
+import edu.cmu.cs.cloudlet.android.util.CloudletPreferenceActivity;
+import edu.cmu.cs.cloudlet.android.util.KLog;
 
 import android.app.Activity;
 import android.app.AlertDialog;
+import android.content.Context;
 import android.content.DialogInterface;
 import android.content.Intent;
+import android.content.SharedPreferences;
 import android.os.Bundle;
-import android.os.Environment;
-import android.util.Log;
+import android.os.Handler;
+import android.os.Message;
+import android.preference.PreferenceManager;
 import android.view.KeyEvent;
+import android.view.Menu;
+import android.view.MenuItem;
 import android.view.View;
 import android.widget.Button;
 
 public class CloudletActivity extends Activity {
-	public static final String SYNTHESIS_SERVER_IP = "192.168.2.2"; // Cloudlet
-	public static final int SYNTHESIS_PORT = 8021;					// Cloudlet port for VM Synthesis
-	public static final int ISR_TRIGGER_PORT = 9091;
-	
+	public static String SYNTHESIS_SERVER_IP = "cloudlet.krha.kr"; // Cloudlet
+	public static int SYNTHESIS_SERVER_PORT = 8021; // Cloudlet port for
+													// VM Synthesis
+
 	public static final String[] applications = { "MOPED", "GRAPHICS", "FACE", "Speech", "NULL" };
 	public static final int TEST_CLOUDLET_APP_MOPED_PORT = 9092; // 19092
 	public static final int TEST_CLOUDLET_APP_GRAPHICS_PORT = 9093;
 	public static final int TEST_CLOUDLET_APP_FACE_PORT = 9876;
 	private static final int TEST_CLOUDLET_APP_SPEECH_PORT = 10191;
 
+	private static final int SYNTHESIS_MENU_ID_SETTINGS = 11123;
+	private static final int SYNTHESIS_MENU_ID_CLEAR = 12311;
+
 	protected Button startConnectionButton;
 	protected CloudletConnector connector;
-//	private UPnPDiscovery serviceDiscovery;
+	private UPnPDiscovery serviceDiscovery;
 	protected int selectedOveralyIndex;
 
 	@Override
 	public void onCreate(Bundle savedInstanceState) {
 		super.onCreate(savedInstanceState);
 		setContentView(R.layout.main);
+		loadPreferneces();
 
 		// Initiate Environment Settings
 		CloudletEnv.instance();
 
-		this.connector = new CloudletConnector(this, CloudletActivity.this);
 		// upnp service binding and show dialog
-		/*
 		this.serviceDiscovery = new UPnPDiscovery(this, CloudletActivity.this, discoveryHandler);
 		getApplicationContext().bindService(new Intent(this, AndroidUpnpServiceImpl.class),
 				this.serviceDiscovery.serviceConnection, Context.BIND_AUTO_CREATE);
-		// serviceDiscovery.showDialogSelectOption();
-		 */
+		serviceDiscovery.showDialogSelectOption();
 
 		// Performance Button
 		findViewById(R.id.testSynthesis).setOnClickListener(clickListener);
-		findViewById(R.id.testSynthesisFromCloud).setOnClickListener(clickListener);
-		findViewById(R.id.testISRCloud).setOnClickListener(clickListener);
-		findViewById(R.id.testISRMobile).setOnClickListener(clickListener);
-		findViewById(R.id.runApplication).setOnClickListener(clickListener);
-
-
 	}
 
-	public byte[] readData(File path) throws IOException {
-        ByteArrayOutputStream bo = new ByteArrayOutputStream();
-        FileInputStream input = new FileInputStream(path);
-        byte[] buffer = new byte[32*1024];
-        while(true) {
-            int count = input.read(buffer);
-            if(count < 0) {
-                break;
-            }
-            bo.write(buffer, 0, count);
-        }
-        return bo.toByteArray();
-    }
 	private void showDialogSelectOverlay(final ArrayList<VMInfo> vmList) {
 		String[] nameList = new String[vmList.size()];
 		for (int i = 0; i < nameList.length; i++) {
@@ -120,7 +102,7 @@ public class CloudletActivity extends Activity {
 					selectedOveralyIndex = position;
 				}
 				VMInfo overlayVM = vmList.get(selectedOveralyIndex);
-				runConnection(SYNTHESIS_SERVER_IP, SYNTHESIS_PORT, overlayVM);
+				runConnection(SYNTHESIS_SERVER_IP, SYNTHESIS_SERVER_PORT, overlayVM);
 			}
 		}).setNegativeButton("Cancel", new DialogInterface.OnClickListener() {
 			public void onClick(DialogInterface dialog, int position) {
@@ -134,84 +116,13 @@ public class CloudletActivity extends Activity {
 	 * Synthesis initiation through HTTP Post
 	 */
 	protected void runConnection(String address, int port, VMInfo overlayVM) {
-		connector.startConnection(address, port, overlayVM);
-	}
-
-	/*
-	 * Synthesis from Cloud Test
-	 */
-	private void showDialogForSynthesis(final String[] applications) {
-
-		// Show Dialog
-		AlertDialog.Builder ab = new AlertDialog.Builder(this);
-		ab.setTitle("Application List");
-		ab.setIcon(R.drawable.ic_launcher);
-		ab.setSingleChoiceItems(applications, 0, new DialogInterface.OnClickListener() {
-			public void onClick(DialogInterface dialog, int position) {
-				selectedOveralyIndex = position;
-			}
-		}).setPositiveButton("Ok", new DialogInterface.OnClickListener() {
-			public void onClick(DialogInterface dialog, int position) {
-				if (position >= 0) {
-					selectedOveralyIndex = position;
-				} else if (applications.length > 0 && selectedOveralyIndex == -1) {
-					selectedOveralyIndex = 0;
-				}
-				String application = applications[selectedOveralyIndex];
-				runHTTPConnection("cloud", application, "cloudlet");
-			}
-		}).setNegativeButton("Cancel", new DialogInterface.OnClickListener() {
-			public void onClick(DialogInterface dialog, int position) {
-				return;
-			}
-		});
-		ab.show();
-	}
-
-	/*
-	 * ISR Client&Server Test method
-	 */
-	private void showDialogSelectISRApplication(final String[] applications, final String command) {
-		// Don't like to use String for passing command type.
-		// But, I more hate to use public CONSTANT for such as temperal test case
-		if (command.equalsIgnoreCase("cloud") == false && command.equalsIgnoreCase("mobile") == false) {
-			showAlert("Error", "command is not cloud or mobile : " + command);
-			return;
+		if (this.connector != null) {
+			this.connector.close();
 		}
-
-		// Show Dialog
-		AlertDialog.Builder ab = new AlertDialog.Builder(this);
-		ab.setTitle("Application List");
-		ab.setIcon(R.drawable.ic_launcher);
-		ab.setSingleChoiceItems(applications, 0, new DialogInterface.OnClickListener() {
-			public void onClick(DialogInterface dialog, int position) {
-				selectedOveralyIndex = position;
-			}
-		}).setPositiveButton("Ok", new DialogInterface.OnClickListener() {
-			public void onClick(DialogInterface dialog, int position) {
-				if (position >= 0) {
-					selectedOveralyIndex = position;
-				} else if (applications.length > 0 && selectedOveralyIndex == -1) {
-					selectedOveralyIndex = 0;
-				}
-				String application = applications[selectedOveralyIndex];
-				runHTTPConnection(command, application, "isr");
-			}
-		}).setNegativeButton("Cancel", new DialogInterface.OnClickListener() {
-			public void onClick(DialogInterface dialog, int position) {
-				return;
-			}
-		});
-		ab.show();
+		this.connector = new CloudletConnector(this, CloudletActivity.this);
+		this.connector.startConnection(address, port, overlayVM);
 	}
 
-	protected void runHTTPConnection(String command, String application, String url) {
-		/*
-		HTTPTriggerClient commandSender = new HTTPTriggerClient(this, CloudletActivity.this, command, application);
-		commandSender.initSetup(url); 
-		commandSender.start();
-		*/
-	}
 
 	/*
 	 * Launch Application as a Standalone
@@ -273,7 +184,6 @@ public class CloudletActivity extends Activity {
 		}
 	}
 
-
 	View.OnClickListener clickListener = new View.OnClickListener() {
 		@Override
 		public void onClick(View v) {
@@ -290,14 +200,6 @@ public class CloudletActivity extends Activity {
 				} else {
 					showAlert("Error", "We found No Overlay");
 				}
-			} else if (v.getId() == R.id.testSynthesisFromCloud) {
-				showDialogForSynthesis(applications);
-			} else if (v.getId() == R.id.testISRCloud) {
-				showDialogSelectISRApplication(applications, "cloud");
-			} else if (v.getId() == R.id.testISRMobile) {
-				showDialogSelectISRApplication(applications, "mobile");
-			} else if (v.getId() == R.id.runApplication) {
-				showDialogSelectApp(applications);
 			}
 		}
 	};
@@ -315,20 +217,9 @@ public class CloudletActivity extends Activity {
 				String ret = data.getExtras().getString("message");
 			}
 		}
-		
+
 		// send close VM message
-		/*
-		HashMap<String, String> messageMap = new HashMap<String, String>();
-		MessagePack msgpack = new MessagePack();
-		BufferPacker packer = msgpack.createBufferPacker();
-		packer.writeMapBegin(message.size());
-		for (Map.Entry<K, V> e : ((Map<K, V>) message).entrySet()) {
-			packer.write(e.getKey());
-			packer.write(e.getValue());
-		}
-		packer.writeMapEnd();
-		this.networkBytes = packer.toByteArray();
-		*/
+		this.connector.closeRequest();
 	}
 
 	public boolean onKeyDown(int keyCode, KeyEvent event) {
@@ -344,34 +235,49 @@ public class CloudletActivity extends Activity {
 		return super.onKeyDown(keyCode, event);
 	}
 
+	public void loadPreferneces() {
+		SharedPreferences prefs = PreferenceManager.getDefaultSharedPreferences(this);
+		CloudletActivity.SYNTHESIS_SERVER_IP = prefs.getString(getString(R.string.synthesis_pref_address),
+				getString(R.string.synthesis_default_ip_address));
+		CloudletActivity.SYNTHESIS_SERVER_PORT = Integer.parseInt(prefs.getString(getString(R.string.synthesis_pref_port),
+				getString(R.string.synthesis_default_port)));
+	}
+
+	@Override
+	public boolean onCreateOptionsMenu(Menu menu) {
+		menu.add(0, SYNTHESIS_MENU_ID_SETTINGS, 0, getString(R.string.synthesis_config_memu_setting));
+		menu.add(0, SYNTHESIS_MENU_ID_CLEAR, 1, getString(R.string.synthesis_config_memu_clear));
+		return super.onCreateOptionsMenu(menu);
+	}
+
+	@Override
+	protected void onResume() {
+		loadPreferneces();
+		super.onResume();
+	}
+
 	@Override
 	public void onDestroy() {
-//		getApplicationContext().unbindService(this.serviceDiscovery.serviceConnection);
-//		this.serviceDiscovery.close();
+		getApplicationContext().unbindService(this.serviceDiscovery.serviceConnection);
+		this.serviceDiscovery.close();
+
 		this.connector.close();
 		super.onDestroy();
 	}
-	
 
 	/*
 	 * Service Discovery Handler
 	 */
-	/*
 	Handler discoveryHandler = new Handler() {
 		public void handleMessage(Message msg) {
 			if (msg.what == UPnPDiscovery.DEVICE_SELECTED) {
 				DeviceDisplay device = (DeviceDisplay) msg.obj;
 				String ipAddress = device.getIPAddress();
-				int port = device.getPort();
-				KLog.println("ip : " + ipAddress + ", port : " + port);
-
-				// connector.startConnection(ipAddress, 9090);
-				// connector.startConnection("128.2.212.207", 9090);
-
+				int port = device.getPort(); // port number of upnp server
+				SYNTHESIS_SERVER_IP = ipAddress;
 			} else if (msg.what == UPnPDiscovery.USER_CANCELED) {
 				showAlert("Info", "Select UPnP Server for Cloudlet Service");
 			}
 		}
 	};
-	*/
 }

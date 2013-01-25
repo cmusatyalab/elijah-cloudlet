@@ -80,13 +80,13 @@ public class Server implements Runnable{
 
 //        Icon icon =new Icon( "image/png", 48, 48, 8, getClass().getResource("icon.png"));
 
-        LocalService<SwitchPower> switchPowerService = new AnnotationLocalServiceBinder().read(SwitchPower.class);
+        LocalService<VMSynthesisService> cloudletPowerService = new AnnotationLocalServiceBinder().read(VMSynthesisService.class);
 
-        switchPowerService.setManager(
-                new DefaultServiceManager(switchPowerService, SwitchPower.class)
+        cloudletPowerService.setManager(
+                new DefaultServiceManager(cloudletPowerService, VMSynthesisService.class)
         );
 
-        return new LocalDevice(identity, type, details, switchPowerService);
+        return new LocalDevice(identity, type, details, cloudletPowerService);
 
         /* Several services can be bound to the same device:
         return new LocalDevice(

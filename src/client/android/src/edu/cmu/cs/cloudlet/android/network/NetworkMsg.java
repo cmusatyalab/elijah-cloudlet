@@ -53,6 +53,13 @@ public class NetworkMsg {
 	public static final int MESSAGE_COMMAND_SUCCESS = 0x01;
 	public static final int MESSAGE_COMMAND_FAIELD = 0x02;
 	public static final int MESSAGE_COMMAND_ON_DEMAND = 0x03;
+	public static final int MESSAGE_COMMAND_FINISH_SUCCESS = 0x04;
+
+	// synthesis option
+	public static final String KEY_SYNTHESIS_OPTION = "synthesis_option";
+	public static final String SYNTHESIS_OPTION_DISPLAY_VNC = "option_display_vnc";
+	public static final String SYNTHESIS_OPTION_EARLY_START = "option_early_start";
+	public static final String SYNTHESIS_OPTION_SHOW_STATISTICS = "option_show_statistics";
 
 	private File selectedfile;
 	private byte[] networkBytes;
@@ -72,10 +79,16 @@ public class NetworkMsg {
 	}
 
 	public static NetworkMsg MSG_send_overlaymeta(VMInfo overlay) {
-		HashMap<String, Integer> overlay_header = new HashMap<String, Integer>();
+		HashMap<String, Object> overlay_header = new HashMap<String, Object>();
 		overlay_header.put(KEY_COMMAND, MESSAGE_COMMAND_SEND_META);
 		overlay_header.put(KEY_META_SIZE, (int) overlay.getMetaFile().length());
 
+
+		// synthesis option
+		HashMap<String, Boolean> options = new HashMap<String, Boolean>();		
+		options.put(SYNTHESIS_OPTION_DISPLAY_VNC, false);
+		options.put(SYNTHESIS_OPTION_EARLY_START, false);		
+		overlay_header.put(KEY_SYNTHESIS_OPTION, options);
 		NetworkMsg msg;
 		try {
 			msg = new NetworkMsg(overlay_header);
@@ -105,6 +118,20 @@ public class NetworkMsg {
 		
 	}
 
+	public static NetworkMsg MSG_send_finishMessage() {
+		HashMap<String, Object> finishHeader = new HashMap<String, Object>();
+		finishHeader.put(NetworkMsg.KEY_COMMAND, NetworkMsg.MESSAGE_COMMAND_FINISH);
+		finishHeader.put("Measure", "Not available yet");
+
+		NetworkMsg msg = null;
+		try {
+			msg = new NetworkMsg(finishHeader);
+		} catch (IOException e) {
+			e.printStackTrace();
+		}
+		return msg;
+	}
+	
 	public File getSelectedFile() {
 		return this.selectedfile;
 	}
@@ -130,8 +157,7 @@ public class NetworkMsg {
 		}else{
 			command = ((Integer) this.messageMap.get(KEY_COMMAND)).intValue();
 		}
-		
-		KLog.println("Recived Command : " + command);
 		return command;
 	}
+
 }

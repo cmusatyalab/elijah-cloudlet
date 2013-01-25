@@ -144,7 +144,7 @@ public class NetworkClientSender extends Thread {
 				networkWriter.flush(); // flush everytime for accurate time
 										// measure
 			}
-			// KLog.println("Send Message " + msg);
+//			 KLog.println("Send Message " + msg);
 		} catch (IOException e) {
 			e.printStackTrace();
 		}

@@ -21,12 +21,14 @@ import java.util.HashMap;
 import java.util.Iterator;
 import java.util.Map;
 import java.util.Vector;
+import java.util.Map.Entry;
 
 import org.apache.http.util.ByteArrayBuffer;
 import org.json.JSONArray;
 import org.json.JSONException;
 import org.json.JSONObject;
 import org.msgpack.MessagePack;
+import org.msgpack.packer.BufferPacker;
 import org.msgpack.type.ArrayValue;
 import org.msgpack.type.Value;
 import org.msgpack.type.ValueType;
@@ -96,6 +98,11 @@ public class CloudletConnector {
 		networkClient.requestCommand(networkMsg);
 	}
 	
+	public void closeRequest(){
+		NetworkMsg networkMsg = NetworkMsg.MSG_send_finishMessage();
+		networkClient.requestCommand(networkMsg);
+	}
+	
 	public void updateMessage(String dialogMessage){
 		if(mDialog != null && mDialog.isShowing()){
 			mDialog.setMessage(dialogMessage);
@@ -134,7 +141,7 @@ public class CloudletConnector {
 				// Response parsing
 				ByteArrayBuffer responseArray = (ByteArrayBuffer) msg.obj;				
 				String resString = new String(responseArray.toByteArray());
-				KLog.println(resString);
+//				KLog.println(resString);
 				
 				// unpack messsage-pack			
 				HashMap messageMap = null;
@@ -154,7 +161,6 @@ public class CloudletConnector {
 					KLog.println("3. Synthesis finished successfully");
 					updateMessage("Step 3. Synthesis is done..");
 					Measure.put(Measure.NET_ACK_OVERLAY_TRASFER);
-
 					if(mDialog != null){
 						mDialog.dismiss();
 					}
@@ -166,6 +172,9 @@ public class CloudletConnector {
 					break;
 				case NetworkMsg.MESSAGE_COMMAND_ON_DEMAND:
 					handleOverlayRequest(messageMap);
+					break;
+				case NetworkMsg.MESSAGE_COMMAND_FINISH_SUCCESS:
+					handleFinishSuccess(messageMap);
 					break;
 				}
 			}
@@ -228,6 +237,16 @@ public class CloudletConnector {
 			e.printStackTrace();
 		}
 	}
+
+	private void handleFinishSuccess(HashMap messageMap) {
+		this.close();
+		new AlertDialog.Builder(mContext).setTitle("Info")
+		.setIcon(R.drawable.ic_launcher)
+		.setMessage("Finished gracefully")
+		.setNegativeButton("Confirm", null)
+		.show();
+	}
+	
 	// End Command Handler
 	
 	private void showAlertDialog(String errorMsg) {
@@ -236,7 +255,7 @@ public class CloudletConnector {
 			.setIcon(R.drawable.ic_launcher)
 			.setMessage(errorMsg)
 			.setNegativeButton("Confirm", null)
-			.show();			
+			.show();
 		}
 	}
 }

@@ -25,23 +25,19 @@ public final class R {
         public static final int fluidgl_view=0x7f06000c;
         public static final int image1=0x7f060003;
         public static final int linearLayout1=0x7f060007;
-        public static final int presstospeak_button=0x7f060018;
+        public static final int presstospeak_button=0x7f060014;
         public static final int relativeLayout1=0x7f060005;
-        public static final int runApplication=0x7f060016;
-        public static final int scrollView=0x7f060017;
-        public static final int scrollView1=0x7f060019;
+        public static final int scrollView=0x7f060013;
+        public static final int scrollView1=0x7f060015;
         public static final int sendButton=0x7f060001;
-        public static final int send_button=0x7f06001a;
+        public static final int send_button=0x7f060016;
         public static final int testAsia=0x7f060011;
         public static final int testCloudlet=0x7f06000d;
         public static final int testEU=0x7f060010;
         public static final int testEast=0x7f06000e;
-        public static final int testISRCloud=0x7f060014;
-        public static final int testISRMobile=0x7f060015;
         public static final int testSynthesis=0x7f060012;
-        public static final int testSynthesisFromCloud=0x7f060013;
         public static final int testWest=0x7f06000f;
-        public static final int text=0x7f06001b;
+        public static final int text=0x7f060017;
         public static final int text1=0x7f060004;
         public static final int use_this_dir_button=0x7f06000a;
     }
@@ -53,25 +49,36 @@ public final class R {
         public static final int graphics=0x7f030004;
         public static final int graphics_main=0x7f030005;
         public static final int main=0x7f030006;
-        public static final int speech=0x7f030007;
-        public static final int speechmain=0x7f030008;
+        public static final int main_reserach=0x7f030007;
+        public static final int speech=0x7f030008;
+        public static final int speechmain=0x7f030009;
     }
     public static final class string {
-        public static final int app_name=0x7f050001;
-        public static final int default_directory=0x7f050004;
-        public static final int default_ipaddress=0x7f050002;
-        public static final int default_portnumber=0x7f050003;
-        public static final int hello=0x7f050000;
-        public static final int intent_key_directory=0x7f05000a;
-        public static final int menu_clear=0x7f050009;
-        public static final int menu_settings=0x7f050008;
-        public static final int pref_directory=0x7f050007;
-        public static final int pref_ipaddress=0x7f050005;
-        public static final int pref_portnumber=0x7f050006;
+        public static final int app_name=0x7f050000;
+        public static final int default_directory=0x7f050003;
+        public static final int default_ipaddress=0x7f050001;
+        public static final int default_portnumber=0x7f050002;
+        public static final int intent_key_directory=0x7f050009;
+        public static final int menu_clear=0x7f050008;
+        public static final int menu_settings=0x7f050007;
+        public static final int pref_directory=0x7f050006;
+        public static final int pref_ipaddress=0x7f050004;
+        public static final int pref_portnumber=0x7f050005;
+        public static final int synthesis_button_title=0x7f05000b;
+        public static final int synthesis_config_memu_clear=0x7f050011;
+        public static final int synthesis_config_memu_ip=0x7f050012;
+        public static final int synthesis_config_memu_port=0x7f050013;
+        public static final int synthesis_config_memu_setting=0x7f050010;
+        public static final int synthesis_default_ip_address=0x7f05000c;
+        public static final int synthesis_default_port=0x7f05000d;
+        public static final int synthesis_label_title=0x7f05000a;
+        public static final int synthesis_pref_address=0x7f05000e;
+        public static final int synthesis_pref_port=0x7f05000f;
     }
     public static final class xml {
-        public static final int face_preferences=0x7f040000;
-        public static final int preferences=0x7f040001;
-        public static final int speech_preferences=0x7f040002;
+        public static final int cloudlet_preferences=0x7f040000;
+        public static final int face_preferences=0x7f040001;
+        public static final int preferences=0x7f040002;
+        public static final int speech_preferences=0x7f040003;
     }
 }

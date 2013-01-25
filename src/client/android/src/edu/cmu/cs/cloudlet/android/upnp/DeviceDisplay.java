@@ -5,6 +5,8 @@ import java.net.URL;
 import org.teleal.cling.model.meta.Device;
 import org.teleal.cling.model.meta.RemoteDevice;
 
+import edu.cmu.cs.cloudlet.android.util.KLog;
+
 public class DeviceDisplay {
     Device device;
 
@@ -38,7 +40,8 @@ public class DeviceDisplay {
     }
     
     public String getIPAddress(){
-    	URL address = ((RemoteDevice) device).getIdentity().getDescriptorURL();    	
+    	URL address = ((RemoteDevice) device).getIdentity().getDescriptorURL();  
+    	KLog.println(device.toString());
     	return address.getHost();
     }
 

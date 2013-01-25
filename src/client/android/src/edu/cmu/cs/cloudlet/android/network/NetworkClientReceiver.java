@@ -78,7 +78,7 @@ public class NetworkClientReceiver extends Thread {
 		if(messageLength == -1){
 			return null;
 		}
-		KLog.println("Received message size : " + messageLength);
+//		KLog.println("Received message size : " + messageLength);
 		byte[] msgpackByte = new byte[messageLength];
 		reader.read(msgpackByte, 0, msgpackByte.length);
 		
@@ -87,20 +87,6 @@ public class NetworkClientReceiver extends Thread {
 	
 		return msgPackBuffer;
 	}
-
-	/*
-	 * Network Command Handler method
-	 * --> Moved to to Cloudlet Connector Class
-	 *
-	private void handleVMList(NetworkMsg recvMsg) {
-	}	
-	private void handleTrasferStart(NetworkMsg msg) {
-	}
-	private void handleVMLaunch(NetworkMsg msg) {
-	}
-	private void handleVMStop(NetworkMsg msg) {
-	}
-	 */
 	
 	public void close() {
 		this.isThreadRun = false;		
