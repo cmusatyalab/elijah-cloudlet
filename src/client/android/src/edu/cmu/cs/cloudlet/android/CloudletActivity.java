@@ -259,7 +259,8 @@ public class CloudletActivity extends Activity {
 	@Override
 	public void onDestroy() {
 		getApplicationContext().unbindService(this.serviceDiscovery.serviceConnection);
-		this.serviceDiscovery.close();
+		if (this.serviceDiscovery != null)
+			this.serviceDiscovery.close();
 
 		this.connector.close();
 		super.onDestroy();

@@ -33,6 +33,8 @@ from Configuration import Const as Cloudlet_Const
 from lzma import LZMADecompressor
 from datetime import datetime
 from synthesis_protocol import Protocol as Protocol
+from upnp_server import UPnPServer, UPnPError
+
 
 Log = cloudlet.CloudletLog("./log_synthesis/log_synthesis-%s" % str(datetime.now()).split(" ")[1])
 
@@ -391,11 +393,12 @@ class SynthesisHandler(SocketServer.StreamRequestHandler):
                 cloudlet.synthesis_statistics(meta_info, temp_overlay_filepath, \
                         mem_access_list, disk_access_list, \
                         print_out=Log)
-        except Exception, e:
+        except Exception as e:
             sys.stderr.write(traceback.format_exc())
             sys.stderr.write("%s" % str(e))
             sys.stderr.write("handler raises exception\n")
             self.terminate()
+            raise e
 
 
     def finish(self):
@@ -491,6 +494,7 @@ def get_local_ipaddress():
 
 
 class SynthesisServer(SocketServer.TCPServer):
+
     def __init__(self, args):
         settings, args = SynthesisServer.process_command_line(args)
         config_file, error_msg = SynthesisServer.parse_configfile(settings.config_filename)
@@ -504,11 +508,23 @@ class SynthesisServer(SocketServer.TCPServer):
         self.allow_reuse_address = True
         self.socket.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
         self.socket.setsockopt(socket.IPPROTO_TCP, socket.TCP_NODELAY, 1)
-        print "* Server configuration"
-        print " - Open TCP Server at %s" % (str(server_address))
-        print " - Disable Nalge(No TCP delay)  : %s" \
-                % str(self.socket.getsockopt(socket.IPPROTO_TCP, socket.TCP_NODELAY))
-        print "-"*50
+        Log.write("* Server configuration\n")
+        Log.write(" - Open TCP Server at %s\n" % (str(server_address)))
+        Log.write(" - Disable Nalge(No TCP delay)  : %s\n" \
+                % str(self.socket.getsockopt(socket.IPPROTO_TCP, socket.TCP_NODELAY)))
+        Log.write("-"*50)
+        Log.write("\n")
+
+        # Start UPnP Server
+        try:
+            self.upnp_server = UPnPServer()
+            self.upnp_server.start()
+        except UPnPError as e:
+            Log.write(str(e))
+            Log.write("[Warning] Cannot start UPnP Server\n")
+            self.upnp_server = None
+        Log.write("[INFO] Start UPnP Server\n")
+        Log.flush()
 
     def handle_error(self, request, client_address):
         #SocketServer.TCPServer.handle_error(self, request, client_address)
@@ -517,7 +533,10 @@ class SynthesisServer(SocketServer.TCPServer):
     def terminate(self):
         if self.socket != -1:
             self.socket.close()
-        sys.stderr.write("terminate client connection\n")
+        if self.upnp_server != None:
+            Log.write("terminate UPnP Server\n")
+            self.upnp_server.terminate()
+        Log.write("terminate client connection\n")
 
     @staticmethod
     def process_command_line(argv):
