@@ -18,6 +18,7 @@
 import urllib
 import pprint
 import math
+import os
 
 class IPGelocationError(Exception):
     pass
@@ -67,30 +68,48 @@ def _is_float(str):
         return False
 
 
-def ip2location(ip_address):
-    query_str = "http://api.hostip.info/get_html.php?ip=%s&position=true" % (ip_address)
-    response = urllib.urlopen(query_str).read().strip()
-    ret_items = [item.strip() for item in response.split("\n") if len(item) > 0]
-    ret_dict = dict()
-    for item in ret_items:
-        key, value = item.split(":")
-        key = key.strip()
-        value = value.strip()
-        if _is_float(value):
-            ret_dict[key] = float(value)
-        else:
-            ret_dict[key] = value
+class IPLocation(object):
+    def __init__(self, maxmind_db_path=None):
+        self.maxmind_db_path = maxmind_db_path
 
-    return IPGeolocation(ret_dict)
+    def ip2location(self, ip_address):
+        # get getlocation from http://maxmind.com/
+        import pygeoip
+        if self.maxmind_db_path == None or os.path.exists(self.maxmind_db_path) == False:
+            raise IPGelocationError("Cannot find maxmind DB at : %s" % self.maxmind_db_path)
+        self.gi = pygeoip.GeoIP(self.maxmind_db_path, pygeoip.MEMORY_CACHE)
+        ret_dict = self.gi.record_by_addr(ip_address)
+        ret_dict['ip_address'] = ip_address
 
+        return IPGeolocation(ret_dict)
+
+    def ip2location_hostip(self, ip_address):
+        # get geolocation from http://www.hostip.info/
+        query_str = "http://api.hostip.info/get_html.php?ip=%s&position=true" % (ip_address)
+        response = urllib.urlopen(query_str).read().strip()
+        ret_items = [item.strip() for item in response.split("\n") if len(item) > 0]
+        ret_dict = dict()
+        for item in ret_items:
+            key, value = item.split(":")
+            key = key.strip()
+            value = value.strip()
+            if _is_float(value):
+                ret_dict[key] = float(value)
+            else:
+                ret_dict[key] = value
+
+        return IPGeolocation(ret_dict)
 
 
 if __name__ == "__main__":
-    print(ip2location("128.2.210.197"))
-    print(ip2location("128.2.210.147"))
-    print(ip2location("129.2.233.197"))
-    #print(ip2location("143.248.233.197"))
+    iploc= IPLocation(maxmind_db_path="./GeoLiteCity.dat")
+    print(iploc.ip2location("128.2.210.197"))
+    print(iploc.ip2location("1.2.210.147"))
+    print(iploc.ip2location("192.2.233.197"))
+    print(iploc.ip2location("143.248.233.197"))
 
-    loc1 = ip2location("128.2.210.197") 
-    loc2 = ip2location("129.2.233.1")
+    loc1 = iploc.ip2location("128.2.210.197") 
+    loc2 = iploc.ip2location("129.2.233.1")
+    loc3 = iploc.ip2location("143.248.233.197")
     print "disktance between (%s) and (%s) is %f km" % (loc1.city, loc2.city, loc1-loc2)
+    print "disktance between (%s) and (%s) is %f km" % (loc1.city, loc3.city, loc1-loc3)
