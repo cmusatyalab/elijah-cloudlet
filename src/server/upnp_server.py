@@ -31,7 +31,7 @@ class UPnPServer(threading.Thread):
                         self.proc = None
                         break
                     if return_code != 0:
-                        sys.stderr("[Error] UPnP is closed unexpectedly")
+                        sys.stderr.write("[Error] UPnP is closed unexpectedly")
         except KeyboardInterrupt, e:
             self.terminate()
 

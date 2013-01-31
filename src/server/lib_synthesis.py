@@ -328,35 +328,48 @@ class SynthesisHandler(SocketServer.StreamRequestHandler):
             self.delta_proc.time_queue = time_delta
             self.fuse_thread.time_queue = time_fuse
 
-            # resume VM
-            self.resumed_VM = cloudlet.ResumedVM(modified_img, modified_mem, self.fuse)
-            time_start_resume = time.time()
-            self.resumed_VM.start()
-            time_end_resume = time.time()
-
-            # start processes
-            download_process.start()
-            decomp_process.start()
-            self.delta_proc.start()
-            self.fuse_thread.start()
 
             if self.synthesis_option.get(Protocol.SYNTHESIS_OPTION_EARLY_START, False):
-                # return success right after resuming VM
+                # 1. resume VM
+                self.resumed_VM = cloudlet.ResumedVM(modified_img, modified_mem, self.fuse)
+                time_start_resume = time.time()
+                self.resumed_VM.start()
+                time_end_resume = time.time()
+
+                # 2. start processes
+                download_process.start()
+                decomp_process.start()
+                self.delta_proc.start()
+                self.fuse_thread.start()
+
+                # 3. return success right after resuming VM
                 # before receiving all chunks
                 self.resumed_VM.join()
                 self.ret_success()
-                # then wait fuse end
-                self.fuse_thread.join()
-                end_time = time.time()
 
-            else:
-                # first wait for fuse end
+                # 4. then wait fuse end
                 self.fuse_thread.join()
-                end_time = time.time()
-                # then return success to client
+            else:
+                # 1. start processes
+                download_process.start()
+                decomp_process.start()
+                self.delta_proc.start()
+                self.fuse_thread.start()
+
+                # 2. wait for fuse end
+                self.fuse_thread.join()
+
+                # 3. resume VM
+                self.resumed_VM = cloudlet.ResumedVM(modified_img, modified_mem, self.fuse)
+                time_start_resume = time.time()
+                self.resumed_VM.start()
+                time_end_resume = time.time()
+
+                # 4. return success to client
                 self.resumed_VM.join()
                 self.ret_success()
-            total_time = (end_time-start_time)
+
+            end_time = time.time()
 
             # printout result
             SynthesisHandler.print_statistics(start_time, end_time, \
