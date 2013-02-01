@@ -20,11 +20,12 @@ import pprint
 import math
 import os
 
+
 class IPGelocationError(Exception):
     pass
 
 
-class IPGeolocation(object):
+class Location(object):
     def __init__(self, properties):
         for k, v in properties.iteritems():
             setattr(self, k.lower(), v)
@@ -46,18 +47,22 @@ class IPGeolocation(object):
         return self.__dict__[item]
 
     def __sub__(self, other):
-        if type(other) != IPGeolocation:
+        if type(other) != Location:
             raise IPGelocationError("Invalid class")
         lat1, lon1 = self.latitude, self.longitude
-        lat2, lon2 = other.latitude, other.longitude
-        radius = 6371 # km
-        dlat = math.radians(lat2-lat1)
-        dlon = math.radians(lon2-lon1)
-        a = math.sin(dlat/2) * math.sin(dlat/2) + math.cos(math.radians(lat1)) \
-                * math.cos(math.radians(lat2)) * math.sin(dlon/2) * math.sin(dlon/2)
-        c = 2 * math.atan2(math.sqrt(a), math.sqrt(1-a))
-        distance = radius * c
-        return distance
+        lat2, lon2 = other.latitude, other.longitudej
+        return geo_distance(lat1, lon1, lat2, lon2)
+
+
+def geo_distance(lat1, lon1, lat2, lon2):
+    radius = 6371 # km
+    dlat = math.radians(lat2-lat1)
+    dlon = math.radians(lon2-lon1)
+    a = math.sin(dlat/2) * math.sin(dlat/2) + math.cos(math.radians(lat1)) \
+            * math.cos(math.radians(lat2)) * math.sin(dlon/2) * math.sin(dlon/2)
+    c = 2 * math.atan2(math.sqrt(a), math.sqrt(1-a))
+    distance = radius * c
+    return distance
 
 
 def _is_float(str):
@@ -69,8 +74,11 @@ def _is_float(str):
 
 
 class IPLocation(object):
-    def __init__(self, maxmind_db_path=None):
-        self.maxmind_db_path = maxmind_db_path
+    CUR_PATH = os.path.dirname(os.path.abspath(__file__))
+    MAXMIND_DB_PATH = os.path.join(CUR_PATH, "db", "GeoLiteCity.dat")
+
+    def __init__(self):
+        self.maxmind_db_path = IPLocation.MAXMIND_DB_PATH
 
     def ip2location(self, ip_address):
         # get getlocation from http://maxmind.com/
@@ -81,7 +89,7 @@ class IPLocation(object):
         ret_dict = self.gi.record_by_addr(ip_address)
         ret_dict['ip_address'] = ip_address
 
-        return IPGeolocation(ret_dict)
+        return Location(ret_dict)
 
     def ip2location_hostip(self, ip_address):
         # get geolocation from http://www.hostip.info/
@@ -98,7 +106,7 @@ class IPLocation(object):
             else:
                 ret_dict[key] = value
 
-        return IPGeolocation(ret_dict)
+        return Location(ret_dict)
 
 
 if __name__ == "__main__":
