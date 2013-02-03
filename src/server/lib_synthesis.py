@@ -34,7 +34,8 @@ from lzma import LZMADecompressor
 from datetime import datetime
 from synthesis_protocol import Protocol as Protocol
 from upnp_server import UPnPServer, UPnPError
-
+from discovery.ds_register import RegisterError
+from discovery.ds_register import RegisterThread
 
 Log = cloudlet.CloudletLog("./log_synthesis/log_synthesis-%s" % str(datetime.now()).split(" ")[1])
 
@@ -48,7 +49,11 @@ class Synthesis_Const(object):
     IS_EARLY_START          = False
     IS_PRINT_STATISTICS     = False
 
-    # Web server for Andorid Client
+    # Discovery
+    DIRECTORY_SERVER = "hail.elijah.cs.cmu.edu:8000"
+    DIRECTORY_UPDATE_PERIOD = 60
+
+    # Synthesis Server
     LOCAL_IPADDRESS = 'localhost'
     SERVER_PORT_NUMBER = 8021
 
@@ -537,6 +542,19 @@ class SynthesisServer(SocketServer.TCPServer):
             Log.write("[Warning] Cannot start UPnP Server\n")
             self.upnp_server = None
         Log.write("[INFO] Start UPnP Server\n")
+
+        # Start Resiger Server
+        try:
+            self.register_client = RegisterThread(
+                    Synthesis_Const.DIRECTORY_SERVER,
+                    log=Log,
+                    update_period=Synthesis_Const.DIRECTORY_UPDATE_PERIOD)
+            self.register_client.start()
+            Log.write("[INFO] Register to Cloudlet direcory service\n")
+        except RegisterError as e:
+            Log.write(str(e))
+            Log.write("[Warning] Cannot register Cloudlet to central server\n")
+        
         Log.flush()
 
     def handle_error(self, request, client_address):
@@ -547,9 +565,12 @@ class SynthesisServer(SocketServer.TCPServer):
         if self.socket != -1:
             self.socket.close()
         if self.upnp_server != None:
-            Log.write("terminate UPnP Server\n")
+            Log.write("[TERMINATE] Terminate UPnP Server\n")
             self.upnp_server.terminate()
-        Log.write("terminate client connection\n")
+        if self.register_client != None:
+            Log.write("[TERMINATE] Deregister from directory service\n")
+            self.register_client.terminate()
+        Log.write("[TERMINATE] Finish synthesis server connection\n")
 
     @staticmethod
     def process_command_line(argv):

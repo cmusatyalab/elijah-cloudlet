@@ -1,1 +1,4 @@
-db/
+project/ds/network/hostip_db/
+project/ds/network/db/
+virt/
+project/cloudlet_ds.db

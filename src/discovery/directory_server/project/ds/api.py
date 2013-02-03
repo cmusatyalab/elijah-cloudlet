@@ -38,7 +38,7 @@ class CloudletResource(ModelResource):
         resource_name = 'Cloudlet'
         list_allowed_methods = ['get', 'post', 'put', 'delete']
         excludes = ['pub_date', 'mod_time', 'id']
-        filtering = {"mod_time":ALL, "status":ALL}
+        filtering = {"mod_time":ALL, "status":ALL, "ip_address":ALL}
 
         search_result = ['latitude', 'longitude', 'ip_address']
 
@@ -65,9 +65,6 @@ class CloudletResource(ModelResource):
         location = cost.ip2location(cloudlet_ip)
         bundle.obj.longitude = location.longitude
         bundle.obj.latitude = location.latitude
-        # set status as running
-        if not bundle.obj.status:
-            bundle.obj.status = 'RUN'
         # update latest update time
         self.mod_time = datetime.datetime.now()
         return bundle
