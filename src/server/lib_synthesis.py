@@ -24,6 +24,7 @@ import msgpack
 import tempfile
 import struct
 import lib_cloudlet as cloudlet
+import db_cloudlet
 import shutil
 
 from pprint import pformat
@@ -260,16 +261,17 @@ class SynthesisHandler(SocketServer.StreamRequestHandler):
             header = msgpack.unpackb(header_data)
 
             base_hashvalue = header.get(Cloudlet_Const.META_BASE_VM_SHA256, None)
+
             # check base VM
-            for base_vm in BaseVM_list:
-                if base_hashvalue == base_vm.get('sha256', None):
-                    base_path = base_vm['path']
+            for (hash_value, disk_path) in BaseVM_list:
+                if base_hashvalue == hash_value:
                     print "[INFO] New client request %s VM" \
-                            % (base_path)
-                    return [base_path, header]
+                            % (disk_path)
+                    return [disk_path, header]
 
         message = "Cannot find matching Base VM\nsha256: %s" % (base_hashvalue)
         print message
+
         self.ret_fail(message)
         return None
 
@@ -515,7 +517,7 @@ class SynthesisServer(SocketServer.TCPServer):
 
     def __init__(self, args):
         settings, args = SynthesisServer.process_command_line(args)
-        config_file, error_msg = SynthesisServer.parse_configfile(settings.config_filename)
+        config_file, error_msg = SynthesisServer.check_basevm()
         if error_msg:
             raise RapidSynthesisError(error_msg)
 
@@ -576,57 +578,36 @@ class SynthesisServer(SocketServer.TCPServer):
     def process_command_line(argv):
         global operation_mode
 
-        parser = OptionParser(usage="usage: %prog -c config_file" + " [option]",
+        parser = OptionParser(usage="usage: %prog " + " [option]",
                 version="Rapid VM Synthesis(piping) 0.1")
-        parser.add_option(
-                '-c', '--config', action='store', type='string', dest='config_filename',
-                help='Set configuration file, which has base VM information, to work as a server mode.')
-        parser.add_option(
-                '-s', '--statistics', action='store_true', dest='is_print_statistics', default=False,
-                help='print synthesis statistics including overlay accessed ratio')
         settings, args = parser.parse_args(argv)
-        if (settings.config_filename == None):
-            parser.error('program need configuration file')
 
         return settings, args
 
 
     @staticmethod
-    def parse_configfile(filename):
+    def check_basevm():
         global BaseVM_list
-        import json
-        if not os.path.exists(filename):
-            return None, "configuration file is not exist : " + filename
 
-        try:
-            json_data = json.load(open(filename, 'r'), "UTF-8")
-        except ValueError:
-            return None, "Invlid JSON format : " + open(filename, 'r').read()
-        if not json_data.has_key('VM'):
-            return None, "JSON Does not have 'VM' Key"
-
-
-        VM_list = json_data['VM']
+        vm_list = db_cloudlet.list_basevm() # list of (hash, path)
         print "-"*50
         print "* Base VM Configuration"
-        for vm_info in VM_list:
+        for index, (hash_value, disk_path) in enumerate(vm_list):
             # check file location
-            base_path = os.path.abspath(vm_info['path'])
             (base_diskmeta, base_mempath, base_memmeta) = \
-                    Cloudlet_Const.get_basepath(base_path)
-            vm_info['path'] = os.path.abspath(vm_info['path'])
-            if not os.path.exists(base_path):
-                print "Error, disk image (%s) is not exist" % (vm_info['path'])
+                    Cloudlet_Const.get_basepath(disk_path)
+            if not os.path.exists(disk_path):
+                print "Error, disk image (%s) is not exist" % (disk_path)
                 sys.exit(2)
             if not os.path.exists(base_mempath):
                 print "Error, memory snapshot (%s) is not exist" % (base_mempath)
                 sys.exit(2)
 
-            BaseVM_list.append(vm_info)
-            print " - %s : (Disk %d MB, Memory %d MB)" % \
-                    (vm_info['name'], os.path.getsize(vm_info['path'])/1024/1024, \
+            BaseVM_list.append((hash_value, disk_path))
+            print " %d : %s (Disk %d MB, Memory %d MB)" % \
+                    (index, disk_path, os.path.getsize(disk_path)/1024/1024, \
                     os.path.getsize(base_mempath)/1024/1024)
         print "-"*50
 
-        return json_data, None
+        return vm_list, None
 

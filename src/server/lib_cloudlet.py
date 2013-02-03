@@ -29,6 +29,7 @@ import msgpack
 import copy
 import libvirt
 import shutil
+import db_cloudlet
 from Configuration import Const, Options
 from delta import DeltaList
 from delta import DeltaItem
@@ -160,9 +161,9 @@ def create_baseVM(disk_image_path):
     # :param disk_image_path : file path of the VM disk image
     # :returns: (generated base VM disk path, generated base VM memory path)
 
+    # Check DB
     (base_diskmeta, base_mempath, base_memmeta) = \
             Const.get_basepath(disk_image_path)
-    base_hashpath = Const.get_basehash_path(disk_image_path)
 
     # check sanity
     if not os.path.exists(Const.TEMPLATE_XML):
@@ -186,8 +187,6 @@ def create_baseVM(disk_image_path):
         os.unlink(base_mempath)
     if os.path.exists(base_memmeta):
         os.unlink(base_memmeta)
-    if os.path.exists(base_hashpath):
-        os.unlink(base_hashpath)
 
     # edit default XML to have new disk path
     conn = get_libvirt_connection()
@@ -207,24 +206,25 @@ def create_baseVM(disk_image_path):
         # generate disk hashing
         # TODO: need more efficient implementation, e.g. bisect
         base_hashvalue = Disk.hashing(disk_image_path, base_diskmeta, print_out=sys.stdout)
-        open(base_hashpath, "wrb").write(base_hashvalue)
     except Exception as e:
         sys.stderr.write(str(e)+"\n")
         if machine:
             machine.destroy()
         sys.exit(1)
 
+    # save the result to DB
+    db_cloudlet.create_basevm(base_hashvalue, disk_image_path)
+
     # write protection
     os.chmod(disk_image_path, stat.S_IRUSR)
     os.chmod(base_diskmeta, stat.S_IRUSR)
     os.chmod(base_mempath, stat.S_IRUSR)
     os.chmod(base_memmeta, stat.S_IRUSR)
-    os.chmod(base_hashpath, stat.S_IRUSR)
+
     return disk_image_path, base_mempath
 
 
 class VM_Overlay(threading.Thread):
-
     def __init__(self, base_image, options, qemu_args=None):
         # create user customized overlay.
         # First resume VM, then let user edit its VM
@@ -245,8 +245,9 @@ class VM_Overlay(threading.Thread):
 
         (base_diskmeta, base_mem, base_memmeta) = \
                 Const.get_basepath(self.base_image, check_exist=True)
-        base_hash_path = Const.get_basehash_path(self.base_image)
-        base_hash_value = open(base_hash_path, "rb").read()
+        base_hash_value = db_cloudlet.gethash_basevm(self.base_image)
+        if not base_hash_value:
+            raise CloudletGenerationError("Cannot find hashvalue for %s" % self.base_image)
         
         # filename for overlay VM
         qemu_logfile = NamedTemporaryFile(prefix="cloudlet-qemu-log-", delete=False)
@@ -699,6 +700,7 @@ def run_fuse(bin_path, chunk_size, original_disk, fuse_disk_size,
                 ]:
             execute_args.append(parameter)
 
+    import pdb;pdb.set_trace()
     fuse_process = vmnetfs.VMNetFS(bin_path, execute_args, **kwargs)
     fuse_process.launch()
     fuse_process.start()

@@ -40,7 +40,6 @@ class Options(object):
 class Const(object):
     BASE_DISK               = ".base-img"
     BASE_MEM                = ".base-mem"
-    BASE_DISK_HASH          = ".base-img-hash"
     BASE_DISK_META          = ".base-img-meta"
     BASE_MEM_META           = ".base-mem-meta"
     OVERLAY_META            = ".overlay-meta"
@@ -63,7 +62,10 @@ class Const(object):
     QEMU_BIN_PATH           = os.path.abspath(os.path.join(MODULE_DIR, "../../lib/bin/x86_64/qemu-system-x86_64"))
     FREE_MEMORY_BIN_PATH    = os.path.abspath(os.path.join(MODULE_DIR, "../../lib/bin/x86_64/free_page_scan"))
     XRAY_BIN_PATH           = os.path.abspath(os.path.join(MODULE_DIR, "../../lib/x86_64/disk_analyzer"))
-    TEMPLATE_XML            = os.path.abspath(os.path.join(MODULE_DIR,  "./config/VM_TEMPLATE.xml"))
+
+    CLOUDLET_DB             = os.path.abspath(os.path.join(MODULE_DIR, "./config/cloudlet.db"))
+    CLOUDLET_DB_SCHEMA      = os.path.abspath(os.path.join(MODULE_DIR, "./config/schema.sql"))
+    TEMPLATE_XML            = os.path.abspath(os.path.join(MODULE_DIR, "./config/VM_TEMPLATE.xml"))
     TEMPLATE_OVF            = os.path.abspath(os.path.join(MODULE_DIR, "./config/ovftransport.iso"))
     UPnP_SERVER             = os.path.abspath(os.path.join(MODULE_DIR, "../../lib/bin/upnp_server.jar"))
     CHUNK_SIZE=4096
@@ -91,14 +93,4 @@ class Const(object):
             Const._check_path('base memory-hash', memmeta)
 
         return diskmeta, mempath, memmeta
-
-    @staticmethod
-    def get_basehash_path(base_disk_path, check_exist=False):
-        Const._check_path('base disk', base_disk_path)
-        image_name = os.path.splitext(os.path.basename(base_disk_path))[0]
-        dir_path = os.path.dirname(base_disk_path)
-        diskhash = os.path.join(dir_path, image_name+Const.BASE_DISK_HASH)
-        if check_exist == True:
-            Const._check_path(diskhash)
-        return diskhash
 

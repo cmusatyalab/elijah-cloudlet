@@ -28,7 +28,7 @@ public class KLog {
 		}
 	}
 
-	public static void println(String message) {
+	public static void println(String message) {		
 		Log.d(TAG, message);
 		if(mWriter != null){
 			try {

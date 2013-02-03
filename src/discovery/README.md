@@ -1,8 +1,8 @@
 This is directory for Cloudlet discovery
 
-Directory Structure
-----------------------
-- See ``directory_server`` directory
+RESTful registration server
+----------------------------
+- At ``directory_server`` directory
 - Central directory server using RESTful API
 
 ## Install ##
@@ -14,10 +14,15 @@ You will need:
 	> $ sudo pip install django django-tastypie pytz
 
 
+DNS server for cloudlet
+-----------------------------
+- At ``dns`` directory
+- Custom DNS server that returns cloudlet's ip address based on geolocation
+
 
 UPnP discovery
 --------------------
-- See ``upnp`` directory
+- At ``upnp`` directory
 - Zeroconf type discovery within broadcasting domain
 
 ## Install ##

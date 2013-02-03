@@ -16,6 +16,7 @@
 #
 
 import lib_cloudlet as lib_cloudlet
+import db_cloudlet
 import sys
 import os
 import time
@@ -23,7 +24,7 @@ from Configuration import Options
 from optparse import OptionParser
 
 def process_command_line(argv, commands):
-    USAGE = 'Usage: %prog ' + ("[%s]" % "|".join(commands)) + " [base VM] [option] -- [qemu-options]\n"
+    USAGE = 'Usage: %prog ' + ("[%s]" % "|".join(commands)) + " [option] -- [qemu-options]\n"
     USAGE += "  EX) cloudlet.py base /path/to/disk.img"
     VERSION = '%prog 0.7'
     DESCRIPTION = 'Cloudlet Overlay Generation & Synthesis'
@@ -43,18 +44,14 @@ def process_command_line(argv, commands):
             help='[overlay_creation] create only disk overlay only')
     settings, args = parser.parse_args(argv)
 
-    if len(args) < 2:
+    if len(args) < 1:
         parser.error("Choose command among [%s] and [base vm path]" % "|".join(commands))
     mode = str(args[0]).lower()
-    base_path = str(args[1])
 
     if mode not in commands:
         parser.error("%s is invalid mode. Choose among %s" % (mode, "|".join(commands)))
-    if os.path.exists(base_path) != True:
-        parser.error("%s does not exist. Need valid path for base disk" % (base_path))
 
-
-    return mode, base_path, args[2:], settings
+    return mode, args[1:], settings
 
 
 def main(argv):
@@ -65,15 +62,19 @@ def main(argv):
     CMD_BASE_CREATION       = "base"
     CMD_OVERLAY_CREATION    = "overlay"
     CMD_SYNTEHSIS           = "synthesis"
+    CMD_LIST_BASE           = "list_base"
 
-    command = (CMD_BASE_CREATION, CMD_OVERLAY_CREATION, CMD_SYNTEHSIS)
-    mode, base_path, left_args, settings = process_command_line(sys.argv[1:], command)
+    command = (CMD_BASE_CREATION, CMD_OVERLAY_CREATION, CMD_SYNTEHSIS, CMD_LIST_BASE)
+    mode, left_args, settings = process_command_line(sys.argv[1:], command)
 
     if mode == CMD_BASE_CREATION:
         # creat base VM
-        disk_image_path = base_path
-        if len(left_args) != 0:
+        if len(left_args) < 1:
+            sys.stderr.write("Error, Need to path to VM disk\n")
+            sys.exit(1)
+        if len(left_args) > 1 :
             sys.stderr("Warning, qemu argument won't be applied to creating base vm")
+        disk_image_path = left_args[0] 
         disk_path, mem_path = lib_cloudlet.create_baseVM(disk_image_path)
         print "Base VM is created from %s" % disk_image_path
         print "Disk: %s" % disk_path
@@ -81,8 +82,10 @@ def main(argv):
 
     elif mode == CMD_OVERLAY_CREATION:
         # create overlay
-        start_time = time.time()
-        disk_path = base_path
+        if len(left_args) < 1:
+            sys.stderr.write("Error, Need to path to VM disk\n")
+            sys.exit(1)
+        disk_image_path = left_args[0] 
         qemu_args = left_args
         options = Options()
         options.TRIM_SUPPORT = not settings.disable_trim_support
@@ -94,16 +97,18 @@ def main(argv):
         overlay.join()
         print "[INFO] overlay metafile : %s" % overlay.overlay_metafile
         print "[INFO] overlay : %s" % str(overlay.overlay_files[0])
-        #print "[INFO] overlay creation time: %f" % (time.time()-start_time)
     elif mode == CMD_SYNTEHSIS:
-        if len(left_args) < 1:
-            sys.stderr.write("Synthesis requires path to overlay-meta\n \
-                    Ex) ./cloudlet synthesis [base path] /path/to/precise.overlay-meta \n")
+        if len(left_args) < 2:
+            sys.stderr.write("Synthesis requires path to VM disk and overlay-meta\n \
+                    Ex) ./cloudlet synthesis [VM disk] /path/to/precise.overlay-meta \n")
             sys.exit(1)
-        meta = left_args[0]
-        qemu_args = left_args[1:]
-
-        lib_cloudlet.synthesis(base_path, meta, settings.disk_only, qemu_args=qemu_args)
+        disk_image_path = left_args[0] 
+        meta = left_args[1]
+        qemu_args = left_args[2:]
+        import pdb;pdb.set_trace()
+        lib_cloudlet.synthesis(disk_image_path, meta, settings.disk_only, qemu_args=qemu_args)
+    elif mode == CMD_LIST_BASE:
+        db_cloudlet.list_basevm(log=sys.stdout)
 
     return 0
 

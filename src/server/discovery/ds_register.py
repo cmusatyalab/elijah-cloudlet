@@ -60,7 +60,8 @@ class RegisterThread(threading.Thread):
             try:
                 self.resource_uri = self._initial_register(self.server_dns)
             except socket.error as e:
-                self.log.write("[REGISTER] waiting for directory server ready\n")
+                pass
+                #self.log.write("[REGISTER] waiting for directory server ready\n")
             finally:
                 self.stop.wait(self.REGISTER_PERIOD_SEC)
 
@@ -70,7 +71,8 @@ class RegisterThread(threading.Thread):
                 self._update_status(self.server_dns)
                 self.log.write("[REGISTER] updating status\n")
             except socket.error as e:
-                self.log.write("[REGISTER] waiting for directory server ready\n")
+                pass
+                #self.log.write("[REGISTER] waiting for directory server ready\n")
             finally:
                 self.stop.wait(self.REGISTER_PERIOD_SEC)
 

@@ -126,6 +126,7 @@ class VMNetFS(threading.Thread):
             self._pipe.write(self._args)
             self._pipe.flush()
             out = self.proc.stdout.readline()
+            import pdb;pdb.set_trace()
             self.mountpoint = out.strip()
         except:
             if self._pipe is not None:
