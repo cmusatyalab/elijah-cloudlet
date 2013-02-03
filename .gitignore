@@ -2,6 +2,7 @@ nonpublic/
 image/
 cloudlet_env/
 test/memory_snapshot/
+src/tmp/
 *.a
 *.o
 *.cproject
