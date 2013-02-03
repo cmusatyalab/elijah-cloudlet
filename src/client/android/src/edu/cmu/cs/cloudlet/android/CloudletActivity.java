@@ -22,9 +22,10 @@ import edu.cmu.cs.cloudlet.android.application.face.batch.FacePreferenceActivity
 import edu.cmu.cs.cloudlet.android.application.graphics.GraphicsClientActivity;
 import edu.cmu.cs.cloudlet.android.application.speech.SpeechAndroidBatchClientActivity;
 import edu.cmu.cs.cloudlet.android.data.VMInfo;
+import edu.cmu.cs.cloudlet.android.discovery.CloudletDiscovery;
 import edu.cmu.cs.cloudlet.android.network.CloudletConnector;
-import edu.cmu.cs.cloudlet.android.upnp.DeviceDisplay;
-import edu.cmu.cs.cloudlet.android.upnp.UPnPDiscovery;
+import edu.cmu.cs.cloudlet.android.discovery.CloudletDevice;
+import edu.cmu.cs.cloudlet.android.discovery.UPnPDiscovery;
 import edu.cmu.cs.cloudlet.android.util.CloudletEnv;
 import edu.cmu.cs.cloudlet.android.util.CloudletPreferenceActivity;
 import edu.cmu.cs.cloudlet.android.util.KLog;
@@ -46,23 +47,17 @@ import android.view.View;
 import android.widget.Button;
 
 public class CloudletActivity extends Activity {
-	public static String SYNTHESIS_SERVER_IP = "cloudlet.krha.kr"; // Cloudlet
-	public static int SYNTHESIS_SERVER_PORT = 8021; // Cloudlet port for
-													// VM Synthesis
-
-	public static final String[] applications = { "MOPED", "GRAPHICS", "FACE", "Speech", "NULL" };
-	public static final int TEST_CLOUDLET_APP_MOPED_PORT = 9092; // 19092
-	public static final int TEST_CLOUDLET_APP_GRAPHICS_PORT = 9093;
-	public static final int TEST_CLOUDLET_APP_FACE_PORT = 9876;
-	private static final int TEST_CLOUDLET_APP_SPEECH_PORT = 10191;
+	public static String GLOBAL_DISCOVERY_SERVER = "http://hail.elijah.cs.cmu.edu:8000/api/v1/Cloudlet/search/?n=3";	
+	public static String SYNTHESIS_SERVER_IP = "cloudlet.krha.kr";
+	public static int SYNTHESIS_SERVER_PORT = 8021;
 
 	private static final int SYNTHESIS_MENU_ID_SETTINGS = 11123;
 	private static final int SYNTHESIS_MENU_ID_CLEAR = 12311;
 
 	protected Button startConnectionButton;
 	protected CloudletConnector connector;
-	private UPnPDiscovery serviceDiscovery;
 	protected int selectedOveralyIndex;
+	private CloudletDiscovery cloudletDiscovery;
 
 	@Override
 	public void onCreate(Bundle savedInstanceState) {
@@ -73,11 +68,8 @@ public class CloudletActivity extends Activity {
 		// Initiate Environment Settings
 		CloudletEnv.instance();
 
-		// upnp service binding and show dialog
-		this.serviceDiscovery = new UPnPDiscovery(this, CloudletActivity.this, discoveryHandler);
-		getApplicationContext().bindService(new Intent(this, AndroidUpnpServiceImpl.class),
-				this.serviceDiscovery.serviceConnection, Context.BIND_AUTO_CREATE);
-		serviceDiscovery.showDialogSelectOption();
+		// Cloudlet discovery
+		this.cloudletDiscovery = new CloudletDiscovery(this, CloudletActivity.this, discoveryHandler);		
 
 		// Performance Button
 		findViewById(R.id.testSynthesis).setOnClickListener(clickListener);
@@ -258,11 +250,12 @@ public class CloudletActivity extends Activity {
 
 	@Override
 	public void onDestroy() {
-		getApplicationContext().unbindService(this.serviceDiscovery.serviceConnection);
-		if (this.serviceDiscovery != null)
-			this.serviceDiscovery.close();
-
-		this.connector.close();
+		if (this.cloudletDiscovery != null){
+			this.cloudletDiscovery.close();
+		}
+		if (this.connector != null)
+			this.connector.close();
+		
 		super.onDestroy();
 	}
 
@@ -271,14 +264,21 @@ public class CloudletActivity extends Activity {
 	 */
 	Handler discoveryHandler = new Handler() {
 		public void handleMessage(Message msg) {
-			if (msg.what == UPnPDiscovery.DEVICE_SELECTED) {
-				DeviceDisplay device = (DeviceDisplay) msg.obj;
+			if (msg.what == CloudletDiscovery.DEVICE_SELECTED) {
+				CloudletDevice device = (CloudletDevice) msg.obj;
 				String ipAddress = device.getIPAddress();
-				int port = device.getPort(); // port number of upnp server
 				SYNTHESIS_SERVER_IP = ipAddress;
-			} else if (msg.what == UPnPDiscovery.USER_CANCELED) {
+			} else if (msg.what == CloudletDiscovery.USER_CANCELED) {
 				showAlert("Info", "Select UPnP Server for Cloudlet Service");
 			}
 		}
 	};
+	
+	 
+	// TO BE DELETED (only for test purpose)
+	public static final String[] applications = { "MOPED", "GRAPHICS", "FACE", "Speech", "NULL" };
+	public static final int TEST_CLOUDLET_APP_MOPED_PORT = 9092; // 19092
+	public static final int TEST_CLOUDLET_APP_GRAPHICS_PORT = 9093;
+	public static final int TEST_CLOUDLET_APP_FACE_PORT = 9876;
+	private static final int TEST_CLOUDLET_APP_SPEECH_PORT = 10191;
 }
