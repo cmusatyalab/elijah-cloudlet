@@ -17,22 +17,15 @@ import java.util.ArrayList;
 import org.teleal.cling.android.AndroidUpnpServiceImpl;
 
 import edu.cmu.cs.cloudlet.android.application.CloudletCameraActivity;
-import edu.cmu.cs.cloudlet.android.application.face.batch.FaceAndroidBatchClientActivity;
-import edu.cmu.cs.cloudlet.android.application.face.batch.FacePreferenceActivity;
 import edu.cmu.cs.cloudlet.android.application.graphics.GraphicsClientActivity;
-import edu.cmu.cs.cloudlet.android.application.speech.SpeechAndroidBatchClientActivity;
 import edu.cmu.cs.cloudlet.android.data.VMInfo;
 import edu.cmu.cs.cloudlet.android.discovery.CloudletDiscovery;
 import edu.cmu.cs.cloudlet.android.network.CloudletConnector;
 import edu.cmu.cs.cloudlet.android.discovery.CloudletDevice;
-import edu.cmu.cs.cloudlet.android.discovery.UPnPDiscovery;
 import edu.cmu.cs.cloudlet.android.util.CloudletEnv;
-import edu.cmu.cs.cloudlet.android.util.CloudletPreferenceActivity;
-import edu.cmu.cs.cloudlet.android.util.KLog;
 
 import android.app.Activity;
 import android.app.AlertDialog;
-import android.content.Context;
 import android.content.DialogInterface;
 import android.content.Intent;
 import android.content.SharedPreferences;
@@ -42,7 +35,6 @@ import android.os.Message;
 import android.preference.PreferenceManager;
 import android.view.KeyEvent;
 import android.view.Menu;
-import android.view.MenuItem;
 import android.view.View;
 import android.widget.Button;
 
@@ -159,18 +151,6 @@ public class CloudletActivity extends Activity {
 			intent.putExtra("address", SYNTHESIS_SERVER_IP);
 			intent.putExtra("port", TEST_CLOUDLET_APP_GRAPHICS_PORT);
 			startActivityForResult(intent, 0);
-		} else if (application.equalsIgnoreCase("face")) {
-			Intent intent = new Intent(CloudletActivity.this, FaceAndroidBatchClientActivity.class);
-			intent.putExtra("address", SYNTHESIS_SERVER_IP);
-			intent.putExtra("port", TEST_CLOUDLET_APP_FACE_PORT);
-			startActivityForResult(intent, 0);
-		} else if (application.equalsIgnoreCase("speech")) {
-			Intent intent = new Intent(CloudletActivity.this, SpeechAndroidBatchClientActivity.class);
-			intent.putExtra("address", SYNTHESIS_SERVER_IP);
-			intent.putExtra("port", TEST_CLOUDLET_APP_SPEECH_PORT);
-			startActivityForResult(intent, 0);
-		} else if (application.equalsIgnoreCase("null")) {
-			showAlert("Info", "NUll has no UI");
 		} else {
 			showAlert("Error", "NO such Application : " + application);
 		}
@@ -276,9 +256,7 @@ public class CloudletActivity extends Activity {
 	
 	 
 	// TO BE DELETED (only for test purpose)
-	public static final String[] applications = { "MOPED", "GRAPHICS", "FACE", "Speech", "NULL" };
+	public static final String[] applications = { "MOPED", "GRAPHICS"};
 	public static final int TEST_CLOUDLET_APP_MOPED_PORT = 9092; // 19092
 	public static final int TEST_CLOUDLET_APP_GRAPHICS_PORT = 9093;
-	public static final int TEST_CLOUDLET_APP_FACE_PORT = 9876;
-	private static final int TEST_CLOUDLET_APP_SPEECH_PORT = 10191;
 }

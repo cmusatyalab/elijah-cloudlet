@@ -1,24 +1,15 @@
 package edu.cmu.cs.cloudlet.android.application;
 
 import java.io.File;
-import java.io.FileFilter;
-import java.io.FileInputStream;
 import java.io.FileNotFoundException;
-import java.io.FileOutputStream;
 import java.io.IOException;
 import java.io.PrintWriter;
-import java.net.InetSocketAddress;
-import java.net.Socket;
 import java.util.ArrayList;
 import java.util.Locale;
-import java.util.Timer;
 import java.util.TimerTask;
 
 import edu.cmu.cs.cloudlet.android.CloudletActivity;
 import edu.cmu.cs.cloudlet.android.R;
-import edu.cmu.cs.cloudlet.android.R.id;
-import edu.cmu.cs.cloudlet.android.R.layout;
-import edu.cmu.cs.cloudlet.android.application.face.ui.FaceRecClientCameraPreview;
 
 import android.app.Activity;
 import android.app.AlertDialog;
