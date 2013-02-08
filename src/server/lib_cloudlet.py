@@ -700,7 +700,6 @@ def run_fuse(bin_path, chunk_size, original_disk, fuse_disk_size,
                 ]:
             execute_args.append(parameter)
 
-    import pdb;pdb.set_trace()
     fuse_process = vmnetfs.VMNetFS(bin_path, execute_args, **kwargs)
     fuse_process.launch()
     fuse_process.start()

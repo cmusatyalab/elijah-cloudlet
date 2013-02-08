@@ -17,7 +17,12 @@ You will need:
 DNS server for cloudlet
 -----------------------------
 - At ``dns`` directory
-- Custom DNS server that returns cloudlet's ip address based on geolocation
+- Custom DNS server that returns cloudlet's ip address based on geolocation proximity
+
+## Install ##
+You will need:
+* 
+
 
 
 UPnP discovery
