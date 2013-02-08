@@ -345,12 +345,12 @@ class VM_Overlay(threading.Thread):
         free_pfn_counter = long(free_memory_dict.get("freed_counter", 0))
 
         # 3. Reorder transfer order & Compression
+        '''
         Log.write("[DEBUG][REORDER] change chunk ordering by offset\n")
         delta.reorder_deltalist_linear(Const.CHUNK_SIZE, merged_deltalist)
-        '''
-        Log.write("[DEBUG][REORDER] change chunk ordering by mem access\n")
-        mem_access_list = monitor.mem_access_chunk_list
-        delta.reorder_deltalist(mem_access_list, Const.CHUNK_SIZE, merged_deltalist)
+        #Log.write("[DEBUG][REORDER] change chunk ordering by mem access\n")
+        #mem_access_list = monitor.mem_access_chunk_list
+        #delta.reorder_deltalist(mem_access_list, Const.CHUNK_SIZE, merged_deltalist)
         '''    
         Log.write("[DEBUG][LZMA] Compressing overlay blobs\n")
         blob_list = delta.divide_blobs(merged_deltalist, overlay_path, 
@@ -885,7 +885,7 @@ def restore_with_config(conn, mem_snapshot, xml):
         #conn.restoreFlags(mem_snapshot, xml, libvirt.VIR_DOMAIN_SAVE_PAUSED)
         print "[INFO] VM is restored..."
     except libvirt.libvirtError, e:
-        message = "%s\nXML: %s" % (str(e), xml)
+        message = "%s\nXML: %s\nError, Check you QEMU_ARGUMENT" % (xml, str(e))
         raise CloudletGenerationError(message)
 
 

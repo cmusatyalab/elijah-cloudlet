@@ -26,6 +26,7 @@ You will need:
 * python-xdelta3
 * python-dev (for message pack)
 * liblzma-dev (for pyliblzma)
+* Java JRE (for UPnP server)
 * apparmor-utils (for disable apparmor for libvirt)
 * python library
     - msgpack-python
@@ -37,7 +38,7 @@ To install:
 1. install library dependency
    Example at ubuntu 12 LTS x86.
 
-		> $ sudo apt-get install qemu-kvm libvirt-bin gvncviewer python-libvirt python-xdelta3 python-dev liblzma-dev apparmor-utils python-pip
+		> $ sudo apt-get install qemu-kvm libvirt-bin gvncviewer python-libvirt python-xdelta3 python-dev openjdk-6-jre liblzma-dev apparmor-utils python-pip
 		> $ sudo pip install msgpack-python bson pyliblzma
 
 2. Disable security module.
@@ -102,7 +103,7 @@ How to use
 	Note: if your application need specific port and you want to make a port
 	forwarding host to VM, you can use -redir parameter as below. 
 
-        > $ ./cloudlet overlay /path/to/vm.image -- -redir tcp:2222:22 -redir tcp:8080::80
+        > $ ./cloudlet overlay /path/to/vm.image -- -redir tcp:2222::22 -redir tcp:8080::80
 
 	This will forward client connection at host port 2222 to VM's 22 and 8080
 	to 80, respectively.

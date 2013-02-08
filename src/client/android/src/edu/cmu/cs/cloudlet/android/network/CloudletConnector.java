@@ -55,12 +55,12 @@ import android.view.View;
 import android.widget.TextView;
 
 public class CloudletConnector {
-	public static final int CONNECTION_ERROR			 	= 1;
-	public static final int NETWORK_ERROR 					= 2;
-	public static final int PROGRESS_MESSAGE				= 3;
-	public static final int FINISH_MESSAGE					= 4;
-	public static final int PROGRESS_MESSAGE_TRANFER		= 5;
-	
+	public static final int CONNECTION_ERROR = 1;
+	public static final int NETWORK_ERROR = 2;
+	public static final int PROGRESS_MESSAGE = 3;
+	public static final int FINISH_MESSAGE = 4;
+	public static final int PROGRESS_MESSAGE_TRANFER = 5;
+
 	protected CloudletActivity activity;
 	protected Context mContext;
 	protected NetworkClientSender networkClient;
@@ -72,78 +72,77 @@ public class CloudletConnector {
 		this.activity = activity;
 		this.mContext = context;
 	}
-	
+
 	public void startConnection(String ipAddress, int port, VMInfo overlayVM) {
-		if(mDialog == null){						 
-			mDialog = ProgressDialog.show(this.mContext, "Info", "Connecting to " + ipAddress , true);
+		if (mDialog == null) {
+			mDialog = ProgressDialog.show(this.mContext, "Info", "Connecting to " + ipAddress, true);
 			mDialog.setIcon(R.drawable.ic_launcher);
-		}else{
+		} else {
 			mDialog.setMessage("Connecting to " + ipAddress);
 		}
 		mDialog.show();
 
-		if(networkClient != null){
+		if (networkClient != null) {
 			networkClient.close();
 			networkClient.stop();
 		}
 		networkClient = new NetworkClientSender(this.mContext, eventHandler);
 		networkClient.setConnector(this);
-		networkClient.setConnection(ipAddress, port);		
+		networkClient.setConnection(ipAddress, port);
 		networkClient.start();
-		
+
 		// Send Synthesis start message
 		mDialog.setMessage("Step 1. Requesting VM Synthesis");
 		this.overlayVM = overlayVM;
 		NetworkMsg networkMsg = NetworkMsg.MSG_send_overlaymeta(this.overlayVM);
 		networkClient.requestCommand(networkMsg);
 	}
-	
-	public void closeRequest(){
+
+	public void closeRequest() {
 		NetworkMsg networkMsg = NetworkMsg.MSG_send_finishMessage();
 		networkClient.requestCommand(networkMsg);
 	}
-	
-	public void updateMessage(String dialogMessage){
-		if(mDialog != null && mDialog.isShowing()){
+
+	public void updateMessage(String dialogMessage) {
+		if (mDialog != null && mDialog.isShowing()) {
 			mDialog.setMessage(dialogMessage);
 		}
 	}
 
 	public void close() {
-		if(this.networkClient != null)
+		if (this.networkClient != null)
 			this.networkClient.close();
 	}
-	
 
 	/*
 	 * Server Message Handler
 	 */
 	Handler eventHandler = new Handler() {
 		public void handleMessage(Message msg) {
-			if(msg.what == CloudletConnector.CONNECTION_ERROR){
-				if(mDialog != null){
+			if (msg.what == CloudletConnector.CONNECTION_ERROR) {
+				if (mDialog != null) {
 					mDialog.dismiss();
 				}
-				
+
 				String message = msg.getData().getString("message");
 				showAlertDialog(message);
-			}else if(msg.what == CloudletConnector.NETWORK_ERROR){
-				if(mDialog != null){
+			} else if (msg.what == CloudletConnector.NETWORK_ERROR) {
+				if (mDialog != null) {
 					mDialog.dismiss();
 				}
-				if(networkClient != null){
+				if (networkClient != null) {
 					networkClient.close();
 				}
 				String message = msg.getData().getString("message");
-				
+
 				showAlertDialog(message);
-			}else if(msg.what == CloudletConnector.PROGRESS_MESSAGE){
+			} else if (msg.what == CloudletConnector.PROGRESS_MESSAGE) {
 				// Response parsing
-				ByteArrayBuffer responseArray = (ByteArrayBuffer) msg.obj;				
+				ByteArrayBuffer responseArray = (ByteArrayBuffer) msg.obj;
 				String resString = new String(responseArray.toByteArray());
-//				KLog.println(resString);
-				
-				// unpack messsage-pack			
+				// KLog.println(resString);
+
+				// unpack messsage-pack
 				HashMap messageMap = null;
 				try {
 					messageMap = convertMessagePackToMap(responseArray.toByteArray());
@@ -152,16 +151,16 @@ public class CloudletConnector {
 					showAlertDialog("Invalid message-pack response : " + resString);
 					return;
 				}
-				
+
 				// Handle Response
-				Object value = messageMap.get(NetworkMsg.KEY_COMMAND);					
+				Object value = messageMap.get(NetworkMsg.KEY_COMMAND);
 				Integer command = (Integer) messageMap.get(NetworkMsg.KEY_COMMAND);
-				switch(command.intValue()){
+				switch (command.intValue()) {
 				case NetworkMsg.MESSAGE_COMMAND_SUCCESS:
 					KLog.println("3. Synthesis finished successfully");
 					updateMessage("Step 3. Synthesis is done..");
 					Measure.put(Measure.NET_ACK_OVERLAY_TRASFER);
-					if(mDialog != null){
+					if (mDialog != null) {
 						mDialog.dismiss();
 					}
 					handleSucessSynthesis();
@@ -181,16 +180,16 @@ public class CloudletConnector {
 		}
 
 	};
-	
+
 	private HashMap convertMessagePackToMap(byte[] byteArray) throws IOException {
 		HashMap<String, Object> messageMap = new HashMap<String, Object>();
-		MessagePack msgpack = new MessagePack();		
+		MessagePack msgpack = new MessagePack();
 		BufferUnpacker au = msgpack.createBufferUnpacker().wrap(byteArray);
 		Map<Value, Value> metaMap = au.readValue().asMapValue();
 		for (Map.Entry<Value, Value> e : ((Map<Value, Value>) metaMap).entrySet()) {
 			ValueType valueType = e.getValue().getType();
 			String key = e.getKey().toString().replace("\"", "");
-			switch(valueType){
+			switch (valueType) {
 			case BOOLEAN:
 				messageMap.put(key, e.getValue().asBooleanValue().getBoolean());
 				break;
@@ -217,22 +216,35 @@ public class CloudletConnector {
 		}
 		return messageMap;
 	}
-	
+
 	/*
 	 * Command Handler
 	 */
 	private void handleSucessSynthesis() {
-		activity.runStandAlone(this.overlayVM.getAppName());
+		boolean isSuccess = activity.runStandAlone(this.overlayVM.getAppName());
+		if (isSuccess == false) {
+			// If we cannot find matching application,
+			// then ask user to close VM
+
+			String message = "VM synthesis is successfully finished, but cannot find matching Android application named ("
+					+ this.overlayVM.getAppName() + ")\n\nClose VM at Cloudlet?";
+			new AlertDialog.Builder(this.activity).setTitle("Info").setMessage(message)
+					.setPositiveButton("Yes", new DialogInterface.OnClickListener() {
+						public void onClick(DialogInterface dialog, int which) {
+							closeRequest();
+						}
+					}).setNegativeButton("No", null).show();
+		}
 	}
-	
+
 	private void handleOverlayRequest(HashMap messageMap) {
 		// add requested overlay to queue
 		String ovelraySegmentURI = (String) messageMap.get(NetworkMsg.KEY_REQUEST_SEGMENT);
-		try{
+		try {
 			File overlayFile = overlayVM.getOverlayFile(ovelraySegmentURI.toString());
 			NetworkMsg networkMsg = NetworkMsg.MSG_send_overlayfile(overlayFile);
 			networkClient.requestCommand(networkMsg);
-		} catch (IOException e){
+		} catch (IOException e) {
 			showAlertDialog(e.getMessage());
 			e.printStackTrace();
 		}
@@ -240,22 +252,16 @@ public class CloudletConnector {
 
 	private void handleFinishSuccess(HashMap messageMap) {
 		this.close();
-		new AlertDialog.Builder(mContext).setTitle("Info")
-		.setIcon(R.drawable.ic_launcher)
-		.setMessage("Finished gracefully")
-		.setNegativeButton("Confirm", null)
-		.show();
+//		new AlertDialog.Builder(mContext).setTitle("Info").setIcon(R.drawable.ic_launcher)
+//				.setMessage("Finished gracefully").setNegativeButton("Confirm", null).show();
 	}
-	
+
 	// End Command Handler
-	
+
 	private void showAlertDialog(String errorMsg) {
-		if(activity.isFinishing() == false){
-			new AlertDialog.Builder(mContext).setTitle("Error")
-			.setIcon(R.drawable.ic_launcher)
-			.setMessage(errorMsg)
-			.setNegativeButton("Confirm", null)
-			.show();
+		if (activity.isFinishing() == false) {
+			new AlertDialog.Builder(mContext).setTitle("Error").setIcon(R.drawable.ic_launcher).setMessage(errorMsg)
+					.setNegativeButton("Confirm", null).show();
 		}
 	}
 }

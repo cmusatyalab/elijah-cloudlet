@@ -86,13 +86,13 @@ def main(argv):
             sys.stderr.write("Error, Need to path to VM disk\n")
             sys.exit(1)
         disk_image_path = left_args[0] 
-        qemu_args = left_args
+        qemu_args = left_args[1:]
         options = Options()
         options.TRIM_SUPPORT = not settings.disable_trim_support
         options.FREE_SUPPORT = not settings.disable_free_support
         options.DISK_ONLY = settings.disk_only
 
-        overlay = lib_cloudlet.VM_Overlay(disk_path, options)
+        overlay = lib_cloudlet.VM_Overlay(disk_image_path, options, qemu_args)
         overlay.start()
         overlay.join()
         print "[INFO] overlay metafile : %s" % overlay.overlay_metafile
@@ -105,7 +105,6 @@ def main(argv):
         disk_image_path = left_args[0] 
         meta = left_args[1]
         qemu_args = left_args[2:]
-        import pdb;pdb.set_trace()
         lib_cloudlet.synthesis(disk_image_path, meta, settings.disk_only, qemu_args=qemu_args)
     elif mode == CMD_LIST_BASE:
         db_cloudlet.list_basevm(log=sys.stdout)

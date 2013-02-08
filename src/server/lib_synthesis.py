@@ -302,6 +302,7 @@ class SynthesisHandler(SocketServer.StreamRequestHandler):
             (base_diskmeta, base_mem, base_memmeta) = \
                     Cloudlet_Const.get_basepath(base_path, check_exist=True)
             header_end_time = time.time()
+            Log.write("Meta header processing time: %f\n" % (header_end_time-header_start_time))
 
             # read overlay files
             # create named pipe to convert queue to stream

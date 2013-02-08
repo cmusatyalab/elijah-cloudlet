@@ -14,8 +14,6 @@
 package edu.cmu.cs.cloudlet.android;
 import java.util.ArrayList;
 
-import org.teleal.cling.android.AndroidUpnpServiceImpl;
-
 import edu.cmu.cs.cloudlet.android.application.CloudletCameraActivity;
 import edu.cmu.cs.cloudlet.android.application.graphics.GraphicsClientActivity;
 import edu.cmu.cs.cloudlet.android.data.VMInfo;
@@ -138,7 +136,7 @@ public class CloudletActivity extends Activity {
 		ab.show();
 	}
 
-	public void runStandAlone(String application) {
+	public boolean runStandAlone(String application) {
 		application = application.trim();
 
 		if (application.equalsIgnoreCase("moped") || application.equalsIgnoreCase("moped_disk")) {
@@ -146,13 +144,15 @@ public class CloudletActivity extends Activity {
 			intent.putExtra("address", SYNTHESIS_SERVER_IP);
 			intent.putExtra("port", TEST_CLOUDLET_APP_MOPED_PORT);
 			startActivityForResult(intent, 0);
+			return true;
 		} else if (application.equalsIgnoreCase("graphics")) {
 			Intent intent = new Intent(CloudletActivity.this, GraphicsClientActivity.class);
 			intent.putExtra("address", SYNTHESIS_SERVER_IP);
 			intent.putExtra("port", TEST_CLOUDLET_APP_GRAPHICS_PORT);
 			startActivityForResult(intent, 0);
+			return true;
 		} else {
-			showAlert("Error", "NO such Application : " + application);
+			return false;
 		}
 	}
 
