@@ -8,7 +8,7 @@ A cloudlet has four key attributes:
 
 Copyright (C) 2011-2012 Carnegie Mellon University
 This is a developing project and some features might not be stable yet.
-Please visit our website at <http://elijah.cs.cmu.edu/>.
+Please visit our website at [Elijah page](http://elijah.cs.cmu.edu/).
 
 Cloudlet is licensed under the GNU General Public License, version 2.
 
@@ -151,3 +151,14 @@ You will need:
 
 * qemu-kvm 1.1.1 (for Free memory and TRIM support)
 * libc6-dev-i386 (for Free memory support)
+
+
+Research works
+--------------------------
+
+* [The Case for VM-based Cloudlets in Mobile Computing](http://www.cs.cmu.edu/~satya/docdir/satya-ieeepvc-cloudlets-2009.pdf)
+* The Impact of Mobile Multimedia Applications on Data Center Consolidation (To be appeared)
+* [Just-in-Time Provisioning for Cyber Foraging](http://reports-archive.adm.cs.cmu.edu/anon/2012/CMU-CS-12-148.pdf)
+* [Scalable Crowd-Sourcing of Video from Mobile Devices](http://reports-archive.adm.cs.cmu.edu/anon/2012/CMU-CS-12-147.pdf)
+
+
