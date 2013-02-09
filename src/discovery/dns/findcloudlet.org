@@ -1,0 +1,40 @@
+
+zone = [
+    SOA(
+        # For whom we are the authority
+        'findcloudlet.org',
+
+        # This nameserver's name
+        mname = "ns1.findcloudlet.org",
+        
+        # Mailbox of individual who handles this
+        rname = "root.findcloudle.org",
+
+        # Unique serial identifying this SOA data
+        serial = 2003010601,        
+
+        # Time interval before zone should be refreshed
+        refresh = "1H",             
+
+        # Interval before failed refresh should be retried
+        retry = "1H",               
+
+        # Upper limit on time interval before expiry
+        expire = "1H",              
+
+        # Minimum TTL
+        minimum = "1H"              
+    ),
+
+    A('findcloudlet.org', '128.2.2.1'),
+    A('findcloudlet.org', '128.2.2.2'),
+    A('findcloudlet.org', '128.2.2.3'),
+    A('findcloudlet.org', '128.2.2.4'),
+    NS('findcloudlet.org', 'ns1.findcloudlet.org'),
+
+    CNAME('www.findcloudler.org', 'findcloudlet.org'),
+    CNAME('ftp.findcloudler.org', 'findcloudlet.org'),
+
+    MX('findcloudlet.org', 0, 'mail.findcloudlet.org'),
+    A('mail.findcloudlet.org', '128.2.2.2')
+]
