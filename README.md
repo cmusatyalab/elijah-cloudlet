@@ -121,7 +121,7 @@ How to use
         > $ cd ./bin
         > $ ./cloudlet synthesis /path/to/base.image /path/to/overlay-meta
     
-    2) Network client (desktop client)  
+    2) Network client (python version)  
 
 	We have a synthesis server that received ``VM synthesis`` request from
 	mobile client and you can start the server as below.
@@ -136,12 +136,20 @@ How to use
         > $ ./rapid_client.py -s [cloudlet ip address] -o [/path/to/overlay-meta]
 
     
-    3) network client (Android client)
+    3) Network client (Android version)
 
 	We have source codes for android client at ./src/client/andoid and you can
-	import to ``Eclipse``. This client program will automatically find the
-	Cloudlet machine using UPnP if both client and Cloudlet are located in
-	broadcasting domain (ex. share WiFi access point)
+	import it to ``Eclipse`` as an Android porject. This client program will
+	automatically find nearby Cloudlet using UPnP if both client and Cloudlet
+	are located in same broadcasting domain (ex. share WiFi access point)
+
+	Once installing application at your mobile device, you should copy your
+	overlay VM (both overlay-meta and xz file) to Android phone. You can copy
+	it to /sdcard/Cloudlet/overlay/ directory creating your overlay directory
+	name.  For example, you can copy your ``face recognition overlay vm`` to
+	/sdcard/Cloudlet/overlay/face/ directory. This directory name will be
+	appeared to your Android application when you're asked to select ``overlay vm``.
+
 
 
 Compiling external library that Cloudlet uses

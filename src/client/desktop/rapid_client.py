@@ -30,19 +30,6 @@ import select
 class RapidClientError(Exception):
     pass
 
-class BlobHeader(object):
-    def __init__(self, blob_uri, blob_size):
-        self.blob_uri = blob_uri
-        self.blob_size = blob_size
-
-    def get_serialized(self):
-        # blob_size         :   unsigned int
-        # blob_name         :   unsigned short
-        # blob_name_size    :   variable string
-        data = struct.pack("!IH%ds" % len(self.blob_uri), \
-                self.blob_size, len(self.blob_uri), self.blob_uri)
-        return data
-
 
 def process_command_line(argv):
     global command_type
