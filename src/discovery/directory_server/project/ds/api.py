@@ -15,9 +15,9 @@ from django.utils import simplejson
 from tastypie.serializers import Serializer
 from network import ip_location
 
-
 now = datetime.datetime.utcnow().replace(tzinfo=utc)
 cost = ip_location.IPLocation()
+
 
 
 class PrettyJSONSerializer(Serializer):

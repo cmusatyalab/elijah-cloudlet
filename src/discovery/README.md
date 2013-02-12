@@ -1,5 +1,11 @@
 This is directory for Cloudlet discovery
 
+Tested platform
+--------------------
+RHEL 6 server 32 bit
+Ubuntu 12.04 LTS 64 bit
+
+
 RESTful registration server
 ----------------------------
 - At ``directory_server`` directory
@@ -21,8 +27,9 @@ DNS server for cloudlet
 
 ## Install ##
 You will need:
-* 
+* Twisted
 
+	> $ sudo apt-get install python-twisted
 
 
 UPnP discovery

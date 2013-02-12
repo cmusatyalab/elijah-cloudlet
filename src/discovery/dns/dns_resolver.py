@@ -22,10 +22,12 @@ class Options(usage.Options):
         ["recursive",   "r", "Perform recursive lookups"],
         ["verbose",     "v", "Log verbosely"],
     ]
-
+    
+    '''
     compData = usage.Completions(
         optActions={"interface" : usage.CompleteNetInterfaces()}
         )
+    '''
 
     zones = None
     zonefiles = None

@@ -26,10 +26,7 @@ zone = [
         minimum = "1H"              
     ),
 
-    A('findcloudlet.org', '128.2.2.1'),
-    A('findcloudlet.org', '128.2.2.2'),
-    A('findcloudlet.org', '128.2.2.3'),
-    A('findcloudlet.org', '128.2.2.4'),
+    #A('findcloudlet.org', '128.2.2.1'),
     NS('findcloudlet.org', 'ns1.findcloudlet.org'),
 
     CNAME('www.findcloudler.org', 'findcloudlet.org'),
