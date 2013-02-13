@@ -24,9 +24,8 @@ import sys
 import heapq
 from operator import itemgetter
 
-from sqlalchemy import text
-from sqlalchemy import create_engine, MetaData, Table
-from sqlalchemy.orm import mapper, sessionmaker
+from sqlalchemy import create_engine
+#from sqlalchemy.orm import mapper, sessionmaker
 
 DJANGO_PROJECT_PATH = os.path.abspath("../register_server/")
 sys.path.append(os.path.join(DJANGO_PROJECT_PATH, "ds"))
@@ -36,7 +35,7 @@ from network import ip_location
 class DBConnector(object):
     def __init__(self):
         self.cost = ip_location.IPLocation()
-        self.db_engine, self.db_session = self._load_session(os.path.join(DJANGO_PROJECT_PATH, "mysql.conf"))
+        self.db_engine = self._load_engine(os.path.join(DJANGO_PROJECT_PATH, "mysql.conf"))
 
     def search_nearby_cloudlet(self, client_ip, max_count=10):
         client_location = self.cost.ip2location(client_ip)
@@ -55,7 +54,7 @@ class DBConnector(object):
         top_cloudlets = heapq.nlargest(max_count, cloudlet_list, key=itemgetter('cost'))
         return top_cloudlets
 
-    def _load_session(self, conf_file):
+    def _load_engine(self, conf_file):
         def _parse_db_file(conf_filename):
             db_name = db_user = db_pass = None
             with open(conf_filename, 'r') as f:
@@ -73,15 +72,22 @@ class DBConnector(object):
                         db_pass = value
             return db_name, db_user, db_pass
 
+        if os.path.exists(conf_file) == False:
+            sys.stderr.write("Cannot find mysql configuration file at %s\n" % \
+                    os.path.exists(conf_file))
+            sys.stderr.write("Please make a file following README\n")
+            sys.exit(1)
         db_name, user, password = _parse_db_file(conf_file)
         engine = create_engine('mysql://%s:%s@localhost/%s' % (user, password, db_name), echo=False)
         #metadata = MetaData(engine)
         #moz_cloudlet = Table('ds_cloudlet', metadata, autoload=True)
         #mapper(Cloudlet, moz_cloudlet) 
-        Session = sessionmaker(bind=engine)
-        session = Session()
 
-        return engine, session
+        # This session maker make a problem at RHEL 6, which has 0.5.5 version
+        #Session = sessionmaker(bind=engine)
+        #session = Session()
+
+        return engine
 
 
 class CloudletMachine(object):

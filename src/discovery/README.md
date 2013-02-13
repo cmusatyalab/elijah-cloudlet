@@ -47,8 +47,9 @@ DNS server for cloudlet
 ## Install ##
 You will need:
 * Twisted
+* sqlalchemy
 
-	> $ sudo apt-get install python-twisted
+	> $ sudo apt-get install python-twisted python-sqlalchemy
 
 
 UPnP discovery
