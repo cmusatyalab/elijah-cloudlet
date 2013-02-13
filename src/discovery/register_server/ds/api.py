@@ -2,6 +2,7 @@
 from django.utils.timezone import utc
 import datetime
 import heapq
+from decimal import Decimal
 from operator import itemgetter
 from tastypie.authorization import Authorization
 from ds.models import Cloudlet
@@ -63,8 +64,9 @@ class CloudletResource(ModelResource):
         bundle.obj.ip_address = cloudlet_ip
         # find location of cloudlet
         location = cost.ip2location(cloudlet_ip)
-        bundle.obj.longitude = location.longitude
-        bundle.obj.latitude = location.latitude
+        # in python 2.6, you cannot directly convert float to Decimal
+        bundle.obj.longitude = Decimal(str(location.longitude))
+        bundle.obj.latitude = Decimal(str(location.latitude))
         # update latest update time
         bundle.obj.mod_time = datetime.datetime.now()
         return bundle
