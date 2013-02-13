@@ -48,8 +48,8 @@ To install:
 
 3. add current user to kvm, libvirtd group.
 
-		> $ sudo adduser [user_name] kvm
-		> $ sudo adduser [user_name] libvirtd
+		> $ sudo adduser [your_account_name] kvm
+		> $ sudo adduser [your_account_name] libvirtd
 
 
 
@@ -73,7 +73,8 @@ How to use
 	regular VM disk image in a raw format.  
 
         > $ cd ./bin
-        > $ ./cloudlet base /path/to/vm.img
+        > $ ./cloudlet base /path/to/base_disk.img
+        > (__Use raw file format__)
 
 	This will launch remote connection(VNC) to guest OS and cloudlet module
 	will automatically start creating ``base vm`` when you close VNC window.
@@ -88,7 +89,7 @@ How to use
     Now you can create your customized VM based on top of ``base vm``  
   
         > $ cd ./bin
-        > $ ./cloudlet overlay /path/to/vm.image
+        > $ ./cloudlet overlay /path/to/base_disk.img
 
 	This will launch VNC again. On top of this ``base vm``, you can install(and
 	execute) your custom server. For example, if you're a developer of ``face
@@ -103,7 +104,7 @@ How to use
 	Note: if your application need specific port and you want to make a port
 	forwarding host to VM, you can use -redir parameter as below. 
 
-        > $ ./cloudlet overlay /path/to/vm.image -- -redir tcp:2222::22 -redir tcp:8080::80
+        > $ ./cloudlet overlay /path/to/base_disk.img -- -redir tcp:2222::22 -redir tcp:8080::80
 
 	This will forward client connection at host port 2222 to VM's 22 and 8080
 	to 80, respectively.
@@ -119,7 +120,7 @@ How to use
     1) Command line interface: You can resume your ``overlay vm`` using 
 
         > $ cd ./bin
-        > $ ./cloudlet synthesis /path/to/base.image /path/to/overlay-meta
+        > $ ./cloudlet synthesis /path/to/base_disk.img /path/to/overlay-meta
     
     2) Network client (python version)  
 
