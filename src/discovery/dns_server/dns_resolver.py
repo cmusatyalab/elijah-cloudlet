@@ -19,11 +19,12 @@ class MemoryResolver(PySourceAuthority):
         authority = []
         additional = []
         default_ttl = max(self.soa[1].minimum, self.soa[1].expire)
+        client_address = self.address[0]
+
         # get close list from DB
         domain_records = self.records.get(name.lower())
         db_domain_records = list() + domain_records
-        machine_list = self.db.search_nearby_cloudlet("1.1.1.1", max_count=10)
-        import pdb;pdb.set_trace()
+        machine_list = self.db.search_nearby_cloudlet(client_address, max_count=10)
         for each_machine in machine_list:
             new_record = dns.Record_A(address=each_machine.ip_address, ttl=default_ttl)
             db_domain_records.append(new_record)

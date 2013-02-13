@@ -22,12 +22,11 @@ Domain Name Server for Cloudlet
 import os
 import sys
 import socket
-import db_cloudlet as db
 
 from twisted.internet import reactor
 from twisted.names import dns
 
-from twisted.names import server
+from server_factory import CloudletDNSServerFactory
 from dns_resolver import Options as Options
 
 class CloudletDNSError(Exception):
@@ -43,12 +42,12 @@ class CloudletDNS(object):
         options.postOptions()
 
         ca, cl = self._buildResolvers(options)
-        self.factory = server.DNSServerFactory(options.zones, ca, cl, options['verbose'])
+        self.factory = CloudletDNSServerFactory(options.zones, ca, cl, options['verbose'])
         self.protocol = dns.DNSDatagramProtocol(self.factory)
         self.factory.noisy = 0
 
     def list_record(self, name, record_type=None):
-        zone = self.factory.resolver.resolvers[0]
+        zone = self.factory.resolver
         domain_records = zone.records.get(name.lower())
         if domain_records:
             ret_record = []
@@ -63,7 +62,7 @@ class CloudletDNS(object):
         if self._is_valid_ip(address) == False:
             raise CloudletDNSError("Invalid ip address: %s" % address)
 
-        zone = self.factory.resolver.resolvers[0]
+        zone = self.factory.resolver
         domain_records = zone.records.get(name.lower())
         new_record = dns.Record_A(address=address, ttl=ttl)
         if domain_records:
