@@ -1,4 +1,5 @@
-project/ds/network/hostip_db/
-project/ds/network/db/
+ds/network/hostip_db/
+ds/network/db/
 virt/
-project/cloudlet_ds.db
+mysql.conf
+
