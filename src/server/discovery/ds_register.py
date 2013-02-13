@@ -59,7 +59,7 @@ class RegisterThread(threading.Thread):
             # first resource creation until successfully connected
             try:
                 self.resource_uri = self._initial_register(self.server_dns)
-            except socket.error as e:
+            except (socket.error, ValueError) as e:
                 pass
                 #self.log.write("[REGISTER] waiting for directory server ready\n")
             finally:
@@ -70,7 +70,7 @@ class RegisterThread(threading.Thread):
             try:
                 self._update_status(self.server_dns)
                 self.log.write("[REGISTER] updating status\n")
-            except socket.error as e:
+            except (socket.error, ValueError) as e:
                 pass
                 #self.log.write("[REGISTER] waiting for directory server ready\n")
             finally:
@@ -80,7 +80,7 @@ class RegisterThread(threading.Thread):
         try:
             self._deregister(self.server_dns)
             self.log.write("[REGISTER] Deregister\n")
-        except socket.error as e:
+        except (socket.error, ValueError) as e:
             self.log.write("[REGISTER] Failed to deregister due to server error\n")
 
     def terminate(self):
@@ -105,7 +105,7 @@ class RegisterThread(threading.Thread):
             ret_uri = response_list[0].get('resource_uri', None)
             end_point = urlparse("%s%s" % (server_dns, ret_uri))
             json_string = {"status":"RUN"}
-            ret_msg = http_put(end_point, json_string=json_string)
+            http_put(end_point, json_string=json_string)
 
         return ret_uri
 

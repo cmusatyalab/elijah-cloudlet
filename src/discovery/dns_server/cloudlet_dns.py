@@ -22,15 +22,13 @@ Domain Name Server for Cloudlet
 import os
 import sys
 import socket
+import db_cloudlet as db
 
 from twisted.internet import reactor
 from twisted.names import dns
-from pprint import pformat
 
 from twisted.names import server
 from dns_resolver import Options as Options
-from dns_resolver import MemoryResolver as MemoryResolver
-
 
 class CloudletDNSError(Exception):
     pass
@@ -48,7 +46,6 @@ class CloudletDNS(object):
         self.factory = server.DNSServerFactory(options.zones, ca, cl, options['verbose'])
         self.protocol = dns.DNSDatagramProtocol(self.factory)
         self.factory.noisy = 0
-
 
     def list_record(self, name, record_type=None):
         zone = self.factory.resolver.resolvers[0]
@@ -110,29 +107,20 @@ class CloudletDNS(object):
             return False
 
 
-
-
 def main(argv):
     if len(argv) != 1:
         sys.stderr.write("need input file\n")
         return 1
     input_file = argv[0]
     cloudlet_dns = CloudletDNS(input_file)
-    cloudlet_dns.add_A_record("findcloudlet.org", "1.2.3.4")
-    cloudlet_dns.add_A_record("findcloudlet.org", "1.2.3.5")
-    cloudlet_dns.add_A_record("findcloudlet.org", "1.2.3.6")
-    cloudlet_dns.add_A_record("findcloudlet.org", "1.2.3.7")
-    cloudlet_dns.add_A_record("findcloudlet.org", "1.2.3.8")
-    cloudlet_dns.add_A_record("findcloudlet.org", "1.2.3.9")
-    cloudlet_dns.add_A_record("new_device.findcloudlet.org", "9.8.7.6")
+    #cloudlet_dns.add_A_record("findcloudlet.org", "1.2.3.9")
+    #cloudlet_dns.add_A_record("new_device.findcloudlet.org", "9.8.7.6")
 
     # print DNS status
     zone_name = "findcloudlet.org"
     record_list = "\n".join(["  " + str(item) for item in cloudlet_dns.list_record(zone_name)])
     print "%s -> \n%s\n" % (zone_name, record_list)
     zone_name = "new_device.findcloudlet.org"
-    record_list = "\n".join(["  " + str(item) for item in cloudlet_dns.list_record(zone_name, record_type=dns.A)])
-    print "%s -> \n%s\n" % (zone_name, record_list)
     print "START DNS SERVER"
 
     # start

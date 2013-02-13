@@ -66,7 +66,7 @@ class CloudletResource(ModelResource):
         bundle.obj.longitude = location.longitude
         bundle.obj.latitude = location.latitude
         # update latest update time
-        self.mod_time = datetime.datetime.now()
+        bundle.obj.mod_time = datetime.datetime.now()
         return bundle
 
     def dehydrate(self, bundle):
@@ -109,17 +109,6 @@ class CloudletResource(ModelResource):
         self.log_throttled_access(request)
         return self.create_response(request, object_list)
 
-        
-    '''
-    def build_filters(self, filters=None):
-        if filters is None:
-            filters = {}
-            orm_filters = super(CloudletResource, self).build_filters(filters)
-            if "q" in filters:
-                sqs = SearchQuerySet().auto_query(filters['q'])
-                orm_filters["pk__in"] = [i.pk for i in sqs]
-            return orm_filters
-    '''
 
 def post_save_signal(sender, **kwargs):
     pass

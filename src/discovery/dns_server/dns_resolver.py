@@ -1,4 +1,5 @@
 import os, traceback
+from db_cloudlet import DBConnector
 
 from twisted.names import authority
 from twisted.names.authority import PySourceAuthority
@@ -7,6 +8,75 @@ from twisted.names import dns
 from twisted.names import secondary
 from twisted.python import failure
 from twisted.internet import defer
+
+
+class MemoryResolver(PySourceAuthority):
+    db = DBConnector()
+
+    def _lookup(self, name, cls, type, timeout = None):
+        cnames = []
+        results = []
+        authority = []
+        additional = []
+        default_ttl = max(self.soa[1].minimum, self.soa[1].expire)
+        # get close list from DB
+        domain_records = self.records.get(name.lower())
+        db_domain_records = list() + domain_records
+        machine_list = self.db.search_nearby_cloudlet("1.1.1.1", max_count=10)
+        import pdb;pdb.set_trace()
+        for each_machine in machine_list:
+            new_record = dns.Record_A(address=each_machine.ip_address, ttl=default_ttl)
+            db_domain_records.append(new_record)
+
+        if db_domain_records:
+            for record in db_domain_records:
+                if record.ttl is not None:
+                    ttl = record.ttl
+                else:
+                    ttl = default_ttl
+
+                if record.TYPE == dns.NS and name.lower() != self.soa[0].lower():
+                    # NS record belong to a child zone: this is a referral.  As
+                    # NS records are authoritative in the child zone, ours here
+                    # are not.  RFC 2181, section 6.1.
+                    authority.append(
+                        dns.RRHeader(name, record.TYPE, dns.IN, ttl, record, auth=False)
+                    )
+                elif record.TYPE == type or type == dns.ALL_RECORDS:
+                    results.append(
+                        dns.RRHeader(name, record.TYPE, dns.IN, ttl, record, auth=True)
+                    )
+                if record.TYPE == dns.CNAME:
+                    cnames.append(
+                        dns.RRHeader(name, record.TYPE, dns.IN, ttl, record, auth=True)
+                    )
+            if not results:
+                results = cnames
+
+            for record in results + authority:
+                section = {dns.NS: additional, dns.CNAME: results, dns.MX: additional}.get(record.type)
+                if section is not None:
+                    n = str(record.payload.name)
+                    for rec in self.records.get(n.lower(), ()):
+                        if rec.TYPE == dns.A:
+                            section.append(
+                                dns.RRHeader(n, dns.A, dns.IN, rec.ttl or default_ttl, rec, auth=True)
+                            )
+
+            if not results and not authority:
+                # Empty response. Include SOA record to allow clients to cache
+                # this response.  RFC 1034, sections 3.7 and 4.3.4, and RFC 2181
+                # section 7.1.
+                authority.append(
+                    dns.RRHeader(self.soa[0], dns.SOA, dns.IN, ttl, self.soa[1], auth=True)
+                    )
+            return defer.succeed((results, authority, additional))
+        else:
+            if name.lower().endswith(self.soa[0].lower()):
+                # We are the authority and we didn't find it.  Goodbye.
+                return defer.fail(failure.Failure(dns.AuthoritativeDomainError(name)))
+            return defer.fail(failure.Failure(dns.DomainError(name)))
+
 
 class Options(usage.Options):
     optParameters = [
@@ -105,71 +175,3 @@ class Options(usage.Options):
         except ValueError:
             raise usage.UsageError("Invalid port: %r" % (self['port'],))
 
-
-class MemoryResolver(PySourceAuthority):
-
-    def add_A_record(self, name, ip_address, ttl=None):
-        domain_records = self.records.get(name.lower())
-        if not domain_records:
-            domain_records = list()
-            
-        domain_records.append({'ttl':ttl, 'address':ip_address}) 
-        self.records[name.lower()] = domain_records
-
-    def _lookup(self, name, cls, type, timeout = None):
-        cnames = []
-        results = []
-        authority = []
-        additional = []
-        default_ttl = max(self.soa[1].minimum, self.soa[1].expire)
-
-        domain_records = self.records.get(name.lower())
-
-        if domain_records:
-            for record in domain_records:
-                if record.ttl is not None:
-                    ttl = record.ttl
-                else:
-                    ttl = default_ttl
-
-                if record.TYPE == dns.NS and name.lower() != self.soa[0].lower():
-                    # NS record belong to a child zone: this is a referral.  As
-                    # NS records are authoritative in the child zone, ours here
-                    # are not.  RFC 2181, section 6.1.
-                    authority.append(
-                        dns.RRHeader(name, record.TYPE, dns.IN, ttl, record, auth=False)
-                    )
-                elif record.TYPE == type or type == dns.ALL_RECORDS:
-                    results.append(
-                        dns.RRHeader(name, record.TYPE, dns.IN, ttl, record, auth=True)
-                    )
-                if record.TYPE == dns.CNAME:
-                    cnames.append(
-                        dns.RRHeader(name, record.TYPE, dns.IN, ttl, record, auth=True)
-                    )
-            if not results:
-                results = cnames
-
-            for record in results + authority:
-                section = {dns.NS: additional, dns.CNAME: results, dns.MX: additional}.get(record.type)
-                if section is not None:
-                    n = str(record.payload.name)
-                    for rec in self.records.get(n.lower(), ()):
-                        if rec.TYPE == dns.A:
-                            section.append(
-                                dns.RRHeader(n, dns.A, dns.IN, rec.ttl or default_ttl, rec, auth=True)
-                            )
-
-            if not results and not authority:
-                # Empty response. Include SOA record to allow clients to cache
-                # this response.  RFC 1034, sections 3.7 and 4.3.4, and RFC 2181
-                # section 7.1.
-                authority.append(
-                    dns.RRHeader(self.soa[0], dns.SOA, dns.IN, ttl, self.soa[1], auth=True)
-                    )
-            return defer.succeed((results, authority, additional))
-        else:
-            if name.lower().endswith(self.soa[0].lower()):
-                # We are the authority and we didn't find it.  Goodbye.
-                return defer.fail(failure.Failure(dns.AuthoritativeDomainError(name)))
-            return defer.fail(failure.Failure(dns.DomainError(name)))

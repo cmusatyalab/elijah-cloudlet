@@ -35,8 +35,7 @@ def create_basevm(hash_value, base_disk_path):
             cur.execute(query)
 
         # insert new
-        ret_hash = ret_hash[0]
-        query = "insert into base_vm values ('%s', '%s')" % (ret_hash, base_disk_path)
+        query = "insert into base_vm values ('%s', '%s')" % (hash_value, base_disk_path)
         cur.execute(query)
         conn.commit()
 
