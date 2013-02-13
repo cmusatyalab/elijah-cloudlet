@@ -148,7 +148,9 @@ def http_post(end_point, json_string=None):
     response = conn.getresponse()
     data = response.read()
     conn.close()
-    return json.loads(data)
+    if data:
+        return json.loads(data)
+    return None
 
 
 def http_put(end_point, json_string=None):

@@ -14,10 +14,10 @@ from django.core.serializers import json
 from django.utils import simplejson
 from tastypie.serializers import Serializer
 from network import ip_location
+from django.db.models.signals import post_save
 
 now = datetime.datetime.utcnow().replace(tzinfo=utc)
 cost = ip_location.IPLocation()
-
 
 
 class PrettyJSONSerializer(Serializer):
@@ -120,3 +120,15 @@ class CloudletResource(ModelResource):
                 orm_filters["pk__in"] = [i.pk for i in sqs]
             return orm_filters
     '''
+
+def post_save_signal(sender, **kwargs):
+    pass
+    '''
+    cloudlet = kwargs.get('instance', None)
+    if (not cloudlet) or (not redis):
+        return
+    redis.set(cloudlet.ip_address, (cloudlet.latitude, cloudlet.longitude))
+    '''
+
+post_save.connect(post_save_signal, sender=Cloudlet)
+

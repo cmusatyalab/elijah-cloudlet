@@ -25,6 +25,7 @@ class Cloudlet(models.Model):
     longitude = models.DecimalField(max_digits=10, decimal_places=4)
     latitude = models.DecimalField(max_digits=10, decimal_places=4)
 
+
     def save(self, *args, **kwargs):
         return super(Cloudlet, self).save(*args, **kwargs)
 
