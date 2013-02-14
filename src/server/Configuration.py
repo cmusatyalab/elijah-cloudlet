@@ -37,6 +37,7 @@ class Options(object):
         import pprint
         return pprint.pformat(self.__dict__)
 
+
 class Const(object):
     BASE_DISK               = ".base-img"
     BASE_MEM                = ".base-mem"
@@ -93,4 +94,22 @@ class Const(object):
             Const._check_path('base memory-hash', memmeta)
 
         return diskmeta, mempath, memmeta
+
+
+class Synthesis_Const(object):
+    # PIPLINING
+    TRANSFER_SIZE           = 1024*16
+    END_OF_FILE             = "!!Overlay Transfer End Marker"
+    SHOW_VNC                = False
+    IS_EARLY_START          = False
+    IS_PRINT_STATISTICS     = False
+
+    # Discovery
+    DIRECTORY_SERVER = "scarlet.aura.cs.cmu.edu"
+    #DIRECTORY_SERVER = "cloudlet.krha.kr:8000"
+    DIRECTORY_UPDATE_PERIOD = 60*10 # 10 min
+
+    # Synthesis Server
+    LOCAL_IPADDRESS = 'localhost'
+    SERVER_PORT_NUMBER = 8021
 

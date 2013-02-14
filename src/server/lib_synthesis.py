@@ -31,6 +31,7 @@ from pprint import pformat
 from optparse import OptionParser
 from multiprocessing import Process, JoinableQueue, Queue, Manager
 from Configuration import Const as Cloudlet_Const
+from Configuration import Synthesis_Const as Synthesis_Const
 from lzma import LZMADecompressor
 from datetime import datetime
 from synthesis_protocol import Protocol as Protocol
@@ -41,23 +42,6 @@ from discovery.ds_register import RegisterThread
 Log = cloudlet.CloudletLog("./log_synthesis/log_synthesis-%s" % str(datetime.now()).split(" ")[1])
 
 BaseVM_list = []
-
-class Synthesis_Const(object):
-    # PIPLINING
-    TRANSFER_SIZE           = 1024*16
-    END_OF_FILE             = "!!Overlay Transfer End Marker"
-    SHOW_VNC                = False
-    IS_EARLY_START          = False
-    IS_PRINT_STATISTICS     = False
-
-    # Discovery
-    #DIRECTORY_SERVER = "scarlet.aura.cs.cmu.edu:8000"
-    DIRECTORY_SERVER = "cloudlet.krha.kr:8000"
-    DIRECTORY_UPDATE_PERIOD = 60*10 # 10 min
-
-    # Synthesis Server
-    LOCAL_IPADDRESS = 'localhost'
-    SERVER_PORT_NUMBER = 8021
 
 
 class RapidSynthesisError(Exception):
