@@ -18,6 +18,8 @@
 # for more details.
 #
 
+import sys
+sys.path.append(".")	# for lower compatibility in twistd
 
 from twisted.application import internet, service
 from twisted.names import server, dns, hosts
