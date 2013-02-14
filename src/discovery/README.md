@@ -46,6 +46,7 @@ Or execute download_geoip_db.sh as follows:
 
 	> ./download_geoip_db.sh
 
+
 DNS server for cloudlet
 -----------------------------
 - At ``dns_server`` directory
@@ -58,6 +59,10 @@ You will need:
 
 	> $ sudo apt-get install python-twisted python-sqlalchemy
 
+
+You can run this DNS Server as DAEMON using twistd
+
+	> $ sudo twistd -y dns.tac
 
 UPnP discovery
 --------------------
