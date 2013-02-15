@@ -23,7 +23,7 @@ zone = [
         expire = "1H",              
 
         # Minimum TTL
-        minimum = "1H"              
+        minimum = "1s"              
     ),
 
     #A('findcloudlet.org', '128.2.2.1'),
