@@ -48,11 +48,22 @@ class RapidSynthesisError(Exception):
     pass
 
 
-def recv_all(request, size):
-    data = ''
-    while len(data) < size:
-        data += request.recv(size - len(data))
-    return data
+class NetworkUtil(object):
+    @staticmethod
+    def recvall(sock, size):
+        data = ''
+        while len(data) < size:
+            data += sock.recv(size - len(data))
+        return data
+
+    @staticmethod
+    def encoding(data):
+        return msgpack.packb(data)
+
+    @staticmethod
+    def decoding(data):
+        return msgpack.unpackb(data)
+
 
 def network_worker(handler, overlay_urls, overlay_urls_size, demanding_queue, out_queue, time_queue, chunk_size):
     read_stream = handler.rfile
@@ -94,7 +105,7 @@ def network_worker(handler, overlay_urls, overlay_urls_size, demanding_queue, ou
                 requesting_overlay = overlay_urls.pop(0)
 
             # request overlay blob to client
-            message = msgpack.packb({
+            message = NetworkUtil.encoding({
                 Protocol.KEY_COMMAND : Protocol.MESSAGE_COMMAND_ON_DEMAND,
                 Protocol.KEY_REQUEST_SEGMENT:requesting_overlay
                 })
@@ -108,7 +119,7 @@ def network_worker(handler, overlay_urls, overlay_urls_size, demanding_queue, ou
         # read header
         blob_header_size = struct.unpack("!I", read_stream.read(4))[0]
         blob_header_data = read_stream.read(blob_header_size)
-        blob_header = msgpack.unpackb(blob_header_data)
+        blob_header = NetworkUtil.decoding(blob_header_data)
         command = blob_header.get(Protocol.KEY_COMMAND, None)
         if command != Protocol.MESSAGE_COMMAND_SEND_OVERLAY:
             msg = "Unexpected command while streaming overlay VM: %d" % command
@@ -204,7 +215,7 @@ class SynthesisHandler(SocketServer.StreamRequestHandler):
 
     def ret_fail(self, message):
         print "Error, %s" % str(message)
-        message = msgpack.packb({
+        message = NetworkUtil.encoding({
             Protocol.KEY_COMMAND : Protocol.MESSAGE_COMMAND_FAIELD,
             Protocol.KEY_FAILED_REAONS : message
             })
@@ -213,7 +224,7 @@ class SynthesisHandler(SocketServer.StreamRequestHandler):
         self.wfile.write(message)
 
     def ret_success(self):
-        message = msgpack.packb({
+        message = NetworkUtil.encoding({
             Protocol.KEY_COMMAND : Protocol.MESSAGE_COMMAND_SUCCESS
             })
         print "SUCCESS to launch VM"
@@ -233,7 +244,7 @@ class SynthesisHandler(SocketServer.StreamRequestHandler):
             header_data = self.request.recv(meta_file_size)
             while len(header_data) < meta_file_size:
                 header_data += self.request.recv(meta_file_size- len(header_data))
-            header = msgpack.unpackb(header_data)
+            header = NetworkUtil.decoding(header_data)
 
             base_hashvalue = header.get(Cloudlet_Const.META_BASE_VM_SHA256, None)
 
@@ -366,7 +377,7 @@ class SynthesisHandler(SocketServer.StreamRequestHandler):
         msgpack_data = self.request.recv(msgpack_size)
         while len(msgpack_data) < msgpack_size:
             msgpack_data += self.request.recv(msgpack_size- len(msgpack_data))
-        finish_message = msgpack.unpackb(msgpack_data)
+        finish_message = NetworkUtil.decoding(msgpack_data)
         command = finish_message.get(Protocol.KEY_COMMAND, None)
         if command != Protocol.MESSAGE_COMMAND_FINISH:
             msg = "Unexpected command while streaming overlay VM: %d" % command
@@ -395,7 +406,7 @@ class SynthesisHandler(SocketServer.StreamRequestHandler):
         static_resource = self.server.resource_monitor.get_static_resource()
         # send request
         
-        message = msgpack.packb({
+        message = NetworkUtil.encoding({
             Protocol.KEY_COMMAND: Protocol.MESSAGE_COMMAND_RET_RESOURCE_INFO,
             Protocol.KEY_PAYLOAD: static_resource,
             })
@@ -423,7 +434,7 @@ class SynthesisHandler(SocketServer.StreamRequestHandler):
         msgpack_data = self.request.recv(message_size)
         while len(msgpack_data) < message_size:
             msgpack_data += self.request.recv(message_size-len(msgpack_data))
-        message = msgpack.unpackb(msgpack_data)
+        message = NetworkUtil.decoding(msgpack_data)
         command = message.get(Protocol.KEY_COMMAND, None)
     
         # handle request
@@ -466,7 +477,7 @@ class SynthesisHandler(SocketServer.StreamRequestHandler):
         Log.flush()
 
         # return finish sucess to client
-        message = msgpack.packb({
+        message = NetworkUtil.encoding({
             Protocol.KEY_COMMAND : Protocol.MESSAGE_COMMAND_FINISH_SUCCESS
             })
         message_size = struct.pack("!I", len(message))
