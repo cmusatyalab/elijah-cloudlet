@@ -403,12 +403,14 @@ class SynthesisHandler(SocketServer.StreamRequestHandler):
                     print_out=Log)
 
     def _handle_get_resource_info(self, message):
-        static_resource = self.server.resource_monitor.get_static_resource()
+        resource = self.server.resource_monitor.get_static_resource()
+        resource.update(self.server.resource_monitor.get_dynamic_resource())
+        
         # send request
         
         message = NetworkUtil.encoding({
             Protocol.KEY_COMMAND: Protocol.MESSAGE_COMMAND_RET_RESOURCE_INFO,
-            Protocol.KEY_PAYLOAD: static_resource,
+            Protocol.KEY_PAYLOAD: resource,
             })
         message_size = struct.pack("!I", len(message))
         self.request.send(message_size)
@@ -617,15 +619,15 @@ class SynthesisServer(SocketServer.TCPServer):
     def terminate(self):
         if self.socket != -1:
             self.socket.close()
-        if self.upnp_server != None:
+        if hasattr(self, 'upnp_server') and self.upnp_server != None:
             Log.write("[TERMINATE] Terminate UPnP Server\n")
             self.upnp_server.terminate()
             self.upnp_server.join()
-        if self.register_client != None:
+        if hasattr(self, 'register_client') and self.register_client != None:
             Log.write("[TERMINATE] Deregister from directory service\n")
             self.register_client.terminate()
             self.register_client.join()
-        if self.resource_monitor != None:
+        if hasattr(self, 'resource_monitor') and self.resource_monitor != None:
             Log.write("[TERMINATE] Terminate resource monitor\n")
             self.resource_monitor.terminate()
             self.resource_monitor.join()

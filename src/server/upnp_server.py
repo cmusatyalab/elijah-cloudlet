@@ -24,7 +24,7 @@ class UPnPServer(threading.Thread):
         _PIPE = subprocess.PIPE
         self.proc = subprocess.Popen(cmd, shell=True, stdin=_PIPE, stdout=_PIPE, stderr=_PIPE)
         try:
-            while(not self.stop.wait(0.0001)):
+            while(not self.stop.wait(10)):
                 return_code = self.proc.poll()
                 if return_code != None:
                     if return_code == 0:
