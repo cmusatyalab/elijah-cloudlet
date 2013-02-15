@@ -1,16 +1,19 @@
 #!/usr/bin/env python
 
 class Const(object):
+    # static resource
     MACHINE_NUMBER_TOTAL_CPU        =   "machine_cpu_num"
     MACHINE_CLOCK_SPEED             =   "machine_cpu_clock_speed_mhz"
     MACHINE_MEM_TOTAL               =   "machine_mem_total_kb"
 
-    TOTAL_DISK_READ_BPS                =   "machine_disk_read_bps"
-    TOTAL_DISK_WRITE_BPS               =   "machine_disk_write_bps"
-    TOTAL_NETWORK_READ_BPS             =   "machine_network_read_bps"
-    TOTAL_NETWORK_WRITE_BPS            =   "machine_newwork_write_bps"
-    TOTAL_CPU_USE_PERCENT                  =   "machine_total_cpu_usage_percent"
-    TOTAL_MEM_USE_PERCENT                  =   "machine_total_mem_usage_percent"
+
+    # dynamic resource
+    TOTAL_CPU_USE_PERCENT              =   "machine_total_cpu_usage_percent"
+    TOTAL_FREE_MEMORY                  =   "machine_total_free_memory_kb"
+    TOTAL_DISK_READ_BPS                =   "machine_disk_read_bytes_per_sec"
+    TOTAL_DISK_WRITE_BPS               =   "machine_disk_write_bytes_per_sec"
+    TOTAL_NETWORK_READ_BPS             =   "machine_network_read_bytes_per_sec"
+    TOTAL_NETWORK_WRITE_BPS            =   "machine_newwork_write_bytes_per_sec"
 
     cloudletNUMBER_SOCKET           =   "machine_number_socket"
     MACHINE_NUMBER_CORES_PSOCKET    =   "machine_number_cores"

@@ -15,11 +15,8 @@
 # for more details.
 #
 
-import sys
-import psutil
-import time
-from optparse import OptionParser
 import libvirt
+import time
 from Const import Const as Const
 import threading
 
@@ -46,38 +43,47 @@ class ResourceMonitorThread(threading.Thread):
         pass
 
     def _get_static_resource(self):
-        # CPU
-        res = open('/proc/cpuinfo').read()
-        clock = [item for item in res.split("\n") if item.find("cpu MHz") == 0][0].split(": ")[1]
-        #n_proc = [item for item in res.split("\n") if item.find("cpu cores") == 0][0].split(": ")[1]
-        #n_socket = len(set([item for item in res.split("\n") if item.find("physical") == 0]))
-        #cache_size = [item for item in res.split("\n") if item.find("cache size") == 0][0].split(": ")[1][:-3]
-        #cache_block_size = [item for item in res.split("\n") if item.find("cache_alignment") == 0][0].split(": ")[1]
-
-        # Memory
-        mem = open('/proc/meminfo').read().split("\n")
-        total_mem = 0
-        for line in mem:
-            if line.find("MemTotal") == 0:
-                total_mem = long(line.split(":")[1].strip()[:-3])
+        conn = libvirt.open("qemu:///session")
+        if not conn:
+            return dict()
+        machine_info = conn.getInfo()
+        mem_total = machine_info[1]
+        clock_speed = machine_info[3]
+        number_socket = machine_info[5]
+        number_cores = machine_info[6]
+        number_threads_pcore = machine_info[7]
 
         info_dict = {
-                Const.MACHINE_NUMBER_TOTAL_CPU: int(psutil.NUM_CPUS),
-                Const.MACHINE_CLOCK_SPEED: float(clock),
-                Const.MACHINE_MEM_TOTAL: long(total_mem),
+                Const.MACHINE_NUMBER_TOTAL_CPU: int(number_socket*number_cores*number_threads_pcore),
+                Const.MACHINE_CLOCK_SPEED: float(clock_speed),
+                Const.MACHINE_MEM_TOTAL: long(mem_total),
                 }
         return info_dict
 
     def get_static_resource(self):
         return self.machine_info
 
-
     def get_dynamic_resource(self):
+        import psutil
+        cpu_usage = float(psutil.cpu_percent())
+        free_memory = long(psutil.virtual_memory()[1])
+
+        # disk io during 1 sec
+        '''
+        old_disk = psutil.disk_io_counters()
+        time.sleep(1)
+        new_disk = psutil.disk_io_counters()
+        disk_read_bps = new_disk.read_bytes - old_disk.read_bytes
+        disk_write_bps = new_disk.write_bytes - old_disk.write_bytes
+        '''
+        
         info_dict = {
-                Const.MACHINE_NUMBER_TOTAL_CPU: int(psutil.NUM_CPUS),
-                Const.MACHINE_CLOCK_SPEED: float(clock),
-                Const.MACHINE_MEM_TOTAL: long(total_mem),
+                Const.TOTAL_CPU_USE_PERCENT: cpu_usage,
+                Const.TOTAL_FREE_MEMORY: free_memory,
+                #Const.TOTAL_DISK_READ_BPS: disk_read_bps,
+                #Const.TOTAL_DISK_WRITE_BPS: disk_write_bps,
                 }
+
         return info_dict
 
     def terminate(self):
