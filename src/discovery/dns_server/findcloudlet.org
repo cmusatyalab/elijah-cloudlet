@@ -20,7 +20,7 @@ zone = [
         retry = "1H",               
 
         # Upper limit on time interval before expiry
-        expire = "1H",              
+        expire = "1s",
 
         # Minimum TTL
         minimum = "1s"              
