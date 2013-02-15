@@ -61,7 +61,7 @@ class RegisterThread(threading.Thread):
                 self.resource_uri = self._initial_register(self.server_dns)
             except (socket.error, ValueError) as e:
                 pass
-                #self.log.write("[REGISTER] waiting for directory server ready\n")
+                self.log.write("[REGISTER] waiting for directory server ready\n")
             finally:
                 self.stop.wait(self.REGISTER_PERIOD_SEC)
 
@@ -72,7 +72,7 @@ class RegisterThread(threading.Thread):
                 self.log.write("[REGISTER] updating status\n")
             except (socket.error, ValueError) as e:
                 pass
-                #self.log.write("[REGISTER] waiting for directory server ready\n")
+                self.log.write("[REGISTER] waiting for directory server ready\n")
             finally:
                 self.stop.wait(self.REGISTER_PERIOD_SEC)
 
@@ -194,7 +194,7 @@ def main(argv):
     registerThread = RegisterThread(settings.server_dns, log=sys.stdout, update_period=60)
     try:
         registerThread.start()
-        time.sleep(30)
+        time.sleep(60*60*60*60)
     except KeyboardInterrupt as e:
         sys.stdout.write("User interrupt\n")
     finally:

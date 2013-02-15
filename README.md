@@ -32,6 +32,7 @@ You will need:
     - msgpack-python
     - bson
 	- pyliblzma
+	- psutil
 
 To install:
 
@@ -39,7 +40,7 @@ To install:
    Example at ubuntu 12 LTS x86.
 
 		> $ sudo apt-get install qemu-kvm libvirt-bin gvncviewer python-libvirt python-xdelta3 python-dev openjdk-6-jre liblzma-dev apparmor-utils python-pip
-		> $ sudo pip install msgpack-python bson pyliblzma
+		> $ sudo pip install msgpack-python bson pyliblzma psutil
 
 2. Disable security module.
    Example at Ubuntu 12
