@@ -32,6 +32,8 @@ class Protocol(object):
     MESSAGE_COMMAND_FAIELD              = 0x02
     MESSAGE_COMMAND_ON_DEMAND           = 0x03
     MESSAGE_COMMAND_FINISH_SUCCESS      = 0x04
+    MESSAGE_COMMAND_RET_RESOURCE_INFO   = 0x05
+    MESSAGE_COMMAND_RET_CACHE_INFO      = 0x06
 
     #
     # other keys
@@ -40,6 +42,7 @@ class Protocol(object):
     KEY_REQUEST_SEGMENT         = "blob_uri"
     KEY_REQUEST_SEGMENT_SIZE    = "blob_size"
     KEY_FAILED_REAONS           = "reasons"
+    KEY_PAYLOAD                 = "payload"
 
     # synthesis option
     KEY_SYNTHESIS_OPTION        = "synthesis_option"

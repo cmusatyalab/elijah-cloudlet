@@ -39,8 +39,8 @@ class ResourceMonitorThread(threading.Thread):
 
     def monitor(self):
         while (not self.stop.wait(0.01)):
-            pass
-        pass
+            if self.stop.wait(10):
+                break
 
     def _get_static_resource(self):
         conn = libvirt.open("qemu:///session")

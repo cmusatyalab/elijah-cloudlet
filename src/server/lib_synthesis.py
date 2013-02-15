@@ -43,8 +43,6 @@ from monitor.resource import ResourceMonitorError
 
 Log = cloudlet.CloudletLog("./log_synthesis/log_synthesis-%s" % str(datetime.now()).split(" ")[1])
 
-BaseVM_list = []
-
 
 class RapidSynthesisError(Exception):
     pass
@@ -240,7 +238,7 @@ class SynthesisHandler(SocketServer.StreamRequestHandler):
             base_hashvalue = header.get(Cloudlet_Const.META_BASE_VM_SHA256, None)
 
             # check base VM
-            for (hash_value, disk_path) in BaseVM_list:
+            for (hash_value, disk_path) in self.server.basevm_list:
                 if base_hashvalue == hash_value:
                     print "[INFO] New client request %s VM" \
                             % (disk_path)
@@ -393,10 +391,20 @@ class SynthesisHandler(SocketServer.StreamRequestHandler):
                     mem_access_list, disk_access_list, \
                     print_out=Log)
 
-    def _handle_get_resource_info(message):
-        pass
+    def _handle_get_resource_info(self, message):
+        static_resource = self.server.resource_monitor.get_static_resource()
+        # send request
+        
+        message = msgpack.packb({
+            Protocol.KEY_COMMAND: Protocol.MESSAGE_COMMAND_RET_RESOURCE_INFO,
+            Protocol.KEY_PAYLOAD: static_resource,
+            })
+        message_size = struct.pack("!I", len(message))
+        self.request.send(message_size)
+        self.wfile.write(message)
+        self.wfile.flush()
 
-    def _handle_get_cache_info(message):
+    def _handle_get_cache_info(self, message):
         pass
 
     def handle(self):
@@ -430,12 +438,11 @@ class SynthesisHandler(SocketServer.StreamRequestHandler):
                 pass
             elif command == Protocol.MESSAGE_COMMAND_GET_RESOURCE_INFO:
                 self._handle_get_resource_info(message)
-                pass
             elif command == Protocol.MESSAGE_COMMAND_GET_CACHE_INFO:
                 self._handle_get_cache_info(message)
                 pass
             else:
-                pass
+                Log.write("Invalid command number : %d\n" % command)
         except Exception as e:
             sys.stderr.write(traceback.format_exc())
             sys.stderr.write("%s" % str(e))
@@ -443,19 +450,18 @@ class SynthesisHandler(SocketServer.StreamRequestHandler):
             self.terminate()
             raise e
 
-
     def finish(self):
-        if self.delta_proc != None:
+        if hasattr(self, 'delta_proc') and self.delta_proc != None:
             self.delta_proc.join()
             self.delta_proc.finish()
-        if self.resumed_VM != None:
+        if hasattr(self, 'resumed_VM') and self.resumed_VM != None:
             self.resumed_VM.terminate()
-        if self.fuse != None:
+        if hasattr(self, 'fuse') and self.fuse != None:
             self.fuse.terminate()
 
-        if os.path.exists(self.overlay_pipe):
+        if hasattr(self, 'overlay_pipe') and os.path.exists(self.overlay_pipe):
             os.unlink(self.overlay_pipe)
-        if os.path.exists(self.tmp_overlay_dir):
+        if hasattr(self, 'tmp_overlay_dir') and os.path.exists(self.tmp_overlay_dir):
             shutil.rmtree(self.tmp_overlay_dir)
         Log.flush()
 
@@ -467,26 +473,25 @@ class SynthesisHandler(SocketServer.StreamRequestHandler):
         self.request.send(message_size)
         self.wfile.write(message)
         self.wfile.flush()
-
-        Log.write("[FINISH] Close client\n")
+        Log.write("[FINISH] close client from %s\n" % (str(self.client_address)))
 
     def terminate(self):
-        # force terminate
+        # force terminate when something wrong in handling request
         # do not wait for joinining
-        if self.delta_proc != None:
+        if hasattr(self, 'detla_proc') and self.delta_proc != None:
             self.delta_proc.finish()
             if self.delta_proc.is_alive():
                 self.delta_proc.terminate()
             self.delta_proc = None
-        if self.resumed_VM != None:
+        if hasattr(self, 'resumed') and self.resumed_VM != None:
             self.resumed_VM.terminate()
             self.resumed_VM = None
-        if self.fuse != None:
+        if hasattr(self, 'fuse') and self.fuse != None:
             self.fuse.terminate()
             self.fuse = None
-        if os.path.exists(self.overlay_pipe):
+        if hasattr(self, 'overlay_pipe') and os.path.exists(self.overlay_pipe):
             os.unlink(self.overlay_pipe)
-        if os.path.exists(self.tmp_overlay_dir):
+        if hasattr(self, 'tmp_overlay_dir') and os.path.exists(self.tmp_overlay_dir):
             shutil.rmtree(self.tmp_overlay_dir)
         Log.flush()
 
@@ -540,7 +545,7 @@ class SynthesisServer(SocketServer.TCPServer):
 
     def __init__(self, args):
         settings, args = SynthesisServer.process_command_line(args)
-        config_file, error_msg = SynthesisServer.check_basevm()
+        self.basevm_list, error_msg = SynthesisServer.check_basevm()
         if error_msg:
             raise RapidSynthesisError(error_msg)
 
@@ -553,6 +558,7 @@ class SynthesisServer(SocketServer.TCPServer):
         except socket.error as e:
             sys.stderr.write(str(e))
             sys.stderr.write("Check IP/Port : %s\n" % (str(server_address)))
+            sys.exit(1)
         self.socket.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
         self.socket.setsockopt(socket.IPPROTO_TCP, socket.TCP_NODELAY, 1)
         Log.write("* Server configuration\n")
@@ -603,11 +609,15 @@ class SynthesisServer(SocketServer.TCPServer):
         if self.upnp_server != None:
             Log.write("[TERMINATE] Terminate UPnP Server\n")
             self.upnp_server.terminate()
+            self.upnp_server.join()
         if self.register_client != None:
             Log.write("[TERMINATE] Deregister from directory service\n")
             self.register_client.terminate()
+            self.register_client.join()
         if self.resource_monitor != None:
+            Log.write("[TERMINATE] Terminate resource monitor\n")
             self.resource_monitor.terminate()
+            self.resource_monitor.join()
         Log.write("[TERMINATE] Finish synthesis server connection\n")
 
     @staticmethod
@@ -622,12 +632,10 @@ class SynthesisServer(SocketServer.TCPServer):
 
     @staticmethod
     def check_basevm():
-        global BaseVM_list
-
-        vm_list = db_cloudlet.list_basevm() # list of (hash, path)
+        basevm_list = db_cloudlet.list_basevm() # list of (hash, path)
         print "-"*50
         print "* Base VM Configuration"
-        for index, (hash_value, disk_path) in enumerate(vm_list):
+        for index, (hash_value, disk_path) in enumerate(basevm_list):
             # check file location
             (base_diskmeta, base_mempath, base_memmeta) = \
                     Cloudlet_Const.get_basepath(disk_path)
@@ -637,12 +645,10 @@ class SynthesisServer(SocketServer.TCPServer):
             if not os.path.exists(base_mempath):
                 print "Error, memory snapshot (%s) is not exist" % (base_mempath)
                 sys.exit(2)
-
-            BaseVM_list.append((hash_value, disk_path))
             print " %d : %s (Disk %d MB, Memory %d MB)" % \
                     (index, disk_path, os.path.getsize(disk_path)/1024/1024, \
                     os.path.getsize(base_mempath)/1024/1024)
         print "-"*50
 
-        return vm_list, None
+        return basevm_list, None
 
