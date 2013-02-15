@@ -39,6 +39,9 @@ class DBConnector(object):
 
     def search_nearby_cloudlet(self, client_ip, max_count=10):
         client_location = self.cost.ip2location(client_ip)
+        if not client_location:
+            return list()
+
         lat1, lon1 = client_location.latitude, client_location.longitude
         search_field = ["latitude", "longitude", "ip_address"]
         sql_query = "select %s from ds_cloudlet where status = 'RUN'" % (", ".join(search_field))

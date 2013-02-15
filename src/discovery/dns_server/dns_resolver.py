@@ -11,6 +11,7 @@ from twisted.internet import defer
 
 
 class MemoryResolver(PySourceAuthority):
+    CLOUDLET_DOMAIN = "findcloudlet.org"
     db = DBConnector()
 
     def _lookup(self, name, cls, type, timeout = None):
@@ -21,13 +22,18 @@ class MemoryResolver(PySourceAuthority):
         default_ttl = max(self.soa[1].minimum, self.soa[1].expire)
         client_address = self.address[0]
 
-        # get close list from DB
         domain_records = self.records.get(name.lower())
-        db_domain_records = list() + domain_records
-        machine_list = self.db.search_nearby_cloudlet(client_address, max_count=10)
-        for each_machine in machine_list:
-            new_record = dns.Record_A(address=each_machine.ip_address, ttl=default_ttl)
-            db_domain_records.append(new_record)
+
+        # search database only for CLOUDLET_DOMAIN
+        if name.lower() == MemoryResolver.CLOUDLET_DOMAIN.lower():
+            db_domain_records = list() + domain_records
+            machine_list = self.db.search_nearby_cloudlet(client_address, max_count=10)
+            for each_machine in machine_list:
+                new_record = dns.Record_A(address=each_machine.ip_address, ttl=default_ttl)
+                db_domain_records.append(new_record)
+        else:
+            db_domain_records = domain_records
+        #import pdb;pdb.set_trace()
 
         if db_domain_records:
             for record in db_domain_records:

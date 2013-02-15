@@ -21,14 +21,17 @@ class Protocol(object):
     #
     KEY_COMMAND                 = "command"
     # client -> server
-    MESSAGE_COMMAND_SEND_META       = 0x11
-    MESSAGE_COMMAND_SEND_OVERLAY    = 0x12
-    MESSAGE_COMMAND_FINISH          = 0x13
+    MESSAGE_COMMAND_SEND_META           = 0x11
+    MESSAGE_COMMAND_SEND_OVERLAY        = 0x12
+    MESSAGE_COMMAND_FINISH              = 0x13
+    MESSAGE_COMMAND_GET_RESOURCE_INFO   = 0x14
+    MESSAGE_COMMAND_GET_CACHE_INFO      = 0x15
+
     # server -> client
-    MESSAGE_COMMAND_SUCCESS         = 0x01
-    MESSAGE_COMMAND_FAIELD          = 0x02
-    MESSAGE_COMMAND_ON_DEMAND       = 0x03
-    MESSAGE_COMMAND_FINISH_SUCCESS  = 0x04
+    MESSAGE_COMMAND_SUCCESS             = 0x01
+    MESSAGE_COMMAND_FAIELD              = 0x02
+    MESSAGE_COMMAND_ON_DEMAND           = 0x03
+    MESSAGE_COMMAND_FINISH_SUCCESS      = 0x04
 
     #
     # other keys

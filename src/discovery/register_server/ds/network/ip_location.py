@@ -87,9 +87,11 @@ class IPLocation(object):
             raise IPGelocationError("Cannot find maxmind DB at : %s" % self.maxmind_db_path)
         self.gi = pygeoip.GeoIP(self.maxmind_db_path, pygeoip.MEMORY_CACHE)
         ret_dict = self.gi.record_by_addr(ip_address)
-        ret_dict['ip_address'] = ip_address
-
-        return Location(ret_dict)
+        if ret_dict:
+            ret_dict['ip_address'] = ip_address
+            return Location(ret_dict)
+        else:
+            return None
 
     def ip2location_hostip(self, ip_address):
         # get geolocation from http://www.hostip.info/

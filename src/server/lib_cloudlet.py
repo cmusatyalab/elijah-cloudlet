@@ -760,6 +760,8 @@ def save_mem_snapshot(machine, fout_path, **kwargs):
 
     #Save memory state
     print "[INFO] save VM memory state at %s" % fout_path
+    print "[INFO] (This could take up to minute depend on VM's memory size)"
+    print "[INFO] (Check file at %s)" % fout_path
     try:
         ret = machine.save(fout_path)
     except libvirt.libvirtError, e:

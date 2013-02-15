@@ -36,8 +36,9 @@ def process_command_line(argv, commands):
             help='This will disable TRIM Support, mainly for test purposes. \
                     Normal user does not need to care about this option')
     parser.add_option(
-            '-m', '--no-free-memory', action='store_true', dest='disable_free_support', default=False,
-            help='This will disable extracting Free memory, mainly for test purposes. \
+            '-m', '--extract-free-memory', action='store_true', dest='enable_free_support', default=False,
+            help='This will ENABLE extracting Free memory, mainly for test purposes. \
+                    We disable this feature in default because it requires agency within guest OS. \
                     Normal user does not need to care about this option')
     parser.add_option(
             '-d', '--disk', action='store_true', dest='disk_only', default=False,
@@ -89,7 +90,7 @@ def main(argv):
         qemu_args = left_args[1:]
         options = Options()
         options.TRIM_SUPPORT = not settings.disable_trim_support
-        options.FREE_SUPPORT = not settings.disable_free_support
+        options.FREE_SUPPORT = settings.enable_free_support
         options.DISK_ONLY = settings.disk_only
 
         overlay = lib_cloudlet.VM_Overlay(disk_image_path, options, qemu_args)

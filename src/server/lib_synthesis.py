@@ -38,6 +38,8 @@ from synthesis_protocol import Protocol as Protocol
 from upnp_server import UPnPServer, UPnPError
 from discovery.ds_register import RegisterError
 from discovery.ds_register import RegisterThread
+from monitor.resource import ResourceMonitorThread
+from monitor.resource import ResourceMonitorError
 
 Log = cloudlet.CloudletLog("./log_synthesis/log_synthesis-%s" % str(datetime.now()).split(" ")[1])
 
@@ -66,7 +68,6 @@ def network_worker(handler, overlay_urls, overlay_urls_size, demanding_queue, ou
     out_of_order_count = 0
     total_urls_count = len(overlay_urls)
     while len(finished_url) < total_urls_count:
-
         #request to client until it becomes more than MAX_REQUEST_SIZE
         while True:
             requesting_size = sum([overlay_urls_size[item] for item in requesting_list])
@@ -110,6 +111,10 @@ def network_worker(handler, overlay_urls, overlay_urls_size, demanding_queue, ou
         blob_header_size = struct.unpack("!I", read_stream.read(4))[0]
         blob_header_data = read_stream.read(blob_header_size)
         blob_header = msgpack.unpackb(blob_header_data)
+        command = blob_header.get(Protocol.KEY_COMMAND, None)
+        if command != Protocol.MESSAGE_COMMAND_SEND_OVERLAY:
+            msg = "Unexpected command while streaming overlay VM: %d" % command
+            raise RapidSynthesisError(msg)
         blob_size = blob_header.get(Protocol.KEY_REQUEST_SEGMENT_SIZE, 0)
         blob_url = blob_header.get(Protocol.KEY_REQUEST_SEGMENT, None)
         if blob_size == 0 or blob_url == None:
@@ -218,21 +223,8 @@ class SynthesisHandler(SocketServer.StreamRequestHandler):
         self.request.send(message_size)
         self.wfile.write(message)
 
-    def _check_validity(self, request):
-        # self.request is the TCP socket connected to the clinet
-        data = request.recv(4)
-        if data == None or len(data) != 4:
-            raise RapidSynthesisError("Failed to receive first byte of header")
-
-        # recv Message 
-        message_size = struct.unpack("!I", data)[0]
-        msgpack_data = request.recv(message_size)
-        while len(msgpack_data) < message_size:
-            msgpack_data += request.recv(message_size-len(msgpack_data))
-        message = msgpack.unpackb(msgpack_data)
-
-        if (message.get(Protocol.KEY_COMMAND, None) == Protocol.MESSAGE_COMMAND_SEND_META) and \
-                (message.get(Protocol.KEY_META_SIZE, 0) > 0):
+    def _check_validity(self, message):
+        if (message.get(Protocol.KEY_META_SIZE, 0) > 0):
             # check header option
             client_syn_option = message.get(Protocol.KEY_SYNTHESIS_OPTION, None)
             if client_syn_option != None and len(client_syn_option) > 0:
@@ -240,9 +232,9 @@ class SynthesisHandler(SocketServer.StreamRequestHandler):
 
             # receive overlay meta file
             meta_file_size = message.get(Protocol.KEY_META_SIZE)
-            header_data = request.recv(meta_file_size)
+            header_data = self.request.recv(meta_file_size)
             while len(header_data) < meta_file_size:
-                header_data += request.recv(meta_file_size- len(header_data))
+                header_data += self.request.recv(meta_file_size- len(header_data))
             header = msgpack.unpackb(header_data)
 
             base_hashvalue = header.get(Cloudlet_Const.META_BASE_VM_SHA256, None)
@@ -256,149 +248,194 @@ class SynthesisHandler(SocketServer.StreamRequestHandler):
 
         message = "Cannot find matching Base VM\nsha256: %s" % (base_hashvalue)
         print message
-
         self.ret_fail(message)
         return None
 
-    def handle(self):
-        # check_base VM
-        try:
-            Log.write("\n\n----------------------- New Connection --------------\n")
-            start_time = time.time()
-            header_start_time = time.time()
-            base_path, meta_info = self._check_validity(self.request)
-            url_manager = Manager()
-            overlay_urls = url_manager.list()
-            overlay_urls_size = url_manager.dict()
-            for blob in meta_info[Cloudlet_Const.META_OVERLAY_FILES]:
-                url = blob[Cloudlet_Const.META_OVERLAY_FILE_NAME]
-                size = blob[Cloudlet_Const.META_OVERLAY_FILE_SIZE]
-                overlay_urls.append(url)
-                overlay_urls_size[url] = size
-            Log.write("  - %s\n" % str(pformat(self.synthesis_option)))
-            Log.write("  - Base VM     : %s\n" % base_path)
-            Log.write("  - Blob count  : %d\n" % len(overlay_urls))
-            if base_path == None or meta_info == None or overlay_urls == None:
-                message = "Failed, Invalid header information"
-                print message
-                self.wfile.write(message)            
-                self.ret_fail()
-                return
-            (base_diskmeta, base_mem, base_memmeta) = \
-                    Cloudlet_Const.get_basepath(base_path, check_exist=True)
-            header_end_time = time.time()
-            Log.write("Meta header processing time: %f\n" % (header_end_time-header_start_time))
+    def _handle_synthesis(self, message):
+        Log.write("\n\n----------------------- New Connection --------------\n")
+        start_time = time.time()
+        header_start_time = time.time()
+        base_path, meta_info = self._check_validity(message)
+        url_manager = Manager()
+        overlay_urls = url_manager.list()
+        overlay_urls_size = url_manager.dict()
+        for blob in meta_info[Cloudlet_Const.META_OVERLAY_FILES]:
+            url = blob[Cloudlet_Const.META_OVERLAY_FILE_NAME]
+            size = blob[Cloudlet_Const.META_OVERLAY_FILE_SIZE]
+            overlay_urls.append(url)
+            overlay_urls_size[url] = size
+        Log.write("  - %s\n" % str(pformat(self.synthesis_option)))
+        Log.write("  - Base VM     : %s\n" % base_path)
+        Log.write("  - Blob count  : %d\n" % len(overlay_urls))
+        if base_path == None or meta_info == None or overlay_urls == None:
+            message = "Failed, Invalid header information"
+            print message
+            self.wfile.write(message)            
+            self.ret_fail()
+            return
+        (base_diskmeta, base_mem, base_memmeta) = \
+                Cloudlet_Const.get_basepath(base_path, check_exist=True)
+        header_end_time = time.time()
+        Log.write("Meta header processing time: %f\n" % (header_end_time-header_start_time))
 
-            # read overlay files
-            # create named pipe to convert queue to stream
-            time_transfer = Queue(); time_decomp = Queue();
-            time_delta = Queue(); time_fuse = Queue();
-            self.tmp_overlay_dir = tempfile.mkdtemp()
-            temp_overlay_filepath = os.path.join(self.tmp_overlay_dir, "overlay_file")
-            temp_overlay_file = open(temp_overlay_filepath, "w+b")
-            self.overlay_pipe = os.path.join(self.tmp_overlay_dir, 'overlay_pipe')
-            os.mkfifo(self.overlay_pipe)
+        # read overlay files
+        # create named pipe to convert queue to stream
+        time_transfer = Queue(); time_decomp = Queue();
+        time_delta = Queue(); time_fuse = Queue();
+        self.tmp_overlay_dir = tempfile.mkdtemp()
+        temp_overlay_filepath = os.path.join(self.tmp_overlay_dir, "overlay_file")
+        temp_overlay_file = open(temp_overlay_filepath, "w+b")
+        self.overlay_pipe = os.path.join(self.tmp_overlay_dir, 'overlay_pipe')
+        os.mkfifo(self.overlay_pipe)
 
-            # overlay
-            demanding_queue = Queue()
-            download_queue = JoinableQueue()
-            import threading
-            download_process = threading.Thread(target=network_worker, 
-                    args=(
-                        self,
-                        overlay_urls, overlay_urls_size, demanding_queue, 
-                        download_queue, time_transfer, Synthesis_Const.TRANSFER_SIZE, 
-                        )
+        # overlay
+        demanding_queue = Queue()
+        download_queue = JoinableQueue()
+        import threading
+        download_process = threading.Thread(target=network_worker, 
+                args=(
+                    self,
+                    overlay_urls, overlay_urls_size, demanding_queue, 
+                    download_queue, time_transfer, Synthesis_Const.TRANSFER_SIZE, 
                     )
-            decomp_process = Process(target=decomp_worker,
-                    args=(
-                        download_queue, self.overlay_pipe, time_decomp, temp_overlay_file,
-                        )
+                )
+        decomp_process = Process(target=decomp_worker,
+                args=(
+                    download_queue, self.overlay_pipe, time_decomp, temp_overlay_file,
                     )
-            modified_img, modified_mem, self.fuse, self.delta_proc, self.fuse_thread = \
-                    cloudlet.recover_launchVM(base_path, meta_info, self.overlay_pipe, 
-                            log=sys.stdout, demanding_queue=demanding_queue)
-            self.delta_proc.time_queue = time_delta
-            self.fuse_thread.time_queue = time_fuse
+                )
+        modified_img, modified_mem, self.fuse, self.delta_proc, self.fuse_thread = \
+                cloudlet.recover_launchVM(base_path, meta_info, self.overlay_pipe, 
+                        log=sys.stdout, demanding_queue=demanding_queue)
+        self.delta_proc.time_queue = time_delta
+        self.fuse_thread.time_queue = time_fuse
 
 
-            if self.synthesis_option.get(Protocol.SYNTHESIS_OPTION_EARLY_START, False):
-                # 1. resume VM
-                self.resumed_VM = cloudlet.ResumedVM(modified_img, modified_mem, self.fuse)
-                time_start_resume = time.time()
-                self.resumed_VM.start()
-                time_end_resume = time.time()
+        if self.synthesis_option.get(Protocol.SYNTHESIS_OPTION_EARLY_START, False):
+            # 1. resume VM
+            self.resumed_VM = cloudlet.ResumedVM(modified_img, modified_mem, self.fuse)
+            time_start_resume = time.time()
+            self.resumed_VM.start()
+            time_end_resume = time.time()
 
-                # 2. start processes
-                download_process.start()
-                decomp_process.start()
-                self.delta_proc.start()
-                self.fuse_thread.start()
+            # 2. start processes
+            download_process.start()
+            decomp_process.start()
+            self.delta_proc.start()
+            self.fuse_thread.start()
 
-                # 3. return success right after resuming VM
-                # before receiving all chunks
-                self.resumed_VM.join()
-                self.ret_success()
+            # 3. return success right after resuming VM
+            # before receiving all chunks
+            self.resumed_VM.join()
+            self.ret_success()
 
-                # 4. then wait fuse end
-                self.fuse_thread.join()
-            else:
-                # 1. start processes
-                download_process.start()
-                decomp_process.start()
-                self.delta_proc.start()
-                self.fuse_thread.start()
+            # 4. then wait fuse end
+            self.fuse_thread.join()
+        else:
+            # 1. start processes
+            download_process.start()
+            decomp_process.start()
+            self.delta_proc.start()
+            self.fuse_thread.start()
 
-                # 2. wait for fuse end
-                self.fuse_thread.join()
+            # 2. wait for fuse end
+            self.fuse_thread.join()
 
-                # 3. resume VM
-                self.resumed_VM = cloudlet.ResumedVM(modified_img, modified_mem, self.fuse)
-                time_start_resume = time.time()
-                self.resumed_VM.start()
-                time_end_resume = time.time()
+            # 3. resume VM
+            self.resumed_VM = cloudlet.ResumedVM(modified_img, modified_mem, self.fuse)
+            time_start_resume = time.time()
+            self.resumed_VM.start()
+            time_end_resume = time.time()
 
-                # 4. return success to client
-                self.resumed_VM.join()
-                self.ret_success()
+            # 4. return success to client
+            self.resumed_VM.join()
+            self.ret_success()
 
-            end_time = time.time()
+        end_time = time.time()
 
-            # printout result
-            SynthesisHandler.print_statistics(start_time, end_time, \
-                    time_transfer, time_decomp, time_delta, time_fuse, \
-                    print_out=Log, resume_time=(time_end_resume-time_start_resume))
+        # printout result
+        SynthesisHandler.print_statistics(start_time, end_time, \
+                time_transfer, time_decomp, time_delta, time_fuse, \
+                print_out=Log, resume_time=(time_end_resume-time_start_resume))
 
-            if self.synthesis_option.get(Protocol.SYNTHESIS_OPTION_DISPLAY_VNC, False):
-                cloudlet.connect_vnc(self.resumed_VM.machine, no_wait=True)
+        if self.synthesis_option.get(Protocol.SYNTHESIS_OPTION_DISPLAY_VNC, False):
+            cloudlet.connect_vnc(self.resumed_VM.machine, no_wait=True)
 
-            # wait for finish message from client
-            Log.write("[SOCKET] waiting for client exit message\n")
-            data = self.request.recv(4)
-            msgpack_size = struct.unpack("!I", data)[0]
-            msgpack_data = self.request.recv(msgpack_size)
-            while len(msgpack_data) < msgpack_size:
-                msgpack_data += self.request.recv(msgpack_size- len(msgpack_data))
-            client_data = msgpack.unpackb(msgpack_data)
-            Log.write("  - %s" % str(pformat(client_data)))
-            Log.write("\n")
+        # wait for finish message from client
+        Log.write("[SOCKET] waiting for client exit message\n")
+        data = self.request.recv(4)
+        msgpack_size = struct.unpack("!I", data)[0]
+        msgpack_data = self.request.recv(msgpack_size)
+        while len(msgpack_data) < msgpack_size:
+            msgpack_data += self.request.recv(msgpack_size- len(msgpack_data))
+        finish_message = msgpack.unpackb(msgpack_data)
+        command = finish_message.get(Protocol.KEY_COMMAND, None)
+        if command != Protocol.MESSAGE_COMMAND_FINISH:
+            msg = "Unexpected command while streaming overlay VM: %d" % command
+            raise RapidSynthesisError(msg)
+        Log.write("  - %s" % str(pformat(finish_message)))
+        Log.write("\n")
 
-            # TO BE DELETED - save execution pattern
-            '''
-            app_url = str(overlay_urls[0])
+        # TO BE DELETED - save execution pattern
+        '''
+        app_url = str(overlay_urls[0])
+        mem_access_list = self.resumed_VM.monitor.mem_access_chunk_list
+        mem_access_str = [str(item) for item in mem_access_list]
+        filename = "exec_patter_%s" % (app_url.split("/")[-2])
+        open(filename, "w+a").write('\n'.join(mem_access_str))
+        '''
+
+        # printout synthesis statistics
+        if self.synthesis_option.get(Protocol.SYNTHESIS_OPTION_SHOW_STATISTICS):
             mem_access_list = self.resumed_VM.monitor.mem_access_chunk_list
-            mem_access_str = [str(item) for item in mem_access_list]
-            filename = "exec_patter_%s" % (app_url.split("/")[-2])
-            open(filename, "w+a").write('\n'.join(mem_access_str))
-            '''
+            disk_access_list = self.resumed_VM.monitor.disk_access_chunk_list
+            cloudlet.synthesis_statistics(meta_info, temp_overlay_filepath, \
+                    mem_access_list, disk_access_list, \
+                    print_out=Log)
 
-            # printout synthesis statistics
-            if self.synthesis_option.get(Protocol.SYNTHESIS_OPTION_SHOW_STATISTICS):
-                mem_access_list = self.resumed_VM.monitor.mem_access_chunk_list
-                disk_access_list = self.resumed_VM.monitor.disk_access_chunk_list
-                cloudlet.synthesis_statistics(meta_info, temp_overlay_filepath, \
-                        mem_access_list, disk_access_list, \
-                        print_out=Log)
+    def _handle_get_resource_info(message):
+        pass
+
+    def _handle_get_cache_info(message):
+        pass
+
+    def handle(self):
+        '''Handle request from the client
+        Each request follows this format: 
+
+        | message_pack size | message_pack data |
+        |   (4 bytes)       | (variable length) |
+        '''
+
+        # get header
+        data = self.request.recv(4)
+        if data == None or len(data) != 4:
+            raise RapidSynthesisError("Failed to receive first byte of header")
+        message_size = struct.unpack("!I", data)[0]
+        msgpack_data = self.request.recv(message_size)
+        while len(msgpack_data) < message_size:
+            msgpack_data += self.request.recv(message_size-len(msgpack_data))
+        message = msgpack.unpackb(msgpack_data)
+        command = message.get(Protocol.KEY_COMMAND, None)
+    
+        # handle request
+        try:
+            if command == Protocol.MESSAGE_COMMAND_SEND_META:
+                self._handle_synthesis(message)
+            elif command == Protocol.MESSAGE_COMMAND_SEND_OVERLAY:
+                # handled at _handle_synthesis
+                pass
+            elif command == Protocol.MESSAGE_COMMAND_FINISH:
+                # handled at _handle_synthesis
+                pass
+            elif command == Protocol.MESSAGE_COMMAND_GET_RESOURCE_INFO:
+                self._handle_get_resource_info(message)
+                pass
+            elif command == Protocol.MESSAGE_COMMAND_GET_CACHE_INFO:
+                self._handle_get_cache_info(message)
+                pass
+            else:
+                pass
         except Exception as e:
             sys.stderr.write(traceback.format_exc())
             sys.stderr.write("%s" % str(e))
@@ -510,8 +547,12 @@ class SynthesisServer(SocketServer.TCPServer):
         Synthesis_Const.LOCAL_IPADDRESS = "0.0.0.0"
         server_address = (Synthesis_Const.LOCAL_IPADDRESS, Synthesis_Const.SERVER_PORT_NUMBER)
 
-        SocketServer.TCPServer.__init__(self, server_address, SynthesisHandler)
         self.allow_reuse_address = True
+        try:
+            SocketServer.TCPServer.__init__(self, server_address, SynthesisHandler)
+        except socket.error as e:
+            sys.stderr.write(str(e))
+            sys.stderr.write("Check IP/Port : %s\n" % (str(server_address)))
         self.socket.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
         self.socket.setsockopt(socket.IPPROTO_TCP, socket.TCP_NODELAY, 1)
         Log.write("* Server configuration\n")
@@ -531,7 +572,7 @@ class SynthesisServer(SocketServer.TCPServer):
             self.upnp_server = None
         Log.write("[INFO] Start UPnP Server\n")
 
-        # Start Resiger Server
+        # Start registration client
         try:
             self.register_client = RegisterThread(
                     Synthesis_Const.DIRECTORY_SERVER,
@@ -542,7 +583,14 @@ class SynthesisServer(SocketServer.TCPServer):
         except RegisterError as e:
             Log.write(str(e))
             Log.write("[Warning] Cannot register Cloudlet to central server\n")
-        
+
+        # cloudlet machine monitor
+        try:
+            self.resource_monitor = ResourceMonitorThread(log=Log) 
+            self.resource_monitor.start()
+        except ResourceMonitorError as e:
+            Log.write(str(e))
+            Log.write("[Warning] Cannot register Cloudlet to central server\n")
         Log.flush()
 
     def handle_error(self, request, client_address):
@@ -558,6 +606,8 @@ class SynthesisServer(SocketServer.TCPServer):
         if self.register_client != None:
             Log.write("[TERMINATE] Deregister from directory service\n")
             self.register_client.terminate()
+        if self.resource_monitor != None:
+            self.resource_monitor.terminate()
         Log.write("[TERMINATE] Finish synthesis server connection\n")
 
     @staticmethod
@@ -569,7 +619,6 @@ class SynthesisServer(SocketServer.TCPServer):
         settings, args = parser.parse_args(argv)
 
         return settings, args
-
 
     @staticmethod
     def check_basevm():

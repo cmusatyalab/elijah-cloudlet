@@ -34,7 +34,7 @@ class RegisterError(Exception):
 class RegisterThread(threading.Thread):
     API_URL             =   "/api/v1/Cloudlet/"
 
-    def __init__(self, server_dns, log=None, update_period=10):
+    def __init__(self, server_dns, log=None, update_period=60):
         self.server_dns = server_dns
         if self.server_dns.find("http://") != 0:
             self.server_dns = "http://" + self.server_dns
@@ -175,7 +175,7 @@ def get_local_ipaddress():
 
 
 def process_command_line(argv):
-    USAGE = 'Usage: %prog server_dns'
+    USAGE = 'Usage: %prog -s server_dns'
     DESCRIPTION = 'Cloudlet register thread'
 
     parser = OptionParser(usage=USAGE, description=DESCRIPTION)
@@ -191,7 +191,7 @@ def process_command_line(argv):
 
 def main(argv):
     settings, args = process_command_line(sys.argv[1:])
-    registerThread = RegisterThread(settings.server_dns, log=sys.stdout, update_period=10)
+    registerThread = RegisterThread(settings.server_dns, log=sys.stdout, update_period=60)
     try:
         registerThread.start()
         time.sleep(30)

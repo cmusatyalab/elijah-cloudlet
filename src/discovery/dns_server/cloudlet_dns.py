@@ -28,6 +28,7 @@ from twisted.names import dns
 
 from server_factory import CloudletDNSServerFactory
 from dns_resolver import Options as Options
+from dns_resolver import MemoryResolver as MemoryResolver
 
 class CloudletDNSError(Exception):
     pass
@@ -45,6 +46,18 @@ class CloudletDNS(object):
         self.factory = CloudletDNSServerFactory(options.zones, ca, cl, options['verbose'])
         self.protocol = dns.DNSDatagramProtocol(self.factory)
         self.factory.noisy = 0
+
+        self.local_ipaddress = self._local_ipaddress()
+        self.add_A_record("ns1.%s" % MemoryResolver.CLOUDLET_DOMAIN, self.local_ipaddress)
+        self.add_A_record("ns2.%s" % MemoryResolver.CLOUDLET_DOMAIN, self.local_ipaddress)
+
+
+    def _local_ipaddress(self):
+        s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+        s.connect(("gmail.com",80))
+        ipaddress = (s.getsockname()[0])
+        s.close()
+        return ipaddress
 
     def list_record(self, name, record_type=None):
         zone = self.factory.resolver
@@ -112,8 +125,6 @@ def main(argv):
         return 1
     input_file = argv[0]
     cloudlet_dns = CloudletDNS(input_file)
-    #cloudlet_dns.add_A_record("findcloudlet.org", "1.2.3.9")
-    #cloudlet_dns.add_A_record("new_device.findcloudlet.org", "9.8.7.6")
 
     # print DNS status
     zone_name = "findcloudlet.org"
