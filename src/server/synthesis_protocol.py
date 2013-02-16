@@ -25,7 +25,8 @@ class Protocol(object):
     MESSAGE_COMMAND_SEND_OVERLAY        = 0x12
     MESSAGE_COMMAND_FINISH              = 0x13
     MESSAGE_COMMAND_GET_RESOURCE_INFO   = 0x14
-    MESSAGE_COMMAND_GET_CACHE_INFO      = 0x15
+    MESSAGE_COMMAND_SESSION_CREATE      = 0x15
+    MESSAGE_COMMAND_SESSION_CLOSE       = 0x16
 
     # server -> client
     MESSAGE_COMMAND_SUCCESS             = 0x01
@@ -33,7 +34,8 @@ class Protocol(object):
     MESSAGE_COMMAND_ON_DEMAND           = 0x03
     MESSAGE_COMMAND_FINISH_SUCCESS      = 0x04
     MESSAGE_COMMAND_RET_RESOURCE_INFO   = 0x05
-    MESSAGE_COMMAND_RET_CACHE_INFO      = 0x06
+    MESSAGE_COMMAND_RET_SESSION_CREATE  = 0x06
+    MESSAGE_COMMAND_RET_SESSION_CLOSE   = 0x07
 
     #
     # other keys
@@ -43,6 +45,7 @@ class Protocol(object):
     KEY_REQUEST_SEGMENT_SIZE    = "blob_size"
     KEY_FAILED_REAONS           = "reasons"
     KEY_PAYLOAD                 = "payload"
+    KEY_SESSIOIN_ID             = "session_id"
 
     # synthesis option
     KEY_SYNTHESIS_OPTION        = "synthesis_option"

@@ -23,13 +23,30 @@ import time
 from Configuration import Options
 from optparse import OptionParser
 
+def print_usage(commands):
+    usage = "\n%prog command  [option] -- [qemu-options]\n"
+    usage += "  EX) cloudlet.py base /path/to/disk.img\n\n"
+    usage += "Command list:\n"
+    MAX_SPACE = 20
+    for (comm, desc) in commands.iteritems():
+        space = ""
+        if len(comm) < MAX_SPACE: 
+            space = " " * (20-len(comm))
+        usage += "  %s%s : %s\n" % (comm, space, desc)
+    return usage
+
+
+def get_database():
+    from db.api import DBConnector
+    dbconn = DBConnector()
+    return dbconn
+
+
 def process_command_line(argv, commands):
-    USAGE = 'Usage: %prog ' + ("[%s]" % "|".join(commands)) + " [option] -- [qemu-options]\n"
-    USAGE += "  EX) cloudlet.py base /path/to/disk.img"
     VERSION = '%prog 0.7'
     DESCRIPTION = 'Cloudlet Overlay Generation & Synthesis'
 
-    parser = OptionParser(usage=USAGE, version=VERSION, description=DESCRIPTION)
+    parser = OptionParser(usage=print_usage(commands), version=VERSION, description=DESCRIPTION)
 
     parser.add_option(
             '-t', '--no-trim', action='store_true', dest='disable_trim_support', default=False,
@@ -46,11 +63,11 @@ def process_command_line(argv, commands):
     settings, args = parser.parse_args(argv)
 
     if len(args) < 1:
-        parser.error("Choose command among [%s] and [base vm path]" % "|".join(commands))
-    mode = str(args[0]).lower()
+        parser.error("Choose command :\n  %s" % " | ".join(commands))
 
-    if mode not in commands:
-        parser.error("%s is invalid mode. Choose among %s" % (mode, "|".join(commands)))
+    mode = str(args[0]).lower()
+    #if mode not in commands.keys():
+    #    parser.error("Invalid Command, Choose among :\n  %s" % " | ".join(commands))
 
     return mode, args[1:], settings
 
@@ -64,9 +81,20 @@ def main(argv):
     CMD_OVERLAY_CREATION    = "overlay"
     CMD_SYNTEHSIS           = "synthesis"
     CMD_LIST_BASE           = "list_base"
+    CMD_DEL_BASE            = "del_base"
+    CMD_ADD_BASE            = "add_base"
+    CMD_LIST_SESSION        = "list_session"
+    CMD_CLEAR_SESSION        = "clear_session"
 
-    command = (CMD_BASE_CREATION, CMD_OVERLAY_CREATION, CMD_SYNTEHSIS, CMD_LIST_BASE)
-    mode, left_args, settings = process_command_line(sys.argv[1:], command)
+    commands = {
+            CMD_BASE_CREATION: "create new base VM",
+            CMD_OVERLAY_CREATION: "create new overlay VM on top of base VM",
+            CMD_SYNTEHSIS: "test created overlay using command line",
+            CMD_LIST_BASE: "show all base VM at this machine",
+            CMD_ADD_BASE: "add existing base vm to DB",
+            CMD_DEL_BASE: "delete base vm at database",
+            }
+    mode, left_args, settings = process_command_line(sys.argv[1:], commands)
 
     if mode == CMD_BASE_CREATION:
         # creat base VM
@@ -108,10 +136,77 @@ def main(argv):
         qemu_args = left_args[2:]
         lib_cloudlet.synthesis(disk_image_path, meta, settings.disk_only, qemu_args=qemu_args)
     elif mode == CMD_LIST_BASE:
-        db_cloudlet.list_basevm(log=sys.stdout)
+        from db.table_def import BaseVM
+        dbconn = get_database()
+
+        basevm_list = dbconn.list_item(BaseVM)
+        sys.stdout.write("hash value" + "\t\t\t\t\t" + "path\n")
+        sys.stdout.write("-"*90 + "\n")
+        for item in basevm_list:
+            sys.stdout.write(item.hash_value + "\t" + item.disk_path + "\n")
+        sys.stdout.write("-"*90 + "\n")
+    elif mode == CMD_ADD_BASE:
+        from db.table_def import BaseVM
+        dbconn = get_database()
+
+        if len(left_args) < 2:
+            sys.stderr.write("Add existing base vm requires: \n \
+                    1) base path\n \
+                    2) hash value of the base\n \
+                    Ex) ./cloudlet add_base /path/to/base_disk.img 4304c473a9f98480c7d6387f01158881d3440bb81c8a9452b1abdef794e51111\n")
+            sys.exit(1)
+        basedisk_path = os.path.abspath(left_args[0])
+        base_hashvalue = left_args[1]
+        if not os.path.isfile(basedisk_path):
+            sys.stderr.write("Not valid file: %s\n" % basedisk_path)
+            sys.exit(1)
+
+        new_basevm = BaseVM(basedisk_path, base_hashvalue)
+        dbconn.add_item(new_basevm)
+    elif mode == CMD_DEL_BASE:
+        from db.table_def import BaseVM
+        dbconn = get_database()
+
+        if len(left_args) < 1:
+            sys.stderr.write("delete base vm requires base path\n \
+                    Ex) ./cloudlet del_base /path/to/base_disk.img \n")
+            sys.exit(1)
+        basedisk_path = os.path.abspath(left_args[0])
+        basevm_list = dbconn.list_item(BaseVM)
+        deleting_base = None
+        for item in basevm_list:
+            if basedisk_path == item.disk_path: 
+                deleting_base = item
+                break
+
+        if deleting_base:
+            dbconn.del_item(item)
+        else: 
+            sys.stderr.write("Cannot find matching base disk\n")
+            sys.exit(1)
+    elif mode == CMD_LIST_SESSION:
+        from db.table_def import Session
+        dbconn = get_database()
+
+        session_list = dbconn.list_item(Session)
+        sys.stdout.write("session_id\t\tassociated_time\t\t\tdisassociated_time\t\tstatus\n")
+        sys.stdout.write("-"*95 + "\n")
+        for item in session_list:
+            sys.stdout.write(str(item) + "\n")
+        sys.stdout.write("-"*95 + "\n")
+    elif mode == CMD_CLEAR_SESSION:
+        from db.table_def import Session
+        dbconn = get_database()
+
+        session_list = dbconn.list_item(Session)
+        for item in session_list:
+            dbconn.session.delete(item)
+        dbconn.session.commit()
+    else:
+        sys.stdout.write("Invalid command: %s\n" % mode)
+        sys.exit(1)
 
     return 0
-
 
 if __name__ == "__main__":
     status = main(sys.argv)

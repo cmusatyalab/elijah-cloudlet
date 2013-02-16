@@ -54,6 +54,7 @@ class CloudletResourceDynamic(object):
     def __str__(self):
         return pprint.pformat(self.__dict__)
 
+
 class Cloudlet(object):
     ip_v4 = ''
     port_number = int(-1)
@@ -84,6 +85,23 @@ def find_nearby_cloudlets(cloudlet_list_ret):
 
 class Util(object):
     @staticmethod
+    def connect(cloudlet_t):
+        global discovery_err_str
+        if not cloudlet_t.ip_v4:
+            discovery_err_str = "No IP is specified"
+            return None
+        try:
+            address = (cloudlet_t.ip_v4, CLOUDLET_PORT)
+            time_out = 10
+            #print "Connecting to (%s).." % str(address)
+            sock = socket.create_connection(address, time_out)
+            sock.setblocking(True)
+        except socket.error, msg:
+            discovery_err_str = str(msg) + ("\nCannot connect to (%s)\n" % str(address))
+            return None
+        return sock
+
+    @staticmethod
     def recvall(sock, size):
         data = ''
         while len(data) < size:
@@ -100,7 +118,6 @@ class Util(object):
 
 
 def get_cloudlet_info(cloudlet_t):
-    global discovery_err_str
     '''Step 1. fill out cloudlet_t field with more detailed information
     :param cloudlet_t: cloudlet_t instance that has ip_address of the cloudlet
     :type cloudlet_t: cloudlet_t
@@ -108,18 +125,8 @@ def get_cloudlet_info(cloudlet_t):
     :return: success/fail
     :rtype: int
     '''
-    if not cloudlet_t.ip_v4:
-        discovery_err_str = "No IP is specified"
-        return RET_FAILED
-
-    try:
-        address = (cloudlet_t.ip_v4, CLOUDLET_PORT)
-        time_out = 10
-        #print "Connecting to (%s).." % str(address)
-        sock = socket.create_connection(address, time_out)
-        sock.setblocking(True)
-    except socket.error, msg:
-        discovery_err_str = str(msg) + ("\nCannot connect to (%s)\n" % str(address))
+    sock = Util.connect(cloudlet_t)
+    if not sock:
         return RET_FAILED
 
     #import pdb;pdb.set_trace()
@@ -148,17 +155,58 @@ def associate_with_cloudlet(cloudlet_t):
     :return: session id or -1 if it failed
     :rtype: long
     '''
-    return long(0)
+    sock = Util.connect(cloudlet_t)
+    if not sock:
+        return RET_FAILED
+
+    # send request
+    header_dict = {
+        protocol.KEY_COMMAND : protocol.MESSAGE_COMMAND_SESSION_CREATE
+        }
+    header = Util.encoding(header_dict)
+    sock.sendall(struct.pack("!I", len(header)))
+    sock.sendall(header)
+
+    # recv response
+    recv_size, = struct.unpack("!I", Util.recvall(sock, 4))
+    data = Util.recvall(sock, recv_size)
+    data = Util.decoding(data)
+
+    pprint.pprint(data)
+    session_id = data.get(protocol.KEY_SESSIOIN_ID, None)
+    return session_id
 
 
-def disassociate(session_id):
+def disassociate(cloudlet_t, session_id):
     '''Step 2. disassociate with given cloudlet
     :param session_id: session_id that was returned when associated
     :type session_id: long
 
     :return: N/A
     '''
-    pass
+    sock = Util.connect(cloudlet_t)
+    if not sock:
+        return RET_FAILED
+
+    # send request
+    header_dict = {
+        protocol.KEY_COMMAND : protocol.MESSAGE_COMMAND_SESSION_CLOSE,
+        protocol.KEY_SESSIOIN_ID: session_id,
+        }
+    header = Util.encoding(header_dict)
+    sock.sendall(struct.pack("!I", len(header)))
+    sock.sendall(header)
+
+    # recv response
+    recv_size, = struct.unpack("!I", Util.recvall(sock, 4))
+    data = Util.recvall(sock, recv_size)
+    data = Util.decoding(data)
+
+    pprint.pprint(data)
+    ret_session_id = data.get(protocol.KEY_SESSIOIN_ID, None)
+    if session_id == ret_session_id:
+        return RET_SUCCESS
+    return RET_FAILED
 
 
 @staticmethod
@@ -194,11 +242,22 @@ def main(argv):
     else:
         print "Failed to find cloudlet"
     
-    for each_cloudlet in cloudlet_list:
-        if RET_SUCCESS == get_cloudlet_info(each_cloudlet):
-            print each_cloudlet
+    each_cloudlet = cloudlet_list[0]
+    if RET_SUCCESS == get_cloudlet_info(each_cloudlet):
+        session_id = associate_with_cloudlet(each_cloudlet)
+        if session_id == RET_FAILED:
+            print "Failed to get Session ID"
+
+        print "Session ID: %d\n" % (session_id)
+        ret = disassociate(each_cloudlet, session_id)
+        if ret:
+            print "Seesion(%d) is closed" % session_id
         else:
-            print "Failed to connect to %s" % each_cloudlet
+            print "Seesion(%d) is failed to close" % session_id
+
+
+    else:
+        print "Failed to connect to %s" % each_cloudlet
 
     return 0
 

@@ -24,7 +24,8 @@ import msgpack
 import tempfile
 import struct
 import lib_cloudlet as cloudlet
-import db_cloudlet
+from db.api import DBConnector
+from db.table_def import BaseVM
 import shutil
 
 from pprint import pformat
@@ -406,8 +407,7 @@ class SynthesisHandler(SocketServer.StreamRequestHandler):
         resource = self.server.resource_monitor.get_static_resource()
         resource.update(self.server.resource_monitor.get_dynamic_resource())
         
-        # send request
-        
+        # send response
         message = NetworkUtil.encoding({
             Protocol.KEY_COMMAND: Protocol.MESSAGE_COMMAND_RET_RESOURCE_INFO,
             Protocol.KEY_PAYLOAD: resource,
@@ -417,8 +417,38 @@ class SynthesisHandler(SocketServer.StreamRequestHandler):
         self.wfile.write(message)
         self.wfile.flush()
 
-    def _handle_get_cache_info(self, message):
-        pass
+    def _handle_session_create(self, message):
+        from db.table_def import Session
+        new_session = Session()
+        self.server.dbconn.add_item(new_session)
+
+        # send response
+        message = NetworkUtil.encoding({
+            Protocol.KEY_COMMAND: Protocol.MESSAGE_COMMAND_RET_SESSION_CREATE,
+            Protocol.KEY_SESSIOIN_ID: new_session.session_id,
+            })
+        message_size = struct.pack("!I", len(message))
+        self.request.send(message_size)
+        self.wfile.write(message)
+        self.wfile.flush()
+
+    def _handle_session_close(self, message):
+        from db.table_def import Session
+        my_session_id = message.get(Protocol.KEY_SESSIOIN_ID, None)
+        ret_session = self.server.dbconn.session.query(Session).filter(Session.session_id==my_session_id).first()
+        if ret_session:
+            ret_session.terminate()
+        self.server.dbconn.session.commit()
+
+        # send response
+        message = NetworkUtil.encoding({
+            Protocol.KEY_COMMAND: Protocol.MESSAGE_COMMAND_RET_SESSION_CLOSE,
+            Protocol.KEY_SESSIOIN_ID: ret_session.session_id,
+            })
+        message_size = struct.pack("!I", len(message))
+        self.request.send(message_size)
+        self.wfile.write(message)
+        self.wfile.flush()
 
     def handle(self):
         '''Handle request from the client
@@ -451,9 +481,10 @@ class SynthesisHandler(SocketServer.StreamRequestHandler):
                 pass
             elif command == Protocol.MESSAGE_COMMAND_GET_RESOURCE_INFO:
                 self._handle_get_resource_info(message)
-            elif command == Protocol.MESSAGE_COMMAND_GET_CACHE_INFO:
-                self._handle_get_cache_info(message)
-                pass
+            elif command == Protocol.MESSAGE_COMMAND_SESSION_CREATE:
+                self._handle_session_create(message)
+            elif command == Protocol.MESSAGE_COMMAND_SESSION_CLOSE:
+                self._handle_session_close(message)
             else:
                 Log.write("Invalid command number : %d\n" % command)
         except Exception as e:
@@ -486,7 +517,6 @@ class SynthesisHandler(SocketServer.StreamRequestHandler):
         self.request.send(message_size)
         self.wfile.write(message)
         self.wfile.flush()
-        Log.write("[FINISH] close client from %s\n" % (str(self.client_address)))
 
     def terminate(self):
         # force terminate when something wrong in handling request
@@ -558,9 +588,8 @@ class SynthesisServer(SocketServer.TCPServer):
 
     def __init__(self, args):
         settings, args = SynthesisServer.process_command_line(args)
-        self.basevm_list, error_msg = SynthesisServer.check_basevm()
-        if error_msg:
-            raise RapidSynthesisError(error_msg)
+        self.dbconn = DBConnector()
+        self.basevm_list = self.check_basevm()
 
         Synthesis_Const.LOCAL_IPADDRESS = "0.0.0.0"
         server_address = (Synthesis_Const.LOCAL_IPADDRESS, Synthesis_Const.SERVER_PORT_NUMBER)
@@ -616,7 +645,21 @@ class SynthesisServer(SocketServer.TCPServer):
         #SocketServer.TCPServer.handle_error(self, request, client_address)
         sys.stderr.write("handling error from client %s\n" % (str(client_address)))
 
+    def expire_session(self):
+        from db.table_def import Session
+
+        Log.write("[TERMINATE] Close all sessions\n")
+        session_list = self.dbconn.list_item(Session)
+        for item in session_list:
+            item.terminate()
+        self.dbconn.session.commit()
+
+
     def terminate(self):
+        # expire all existing session
+        self.expire_session()
+
+        # close all thread
         if self.socket != -1:
             self.socket.close()
         if hasattr(self, 'upnp_server') and self.upnp_server != None:
@@ -643,25 +686,31 @@ class SynthesisServer(SocketServer.TCPServer):
 
         return settings, args
 
-    @staticmethod
-    def check_basevm():
-        basevm_list = db_cloudlet.list_basevm() # list of (hash, path)
+    def check_basevm(self):
+        basevm_list = self.dbconn.list_item(BaseVM)
+        ret_list = list()
         print "-"*50
         print "* Base VM Configuration"
-        for index, (hash_value, disk_path) in enumerate(basevm_list):
+        for index, item in enumerate(basevm_list):
             # check file location
             (base_diskmeta, base_mempath, base_memmeta) = \
-                    Cloudlet_Const.get_basepath(disk_path)
-            if not os.path.exists(disk_path):
-                print "Error, disk image (%s) is not exist" % (disk_path)
-                sys.exit(2)
+                    Cloudlet_Const.get_basepath(item.disk_path)
+            if not os.path.exists(item.disk_path):
+                Log.write("[Warning] disk image (%s) is not exist\n" % (item.disk_path))
+                continue
             if not os.path.exists(base_mempath):
-                print "Error, memory snapshot (%s) is not exist" % (base_mempath)
-                sys.exit(2)
+                Log.write("[Warning] memory snapshot (%s) is not exist\n" % (base_mempath))
+                continue
+
+            # add to list
+            ret_list.append(item)
             print " %d : %s (Disk %d MB, Memory %d MB)" % \
-                    (index, disk_path, os.path.getsize(disk_path)/1024/1024, \
+                    (index, item.disk_path, os.path.getsize(item.disk_path)/1024/1024, \
                     os.path.getsize(base_mempath)/1024/1024)
         print "-"*50
 
-        return basevm_list, None
+        if len(ret_list) == 0:
+            Log.write("[Error] NO valid Base VM\n")
+            sys.exit(2)
+        return ret_list
 
