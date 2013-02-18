@@ -12,6 +12,7 @@ src/tmp/
 *.mem
 *.pyc
 *.class
+src/log_synthesis/
 paper/
 src/kvm-qemu/ 
 src/ec2/image/

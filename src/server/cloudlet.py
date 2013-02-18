@@ -16,7 +16,6 @@
 #
 
 import lib_cloudlet as lib_cloudlet
-import db_cloudlet
 import sys
 import os
 import time

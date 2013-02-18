@@ -29,7 +29,7 @@ def process_command_line(argv):
     global command_type
     global application_names
 
-    parser = OptionParser(usage="usage: ./rapid_app.py [option]",\
+    parser = OptionParser(usage="usage: ./rapid_app.py -a app_name [option]",\
             version="Desktop Cloudlet Client")
     parser.add_option(
             '-a', '--app', action='store', type='string', dest='application',

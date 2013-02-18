@@ -215,10 +215,10 @@ class SynthesisHandler(SocketServer.StreamRequestHandler):
             }
 
     def ret_fail(self, message):
-        print "Error, %s" % str(message)
+        Log.write("[Error] %s\n" % str(message))
         message = NetworkUtil.encoding({
             Protocol.KEY_COMMAND : Protocol.MESSAGE_COMMAND_FAIELD,
-            Protocol.KEY_FAILED_REAONS : message
+            Protocol.KEY_FAILED_REASON : message
             })
         message_size = struct.pack("!I", len(message))
         self.request.send(message_size)
@@ -226,7 +226,7 @@ class SynthesisHandler(SocketServer.StreamRequestHandler):
 
     def ret_success(self):
         message = NetworkUtil.encoding({
-            Protocol.KEY_COMMAND : Protocol.MESSAGE_COMMAND_SUCCESS
+            Protocol.KEY_COMMAND : Protocol.MESSAGE_COMMAND_SUCCESS,
             })
         print "SUCCESS to launch VM"
         message_size = struct.pack("!I", len(message))
@@ -234,6 +234,9 @@ class SynthesisHandler(SocketServer.StreamRequestHandler):
         self.wfile.write(message)
 
     def _check_validity(self, message):
+        header_info = None
+        requested_base = None
+
         if (message.get(Protocol.KEY_META_SIZE, 0) > 0):
             # check header option
             client_syn_option = message.get(Protocol.KEY_SYNTHESIS_OPTION, None)
@@ -246,26 +249,30 @@ class SynthesisHandler(SocketServer.StreamRequestHandler):
             while len(header_data) < meta_file_size:
                 header_data += self.request.recv(meta_file_size- len(header_data))
             header = NetworkUtil.decoding(header_data)
-
             base_hashvalue = header.get(Cloudlet_Const.META_BASE_VM_SHA256, None)
 
             # check base VM
-            for (hash_value, disk_path) in self.server.basevm_list:
-                if base_hashvalue == hash_value:
+            for each_basevm in self.server.basevm_list:
+                if base_hashvalue == each_basevm.hash_value:
                     print "[INFO] New client request %s VM" \
-                            % (disk_path)
-                    return [disk_path, header]
-
-        message = "Cannot find matching Base VM\nsha256: %s" % (base_hashvalue)
-        print message
-        self.ret_fail(message)
-        return None
+                            % (each_basevm.disk_path)
+                    requested_base = each_basevm.disk_path
+                    header_info = header
+        return [requested_base, header_info]
 
     def _handle_synthesis(self, message):
         Log.write("\n\n----------------------- New Connection --------------\n")
+        # check overlay meta info
         start_time = time.time()
         header_start_time = time.time()
         base_path, meta_info = self._check_validity(message)
+        if base_path and meta_info and meta_info.get(Cloudlet_Const.META_OVERLAY_FILES, None):
+            self.ret_success()
+        else:
+            self.ret_fail("No matching Base VM")
+            return
+
+        # start synthesis process
         url_manager = Manager()
         overlay_urls = url_manager.list()
         overlay_urls_size = url_manager.dict()
@@ -277,11 +284,8 @@ class SynthesisHandler(SocketServer.StreamRequestHandler):
         Log.write("  - %s\n" % str(pformat(self.synthesis_option)))
         Log.write("  - Base VM     : %s\n" % base_path)
         Log.write("  - Blob count  : %d\n" % len(overlay_urls))
-        if base_path == None or meta_info == None or overlay_urls == None:
-            message = "Failed, Invalid header information"
-            print message
-            self.wfile.write(message)            
-            self.ret_fail()
+        if overlay_urls == None:
+            self.ret_fail("No overlay info listed")
             return
         (base_diskmeta, base_mem, base_memmeta) = \
                 Cloudlet_Const.get_basepath(base_path, check_exist=True)
@@ -352,13 +356,13 @@ class SynthesisHandler(SocketServer.StreamRequestHandler):
             self.fuse_thread.join()
 
             # 3. resume VM
-            self.resumed_VM = cloudlet.ResumedVM(modified_img, modified_mem, self.fuse)
             time_start_resume = time.time()
+            self.resumed_VM = cloudlet.ResumedVM(modified_img, modified_mem, self.fuse)
             self.resumed_VM.start()
-            time_end_resume = time.time()
 
             # 4. return success to client
             self.resumed_VM.join()
+            time_end_resume = time.time()
             self.ret_success()
 
         end_time = time.time()
@@ -409,7 +413,7 @@ class SynthesisHandler(SocketServer.StreamRequestHandler):
         
         # send response
         message = NetworkUtil.encoding({
-            Protocol.KEY_COMMAND: Protocol.MESSAGE_COMMAND_RET_RESOURCE_INFO,
+            Protocol.KEY_COMMAND: Protocol.MESSAGE_COMMAND_SUCCESS,
             Protocol.KEY_PAYLOAD: resource,
             })
         message_size = struct.pack("!I", len(message))
@@ -424,7 +428,7 @@ class SynthesisHandler(SocketServer.StreamRequestHandler):
 
         # send response
         message = NetworkUtil.encoding({
-            Protocol.KEY_COMMAND: Protocol.MESSAGE_COMMAND_RET_SESSION_CREATE,
+            Protocol.KEY_COMMAND: Protocol.MESSAGE_COMMAND_SUCCESS,
             Protocol.KEY_SESSIOIN_ID: new_session.session_id,
             })
         message_size = struct.pack("!I", len(message))
@@ -442,13 +446,30 @@ class SynthesisHandler(SocketServer.StreamRequestHandler):
 
         # send response
         message = NetworkUtil.encoding({
-            Protocol.KEY_COMMAND: Protocol.MESSAGE_COMMAND_RET_SESSION_CLOSE,
+            Protocol.KEY_COMMAND: Protocol.MESSAGE_COMMAND_SUCCESS,
             Protocol.KEY_SESSIOIN_ID: ret_session.session_id,
             })
         message_size = struct.pack("!I", len(message))
         self.request.send(message_size)
         self.wfile.write(message)
         self.wfile.flush()
+
+    def _check_session(self, message):
+        from db.table_def import Session
+        my_session_id = message.get(Protocol.KEY_SESSIOIN_ID, None)
+        ret_session = self.server.dbconn.session.query(Session).filter(Session.session_id==my_session_id).first()
+        if ret_session and ret_session.status == Session.STATUS_RUNNING:
+            return True
+        else:
+            # send response
+            self.ret_fail("Not Valid session %s" % (my_session_id))
+            return False
+
+    def force_session_close(self, message):
+        from db.table_def import Session
+        my_session_id = message.get(Protocol.KEY_SESSIOIN_ID, None)
+        ret_session = self.server.dbconn.session.query(Session).filter(Session.session_id==my_session_id).first()
+        ret_session.terminate(status=Session.STATUS_UNEXPECT_CLOSE)
 
     def handle(self):
         '''Handle request from the client
@@ -468,11 +489,12 @@ class SynthesisHandler(SocketServer.StreamRequestHandler):
             msgpack_data += self.request.recv(message_size-len(msgpack_data))
         message = NetworkUtil.decoding(msgpack_data)
         command = message.get(Protocol.KEY_COMMAND, None)
-    
-        # handle request
+
+        # handle request that requries session
         try:
             if command == Protocol.MESSAGE_COMMAND_SEND_META:
-                self._handle_synthesis(message)
+                if self._check_session(message):
+                    self._handle_synthesis(message)
             elif command == Protocol.MESSAGE_COMMAND_SEND_OVERLAY:
                 # handled at _handle_synthesis
                 pass
@@ -484,10 +506,14 @@ class SynthesisHandler(SocketServer.StreamRequestHandler):
             elif command == Protocol.MESSAGE_COMMAND_SESSION_CREATE:
                 self._handle_session_create(message)
             elif command == Protocol.MESSAGE_COMMAND_SESSION_CLOSE:
-                self._handle_session_close(message)
+                if self._check_session(message):
+                    self._handle_session_close(message)
             else:
                 Log.write("Invalid command number : %d\n" % command)
         except Exception as e:
+            # close session if synthesis failed
+            if command == Protocol.MESSAGE_COMMAND_SEND_META:
+                self.force_session_close()
             sys.stderr.write(traceback.format_exc())
             sys.stderr.write("%s" % str(e))
             sys.stderr.write("handler raises exception\n")
@@ -511,7 +537,7 @@ class SynthesisHandler(SocketServer.StreamRequestHandler):
 
         # return finish sucess to client
         message = NetworkUtil.encoding({
-            Protocol.KEY_COMMAND : Protocol.MESSAGE_COMMAND_FINISH_SUCCESS
+            Protocol.KEY_COMMAND : Protocol.MESSAGE_COMMAND_SUCCESS,
             })
         message_size = struct.pack("!I", len(message))
         self.request.send(message_size)
@@ -643,21 +669,23 @@ class SynthesisServer(SocketServer.TCPServer):
 
     def handle_error(self, request, client_address):
         #SocketServer.TCPServer.handle_error(self, request, client_address)
-        sys.stderr.write("handling error from client %s\n" % (str(client_address)))
+        #sys.stderr.write("handling error from client %s\n" % (str(client_address)))
+        pass
 
-    def expire_session(self):
+    def expire_all_sessions(self):
         from db.table_def import Session
 
-        Log.write("[TERMINATE] Close all sessions\n")
+        Log.write("[TERMINATE] Close all running sessions\n")
         session_list = self.dbconn.list_item(Session)
         for item in session_list:
-            item.terminate()
+            if item.status == Session.STATUS_RUNNING:
+                item.terminate(Session.STATUS_UNEXPECT_CLOSE)
         self.dbconn.session.commit()
 
 
     def terminate(self):
         # expire all existing session
-        self.expire_session()
+        self.expire_all_sessions()
 
         # close all thread
         if self.socket != -1:

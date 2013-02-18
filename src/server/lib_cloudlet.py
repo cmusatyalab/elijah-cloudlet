@@ -29,7 +29,6 @@ import msgpack
 import copy
 import libvirt
 import shutil
-import db_cloudlet
 from Configuration import Const, Options
 from delta import DeltaList
 from delta import DeltaItem

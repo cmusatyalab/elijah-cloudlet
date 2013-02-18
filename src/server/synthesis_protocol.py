@@ -33,17 +33,15 @@ class Protocol(object):
     MESSAGE_COMMAND_FAIELD              = 0x02
     MESSAGE_COMMAND_ON_DEMAND           = 0x03
     MESSAGE_COMMAND_FINISH_SUCCESS      = 0x04
-    MESSAGE_COMMAND_RET_RESOURCE_INFO   = 0x05
-    MESSAGE_COMMAND_RET_SESSION_CREATE  = 0x06
-    MESSAGE_COMMAND_RET_SESSION_CLOSE   = 0x07
 
     #
     # other keys
     #
+    KEY_ERROR                   = "error"
     KEY_META_SIZE               = "meta_size"
     KEY_REQUEST_SEGMENT         = "blob_uri"
     KEY_REQUEST_SEGMENT_SIZE    = "blob_size"
-    KEY_FAILED_REAONS           = "reasons"
+    KEY_FAILED_REASON           = "reasons"
     KEY_PAYLOAD                 = "payload"
     KEY_SESSIOIN_ID             = "session_id"
 

@@ -21,11 +21,15 @@ import struct
 import sys
 import socket
 import time
+import threading
+import select
 from synthesis_protocol import Protocol as protocol
 from optparse import OptionParser
-import threading
 from pprint import pprint
-import select
+from discovery.discovery_api import API
+from discovery.discovery_api import Cloudlet
+from discovery.discovery_api import Util
+
 
 class RapidClientError(Exception):
     pass
@@ -73,44 +77,53 @@ def synthesis(address, port, overlay_path, app_function, synthesis_option):
         sys.stderr.write("Invalid overlay path: %s\n" % overlay_path)
         sys.exit(1)
 
-    # connection
-    start_time = time.time()
-    try:
-        print "Connecting to (%s, %d).." % (address, port)
-        sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-        #sock.setblocking(True)
-        sock.settimeout(10)
-        sock.setsockopt(socket.IPPROTO_TCP, socket.TCP_NODELAY, 1)
-        sock.connect((address, port))
-    except socket.error, msg:
-        sys.stderr.write("Error, %s\n" % msg)
-        sys.exit(1)
+    # get session
+    cloudlet = Cloudlet(ip_address=address)
+    session_id = API.associate_with_cloudlet(cloudlet)
 
-    start_cloudlet(sock, overlay_path, app_function, start_time, synthesis_option)
+    start_cloudlet(cloudlet, session_id, overlay_path, app_function, synthesis_option)
     print "finished"
 
 
-def start_cloudlet(sock, overlay_meta_path, app_function, start_time, synthesis_options=dict()):
-    blob_request_list = list()
+def start_cloudlet(cloudlet, session_id, overlay_meta_path, app_function, synthesis_options=dict()):
+    # connection
+    start_time = time.time()
+    sock = Util.connect(cloudlet)
+    if not sock:
+        print API.discovery_err_str
+        sys.exit(1)
 
+    blob_request_list = list()
     time_dict = dict()
     app_time_dict = dict()
 
     print "Overlay Meta: %s" % (overlay_meta_path)
-    meta_info = msgpack.unpackb(open(overlay_meta_path, "r").read())
+    meta_info = Util.decoding(open(overlay_meta_path, "r").read())
 
     # send header
     header_dict = {
         protocol.KEY_COMMAND : protocol.MESSAGE_COMMAND_SEND_META,
         protocol.KEY_META_SIZE : os.path.getsize(overlay_meta_path),
+        protocol.KEY_SESSIOIN_ID: session_id,
         }
     if len(synthesis_options) > 0:
         header_dict[protocol.KEY_SYNTHESIS_OPTION] = synthesis_options
-    header = msgpack.packb(header_dict)
+    header = Util.encoding(header_dict)
     sock.sendall(struct.pack("!I", len(header)))
     sock.sendall(header)
     sock.sendall(open(overlay_meta_path, "r").read())
     time_dict['send_end_time'] = time.time()
+
+    # recv header
+    data = recv_all(sock, 4)
+    msg_size = struct.unpack("!I", data)[0]
+    msg_data = recv_all(sock, msg_size);
+    message = Util.decoding(msg_data)
+    command = message.get(protocol.KEY_COMMAND, None)
+    if command != protocol.MESSAGE_COMMAND_SUCCESS:
+        sys.stderr.write("[ERROR] Failed to send overlay meta header\n")
+        sys.stderr.write("[ERROR] Reason : %s\n" % message.get(protocol.KEY_FAILED_REASON, None))
+        sys.exit(1)
 
     app_thread = None
     total_blob_count = len(meta_info['overlay_files'])
@@ -125,7 +138,7 @@ def start_cloudlet(sock, overlay_meta_path, app_function, start_time, synthesis_
                     break
                 msg_size = struct.unpack("!I", data)[0]
                 msg_data = recv_all(sock, msg_size);
-                message = msgpack.unpackb(msg_data)
+                message = Util.decoding(msg_data)
                 command = message.get(protocol.KEY_COMMAND)
                 if command ==  protocol.MESSAGE_COMMAND_SUCCESS:    # RET_SUCCESS
                     sys.stdout.write("Synthesis SUCCESS\n")
@@ -160,11 +173,12 @@ def start_cloudlet(sock, overlay_meta_path, app_function, start_time, synthesis_
                 segment_info = {
                         protocol.KEY_COMMAND : protocol.MESSAGE_COMMAND_SEND_OVERLAY,
                         protocol.KEY_REQUEST_SEGMENT : requested_uri,
-                        protocol.KEY_REQUEST_SEGMENT_SIZE : os.path.getsize(blob_path)
+                        protocol.KEY_REQUEST_SEGMENT_SIZE : os.path.getsize(blob_path),
+                        protocol.KEY_SESSIOIN_ID: session_id,
                         }
 
                 # send close signal to cloudlet server
-                header = msgpack.packb(segment_info)
+                header = Util.encoding(segment_info)
                 sock.sendall(struct.pack("!I", len(header)))
                 sock.sendall(header)
                 sock.sendall(open(blob_path, "rb").read())
@@ -187,6 +201,7 @@ def start_cloudlet(sock, overlay_meta_path, app_function, start_time, synthesis_
     app_end = time_dict['app_end']
     client_info = {
             protocol.KEY_COMMAND : protocol.MESSAGE_COMMAND_FINISH,
+            protocol.KEY_SESSIOIN_ID : session_id,
             'Transfer End':(send_end-start_time), 
             'Synthesis Success': (recv_end-start_time),
             'App Start': (app_start-start_time),
@@ -195,7 +210,7 @@ def start_cloudlet(sock, overlay_meta_path, app_function, start_time, synthesis_
     pprint(client_info)
 
     # send close signal to cloudlet server
-    header = msgpack.packb(client_info)
+    header = Util.encoding(client_info)
     sock.sendall(struct.pack("!I", len(header)))
     sock.sendall(header)
 
@@ -203,10 +218,15 @@ def start_cloudlet(sock, overlay_meta_path, app_function, start_time, synthesis_
     data = recv_all(sock, 4)
     msg_size = struct.unpack("!I", data)[0]
     msg_data = recv_all(sock, msg_size);
-    message = msgpack.unpackb(msg_data)
+    message = Util.decoding(msg_data)
     command = message.get(protocol.KEY_COMMAND)
-    if command != protocol.MESSAGE_COMMAND_FINISH_SUCCESS:
+    if command != protocol.MESSAGE_COMMAND_SUCCESS:
         raise RapidClientError("finish sucess errror: %d" % command)
+
+    # close session
+    if API.disassociate(cloudlet, session_id) == False:
+        print API.discovery_err_str
+
 
 class client_thread(threading.Thread):
     def __init__(self, client_method):
