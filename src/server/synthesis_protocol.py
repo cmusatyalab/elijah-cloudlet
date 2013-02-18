@@ -32,7 +32,6 @@ class Protocol(object):
     MESSAGE_COMMAND_SUCCESS             = 0x01
     MESSAGE_COMMAND_FAIELD              = 0x02
     MESSAGE_COMMAND_ON_DEMAND           = 0x03
-    MESSAGE_COMMAND_FINISH_SUCCESS      = 0x04
 
     #
     # other keys
