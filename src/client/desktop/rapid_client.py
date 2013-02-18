@@ -29,6 +29,7 @@ from pprint import pprint
 from discovery.discovery_api import API
 from discovery.discovery_api import Cloudlet
 from discovery.discovery_api import Util
+from discovery import discovery_api
 
 
 class RapidClientError(Exception):
@@ -39,7 +40,7 @@ def process_command_line(argv):
     global command_type
     global application_names
 
-    parser = OptionParser(usage="usage: ./cloudlet_client.py -o overlay_path -s cloudlet_server_ip [option]",
+    parser = OptionParser(usage="usage: ./cloudlet_client.py -o overlay_path [option]",
             version="Desktop Client for Cloudlet")
     parser.add_option(
             '-o', '--overlay-path', action='store', type='string', dest='overlay_path',
@@ -57,8 +58,6 @@ def process_command_line(argv):
 
     if settings.overlay_path == None:
         parser.error("Need path to overlay-meta file")
-    if settings.server_ip == None:
-        parser.error("Need Cloudlet's server IP")
     if not len(args) == 0:
         parser.error('program takes no command-line arguments; "%s" ignored.' % (args,))
     
@@ -80,6 +79,9 @@ def synthesis(address, port, overlay_path, app_function, synthesis_option):
     # get session
     cloudlet = Cloudlet(ip_address=address)
     session_id = API.associate_with_cloudlet(cloudlet)
+    if session_id == discovery_api.RET_FAILED:
+        sys.stderr.write(API.discovery_err_str)
+        sys.exit(1)
 
     start_cloudlet(cloudlet, session_id, overlay_path, app_function, synthesis_option)
     print "finished"
@@ -255,7 +257,28 @@ def main(argv=None):
     synthesis_options[protocol.SYNTHESIS_OPTION_DISPLAY_VNC] = settings.display_vnc
     synthesis_options[protocol.SYNTHESIS_OPTION_EARLY_START] = settings.early_start
     app_function = default_app_function
-    synthesis(settings.server_ip, port, settings.overlay_path, app_function, synthesis_options)
+    cloudlet_ip = None
+    if settings.server_ip:
+        cloudlet_ip = settings.server_ip
+    else:
+        cloudlet_list = list()
+        if discovery_api.RET_FAILED == API.find_nearby_cloudlets(cloudlet_list):
+            sys.stderr.write(API.discovery_err_str)
+            sys.exit(1)
+        for index, each_cloudlet in enumerate(cloudlet_list):
+            API.get_cloudlet_info(each_cloudlet)
+            print "%d : %s" % (index, each_cloudlet)
+        print ""
+        while True:
+            user_input = raw_input("Choose Cloudlet (0~%d): " % (len(cloudlet_list)-1))
+            if not user_input.isdigit():
+                continue
+            selected_number = int(user_input)
+            if 0 <= selected_number < len(cloudlet_list):
+                break
+        cloudlet_ip = cloudlet_list[selected_number].ip_v4
+        
+    synthesis(cloudlet_ip, port, settings.overlay_path, app_function, synthesis_options)
     return 0
 
 

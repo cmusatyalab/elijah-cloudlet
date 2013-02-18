@@ -128,7 +128,7 @@ class OverlayVM(Base):
     def __str__(self):
         base_path = self.basevm_path
         if len(base_path) > 50:
-            base_path = "..%s" % base_path[-47:]
+            base_path = "...%s" % base_path[-47:]
         ret_str = "%s\t%s\t%s\t%s" % (str(self.id),
                 str(self.session_id), str(base_path),
                 self._print_status(self.status))
