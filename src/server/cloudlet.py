@@ -83,7 +83,8 @@ def main(argv):
     CMD_DEL_BASE            = "del_base"
     CMD_ADD_BASE            = "add_base"
     CMD_LIST_SESSION        = "list_session"
-    CMD_CLEAR_SESSION        = "clear_session"
+    CMD_CLEAR_SESSION       = "clear_session"
+    CMD_LIST_OVERLAY        = "list_overlay"
 
     commands = {
             CMD_BASE_CREATION: "create new base VM",
@@ -201,6 +202,16 @@ def main(argv):
         for item in session_list:
             dbconn.session.delete(item)
         dbconn.session.commit()
+    elif mode == CMD_LIST_OVERLAY:
+        from db.table_def import OverlayVM
+        dbconn = get_database()
+
+        overlay_list = dbconn.list_item(OverlayVM)
+        sys.stdout.write("id\tsession_id\t\tbasevm_path\t\t\t\t\t\tstatus\n")
+        sys.stdout.write("-"*95 + "\n")
+        for item in overlay_list:
+            sys.stdout.write(str(item) + "\n")
+        sys.stdout.write("-"*95 + "\n")
     else:
         sys.stdout.write("Invalid command: %s\n" % mode)
         sys.exit(1)

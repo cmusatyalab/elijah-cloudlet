@@ -50,7 +50,7 @@ class CloudletResourceStatic(object):
 
     def update(self, data):
         self.number_cpu = data.get(Const.MACHINE_NUMBER_TOTAL_CPU, None)
-        self.cpu_clock_speed_ghz = data.get(Const.MACHINE_CLOCK_SPEED, None)
+        self.cpu_clock_speed_mhz = data.get(Const.MACHINE_CLOCK_SPEED, None)
         self.mem_total_mb = data.get(Const.MACHINE_MEM_TOTAL, None)
 
 
@@ -177,7 +177,7 @@ class API(object):
 
     @staticmethod
     def associate_with_cloudlet(cloudlet_t):
-        '''Step 2. Associate with given cloudlet
+        '''Step 3. Associate with given cloudlet
         :param cloudlet_t: cloudlet_t instance that has ip_address of the cloudlet
         :type cloudlet_t: cloudlet_t
 
@@ -213,7 +213,7 @@ class API(object):
 
     @staticmethod
     def disassociate(cloudlet_t, session_id):
-        '''Step 2. disassociate with given cloudlet
+        '''Step 4. disassociate with given cloudlet
         :param session_id: session_id that was returned when associated
         :type session_id: long
 

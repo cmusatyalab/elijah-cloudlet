@@ -25,7 +25,7 @@ import tempfile
 import struct
 import lib_cloudlet as cloudlet
 from db.api import DBConnector
-from db.table_def import BaseVM
+from db.table_def import BaseVM, Session, OverlayVM
 import shutil
 
 from pprint import pformat
@@ -266,11 +266,16 @@ class SynthesisHandler(SocketServer.StreamRequestHandler):
         start_time = time.time()
         header_start_time = time.time()
         base_path, meta_info = self._check_validity(message)
+        session_id = message.get(Protocol.KEY_SESSIOIN_ID, None)
         if base_path and meta_info and meta_info.get(Cloudlet_Const.META_OVERLAY_FILES, None):
             self.ret_success()
         else:
             self.ret_fail("No matching Base VM")
             return
+
+        # update DB
+        new_overlayvm = OverlayVM(session_id, base_path)
+        self.server.dbconn.add_item(new_overlayvm)
 
         # start synthesis process
         url_manager = Manager()
@@ -407,6 +412,9 @@ class SynthesisHandler(SocketServer.StreamRequestHandler):
                     mem_access_list, disk_access_list, \
                     print_out=Log)
 
+        # update DB
+        new_overlayvm.terminate()
+
     def _handle_get_resource_info(self, message):
         resource = self.server.resource_monitor.get_static_resource()
         resource.update(self.server.resource_monitor.get_dynamic_resource())
@@ -422,7 +430,6 @@ class SynthesisHandler(SocketServer.StreamRequestHandler):
         self.wfile.flush()
 
     def _handle_session_create(self, message):
-        from db.table_def import Session
         new_session = Session()
         self.server.dbconn.add_item(new_session)
 
@@ -437,7 +444,6 @@ class SynthesisHandler(SocketServer.StreamRequestHandler):
         self.wfile.flush()
 
     def _handle_session_close(self, message):
-        from db.table_def import Session
         my_session_id = message.get(Protocol.KEY_SESSIOIN_ID, None)
         ret_session = self.server.dbconn.session.query(Session).filter(Session.session_id==my_session_id).first()
         if ret_session:
@@ -455,7 +461,6 @@ class SynthesisHandler(SocketServer.StreamRequestHandler):
         self.wfile.flush()
 
     def _check_session(self, message):
-        from db.table_def import Session
         my_session_id = message.get(Protocol.KEY_SESSIOIN_ID, None)
         ret_session = self.server.dbconn.session.query(Session).filter(Session.session_id==my_session_id).first()
         if ret_session and ret_session.status == Session.STATUS_RUNNING:
@@ -466,7 +471,6 @@ class SynthesisHandler(SocketServer.StreamRequestHandler):
             return False
 
     def force_session_close(self, message):
-        from db.table_def import Session
         my_session_id = message.get(Protocol.KEY_SESSIOIN_ID, None)
         ret_session = self.server.dbconn.session.query(Session).filter(Session.session_id==my_session_id).first()
         ret_session.terminate(status=Session.STATUS_UNEXPECT_CLOSE)
