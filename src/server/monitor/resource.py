@@ -66,7 +66,7 @@ class ResourceMonitorThread(threading.Thread):
     def get_dynamic_resource(self):
         import psutil
         cpu_usage = float(psutil.cpu_percent())
-        free_memory = long(psutil.virtual_memory()[1])
+        free_memory = long(psutil.virtual_memory()[1]/1024/1024)
 
         # disk io during 1 sec
         '''
