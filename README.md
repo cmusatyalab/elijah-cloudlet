@@ -59,9 +59,9 @@ Recommended platform
 
 We have tested at __Ubuntu 12.04 LTS 64-bit__
 
-This version of Cloudlet code have several dependencies on other project for
+This version of Cloudlet has several dependencies on other projects for
 further optimization, and currently we include this dependency as a binary.
-Therefore, it recommend you to use __Ubuntu 12.04 LTS 64-bit__
+Therefore, we recommend you to use __Ubuntu 12.04 LTS 64-bit__
 
 
 
