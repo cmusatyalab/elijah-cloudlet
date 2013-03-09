@@ -29,6 +29,8 @@ import msgpack
 import copy
 import libvirt
 import shutil
+from db import api as db_api
+from db import table_def as db_table
 from Configuration import Const, Options
 from delta import DeltaList
 from delta import DeltaItem
@@ -212,7 +214,9 @@ def create_baseVM(disk_image_path):
         sys.exit(1)
 
     # save the result to DB
-    db_cloudlet.create_basevm(base_hashvalue, disk_image_path)
+    dbconn = db_api.DBConnector()
+    new_basevm = db_table.BaseVM(disk_image_path, base_hashvalue)
+    dbconn.add_item(new_basevm)
 
     # write protection
     os.chmod(disk_image_path, stat.S_IRUSR)
@@ -244,7 +248,13 @@ class VM_Overlay(threading.Thread):
 
         (base_diskmeta, base_mem, base_memmeta) = \
                 Const.get_basepath(self.base_image, check_exist=True)
-        base_hash_value = db_cloudlet.gethash_basevm(self.base_image)
+
+        # find base vm from DB
+        dbconn = db_api.DBConnector()
+        basevm_list = dbconn.list_item(db_table.BaseVM)
+        for basevm_row in basevm_list:
+            if basevm_row.disk_path == self.base_image:
+                base_hash_value = basevm_row.hash_value
         if not base_hash_value:
             raise CloudletGenerationError("Cannot find hashvalue for %s" % self.base_image)
         

@@ -23,8 +23,6 @@ from sqlalchemy import Column, DateTime, Integer, String, BigInteger
 from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.orm import relation, backref
 import random
-import sys
-    
 import datetime
 
 
