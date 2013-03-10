@@ -12,6 +12,7 @@
 // or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU General Public License
 // for more details.
 package edu.cmu.cs.cloudlet.android;
+import java.io.File;
 import java.util.ArrayList;
 
 import edu.cmu.cs.cloudlet.android.application.CloudletCameraActivity;
@@ -20,10 +21,12 @@ import edu.cmu.cs.cloudlet.android.data.VMInfo;
 import edu.cmu.cs.cloudlet.android.discovery.CloudletDiscovery;
 import edu.cmu.cs.cloudlet.android.network.CloudletConnector;
 import edu.cmu.cs.cloudlet.android.discovery.CloudletDevice;
+import edu.cmu.cs.cloudlet.android.test.BatchSynthesisTest;
 import edu.cmu.cs.cloudlet.android.util.CloudletEnv;
 
 import android.app.Activity;
 import android.app.AlertDialog;
+import android.app.ProgressDialog;
 import android.content.DialogInterface;
 import android.content.Intent;
 import android.content.SharedPreferences;
@@ -37,7 +40,7 @@ import android.view.View;
 import android.widget.Button;
 
 public class CloudletActivity extends Activity {
-	public static String GLOBAL_DISCOVERY_SERVER = "http://hail.elijah.cs.cmu.edu:8000/api/v1/Cloudlet/search/?n=3";	
+	public static String GLOBAL_DISCOVERY_SERVER = "http://scarlet.aura.cs.cmu.edu/api/v1/Cloudlet/search/?n=3";	
 	public static String SYNTHESIS_SERVER_IP = "cloudlet.krha.kr";
 	public static int SYNTHESIS_SERVER_PORT = 8021;
 
@@ -48,6 +51,7 @@ public class CloudletActivity extends Activity {
 	protected CloudletConnector connector;
 	protected int selectedOveralyIndex;
 	private CloudletDiscovery cloudletDiscovery;
+	private ProgressDialog progDialog;
 
 	@Override
 	public void onCreate(Bundle savedInstanceState) {
@@ -63,6 +67,7 @@ public class CloudletActivity extends Activity {
 
 		// Performance Button
 		findViewById(R.id.testSynthesis).setOnClickListener(clickListener);
+		findViewById(R.id.synthesisBatchTest).setOnClickListener(clickListener);
 	}
 
 	private void showDialogSelectOverlay(final ArrayList<VMInfo> vmList) {
@@ -95,14 +100,23 @@ public class CloudletActivity extends Activity {
 	}
 
 	/*
-	 * Synthesis initiation through HTTP Post
+	 * Synthesis start
 	 */
 	protected void runConnection(String address, int port, VMInfo overlayVM) {
 		if (this.connector != null) {
 			this.connector.close();
 		}
-		this.connector = new CloudletConnector(this, CloudletActivity.this);
-		this.connector.startConnection(address, port, overlayVM);
+		this.connector = new CloudletConnector(CloudletActivity.this, synthesisHandler);
+		this.connector.setConnection(address, port, overlayVM);
+		this.connector.start();
+
+		if (this.progDialog == null) {
+			this.progDialog = ProgressDialog.show(this, "Info", "Connecting to " + address, true);
+			this.progDialog.setIcon(R.drawable.ic_launcher);
+		} else {
+			this.progDialog.setMessage("Connecting to " + address);
+		}
+		this.progDialog.show();		
 	}
 
 
@@ -159,10 +173,6 @@ public class CloudletActivity extends Activity {
 	View.OnClickListener clickListener = new View.OnClickListener() {
 		@Override
 		public void onClick(View v) {
-			// show
-			// serviceDiscovery.showDialogSelectOption();
-
-			// This buttons are for MobiSys test
 			if (v.getId() == R.id.testSynthesis) {
 				// Find All overlay and let user select one of them.
 				CloudletEnv.instance().resetOverlayList();
@@ -170,8 +180,13 @@ public class CloudletActivity extends Activity {
 				if (vmList.size() > 0) {
 					showDialogSelectOverlay(vmList);
 				} else {
-					showAlert("Error", "We found No Overlay");
+					File ovelray_root = CloudletEnv.instance().getFilePath(CloudletEnv.OVERLAY_DIR);
+					String errMsg = "No Overlay exist\nCreate overlay directory under \"" + ovelray_root.getAbsolutePath() + "\"";
+					showAlert("Error", errMsg);
 				}
+			}else if(v.getId() == R.id.synthesisBatchTest) {
+				Intent intent = new Intent(CloudletActivity.this, BatchSynthesisTest.class);
+				startActivityForResult(intent, 0);
 			}
 		}
 	};
@@ -254,6 +269,55 @@ public class CloudletActivity extends Activity {
 		}
 	};
 	
+	/*
+	 * Synthesis callback handler
+	 */
+	Handler synthesisHandler = new Handler() {
+		
+		protected void updateMessage(String msg){
+			if ((progDialog != null) && (progDialog.isShowing())){
+				progDialog.setMessage(msg);
+			}
+		}
+		
+		public void handleMessage(Message msg) {
+			if (msg.what == CloudletConnector.SYNTHESIS_SUCCESS) {				
+				String appName = (String)msg.obj;
+				this.updateMessage("Synthesis SUCESS");
+//				boolean isSuccess = runStandAlone(appName);
+				boolean isSuccess = false;
+				if (isSuccess == false) {
+					// If we cannot find matching application,
+					// then ask user to close VM
+					String message = "VM synthesis is successfully finished, but cannot find matching Android application named ("
+							+ appName + ")\n\nClose VM at Cloudlet?";
+					new AlertDialog.Builder(CloudletActivity.this).setTitle("Info").setMessage(message)
+							.setPositiveButton("Yes", new DialogInterface.OnClickListener() {
+								public void onClick(DialogInterface dialog, int which) {
+									connector.closeRequest();
+								}
+							}).setNegativeButton("No", null).show();
+				}
+				progDialog.dismiss();
+			} else if (msg.what == CloudletConnector.SYNTHESIS_FAILED) {
+				String reason = (String) msg.obj;
+				if (reason != null)
+					this.updateMessage(reason);
+				else
+					this.updateMessage("Synthesis FAILED");
+				progDialog.dismiss();
+				
+				AlertDialog.Builder ab = new AlertDialog.Builder(CloudletActivity.this);
+				ab.setTitle("VM Synthesis Failed");
+				ab.setIcon(R.drawable.ic_launcher);
+				ab.setPositiveButton("Ok", null).setNegativeButton("Cancel", null);
+				ab.show();				
+			} else if (msg.what == CloudletConnector.SYNTHESIS_PROGRESS) {
+				String message = (String)msg.obj;
+				this.updateMessage(message);				
+			}
+		}
+	};
 	 
 	// TO BE DELETED (only for test purpose)
 	public static final String[] applications = { "MOPED", "GRAPHICS"};

@@ -224,9 +224,22 @@ class SynthesisHandler(SocketServer.StreamRequestHandler):
         self.request.send(message_size)
         self.wfile.write(message)
 
-    def ret_success(self):
-        message = NetworkUtil.encoding({
+    def ret_success(self, req_command, payload=None):
+        send_message = {
             Protocol.KEY_COMMAND : Protocol.MESSAGE_COMMAND_SUCCESS,
+            Protocol.KEY_REQUESTED_COMMAND : req_command,
+            }
+        if payload:
+            send_message.update(payload)
+        message = NetworkUtil.encoding(send_message)
+        message_size = struct.pack("!I", len(message))
+        self.request.send(message_size)
+        self.wfile.write(message)
+        self.wfile.flush()
+
+    def send_synthesis_done(self):
+        message = NetworkUtil.encoding({
+            Protocol.KEY_COMMAND : Protocol.MESSAGE_COMMAND_SYNTHESIS_DONE,
             })
         print "SUCCESS to launch VM"
         message_size = struct.pack("!I", len(message))
@@ -268,7 +281,7 @@ class SynthesisHandler(SocketServer.StreamRequestHandler):
         base_path, meta_info = self._check_validity(message)
         session_id = message.get(Protocol.KEY_SESSIOIN_ID, None)
         if base_path and meta_info and meta_info.get(Cloudlet_Const.META_OVERLAY_FILES, None):
-            self.ret_success()
+            self.ret_success(Protocol.MESSAGE_COMMAND_SEND_META)
         else:
             self.ret_fail("No matching Base VM")
             return
@@ -346,7 +359,7 @@ class SynthesisHandler(SocketServer.StreamRequestHandler):
             # 3. return success right after resuming VM
             # before receiving all chunks
             self.resumed_VM.join()
-            self.ret_success()
+            self.send_synthesis_done()
 
             # 4. then wait fuse end
             self.fuse_thread.join()
@@ -368,7 +381,7 @@ class SynthesisHandler(SocketServer.StreamRequestHandler):
             # 4. return success to client
             self.resumed_VM.join()
             time_end_resume = time.time()
-            self.ret_success()
+            self.send_synthesis_done()
 
         end_time = time.time()
 
@@ -392,6 +405,7 @@ class SynthesisHandler(SocketServer.StreamRequestHandler):
         if command != Protocol.MESSAGE_COMMAND_FINISH:
             msg = "Unexpected command while streaming overlay VM: %d" % command
             raise RapidSynthesisError(msg)
+        self.ret_success(Protocol.MESSAGE_COMMAND_FINISH)
         Log.write("  - %s" % str(pformat(finish_message)))
         Log.write("\n")
 
@@ -420,28 +434,16 @@ class SynthesisHandler(SocketServer.StreamRequestHandler):
         resource.update(self.server.resource_monitor.get_dynamic_resource())
         
         # send response
-        message = NetworkUtil.encoding({
-            Protocol.KEY_COMMAND: Protocol.MESSAGE_COMMAND_SUCCESS,
-            Protocol.KEY_PAYLOAD: resource,
-            })
-        message_size = struct.pack("!I", len(message))
-        self.request.send(message_size)
-        self.wfile.write(message)
-        self.wfile.flush()
+        pay_load = {Protocol.KEY_PAYLOAD: resource}
+        self.ret_success(Protocol.MESSAGE_COMMAND_GET_RESOURCE_INFO, pay_load)
 
     def _handle_session_create(self, message):
         new_session = Session()
         self.server.dbconn.add_item(new_session)
 
         # send response
-        message = NetworkUtil.encoding({
-            Protocol.KEY_COMMAND: Protocol.MESSAGE_COMMAND_SUCCESS,
-            Protocol.KEY_SESSIOIN_ID: new_session.session_id,
-            })
-        message_size = struct.pack("!I", len(message))
-        self.request.send(message_size)
-        self.wfile.write(message)
-        self.wfile.flush()
+        pay_load = {Protocol.KEY_SESSIOIN_ID : new_session.session_id}
+        self.ret_success(Protocol.MESSAGE_COMMAND_SESSION_CREATE, pay_load)
 
     def _handle_session_close(self, message):
         my_session_id = message.get(Protocol.KEY_SESSIOIN_ID, None)
@@ -451,14 +453,7 @@ class SynthesisHandler(SocketServer.StreamRequestHandler):
         self.server.dbconn.session.commit()
 
         # send response
-        message = NetworkUtil.encoding({
-            Protocol.KEY_COMMAND: Protocol.MESSAGE_COMMAND_SUCCESS,
-            Protocol.KEY_SESSIOIN_ID: ret_session.session_id,
-            })
-        message_size = struct.pack("!I", len(message))
-        self.request.send(message_size)
-        self.wfile.write(message)
-        self.wfile.flush()
+        self.ret_success(Protocol.MESSAGE_COMMAND_SESSION_CLOSE)
 
     def _check_session(self, message):
         my_session_id = message.get(Protocol.KEY_SESSIOIN_ID, None)
@@ -538,15 +533,6 @@ class SynthesisHandler(SocketServer.StreamRequestHandler):
         if hasattr(self, 'tmp_overlay_dir') and os.path.exists(self.tmp_overlay_dir):
             shutil.rmtree(self.tmp_overlay_dir)
         Log.flush()
-
-        # return finish sucess to client
-        message = NetworkUtil.encoding({
-            Protocol.KEY_COMMAND : Protocol.MESSAGE_COMMAND_SUCCESS,
-            })
-        message_size = struct.pack("!I", len(message))
-        self.request.send(message_size)
-        self.wfile.write(message)
-        self.wfile.flush()
 
     def terminate(self):
         # force terminate when something wrong in handling request

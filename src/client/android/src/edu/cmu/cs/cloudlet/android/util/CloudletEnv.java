@@ -34,11 +34,12 @@ public class CloudletEnv {
 	public static final int SPEECH_INPUT_DIR = 7;
 	public static final int FACE_LOG_DIR = 8;
 	public static final int FACE_INPUT_DIR = 9;
+	public static final int OVERLAY_DIR = 10;
 
 	protected File SD_ROOT = Environment.getExternalStorageDirectory();
 
-	private String env_root = "Cloudlet";
-	private String overlay_dir = "overlay";
+	public final static String env_root = "Cloudlet";
+	public final static String overlay_dir = "overlay";
 	private String speech_log_dir = "SPEECH" + File.separator + "log";
 	private String speech_input_dir = "SPEECH" + File.separator + "myrecordings";
 	private String face_log_dir = "FACE" + File.separator + "log";
@@ -50,6 +51,9 @@ public class CloudletEnv {
 	protected static CloudletEnv env = null;
 	protected ArrayList<VMInfo> overlayVMList = null;
 	protected String VM_Type;
+	
+	private File overlayDir;
+	private File envDir;
 
 	public static CloudletEnv instance() {
 		if (env == null) {
@@ -60,21 +64,21 @@ public class CloudletEnv {
 
 	protected CloudletEnv() {
 		SD_ROOT = Environment.getExternalStorageDirectory();
-		File env_dir = new File(SD_ROOT + File.separator + env_root);
-		File overay_dir = new File(env_dir.getAbsolutePath() + File.separator + overlay_dir);
-		if (env_dir.exists() == false) {
+		this.envDir = new File(SD_ROOT + File.separator + env_root);
+		this.overlayDir = new File(envDir.getAbsolutePath() + File.separator + overlay_dir);
+		if (envDir.exists() == false) {
 			// create cloudlet root directory
-			if (env_dir.mkdir() == false) {
+			if (envDir.mkdir() == false) {
 				Log.e("krha", "Cannot create Folder");
 			}
 			// create overlay directory
-			if (overay_dir.mkdir() == false) {
+			if (overlayDir.mkdir() == false) {
 				Log.e("krha", "Cannot create Folder");
 			}
 		}
 
-		File speech_dir1 = new File(env_dir.getAbsolutePath() + File.separator + speech_log_dir);
-		File speech_dir2 = new File(env_dir.getAbsolutePath() + File.separator + speech_input_dir);
+		File speech_dir1 = new File(envDir.getAbsolutePath() + File.separator + speech_log_dir);
+		File speech_dir2 = new File(envDir.getAbsolutePath() + File.separator + speech_input_dir);
 		// create speech sub directory1
 		if (speech_dir1.exists() == false) {
 			if (speech_dir1.mkdirs() == false) {
@@ -88,8 +92,8 @@ public class CloudletEnv {
 		}
 
 		// create face sub dirs
-		File face_dir1 = new File(env_dir.getAbsolutePath() + File.separator + face_log_dir);
-		File face_dir2 = new File(env_dir.getAbsolutePath() + File.separator + face_input_dir);
+		File face_dir1 = new File(envDir.getAbsolutePath() + File.separator + face_log_dir);
+		File face_dir2 = new File(envDir.getAbsolutePath() + File.separator + face_input_dir);
 		if (face_dir1.exists() == false) {
 			if (face_dir1.mkdirs() == false) {
 				Log.e("krha", "Cannot create Folder" + face_dir1.getAbsolutePath());
@@ -101,7 +105,7 @@ public class CloudletEnv {
 			}
 		}
 
-	}
+	}	
 
 	public File getFilePath(int id) {
 		String path = "";
@@ -133,6 +137,9 @@ public class CloudletEnv {
 		case CloudletEnv.FACE_LOG_DIR:
 			path = this.face_log_dir;
 			break;
+		case CloudletEnv.OVERLAY_DIR:
+			path = this.overlay_dir;
+			break;
 		}
 
 		return new File(SD_ROOT + File.separator + env_root + File.separator + path);
@@ -146,8 +153,8 @@ public class CloudletEnv {
 
 		// Get information From overlay directory
 		File env_dir = new File(SD_ROOT + File.separator + env_root);
-		File overay_root = new File(env_dir.getAbsolutePath() + File.separator + overlay_dir);
-		File[] overlayVMDirs = overay_root.listFiles();
+		File ovelray_root = new File(env_dir.getAbsolutePath() + File.separator + overlay_dir);
+		File[] overlayVMDirs = ovelray_root.listFiles();
 
 		// Enumerate base VMs
 		for (int i = 0; i < overlayVMDirs.length; i++) {

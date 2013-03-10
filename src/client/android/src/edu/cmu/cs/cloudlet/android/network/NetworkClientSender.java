@@ -33,31 +33,27 @@ import edu.cmu.cs.cloudlet.android.data.Measure;
 import edu.cmu.cs.cloudlet.android.data.VMInfo;
 import edu.cmu.cs.cloudlet.android.util.KLog;
 
-import android.content.Context;
 import android.os.Bundle;
 import android.os.Handler;
 import android.os.Message;
 
 public class NetworkClientSender extends Thread {
 	private boolean isThreadRun = true;
-	private Context mContext;
 	private Handler mHandler;
 
 	private String Server_ipAddress;
 	private int Server_port;
 
-	private NetworkClientReceiver receiver;
 	private Vector<NetworkMsg> commandQueue = new Vector<NetworkMsg>(); // thread
-																		// safe
-	private Socket mClientSocket;
+									
 	private DataOutputStream networkWriter;
 
 	private byte[] imageSendingBuffer = new byte[3 * 1024 * 1024];
 	private CloudletConnector connector;
 
-	public NetworkClientSender(Context context, Handler handler) {
-		mContext = context;
-		mHandler = handler;
+	public NetworkClientSender(DataOutputStream networkWriter, Handler handler) {		
+		this.networkWriter = networkWriter;
+		this.mHandler = handler;
 	}
 
 	// this is only for sending status of VM transfer.
@@ -67,50 +63,12 @@ public class NetworkClientSender extends Thread {
 		this.connector = connector;
 	}
 
-	public void setConnection(String ip, int port) {
-		this.Server_ipAddress = ip;
-		this.Server_port = port;
-	}
-
-	private boolean initConnection(String server_ipAddress2, int server_port2) {
-		try {
-			mClientSocket = new Socket();
-			mClientSocket.connect(new InetSocketAddress(this.Server_ipAddress, this.Server_port), 10 * 1000);
-			networkWriter = new DataOutputStream(mClientSocket.getOutputStream());
-			receiver = new NetworkClientReceiver(new DataInputStream(mClientSocket.getInputStream()), mHandler);
-		} catch (UnknownHostException e) {
-			Message msg = Message.obtain();
-			msg.what = CloudletConnector.CONNECTION_ERROR;
-			Bundle data = new Bundle();
-			data.putString("message", "Cannot Connect to " + this.Server_ipAddress + ":" + this.Server_port);
-			msg.setData(data);
-			mHandler.sendMessage(msg);
-			return false;
-		} catch (IOException e) {
-			Message msg = Message.obtain();
-			msg.what = CloudletConnector.CONNECTION_ERROR;
-			Bundle data = new Bundle();
-			data.putString("message", "Cannot Connect to " + this.Server_ipAddress + ":" + this.Server_port);
-			msg.setData(data);
-			mHandler.sendMessage(msg);
-			return false;
-		}
-
-		return true;
-	}
-
 	public void run() {
-		boolean ret = this.initConnection(this.Server_ipAddress, this.Server_port);
-		if (ret == false)
-			return;
-
-		// Socket Receiver Thread Start
-		this.receiver.start();
-
+		
 		while (isThreadRun == true) {
 			if (commandQueue.size() == 0) {
 				try {
-					Thread.sleep(10);
+					Thread.sleep(1);
 				} catch (InterruptedException e) {
 					e.printStackTrace();
 				}
@@ -118,58 +76,51 @@ public class NetworkClientSender extends Thread {
 			}
 
 			NetworkMsg networkCommand = commandQueue.remove(0);
-			this.sendCommand(networkCommand);
-
-			switch (networkCommand.getCommandType()) {
-			case NetworkMsg.MESSAGE_COMMAND_SEND_META:
-				// Send overlay meta file
-				File metaFile = networkCommand.getSelectedFile();
-				Measure.put(Measure.OVERLAY_TRANSFER_START);
-				this.sendBinaryFile(metaFile);
-				break;
-			case NetworkMsg.MESSAGE_COMMAND_SEND_OVERLAY:
-				// Send overlay file
-				File overlayFile = networkCommand.getSelectedFile();
-				this.sendBinaryFile(overlayFile);
-				break;
+			try{
+				this.sendCommand(this.networkWriter, networkCommand);
+				switch (networkCommand.getCommandType()) {
+				case NetworkMsg.MESSAGE_COMMAND_SEND_META:
+					// Send overlay meta file
+					File metaFile = networkCommand.getSelectedFile();
+					Measure.put(Measure.OVERLAY_TRANSFER_START);
+					this.sendBinaryFile(metaFile);
+					break;
+				case NetworkMsg.MESSAGE_COMMAND_SEND_OVERLAY:
+					// Send overlay file
+					File overlayFile = networkCommand.getSelectedFile();
+					this.sendBinaryFile(overlayFile);
+					break;
+				}
+			}catch(IOException e){
+				KLog.printErr(e.getMessage());
 			}
 		}
 	}
 
-	private void sendCommand(NetworkMsg msg) {
-		try {
-			byte[] byteMsg = msg.toNetworkByte();
-			if (byteMsg != null) {
-				networkWriter.write(byteMsg);
-				networkWriter.flush(); // flush everytime for accurate time
-										// measure
-			}
+	public void sendCommand(DataOutputStream writer, NetworkMsg msg) throws IOException {
+		byte[] byteMsg = msg.toNetworkByte();
+		if (byteMsg != null) {
+			writer.write(byteMsg);
+			writer.flush(); // flush everytime for accurate time
+									// measure
+		}
 //			 KLog.println("Send Message " + msg);
-		} catch (IOException e) {
-			e.printStackTrace();
-		}
 	}
 
-	private void sendBinaryFile(File image) {
-		try {
-			int sendByte = -1, totalByte = 0;
-			// sending disk image
-			BufferedInputStream bi = new BufferedInputStream(new FileInputStream(image));
-			while ((sendByte = bi.read(imageSendingBuffer, 0, imageSendingBuffer.length)) > 0) {
-				networkWriter.write(imageSendingBuffer, 0, sendByte);
-				totalByte += sendByte;
-				String statusMsg = "Sending overlay.. " + (int) (100.0 * totalByte / image.length()) + "%, (" + totalByte
-						+ "/" + image.length() + ")";
-				// KLog.println(statusMsg);
-				this.notifyTransferStatus("Step 2. Sending overlay VM ..\n" + statusMsg);
-			}
-			bi.close();
-			networkWriter.flush();
-		} catch (FileNotFoundException e) {
-			KLog.printErr(e.toString());
-		} catch (IOException e) {
-			KLog.printErr(e.toString());
+	private void sendBinaryFile(File image) throws IOException {
+		int sendByte = -1, totalByte = 0;
+		// sending disk image
+		BufferedInputStream bi = new BufferedInputStream(new FileInputStream(image));
+		while ((sendByte = bi.read(imageSendingBuffer, 0, imageSendingBuffer.length)) > 0) {
+			networkWriter.write(imageSendingBuffer, 0, sendByte);
+			totalByte += sendByte;
+			String statusMsg = "Sending overlay.. " + (int) (100.0 * totalByte / image.length()) + "%, (" + totalByte
+					+ "/" + image.length() + ")";
+			this.notifyTransferStatus("Step 2. Sending overlay VM ..\n" + statusMsg);
 		}
+		bi.close();
+		networkWriter.flush();
+		
 	}
 
 	private void notifyTransferStatus(final String messageString) {
@@ -188,19 +139,7 @@ public class NetworkClientSender extends Thread {
 	}
 
 	public void close() {
-		try {
-			this.isThreadRun = false;
-
-			if (this.receiver != null)
-				this.receiver.close();
-			if (this.networkWriter != null)
-				this.networkWriter.close();
-			if (this.mClientSocket != null)
-				this.mClientSocket.close();
-		} catch (IOException e) {
-			KLog.printErr(e.toString());
-		}
-		KLog.println("Socket Connection Closed");
+		this.isThreadRun = false;
 	}
 
 }

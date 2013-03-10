@@ -27,11 +27,12 @@ class Protocol(object):
     MESSAGE_COMMAND_GET_RESOURCE_INFO   = 0x14
     MESSAGE_COMMAND_SESSION_CREATE      = 0x15
     MESSAGE_COMMAND_SESSION_CLOSE       = 0x16
-
-    # server -> client
+    # server -> client as return
     MESSAGE_COMMAND_SUCCESS             = 0x01
     MESSAGE_COMMAND_FAIELD              = 0x02
+    # server -> client as command
     MESSAGE_COMMAND_ON_DEMAND           = 0x03
+    MESSAGE_COMMAND_SYNTHESIS_DONE      = 0x04
 
     #
     # other keys
@@ -43,6 +44,7 @@ class Protocol(object):
     KEY_FAILED_REASON           = "reasons"
     KEY_PAYLOAD                 = "payload"
     KEY_SESSIOIN_ID             = "session_id"
+    KEY_REQUESTED_COMMAND       = "requested_command"
 
     # synthesis option
     KEY_SYNTHESIS_OPTION        = "synthesis_option"

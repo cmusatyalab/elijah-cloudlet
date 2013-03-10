@@ -167,7 +167,6 @@ class API(object):
         data = Util.recvall(sock, recv_size)
         data = Util.decoding(data)
         sock.close()
-        #import pdb;pdb.set_trace()
         if data.get(protocol.KEY_COMMAND) == protocol.MESSAGE_COMMAND_SUCCESS:
             cloudlet_t.update(data.get(protocol.KEY_PAYLOAD, dict()))
             return RET_SUCCESS
@@ -203,6 +202,7 @@ class API(object):
         data = Util.decoding(data)
         session_id = data.get(protocol.KEY_SESSIOIN_ID, None)
         if not session_id:
+            session_id = RET_FAILED
             reason = data.get(protocol.KEY_FAILED_REASON, None)
             if reason:
                 API.discovery_err_str = str(reason)

@@ -8,26 +8,11 @@
         android:layout_width="fill_parent"
         android:layout_height="wrap_content"
         android:gravity="center_vertical"
-        android:text="@string/synthesis_label_title"
+        android:text="Start Batch Test"
         android:textSize="30sp" />
 
     <Button
-        android:id="@+id/testSynthesis"
-        android:layout_width="fill_parent"
-        android:layout_height="wrap_content"
-        android:layout_gravity="bottom"
-        android:text="@string/synthesis_button_title" >
-    </Button>
-
-    <TextView
-        android:layout_width="fill_parent"
-        android:layout_height="wrap_content"
-        android:gravity="center_vertical"
-        android:text="Batch Test"
-        android:textSize="30sp" />
-
-    <Button
-        android:id="@+id/synthesisBatchTest"
+        android:id="@+id/startBatchTest"
         android:layout_width="fill_parent"
         android:layout_height="wrap_content"
         android:layout_gravity="bottom"

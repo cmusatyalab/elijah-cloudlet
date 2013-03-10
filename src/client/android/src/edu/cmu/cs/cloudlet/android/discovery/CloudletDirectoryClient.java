@@ -28,7 +28,7 @@ public class CloudletDirectoryClient extends Thread {
 
 	@Override
 	public void run() {
-		String retString = httpPostCommand(CloudletActivity.GLOBAL_DISCOVERY_SERVER);
+		String retString = httpGet(CloudletActivity.GLOBAL_DISCOVERY_SERVER);
 		if (retString != null) {
 			try {
 				JSONObject jsonObject = new JSONObject(retString);
@@ -44,8 +44,7 @@ public class CloudletDirectoryClient extends Thread {
 
 	}
 
-	private String httpPostCommand(String httpURL) {
-		// Create a new HttpClient and Post Header
+	private String httpGet(String httpURL) {
 		HttpClient httpclient = new DefaultHttpClient();
 		HttpGet httpGet = new HttpGet(httpURL);
 		String endResult = null;

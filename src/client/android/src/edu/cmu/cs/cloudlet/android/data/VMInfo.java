@@ -47,8 +47,7 @@ public class VMInfo {
 		// get application name to display
 		String[] temp = overlayMetaFile.getParent().split("/");
 		String dirName = temp[temp.length-1];
-		this.appName = dirName;
-		
+		this.appName = dirName;		
 		this.overlayMetaFile = overlayMetaFile;
 	}
 	

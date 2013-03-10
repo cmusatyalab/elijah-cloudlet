@@ -55,7 +55,7 @@ public class NetworkClientReceiver extends Thread {
 			}
 			
 			if(msg == null){			
-				try { Thread.sleep(200);} catch (InterruptedException e) {}
+				try { Thread.sleep(1);} catch (InterruptedException e) {}
 				continue;
 			}else{
 				this.notifyStatus(CloudletConnector.PROGRESS_MESSAGE, "received..", msg);				
@@ -73,12 +73,11 @@ public class NetworkClientReceiver extends Thread {
 		this.mHandler.sendMessage(msg);
 	}
 
-	private ByteArrayBuffer receiveMsg(DataInputStream reader) throws EOFException, IOException {
+	public ByteArrayBuffer receiveMsg(DataInputStream reader) throws EOFException, IOException {
 		int messageLength = reader.readInt();
 		if(messageLength == -1){
 			return null;
 		}
-//		KLog.println("Received message size : " + messageLength);
 		byte[] msgpackByte = new byte[messageLength];
 		reader.read(msgpackByte, 0, msgpackByte.length);
 		

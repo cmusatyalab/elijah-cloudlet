@@ -80,6 +80,7 @@ def synthesis(address, port, overlay_path, app_function, synthesis_option):
     cloudlet = Cloudlet(ip_address=address)
     session_id = API.associate_with_cloudlet(cloudlet)
     if session_id == discovery_api.RET_FAILED:
+        sys.stderr.write("Cannot create session : \n")
         sys.stderr.write(API.discovery_err_str)
         sys.exit(1)
 
@@ -100,6 +101,7 @@ def start_cloudlet(cloudlet, session_id, overlay_meta_path, app_function, synthe
     app_time_dict = dict()
 
     print "Overlay Meta: %s" % (overlay_meta_path)
+    print "Session ID: %ld" % (session_id)
     meta_info = Util.decoding(open(overlay_meta_path, "r").read())
 
     # send header
@@ -143,13 +145,15 @@ def start_cloudlet(cloudlet, session_id, overlay_meta_path, app_function, synthe
                 message = Util.decoding(msg_data)
                 command = message.get(protocol.KEY_COMMAND)
                 if command ==  protocol.MESSAGE_COMMAND_SUCCESS:    # RET_SUCCESS
+                    pass
+                elif command == protocol.MESSAGE_COMMAND_FAIELD:   # RET_FAIL
+                    sys.stderr.write("Synthesis Failed\n")
+                if command ==  protocol.MESSAGE_COMMAND_SYNTHESIS_DONE:    # RET_SUCCESS
                     sys.stdout.write("Synthesis SUCCESS\n")
                     time_dict['recv_success_time'] = time.time()
                     #run user input waiting thread 
                     app_thread = client_thread(app_function)
                     app_thread.start()
-                elif command == protocol.MESSAGE_COMMAND_FAIELD:   # RET_FAIL
-                    sys.stderr.write("Synthesis Failed\n")
                 elif command == protocol.MESSAGE_COMMAND_ON_DEMAND:    # request blob
                     #sys.stdout.write("Request: %s\n" % (message.get(protocol.KEY_REQUEST_SEGMENT)))
                     blob_request_list.append(str(message.get(protocol.KEY_REQUEST_SEGMENT)))
