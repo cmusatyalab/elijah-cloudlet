@@ -19,19 +19,4 @@
         android:text="@string/synthesis_button_title" >
     </Button>
 
-    <TextView
-        android:layout_width="fill_parent"
-        android:layout_height="wrap_content"
-        android:gravity="center_vertical"
-        android:text="Batch Test"
-        android:textSize="30sp" />
-
-    <Button
-        android:id="@+id/synthesisBatchTest"
-        android:layout_width="fill_parent"
-        android:layout_height="wrap_content"
-        android:layout_gravity="bottom"
-        android:text="Start" >
-    </Button>
-
 </LinearLayout>

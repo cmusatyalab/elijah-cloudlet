@@ -61,6 +61,7 @@ public class MessagePackUtils {
 					hasResumedMemorySize = true;
 				}else if(key.equals(VMInfo.META_OVERLAY_FILES)){
 					hasOverlayFileNames = true;
+					metaMap.get(key);
 				}
 			}
 		} catch(IOException e){

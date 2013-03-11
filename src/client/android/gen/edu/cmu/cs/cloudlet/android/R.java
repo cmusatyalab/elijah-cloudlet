@@ -24,8 +24,7 @@ public final class R {
         public static final int linearLayout1=0x7f060005;
         public static final int relativeLayout1=0x7f060003;
         public static final int sendButton=0x7f060001;
-        public static final int startBatchTest=0x7f060012;
-        public static final int synthesisBatchTest=0x7f060011;
+        public static final int startBatchTest=0x7f060011;
         public static final int testAsia=0x7f06000f;
         public static final int testCloudlet=0x7f06000b;
         public static final int testEU=0x7f06000e;

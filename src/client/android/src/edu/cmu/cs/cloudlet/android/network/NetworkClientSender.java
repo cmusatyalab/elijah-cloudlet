@@ -82,18 +82,19 @@ public class NetworkClientSender extends Thread {
 				case NetworkMsg.MESSAGE_COMMAND_SEND_META:
 					// Send overlay meta file
 					File metaFile = networkCommand.getSelectedFile();
-					Measure.put(Measure.OVERLAY_TRANSFER_START);
+					Measure.record(Measure.OVERLAY_TRANSFER_START);
 					this.sendBinaryFile(metaFile);
 					break;
 				case NetworkMsg.MESSAGE_COMMAND_SEND_OVERLAY:
 					// Send overlay file
 					File overlayFile = networkCommand.getSelectedFile();
 					this.sendBinaryFile(overlayFile);
+					this.connector.updateTransferredOverlay(overlayFile);
 					break;
 				}
 			}catch(IOException e){
 				KLog.printErr(e.getMessage());
-			}
+			}			
 		}
 	}
 

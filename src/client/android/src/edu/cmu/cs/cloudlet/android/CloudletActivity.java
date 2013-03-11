@@ -67,7 +67,6 @@ public class CloudletActivity extends Activity {
 
 		// Performance Button
 		findViewById(R.id.testSynthesis).setOnClickListener(clickListener);
-		findViewById(R.id.synthesisBatchTest).setOnClickListener(clickListener);
 	}
 
 	private void showDialogSelectOverlay(final ArrayList<VMInfo> vmList) {
@@ -184,9 +183,6 @@ public class CloudletActivity extends Activity {
 					String errMsg = "No Overlay exist\nCreate overlay directory under \"" + ovelray_root.getAbsolutePath() + "\"";
 					showAlert("Error", errMsg);
 				}
-			}else if(v.getId() == R.id.synthesisBatchTest) {
-				Intent intent = new Intent(CloudletActivity.this, BatchSynthesisTest.class);
-				startActivityForResult(intent, 0);
 			}
 		}
 	};
