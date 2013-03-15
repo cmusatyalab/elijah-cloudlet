@@ -370,15 +370,15 @@ class SynthesisHandler(SocketServer.StreamRequestHandler):
             self.delta_proc.start()
             self.fuse_thread.start()
 
-            # 2. wait for fuse end
-            self.fuse_thread.join()
-
-            # 3. resume VM
-            time_start_resume = time.time()
+            # 2. resume VM
             self.resumed_VM = cloudlet.ResumedVM(modified_img, modified_mem, self.fuse)
             self.resumed_VM.start()
 
+            # 3. wait for fuse end
+            self.fuse_thread.join()
+
             # 4. return success to client
+            time_start_resume = time.time()     # measure pure resume time
             self.resumed_VM.join()
             time_end_resume = time.time()
             self.send_synthesis_done()
