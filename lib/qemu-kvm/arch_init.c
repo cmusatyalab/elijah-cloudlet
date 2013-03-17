@@ -497,10 +497,14 @@ static inline void *qemu_mmap_mem(QEMUFile *f, void *host, ram_addr_t length) {
 		perror("qemu_mmap_mem");
 
 	if (qemu_mmap_idx < QEMU_MMAP_MAX) {
+		DPRINTF("new mmap count %d\n", qemu_mmap_idx);
 		qemu_mmap_entries[qemu_mmap_idx].addr = host;
 		qemu_mmap_entries[qemu_mmap_idx].length = (size_t) length;
 		qemu_mmap_idx++;
+	}else{
+		perror("qemu_mmap_mem");
 	}
+
 
 	return addr;
 }

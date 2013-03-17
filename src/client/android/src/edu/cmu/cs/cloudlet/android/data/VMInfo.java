@@ -25,10 +25,13 @@ import java.util.Vector;
 import org.json.JSONObject;
 import org.msgpack.MessagePack;
 import org.msgpack.type.ArrayValue;
+import org.msgpack.type.MapValue;
 import org.msgpack.type.Value;
+import org.msgpack.type.ValueType;
 import org.msgpack.unpacker.BufferUnpacker;
 
 import edu.cmu.cs.cloudlet.android.network.CloudletConnector;
+import edu.cmu.cs.cloudlet.android.util.KLog;
 import edu.cmu.cs.cloudlet.android.util.MessagePackUtils;
 
 public class VMInfo {
@@ -36,8 +39,9 @@ public class VMInfo {
 
 	private String appName = "No application name";
 	private File overlayMetaFile;
+	private Vector<File> sentOverlayFileList = new Vector<File>();
 
-	private Vector<File> leftOverlayList = new Vector<File>();
+	private int totalOverlayFiles;
 
 	public static final String META_BASE_VM_SHA256 = "base_vm_sha256";
 	public static final String META_RESUME_VM_DISK_SIZE = "resumed_vm_disk_size";
@@ -53,28 +57,30 @@ public class VMInfo {
 		// get application name to display
 		String[] temp = overlayMetaFile.getParent().split("/");
 		String dirName = temp[temp.length-1];
-		this.appName = dirName;		
+		this.appName = dirName;
 		this.overlayMetaFile = overlayMetaFile;
 		this.unpackMessagePack();
-	}
-	
+	}	
+		
 	private void unpackMessagePack() throws IOException{
 		MessagePack msgpack = new MessagePack();
-		byte[] byteArray = null;
-		byteArray = MessagePackUtils.readData(this.overlayMetaFile);
-		this.data = CloudletConnector.convertMessagePackToMap(byteArray);
+		byte[] a = null;
+		a = MessagePackUtils.readData(this.overlayMetaFile);
+		BufferUnpacker unpacker = msgpack.createBufferUnpacker().wrap(a);		
 		
-		ArrayValue overlayFileArray = (ArrayValue) this.data.get(META_OVERLAY_FILES);
-		Iterator<Value> overlayIter = overlayFileArray.iterator();
-		File dirPath = overlayMetaFile.getParentFile();
-		while(overlayIter.hasNext()){
-			String overlayFileName = overlayIter.next().asRawValue().toString();
-			File overlayFile = new File(dirPath + File.separator + overlayFileName);
-			if (overlayFile.canRead() != true){
-				throw new IOException("Cannot find overlay file : " + overlayFile.getCanonicalPath());
-			}
-			this.leftOverlayList.add(overlayFile);
-		}
+		// optimized to get only overlay size 
+	    int size = unpacker.readMapBegin();                                                                                                                                       
+	    Map<String, Value> ret = new HashMap<String, Value>(size);                                                                                                                                  
+	    for (int i = 0; i < size; ++i) {                                                                                                                                          
+	        String key = unpacker.read(String.class);
+	        if (key.equals(META_OVERLAY_FILES) == true){
+	        	this.totalOverlayFiles = unpacker.readArrayBegin();
+	        	break;
+	        }else{
+		        Value value = unpacker.read(Value.class);
+	        }
+	    }
+	    unpacker.close();	     
 	}
 	
 	public File getMetaFile(){
@@ -103,14 +109,16 @@ public class VMInfo {
 		return overlayFile;
 	}
 
-	public boolean transferFinish(){
-		if(this.leftOverlayList.size() == 0){
+	public boolean transferFinish() {
+		if(this.sentOverlayFileList.size() == this.totalOverlayFiles){
 			return true;
 		}
 		return false;
 	}
 	
 	public void addTransferredOverlay(File overlayFile) {
-		this.leftOverlayList.removeElement(overlayFile);
+		// First remove it to avoid duplicated overlay file element
+		this.sentOverlayFileList.removeElement(overlayFile);
+		this.addTransferredOverlay(overlayFile);
 	}
 }

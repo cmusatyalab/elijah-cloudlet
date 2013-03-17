@@ -235,6 +235,17 @@ uint8_t *boot_splash_filedata;
 int boot_splash_filedata_size;
 uint8_t qemu_extra_params_fw[2];
 
+
+#define DEBUG_VL
+#ifdef DEBUG_VL
+#define DPRINTF(fmt, ...) \
+    do { printf("vl: " fmt, ## __VA_ARGS__); } while (0)
+#else
+#define DPRINTF(fmt, ...) \
+    do { } while (0)
+#endif
+
+
 typedef struct FWBootEntry FWBootEntry;
 
 struct FWBootEntry {
@@ -3717,10 +3728,17 @@ int main(int argc, char **argv, char **envp)
     net_cleanup();
     res_free();
 
+	DPRINTF("Start munmap\n");
     if (qemu_memfile) {
 	    int i;
-	    for (i = 0; i < qemu_mmap_idx; i++)
-		    munmap(qemu_mmap_entries[i].addr, qemu_mmap_entries[i].length);
+	    for (i = 0; i < qemu_mmap_idx; i++){
+		    int ret = munmap(qemu_mmap_entries[i].addr, qemu_mmap_entries[i].length);
+			if (ret != 0){
+				fprintf(stderr, "failed to munmap, %s\n", strerror(errno));
+			}else{
+				DPRINTF("Unmap count : %d\n", i);
+			}
+		}
 	    qemu_fclose(qemu_memfile);
     }
 
