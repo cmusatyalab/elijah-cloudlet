@@ -111,6 +111,14 @@ How to use
 	to 80, respectively.
 
 
+	### Warning
+
+	If you have kernel related issue like
+	[this](https://github.com/cmusatyalab/elijah-cloudlet/issues/1), You should
+	follow workaround for this problem. It happens at low-end machine with EPT
+	support, and you can avoid it by disabling EPT support.
+
+
 3. Synthesizing ``overlay vm``  
 
 	Here, we'll show 3 different ways to perform VM synthesis using ``overlay
