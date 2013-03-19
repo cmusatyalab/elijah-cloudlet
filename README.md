@@ -112,7 +112,7 @@ How to use
 	to 80, respectively.
 
 
-	###Note### 
+	### Note
 
 	If you have kernel related issue like
 	[this](https://github.com/cmusatyalab/elijah-cloudlet/issues/1), You should
