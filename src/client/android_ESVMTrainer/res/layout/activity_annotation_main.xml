@@ -7,6 +7,7 @@
     android:paddingLeft="@dimen/activity_horizontal_margin"
     android:paddingRight="@dimen/activity_horizontal_margin"
     android:paddingTop="@dimen/activity_vertical_margin"
+    android:background="#333333"
     tools:context=".ESVMTrainActivity" >
 
     <TextView
@@ -27,7 +28,7 @@
 
     <GridView
         android:id="@+id/grid_view"
-        android:layout_below="@+id/cropImages"
+        android:layout_below="@+id/startTraining"
         android:layout_width="fill_parent"
         android:layout_height="fill_parent"
         android:columnWidth="90dp"

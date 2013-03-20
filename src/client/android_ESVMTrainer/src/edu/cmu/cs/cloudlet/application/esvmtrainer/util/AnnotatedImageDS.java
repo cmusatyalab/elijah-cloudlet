@@ -2,29 +2,29 @@ package edu.cmu.cs.cloudlet.application.esvmtrainer.util;
 
 import java.io.File;
 
+import edu.cmu.cs.cloudlet.application.esvmtrainer.AnnotationActivity;
+
 import android.graphics.Rect;
 
-public class CropImageDS {
+public class AnnotatedImageDS {
 	protected File originalFile = null;
-	protected File cropFile = null;
-	protected boolean isCropped = false;
+	protected File croppedFile = null;
+	
+	protected boolean isAnnotated = false;
 	protected Rect cropRect = null;
 	
-	public CropImageDS(File originalFile){
+	public AnnotatedImageDS(File originalFile){
 		this.originalFile = originalFile;
-		this.cropFile = new File(originalFile.getAbsoluteFile() + ".crop");
-		this.isCropped = false;
+		this.croppedFile = new File(originalFile.getAbsoluteFile() + AnnotationActivity.CROP_EXT);
+		this.isAnnotated = false;
 	}
 
 	public File getCropFile() {
-		return this.cropFile;
+		return this.croppedFile;
 	}
 
 	public boolean isCrop() {
-		return this.isCropped;
-	}
-	public void setCrop(boolean isCrop) {
-		this.isCropped = isCrop;
+		return this.isAnnotated;
 	}
 
 	public File getOriginalFile() {
@@ -33,6 +33,7 @@ public class CropImageDS {
 
 	public void setCropRect(Rect cropRect) {
 		this.cropRect = cropRect;
+		this.isAnnotated = true;
 	}
 	
 	public Rect getCropRect(){

@@ -6,7 +6,6 @@ import java.io.FilenameFilter;
 import java.io.IOException;
 import java.util.List;
 
-import edu.cmu.cs.cloudlet.application.esvmtrainer.util.AnnotationActivity;
 
 import android.net.Uri;
 import android.os.Bundle;
@@ -37,7 +36,7 @@ public class ESVMTrainActivity extends Activity {
 	// private static final String VIDEO_BASE_DIR = Environment
 	// .getExternalStorageDirectory() + File.separator + "ESVM";
 	public static final String VIDEO_BASE_DIR = "/sdcard/ESVM";
-	public static final String VIDEO_TEST_DIR = "/sdcard/ESVM/VID_20130225_215420/";
+	public static final String VIDEO_TEST_DIR = "/sdcard/ESVM/20130319_193221/";
 	protected ProgressDialog progDialog = null;
 
 	@Override
@@ -94,7 +93,7 @@ public class ESVMTrainActivity extends Activity {
 						+ File.separator
 						+ new File(filePath).getName().replaceFirst(
 								"[.][^.]+$", "");
-				File frameDirFile = new File(frameDir);
+				File frameDirFile = new File(frameDir);				
 
 				this.progDialog.show();
 				FrameExtractor frameExtractor = new FrameExtractor(this,
@@ -130,7 +129,7 @@ public class ESVMTrainActivity extends Activity {
 				File destDir = (File) msg.obj;
 				Intent cropIntent = new Intent(ESVMTrainActivity.this,
 						AnnotationActivity.class);
-				cropIntent.putExtra(AnnotationActivity.INTENT_IMAGE_DIR,
+				cropIntent.putExtra(AnnotationActivity.INTENT_ARGS_IMAGE_DIR,
 						destDir.getAbsolutePath());
 				startActivityForResult(cropIntent, ACTION_ANNOTATION);
 			} else if (msg.what == FrameExtractor.EXTRACT_FAIL) {
