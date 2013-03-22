@@ -52,7 +52,6 @@ public class ImageAdapter extends BaseAdapter{
         return 0;
     }
  
-	@SuppressLint("NewApi")
 	@Override
     public View getView(int position, View convertView, ViewGroup parent) {
     	AnnotatedImageDS cropImage = cropImageList.get(position);

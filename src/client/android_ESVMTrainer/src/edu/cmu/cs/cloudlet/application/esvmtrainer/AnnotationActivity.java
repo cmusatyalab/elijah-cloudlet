@@ -15,12 +15,18 @@ import org.json.JSONObject;
 import edu.cmu.cs.cloudlet.application.esvmtrainer.R;
 import edu.cmu.cs.cloudlet.application.esvmtrainer.cropimage.CropImage;
 import edu.cmu.cs.cloudlet.application.esvmtrainer.util.AnnotatedImageDS;
+import edu.cmu.cs.cloudlet.application.esvmtrainer.util.AnnotationDBHelper;
 import edu.cmu.cs.cloudlet.application.esvmtrainer.util.ImageAdapter;
 
 import android.app.Activity;
+import android.app.AlertDialog;
 import android.graphics.drawable.Drawable;
 import android.content.ActivityNotFoundException;
+import android.content.ContentValues;
+import android.content.DialogInterface;
 import android.content.Intent;
+import android.database.Cursor;
+import android.database.sqlite.SQLiteDatabase;
 import android.graphics.Bitmap;
 import android.graphics.BitmapFactory;
 import android.graphics.Rect;
@@ -28,6 +34,7 @@ import android.net.Uri;
 import android.os.Bundle;
 import android.os.Environment;
 import android.provider.MediaStore;
+import android.view.KeyEvent;
 import android.view.View;
 import android.widget.AdapterView;
 import android.widget.AdapterView.OnItemClickListener;
@@ -41,20 +48,12 @@ public class AnnotationActivity extends Activity {
 
 	public static final String INTENT_ARGS_IMAGE_DIR = "imageDirectory";
 	public static final String CROP_EXT = ".crop";
-	
-	private static final String META_FILENAME = "meta.json";
-	private static final String META_JSON_ANNOTATION_KEY = "annotation_info";
-	private static final String META_JSON_ANNOTATION_FILENAME = "filename";
-	private static final String META_JSON_ANNOTATION_INFO_LEFT = "left";
-	private static final String META_JSON_ANNOTATION_INFO_RIGHT = "right";
-	private static final String META_JSON_ANNOTATION_INFO_TOP = "top";
-	private static final String META_JSON_ANNOTATION_INFO_BOTTOM = "bottom";
 
 	protected File iamgeSourceDir = null;
 	protected ImageAdapter imageAdapter = null;
 	LinkedList<AnnotatedImageDS> allImageList = null;
 	private File currentProcessingImage = null;
-	private File metaFile = null;
+	private AnnotationDBHelper dbHelper = null;
 
 	@Override
 	protected void onCreate(Bundle savedInstanceState) {
@@ -82,14 +81,8 @@ public class AnnotationActivity extends Activity {
 		for (File originalFile : imageFiles) {
 			allImageList.add(new AnnotatedImageDS(originalFile));
 		}
-		
-		try {
-			updateMetaFile(allImageList, META_FILENAME);
-		} catch (IOException e) {
-			e.printStackTrace();
-		} catch (JSONException e) {
-			e.printStackTrace();
-		}
+		this.dbHelper = new AnnotationDBHelper(this);
+		this.dbHelper.updateImageFromDB(allImageList);
 
 		imageAdapter = new ImageAdapter(this, allImageList);
 		GridView gridView = (GridView) findViewById(R.id.grid_view);
@@ -101,68 +94,6 @@ public class AnnotationActivity extends Activity {
 		findViewById(R.id.startTraining).setOnClickListener(startTrainingListener);
 	}
 
-	private void updateMetaFile(LinkedList<AnnotatedImageDS> imageList, String metaFilename) throws IOException, JSONException {
-		this.metaFile = new File(metaFilename);
-		if (metaFile.isFile() == true) {
-			// read meta json file
-			/*
-			 * JSON meta file structure (example) 
-			 * {
-			 *   "annotation_info": [
-			 *     {"filename": "1.jpg", "left":10, "right": 20, "top" : 40, "bottom": 50}
-			 *     ...
-			 *     {"filename": "9.jpg", "left":10, "right": 20, "top" : 40, "bottom": 50} 
-			 *   ]
-			 * }
-			 */
-			BufferedReader br = new BufferedReader(new FileReader(metaFile));
-			StringBuilder sb = new StringBuilder();
-			String line = "";
-			while ((line = br.readLine()) != null) {
-				sb.append(line + "\n");
-			}
-			br.close();
-			String jsonString = sb.toString();
-			if (jsonString.length() != 0) {
-				JSONObject rootObj = new JSONObject(jsonString);
-				JSONArray annotationArray = rootObj.getJSONArray(META_JSON_ANNOTATION_KEY);
-				for(int i = 0; i < annotationArray.length(); i++){
-					JSONObject eachObj = annotationArray.getJSONObject(i);
-					String filename = eachObj.getString(META_JSON_ANNOTATION_FILENAME);
-					int left = eachObj.getInt(META_JSON_ANNOTATION_INFO_LEFT);
-					int right = eachObj.getInt(META_JSON_ANNOTATION_INFO_RIGHT);
-					int top = eachObj.getInt(META_JSON_ANNOTATION_INFO_TOP);
-					int bottom = eachObj.getInt(META_JSON_ANNOTATION_INFO_BOTTOM);
-					Rect box = new Rect(left, top, right, bottom);
-					AnnotatedImageDS image = findImageByName(imageList, filename);
-					if (image != null){
-						image.setCropRect(box);
-					}
-				}
-			}
-		} else {
-			try {
-				metaFile.createNewFile();
-			} catch (IOException e) {
-				e.printStackTrace();
-			}
-			return;
-		}
-
-	}
-
-	private void updateMetaFile(AnnotatedImageDS processedImage) throws JSONException, IOException {		
-	}
-
-	private AnnotatedImageDS findImageByName(LinkedList<AnnotatedImageDS> imageList, String filename) {
-		for(int i = 0; i < imageList.size(); i++){
-			AnnotatedImageDS image = imageList.get(i);
-			if (image.getOriginalFile().getName().equals(filename)){
-				return image;
-			}
-		}
-		return null;
-	}
 
 	private void starTraining() {
 
@@ -188,7 +119,7 @@ public class AnnotationActivity extends Activity {
 					int cropTop = extras.getInt("crop-top");
 					Rect cropRect = new Rect(cropLeft, cropTop, cropRight, cropBottom);
 					processedImage.setCropRect(cropRect);
-					updateMetaFile(processedImage);
+					this.dbHelper.updateDB(processedImage);
 					Toast.makeText(AnnotationActivity.this, "SUCCESS", Toast.LENGTH_SHORT).show();
 
 					// update image to cropped region
@@ -215,7 +146,7 @@ public class AnnotationActivity extends Activity {
 
 			AnnotatedImageDS image = (AnnotatedImageDS) imageAdapter.getItem(position);
 			File cropImageFile = image.getCropFile();
-			currentProcessingImage = cropImageFile;
+			currentProcessingImage = image.getOriginalFile();
 			Uri picUri = Uri.fromFile(image.getOriginalFile());
 			try {
 
@@ -235,4 +166,29 @@ public class AnnotationActivity extends Activity {
 			}
 		}
 	};
+	
+	public boolean onKeyDown(int keyCode, KeyEvent event) {
+		if (keyCode == KeyEvent.KEYCODE_BACK) {
+			this.close();			
+			/*
+			new AlertDialog.Builder(AnnotationActivity.this).setTitle("Exit").setMessage("Finish Application")
+					.setPositiveButton("Confirm", new DialogInterface.OnClickListener() {
+						public void onClick(DialogInterface dialog, int which) {
+							moveTaskToBack(true);
+							finish();
+						}
+					}).setNegativeButton("Cancel", null).show();
+			*/
+		}
+		return super.onKeyDown(keyCode, event);
+	}
+
+
+	private void close() {
+		if (this.dbHelper != null){
+			this.dbHelper.close();
+			this.dbHelper = null;
+		}
+	}
+
 }
