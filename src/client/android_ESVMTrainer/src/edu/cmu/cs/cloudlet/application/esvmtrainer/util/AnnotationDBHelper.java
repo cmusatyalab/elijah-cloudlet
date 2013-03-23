@@ -1,6 +1,11 @@
 package edu.cmu.cs.cloudlet.application.esvmtrainer.util;
 
+import java.io.File;
 import java.util.LinkedList;
+
+import org.json.JSONArray;
+import org.json.JSONException;
+import org.json.JSONObject;
 
 import android.content.ContentValues;
 import android.content.Context;
@@ -103,6 +108,38 @@ public class AnnotationDBHelper extends SQLiteOpenHelper {
 	public void close() {
 		if (this.database != null) {
 			this.database.close();
+		}
+	}
+
+	public JSONObject getJSONAnnotation(LinkedList<AnnotatedImageDS> imageList) {
+		JSONObject retObject = new JSONObject();
+		JSONArray annotationArray = new JSONArray();
+		for (int i = 0; i < imageList.size(); i++) {
+			AnnotatedImageDS imageDS = imageList.get(i);
+			File image = imageDS.getOriginalFile();
+			Rect annotation = imageDS.getCropRect();
+			if (annotation == null){
+				return null;
+			}
+			
+			JSONObject newObj = new JSONObject();
+			try {
+				newObj.put(COLUMN_ORIGINAL_FILENAME, image.getAbsoluteFile());
+				newObj.put(COLUMN_ANNOTATION_LEFT, annotation.left);
+				newObj.put(COLUMN_ANNOTATION_RIGHT, annotation.right);
+				newObj.put(COLUMN_ANNOTATION_BOTTOM, annotation.bottom);
+				newObj.put(COLUMN_ANNOTATION_TOP, annotation.top);
+				annotationArray.put(newObj);
+			} catch (JSONException e) {
+				return null;
+			}
+		}
+		
+		try {
+			retObject.put(TABLE_NAME, annotationArray);
+			return retObject;
+		} catch (JSONException e) {
+			return null;
 		}
 	}
 }
