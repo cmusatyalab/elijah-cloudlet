@@ -980,6 +980,11 @@ def synthesis(base_disk, meta, disk_only=False, qemu_args=None):
     resumed_VM.terminate()
     fuse.terminate()
 
+    if os.path.exists(modified_img):
+        os.unlink(modified_img)
+    if os.path.exists(modified_mem):
+        os.unlink(modified_mem)
+
 
 def synthesis_statistics(meta_info, decomp_overlay_file, 
         mem_access_list, disk_access_list, print_out=sys.stdout):
