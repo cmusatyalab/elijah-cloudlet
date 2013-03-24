@@ -53,7 +53,7 @@ public class AnnotationActivity extends Activity {
 
 	public static final String INTENT_ARGS_IMAGE_DIR = "imageDirectory";
 	public static final String CROP_EXT = ".crop";
-	private static final String HTTP_SERVER = "http://cloudlet.krha.kr:8000/esvmtrainer/";
+	private static final String HTTP_SERVER = "http://hail.elijah.cs.cmu.edu:8000/esvmtrainer";
 
 	protected File iamgeSourceDir = null;
 	protected ImageAdapter imageAdapter = null;
@@ -123,6 +123,7 @@ public class AnnotationActivity extends Activity {
 			}
 			ESVMNetworkClinet client = new ESVMNetworkClinet(
 					this.networkHandler, jsonObj, imageList, this.HTTP_SERVER);
+			client.start();
 
 		} else {
 			AlertDialog.Builder ab = new AlertDialog.Builder(this);
@@ -225,11 +226,11 @@ public class AnnotationActivity extends Activity {
 				this.updateMessage("SUCCESS: " + retMsg);
 			} else {
 				String retMsg = (String) msg.obj;
-
 				this.updateMessage("SUCCESS: " + retMsg);
 				AlertDialog.Builder ab = new AlertDialog.Builder(
 						AnnotationActivity.this);
-				ab.setTitle("ESVM update failed : " + msg);
+				ab.setTitle("Failed");
+				ab.setMessage("ESVM update failed : " + msg);
 				ab.setIcon(R.drawable.ic_launcher);
 				ab.setPositiveButton("Confirm", null);
 				ab.show();
