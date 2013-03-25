@@ -33,6 +33,7 @@ You will need:
     - bson
 	- pyliblzma
 	- psutil
+	- SQLAlchemy
 
 To install:
 
@@ -40,7 +41,7 @@ To install:
    Example at ubuntu 12 LTS x86.
 
 		> $ sudo apt-get install qemu-kvm libvirt-bin gvncviewer python-libvirt python-xdelta3 python-dev openjdk-6-jre liblzma-dev apparmor-utils python-pip
-		> $ sudo pip install msgpack-python bson pyliblzma psutil
+		> $ sudo pip install msgpack-python bson pyliblzma psutil sqlalchemy
 
 2. Disable security module.
    Example at Ubuntu 12
@@ -59,9 +60,9 @@ Recommended platform
 
 We have tested at __Ubuntu 12.04 LTS 64-bit__
 
-This version of Cloudlet code have several dependencies on other project for
+This version of Cloudlet has several dependencies on other projects for
 further optimization, and currently we include this dependency as a binary.
-Therefore, it recommend you to use __Ubuntu 12.04 LTS 64-bit__
+Therefore, we recommend you to use __Ubuntu 12.04 LTS 64-bit__
 
 
 
@@ -111,7 +112,7 @@ How to use
 	to 80, respectively.
 
 
-	### Warning
+	### Note
 
 	If you have kernel related issue like
 	[this](https://github.com/cmusatyalab/elijah-cloudlet/issues/1), You should
@@ -158,7 +159,11 @@ How to use
 	it to /sdcard/Cloudlet/overlay/ directory creating your overlay directory
 	name.  For example, you can copy your ``face recognition overlay vm`` to
 	/sdcard/Cloudlet/overlay/face/ directory. This directory name will be
-	appeared to your Android application when you're asked to select ``overlay vm``.
+	appeared to your Android application when you're asked to select ``overlay
+	vm``.  Right directory name is important since the directory name will be
+	saved as appName in internal data structure and being used to launch
+	associated mobile application after finishing ``VM synthesis``. See more
+	details at handleSucessSynthesis() method at CloudletConnector.java file.
 
 
 
