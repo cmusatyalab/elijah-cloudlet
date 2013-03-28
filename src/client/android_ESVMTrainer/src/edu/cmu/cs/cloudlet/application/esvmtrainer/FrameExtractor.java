@@ -12,6 +12,7 @@ import android.graphics.Bitmap;
 import android.media.MediaMetadataRetriever;
 import android.media.MediaPlayer;
 import android.net.Uri;
+import android.os.Bundle;
 import android.os.Environment;
 import android.os.Handler;
 import android.os.Message;
@@ -24,13 +25,13 @@ public class FrameExtractor extends Thread{
 
 	private static final int FRAME_PERIOD = 1000; // every 100 ms
 	protected Context context = null;
-	protected Uri videoURI = null;
+	protected File videoFile = null;
 	protected File destDir = null;
 	protected Handler handler = null;
 
-	public FrameExtractor(Context context, Uri videoURI, File destDir, Handler handler) {
+	public FrameExtractor(Context context, File videoFile, File destDir, Handler handler) {
 		this.context = context;
-		this.videoURI = videoURI;
+		this.videoFile = videoFile;
 		this.destDir = destDir;
 		this.handler = handler;
 	}
@@ -40,7 +41,10 @@ public class FrameExtractor extends Thread{
 		try{
 			this.saveFrames();
 			msg.what = FrameExtractor.EXTRACT_SUCCESS;
-			msg.obj = this.destDir;
+			Bundle data = new Bundle();
+			data.putString(AnnotationActivity.INTENT_ARGS_VIDEO_FILE, this.videoFile.getAbsolutePath());
+			data.putString(AnnotationActivity.INTENT_ARGS_IMAGE_DIR, this.destDir.getAbsolutePath());
+			msg.setData(data);
 			this.handler.sendMessage(msg);
 		}catch(IOException e){
 			String errMsg = "" + e;
@@ -63,7 +67,7 @@ public class FrameExtractor extends Thread{
 		}
 		
 		MediaMetadataRetriever retriever = new MediaMetadataRetriever();
-		retriever.setDataSource(this.context, this.videoURI);
+		retriever.setDataSource(this.videoFile.getAbsolutePath());
 
 		String milliString = retriever
 				.extractMetadata(MediaMetadataRetriever.METADATA_KEY_DURATION);

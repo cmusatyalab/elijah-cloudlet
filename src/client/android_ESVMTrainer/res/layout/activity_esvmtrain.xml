@@ -16,7 +16,6 @@
         android:gravity="center_vertical"
         android:text="@string/recording_label_title"
         android:textSize="30sp" />
-
     <Button
         android:id="@+id/videoRecording"
         android:layout_width="fill_parent"
@@ -24,5 +23,22 @@
         android:layout_alignLeft="@+id/textView1"
         android:layout_below="@+id/textView1"
         android:text="@string/recording_button_title" />
+    
+    <TextView
+        android:id="@+id/textView2"
+        android:layout_width="fill_parent"
+        android:layout_height="wrap_content"
+        android:gravity="center_vertical"
+        android:layout_below="@+id/videoRecording"
+        android:text="@string/selecting_label_title"
+        android:textSize="30sp" />
+
+    <Button
+        android:id="@+id/videoSelecting"
+        android:layout_width="fill_parent"
+        android:layout_height="wrap_content"
+        android:layout_alignLeft="@+id/textView2"
+        android:layout_below="@+id/textView2"
+        android:text="@string/selecting_button_title" />
 
 </RelativeLayout>

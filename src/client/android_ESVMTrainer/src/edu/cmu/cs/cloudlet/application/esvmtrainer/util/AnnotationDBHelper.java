@@ -49,7 +49,8 @@ public class AnnotationDBHelper extends SQLiteOpenHelper {
 	@Override
 	public void onCreate(SQLiteDatabase database) {
 		// TODO Auto-generated method stub
-		this.database.execSQL(DATABASE_CREATE);
+		database.execSQL(DATABASE_CREATE);
+		this.database = database;
 	}
 
 	@Override

@@ -26,6 +26,7 @@ import android.app.ProgressDialog;
 import android.graphics.drawable.Drawable;
 import android.content.ActivityNotFoundException;
 import android.content.ContentValues;
+import android.content.CursorLoader;
 import android.content.DialogInterface;
 import android.content.Intent;
 import android.database.Cursor;
@@ -52,14 +53,17 @@ public class AnnotationActivity extends Activity {
 	public static Drawable CHECKMARK_DONE;
 
 	public static final String INTENT_ARGS_IMAGE_DIR = "imageDirectory";
+	public static final String INTENT_ARGS_VIDEO_FILE = "videoFile";
+	
 	public static final String CROP_EXT = ".crop";
 	private static final String HTTP_SERVER = "http://hail.elijah.cs.cmu.edu:8000/esvmtrainer";
 
-	protected File iamgeSourceDir = null;
+	protected File imageSourceDir = null;
 	protected ImageAdapter imageAdapter = null;
 	LinkedList<AnnotatedImageDS> allImageList = null;
 	private File currentProcessingImage = null;
 	private AnnotationDBHelper dbHelper = null;
+	private File videoFile = null;
 
 	@Override
 	protected void onCreate(Bundle savedInstanceState) {
@@ -69,16 +73,22 @@ public class AnnotationActivity extends Activity {
 		this.CHECKMARK_DONE = getResources().getDrawable(
 				R.drawable.checkmark_done);
 
+		// Get information either from bundle or fixed location (for testing)
 		Bundle extras = getIntent().getExtras();
 		if (extras != null && extras.getString(INTENT_ARGS_IMAGE_DIR) != null) {
-			this.iamgeSourceDir = new File(
+			this.imageSourceDir = new File(
 					extras.getString(INTENT_ARGS_IMAGE_DIR));
 		} else {
-			this.iamgeSourceDir = new File(ESVMTrainActivity.VIDEO_TEST_DIR);
+			this.imageSourceDir = new File(ESVMTrainActivity.VIDEO_TEST_DIR);
+		}
+		if (extras != null && extras.getString(INTENT_ARGS_VIDEO_FILE) != null) {
+			this.videoFile = new File(extras.getString(INTENT_ARGS_VIDEO_FILE));
+		} else {
+			this.videoFile = new File(ESVMTrainActivity.VIDEO_TEST_VIDEO_FILE);
 		}
 
 		allImageList = new LinkedList<AnnotatedImageDS>();
-		File[] imageFiles = this.iamgeSourceDir.listFiles(new FilenameFilter() {
+		File[] imageFiles = this.imageSourceDir.listFiles(new FilenameFilter() {
 			@Override
 			public boolean accept(File dir, String filename) {
 				if (filename.endsWith(".jpg"))
@@ -116,11 +126,10 @@ public class AnnotationActivity extends Activity {
 			}
 			this.progDialog.show();
 
-			// send request
-			File[] imageList = new File[this.allImageList.size()];
-			for (int i = 0; i < imageList.length; i++) {
-				imageList[i] = this.allImageList.get(i).getOriginalFile();
-			}
+			// send request + video file
+			File[] imageList = new File[1];
+			imageList[0] = this.videoFile;
+			
 			ESVMNetworkClinet client = new ESVMNetworkClinet(
 					this.networkHandler, jsonObj, imageList, this.HTTP_SERVER);
 			client.start();
@@ -256,6 +265,17 @@ public class AnnotationActivity extends Activity {
 			 */
 		}
 		return super.onKeyDown(keyCode, event);
+	}
+
+	public String getRealPathFromURI(Uri contentUri) {
+		String[] proj = { MediaStore.Images.Media.DATA };
+		CursorLoader loader = new CursorLoader(this, contentUri, proj, null,
+				null, null);
+		Cursor cursor = loader.loadInBackground();
+		int column_index = cursor
+				.getColumnIndexOrThrow(MediaStore.Images.Media.DATA);
+		cursor.moveToFirst();
+		return cursor.getString(column_index);
 	}
 
 	private void close() {
