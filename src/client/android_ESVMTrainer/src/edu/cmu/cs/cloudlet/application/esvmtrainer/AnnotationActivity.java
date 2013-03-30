@@ -1,12 +1,7 @@
 package edu.cmu.cs.cloudlet.application.esvmtrainer;
 
-import java.io.BufferedReader;
 import java.io.File;
-import java.io.FileNotFoundException;
-import java.io.FileReader;
 import java.io.FilenameFilter;
-import java.io.IOException;
-import java.util.Iterator;
 import java.util.LinkedList;
 
 import org.json.JSONArray;
@@ -40,10 +35,12 @@ import android.os.Environment;
 import android.os.Handler;
 import android.os.Message;
 import android.provider.MediaStore;
+import android.util.Log;
 import android.view.KeyEvent;
 import android.view.View;
 import android.widget.AdapterView;
 import android.widget.AdapterView.OnItemClickListener;
+import android.widget.EditText;
 import android.widget.GridView;
 import android.widget.ImageView;
 import android.widget.Toast;
@@ -114,9 +111,11 @@ public class AnnotationActivity extends Activity {
 				startTrainingListener);
 	}
 
-	private void starTraining() {
+	private void starTraining(String objectName) {
+		Log.d("krha", "training object name : " + objectName);
 		JSONObject jsonObj = dbHelper.getJSONAnnotation(this.allImageList);
 		if (jsonObj != null) {
+
 			// start progress bar
 			if (this.progDialog == null) {
 				this.progDialog = ProgressDialog.show(this, "Info",
@@ -187,7 +186,24 @@ public class AnnotationActivity extends Activity {
 		@Override
 		public void onClick(View v) {
 			if (v.getId() == R.id.startTraining) {
-				starTraining();
+				// ask model name
+				AlertDialog.Builder ab = new AlertDialog.Builder(AnnotationActivity.this);
+				final EditText input = new EditText(getApplicationContext());
+				ab.setTitle("Training");
+				ab.setMessage("Enter the name of this object");
+				ab.setView(input);
+				ab.setIcon(R.drawable.ic_launcher);
+				ab.setPositiveButton("Ok", new DialogInterface.OnClickListener() {
+					public void onClick(DialogInterface dialog, int whichButton) {
+						String value = input.getText().toString();
+						starTraining(value);
+					}
+				});
+				ab.setNegativeButton("Cancel", new DialogInterface.OnClickListener() {
+					public void onClick(DialogInterface dialog, int whichButton) {
+					}
+				});
+				ab.show();
 			}
 		}
 	};
@@ -260,15 +276,7 @@ public class AnnotationActivity extends Activity {
 	public boolean onKeyDown(int keyCode, KeyEvent event) {
 		if (keyCode == KeyEvent.KEYCODE_BACK) {
 			this.close();
-			/*
-			 * new
-			 * AlertDialog.Builder(AnnotationActivity.this).setTitle("Exit").
-			 * setMessage("Finish Application") .setPositiveButton("Confirm",
-			 * new DialogInterface.OnClickListener() { public void
-			 * onClick(DialogInterface dialog, int which) {
-			 * moveTaskToBack(true); finish(); } }).setNegativeButton("Cancel",
-			 * null).show();
-			 */
+			this.finish();
 		}
 		return super.onKeyDown(keyCode, event);
 	}

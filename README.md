@@ -159,7 +159,11 @@ How to use
 	it to /sdcard/Cloudlet/overlay/ directory creating your overlay directory
 	name.  For example, you can copy your ``face recognition overlay vm`` to
 	/sdcard/Cloudlet/overlay/face/ directory. This directory name will be
-	appeared to your Android application when you're asked to select ``overlay vm``.
+	appeared to your Android application when you're asked to select ``overlay
+	vm``.  Right directory name is important since the directory name will be
+	saved as appName in internal data structure and being used to launch
+	associated mobile application after finishing ``VM synthesis``. See more
+	details at handleSucessSynthesis() method at CloudletConnector.java file.
 
 
 

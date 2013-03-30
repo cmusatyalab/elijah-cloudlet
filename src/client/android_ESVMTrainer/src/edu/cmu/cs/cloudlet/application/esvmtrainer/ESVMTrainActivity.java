@@ -1,10 +1,8 @@
 package edu.cmu.cs.cloudlet.application.esvmtrainer;
 
 import java.io.File;
-import java.io.FileFilter;
 import java.io.FileInputStream;
 import java.io.FileOutputStream;
-import java.io.FilenameFilter;
 import java.io.IOException;
 import java.io.InputStream;
 import java.util.List;
@@ -20,8 +18,6 @@ import android.os.Message;
 import android.provider.MediaStore;
 import android.app.Activity;
 import android.app.AlertDialog;
-import android.app.AlertDialog.Builder;
-import android.app.Dialog;
 import android.app.ProgressDialog;
 import android.content.Context;
 import android.content.CursorLoader;
