@@ -15,7 +15,7 @@ import org.json.JSONObject;
 
 import edu.cmu.cs.cloudlet.application.esvmtrainer.R;
 import edu.cmu.cs.cloudlet.application.esvmtrainer.cropimage.CropImage;
-import edu.cmu.cs.cloudlet.application.esvmtrainer.network.ESVMNetworkClinet;
+import edu.cmu.cs.cloudlet.application.esvmtrainer.network.ESVMNetworkClient;
 import edu.cmu.cs.cloudlet.application.esvmtrainer.util.AnnotatedImageDS;
 import edu.cmu.cs.cloudlet.application.esvmtrainer.util.AnnotationDBHelper;
 import edu.cmu.cs.cloudlet.application.esvmtrainer.util.ImageAdapter;
@@ -53,10 +53,11 @@ public class AnnotationActivity extends Activity {
 	public static Drawable CHECKMARK_DONE;
 
 	public static final String INTENT_ARGS_IMAGE_DIR = "imageDirectory";
-	public static final String INTENT_ARGS_VIDEO_FILE = "videoFile";
+	public static final String INTENT_ARGS_VIDEO_FILE = "video_file_size";
 	
 	public static final String CROP_EXT = ".crop";
-	private static final String HTTP_SERVER = "http://hail.elijah.cs.cmu.edu:8000/esvmtrainer";
+	private static final String ESVM_SERVER = "hail.elijah.cs.cmu.edu";
+	private static final int ESVM_PORT = 9121;
 
 	protected File imageSourceDir = null;
 	protected ImageAdapter imageAdapter = null;
@@ -119,19 +120,21 @@ public class AnnotationActivity extends Activity {
 			// start progress bar
 			if (this.progDialog == null) {
 				this.progDialog = ProgressDialog.show(this, "Info",
-						"Connecting to " + this.HTTP_SERVER, true);
+						"Connecting to " + this.ESVM_SERVER, true);
 				this.progDialog.setIcon(R.drawable.ic_launcher);
 			} else {
-				this.progDialog.setMessage("Connecting to " + this.HTTP_SERVER);
+				this.progDialog.setMessage("Connecting to " + this.ESVM_SERVER);
 			}
 			this.progDialog.show();
 
 			// send request + video file
-			File[] imageList = new File[1];
-			imageList[0] = this.videoFile;
+			try {
+				jsonObj.put(ESVMNetworkClient.JSON_HEADER_VIDEOSIZE, this.videoFile.length());
+			} catch (JSONException e) {
+			}
 			
-			ESVMNetworkClinet client = new ESVMNetworkClinet(
-					this.networkHandler, jsonObj, imageList, this.HTTP_SERVER);
+			ESVMNetworkClient client = new ESVMNetworkClient(
+					this.networkHandler, jsonObj, this.videoFile, this.ESVM_SERVER, this.ESVM_PORT);
 			client.start();
 
 		} else {
@@ -230,10 +233,13 @@ public class AnnotationActivity extends Activity {
 		}
 
 		public void handleMessage(Message msg) {
-			if (msg.what == ESVMNetworkClinet.CALLBACK_SUCCESS) {
+			if (msg.what == ESVMNetworkClient.CALLBACK_SUCCESS) {
 				String retMsg = (String) msg.obj;
 				this.updateMessage("SUCCESS: " + retMsg);
-			} else {
+			} else if (msg.what == ESVMNetworkClient.CALLBACK_UPDATE) {
+				String retMsg = (String) msg.obj;
+				this.updateMessage(retMsg);
+			} else if (msg.what == ESVMNetworkClient.CALLBACK_FAILED) {
 				String retMsg = (String) msg.obj;
 				this.updateMessage("SUCCESS: " + retMsg);
 				AlertDialog.Builder ab = new AlertDialog.Builder(
