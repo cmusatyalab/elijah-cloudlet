@@ -125,7 +125,7 @@ public class AnnotationDBHelper extends SQLiteOpenHelper {
 			
 			JSONObject newObj = new JSONObject();
 			try {
-				newObj.put(COLUMN_ORIGINAL_FILENAME, image.getAbsoluteFile());
+				newObj.put(COLUMN_ORIGINAL_FILENAME, image.getName());
 				newObj.put(COLUMN_ANNOTATION_LEFT, annotation.left);
 				newObj.put(COLUMN_ANNOTATION_RIGHT, annotation.right);
 				newObj.put(COLUMN_ANNOTATION_BOTTOM, annotation.bottom);

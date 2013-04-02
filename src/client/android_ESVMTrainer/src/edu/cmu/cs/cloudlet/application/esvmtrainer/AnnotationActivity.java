@@ -115,7 +115,6 @@ public class AnnotationActivity extends Activity {
 		Log.d("krha", "training object name : " + objectName);
 		JSONObject jsonObj = dbHelper.getJSONAnnotation(this.allImageList);
 		if (jsonObj != null) {
-
 			// start progress bar
 			if (this.progDialog == null) {
 				this.progDialog = ProgressDialog.show(this, "Info",
@@ -126,14 +125,18 @@ public class AnnotationActivity extends Activity {
 			}
 			this.progDialog.show();
 
-			// send request + video file
+			// send request + image files
+			File[] imageList = new File[this.allImageList.size()];
+			for (int i = 0; i < imageList.length; i++){
+				imageList[i] = this.allImageList.get(i).getOriginalFile();
+			}
 			try {
-				jsonObj.put(ESVMNetworkClient.JSON_HEADER_VIDEOSIZE, this.videoFile.length());
+				jsonObj.put(ESVMNetworkClient.JSON_HEADER_MODEL_NAME, objectName);
 			} catch (JSONException e) {
 			}
 			
 			ESVMNetworkClient client = new ESVMNetworkClient(
-					this.networkHandler, jsonObj, this.videoFile, this.ESVM_SERVER, this.ESVM_PORT);
+					this.networkHandler, jsonObj, imageList, this.ESVM_SERVER, this.ESVM_PORT);
 			client.start();
 
 		} else {
@@ -252,16 +255,23 @@ public class AnnotationActivity extends Activity {
 			if (msg.what == ESVMNetworkClient.CALLBACK_SUCCESS) {
 				String retMsg = (String) msg.obj;
 				this.updateMessage("SUCCESS: " + retMsg);
+				AlertDialog.Builder ab = new AlertDialog.Builder(
+						AnnotationActivity.this);
+				ab.setTitle("SUCCESS");
+				ab.setMessage(retMsg);
+				ab.setIcon(R.drawable.ic_launcher);
+				ab.setPositiveButton("Confirm", null);
+				ab.show();
 			} else if (msg.what == ESVMNetworkClient.CALLBACK_UPDATE) {
 				String retMsg = (String) msg.obj;
 				this.updateMessage(retMsg);
 			} else if (msg.what == ESVMNetworkClient.CALLBACK_FAILED) {
 				String retMsg = (String) msg.obj;
-				this.updateMessage("SUCCESS: " + retMsg);
+				this.updateMessage("Failed : " + retMsg);
 				AlertDialog.Builder ab = new AlertDialog.Builder(
 						AnnotationActivity.this);
 				ab.setTitle("Failed");
-				ab.setMessage("ESVM update failed : " + msg);
+				ab.setMessage("ESVM update failed : " + retMsg);
 				ab.setIcon(R.drawable.ic_launcher);
 				ab.setPositiveButton("Confirm", null);
 				ab.show();

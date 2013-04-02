@@ -26,7 +26,7 @@ public class ZipUtility {
 		int read = 0;
 		for (int i = 0, n = files.length; i < n; i++) {
 			FileInputStream in = new FileInputStream(files[i]);
-			ZipEntry entry = new ZipEntry(files[i].getAbsolutePath());
+			ZipEntry entry = new ZipEntry(files[i].getName());
 			zos.putNextEntry(entry);
 			while (-1 != (read = in.read(buffer))) {
 				zos.write(buffer, 0, read);
