@@ -57,7 +57,6 @@ public class CloudletActivity extends Activity {
 	public void onCreate(Bundle savedInstanceState) {
 		super.onCreate(savedInstanceState);
 		setContentView(R.layout.main);
-		loadPreferneces();
 
 		// Initiate Environment Settings
 		CloudletEnv.instance();
@@ -218,14 +217,6 @@ public class CloudletActivity extends Activity {
 		return super.onKeyDown(keyCode, event);
 	}
 
-	public void loadPreferneces() {
-		SharedPreferences prefs = PreferenceManager.getDefaultSharedPreferences(this);
-		CloudletActivity.SYNTHESIS_SERVER_IP = prefs.getString(getString(R.string.synthesis_pref_address),
-				getString(R.string.synthesis_default_ip_address));
-		CloudletActivity.SYNTHESIS_SERVER_PORT = Integer.parseInt(prefs.getString(getString(R.string.synthesis_pref_port),
-				getString(R.string.synthesis_default_port)));
-	}
-
 	@Override
 	public boolean onCreateOptionsMenu(Menu menu) {
 		menu.add(0, SYNTHESIS_MENU_ID_SETTINGS, 0, getString(R.string.synthesis_config_memu_setting));
@@ -235,7 +226,6 @@ public class CloudletActivity extends Activity {
 
 	@Override
 	protected void onResume() {
-		loadPreferneces();
 		super.onResume();
 	}
 

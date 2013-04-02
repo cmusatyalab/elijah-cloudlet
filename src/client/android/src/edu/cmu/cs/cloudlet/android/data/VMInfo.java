@@ -119,6 +119,6 @@ public class VMInfo {
 	public void addTransferredOverlay(File overlayFile) {
 		// First remove it to avoid duplicated overlay file element
 		this.sentOverlayFileList.removeElement(overlayFile);
-		this.addTransferredOverlay(overlayFile);
+		this.sentOverlayFileList.addElement(overlayFile);
 	}
 }

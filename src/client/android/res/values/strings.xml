@@ -4,13 +4,7 @@
     
     <string name="synthesis_label_title">VM Synthesis</string>
     <string name="synthesis_button_title">Start</string>
-    <string name="synthesis_default_ip_address">192.168.11.147</string>
-    <string name="synthesis_default_port">8021</string>
-    <string name="synthesis_pref_address">192.168.11.147</string>
-    <string name="synthesis_pref_port">8021</string>
     <string name="synthesis_config_memu_setting">Setting</string>
     <string name="synthesis_config_memu_clear">Clear</string>
-    <string name="synthesis_config_memu_ip">ipaddress</string>
-    <string name="synthesis_config_memu_port">port</string>
 
 </resources>

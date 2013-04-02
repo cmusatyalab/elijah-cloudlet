@@ -18,8 +18,8 @@ public class Measure {
 	}
 
 	public static void record(String timeString) {
-		timeline.add(timeString + SEPERATOR
-				+ (System.currentTimeMillis() / 1000));
+//		timeline.add(timeString + SEPERATOR
+//				+ (System.currentTimeMillis() / 1000));
 		// Log.d("krha", "Measurement : " + timeString + SEPERATOR +
 		// System.currentTimeMillis());
 	}
