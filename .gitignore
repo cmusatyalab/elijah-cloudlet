@@ -6,7 +6,6 @@ src/tmp/
 *.a
 *.o
 *.cproject
-*.project
 *.lzma
 *.qcow2
 *.mem
