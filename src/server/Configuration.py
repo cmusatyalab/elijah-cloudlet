@@ -105,7 +105,7 @@ class Synthesis_Const(object):
     IS_PRINT_STATISTICS     = False
 
     # Discovery
-    DIRECTORY_SERVER = "scarlet.aura.cs.cmu.edu"
+    DIRECTORY_SERVER = "register.findcloudlet.org"
     #DIRECTORY_SERVER = "cloudlet.krha.kr:8000"
     DIRECTORY_UPDATE_PERIOD = 60*10 # 10 min
 
