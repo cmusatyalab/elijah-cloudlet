@@ -637,16 +637,17 @@ class SynthesisServer(SocketServer.TCPServer):
         Log.write("[INFO] Start UPnP Server\n")
 
         # Start registration client
-        try:
-            self.register_client = RegisterThread(
-                    Synthesis_Const.DIRECTORY_SERVER,
-                    log=Log,
-                    update_period=Synthesis_Const.DIRECTORY_UPDATE_PERIOD)
-            self.register_client.start()
-            Log.write("[INFO] Register to Cloudlet direcory service\n")
-        except RegisterError as e:
-            Log.write(str(e))
-            Log.write("[Warning] Cannot register Cloudlet to central server\n")
+        if settings.register_server:
+            try:
+                self.register_client = RegisterThread(
+                        settings.register_server,
+                        log=Log,
+                        update_period=Synthesis_Const.DIRECTORY_UPDATE_PERIOD)
+                self.register_client.start()
+                Log.write("[INFO] Register to Cloudlet direcory service\n")
+            except RegisterError as e:
+                Log.write(str(e))
+                Log.write("[Warning] Cannot register Cloudlet to central server\n")
 
         # cloudlet machine monitor
         try:
@@ -700,8 +701,12 @@ class SynthesisServer(SocketServer.TCPServer):
 
         parser = OptionParser(usage="usage: %prog " + " [option]",
                 version="Rapid VM Synthesis(piping) 0.1")
+        parser.add_option(
+                '-r', '--register-server', action='store', dest='register_server',
+                default=None, help= 'Domain address for registration server.\n \
+                        Specify this if you like to register your \
+                        Cloudlet to registration server.')
         settings, args = parser.parse_args(argv)
-
         return settings, args
 
     def check_basevm(self):

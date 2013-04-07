@@ -17,6 +17,7 @@ import edu.cmu.cs.cloudlet.android.CloudletActivity;
 import edu.cmu.cs.cloudlet.android.util.KLog;
 
 public class CloudletDirectoryClient extends Thread {
+	public static String GLOBAL_DISCOVERY_SERVER = ""; //specify URL if you want to find Cloudlet from global search
 
 	private Activity activity;
 	private ArrayAdapter<CloudletDevice> listAdapter;;
@@ -28,7 +29,10 @@ public class CloudletDirectoryClient extends Thread {
 
 	@Override
 	public void run() {
-		String retString = httpGet(CloudletActivity.GLOBAL_DISCOVERY_SERVER);
+		if (CloudletDirectoryClient.GLOBAL_DISCOVERY_SERVER.startsWith("http") == false)
+			return;
+		
+		String retString = httpGet(CloudletDirectoryClient.GLOBAL_DISCOVERY_SERVER);
 		if (retString != null) {
 			try {
 				JSONObject jsonObject = new JSONObject(retString);

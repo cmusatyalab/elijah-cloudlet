@@ -57,13 +57,17 @@ public class CloudletDiscovery {
 		}).setPositiveButton("Ok", new DialogInterface.OnClickListener() {
 			public void onClick(DialogInterface dialog, int position) {
 				Message msg = Message.obtain();
-				msg.what = CloudletDiscovery.DEVICE_SELECTED;
 				if(position >= 0){
-					msg.obj = listAdapter.getItem(position);					
+					msg.obj = listAdapter.getItem(position);
+					msg.what = CloudletDiscovery.DEVICE_SELECTED;					
 				}else if(lastSelectedIndex != -1){
 					msg.obj = listAdapter.getItem(lastSelectedIndex);
+					msg.what = CloudletDiscovery.DEVICE_SELECTED;
 				}else if(listAdapter.getCount() > 0){
 					msg.obj = listAdapter.getItem(0);
+					msg.what = CloudletDiscovery.DEVICE_SELECTED;
+				}else{
+					msg.what = CloudletDiscovery.USER_CANCELED;					
 				}
 				handler.sendMessage(msg);
 			}

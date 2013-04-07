@@ -50,7 +50,7 @@ class RegisterThread(threading.Thread):
 
     def register(self):
         
-        self.log.write("[REGISTER] start register\n")
+        self.log.write("[REGISTER] start register to %s\n" % (self.server_dns))
         while (self.resource_uri == None):
             if self.stop.wait(0.001):
                 # finish thread without deregister since it hasn't done register
@@ -130,7 +130,7 @@ def http_get(end_point):
     headers = {"Content-type":"application/json"}
     end_string = "%s?%s" % (end_point[2], end_point[4])
 
-    conn = httplib.HTTPConnection(end_point[1])
+    conn = httplib.HTTPConnection(end_point[1], 80, timeout=1)
     conn.request("GET", end_string, params, headers)
     data = conn.getresponse().read()
     response_list = json.loads(data).get('objects', list())

@@ -12,6 +12,7 @@
 // or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU General Public License
 // for more details.
 package edu.cmu.cs.cloudlet.android;
+
 import java.io.File;
 import java.util.ArrayList;
 
@@ -34,15 +35,16 @@ import android.os.Bundle;
 import android.os.Handler;
 import android.os.Message;
 import android.preference.PreferenceManager;
+import android.text.InputType;
 import android.view.KeyEvent;
 import android.view.Menu;
 import android.view.View;
 import android.widget.Button;
+import android.widget.EditText;
 
 public class CloudletActivity extends Activity {
-	public static String GLOBAL_DISCOVERY_SERVER = "http://scarlet.aura.cs.cmu.edu/api/v1/Cloudlet/search/?n=3";	
-	public static String SYNTHESIS_SERVER_IP = "cloudlet.krha.kr";
-	public static int SYNTHESIS_SERVER_PORT = 8021;
+	public static String CLOUDLET_SYNTHESIS_IP = "cloudlet.krha.kr";
+	public static int CLOUDLET_SYNTHESIS_PORT = 8021;
 
 	private static final int SYNTHESIS_MENU_ID_SETTINGS = 11123;
 	private static final int SYNTHESIS_MENU_ID_CLEAR = 12311;
@@ -62,7 +64,7 @@ public class CloudletActivity extends Activity {
 		CloudletEnv.instance();
 
 		// Cloudlet discovery
-		this.cloudletDiscovery = new CloudletDiscovery(this, CloudletActivity.this, discoveryHandler);		
+		this.cloudletDiscovery = new CloudletDiscovery(this, CloudletActivity.this, discoveryHandler);
 
 		// Performance Button
 		findViewById(R.id.testSynthesis).setOnClickListener(clickListener);
@@ -87,7 +89,7 @@ public class CloudletActivity extends Activity {
 					selectedOveralyIndex = position;
 				}
 				VMInfo overlayVM = vmList.get(selectedOveralyIndex);
-				runConnection(SYNTHESIS_SERVER_IP, SYNTHESIS_SERVER_PORT, overlayVM);
+				runConnection(CLOUDLET_SYNTHESIS_IP, CLOUDLET_SYNTHESIS_PORT, overlayVM);
 			}
 		}).setNegativeButton("Cancel", new DialogInterface.OnClickListener() {
 			public void onClick(DialogInterface dialog, int position) {
@@ -114,9 +116,8 @@ public class CloudletActivity extends Activity {
 		} else {
 			this.progDialog.setMessage("Connecting to " + address);
 		}
-		this.progDialog.show();		
+		this.progDialog.show();
 	}
-
 
 	/*
 	 * Launch Application as a Standalone
@@ -153,13 +154,13 @@ public class CloudletActivity extends Activity {
 
 		if (application.equalsIgnoreCase("moped") || application.equalsIgnoreCase("moped_disk")) {
 			Intent intent = new Intent(CloudletActivity.this, CloudletCameraActivity.class);
-			intent.putExtra("address", SYNTHESIS_SERVER_IP);
+			intent.putExtra("address", CLOUDLET_SYNTHESIS_IP);
 			intent.putExtra("port", TEST_CLOUDLET_APP_MOPED_PORT);
 			startActivityForResult(intent, 0);
 			return true;
 		} else if (application.equalsIgnoreCase("graphics")) {
 			Intent intent = new Intent(CloudletActivity.this, GraphicsClientActivity.class);
-			intent.putExtra("address", SYNTHESIS_SERVER_IP);
+			intent.putExtra("address", CLOUDLET_SYNTHESIS_IP);
 			intent.putExtra("port", TEST_CLOUDLET_APP_GRAPHICS_PORT);
 			startActivityForResult(intent, 0);
 			return true;
@@ -179,7 +180,8 @@ public class CloudletActivity extends Activity {
 					showDialogSelectOverlay(vmList);
 				} else {
 					File ovelray_root = CloudletEnv.instance().getFilePath(CloudletEnv.OVERLAY_DIR);
-					String errMsg = "No Overlay exist\nCreate overlay directory under \"" + ovelray_root.getAbsolutePath() + "\"";
+					String errMsg = "No Overlay exist\nCreate overlay directory under \""
+							+ ovelray_root.getAbsolutePath() + "\"";
 					showAlert("Error", errMsg);
 				}
 			}
@@ -231,12 +233,12 @@ public class CloudletActivity extends Activity {
 
 	@Override
 	public void onDestroy() {
-		if (this.cloudletDiscovery != null){
+		if (this.cloudletDiscovery != null) {
 			this.cloudletDiscovery.close();
 		}
 		if (this.connector != null)
 			this.connector.close();
-		
+
 		super.onDestroy();
 	}
 
@@ -248,35 +250,49 @@ public class CloudletActivity extends Activity {
 			if (msg.what == CloudletDiscovery.DEVICE_SELECTED) {
 				CloudletDevice device = (CloudletDevice) msg.obj;
 				String ipAddress = device.getIPAddress();
-				SYNTHESIS_SERVER_IP = ipAddress;
+				CLOUDLET_SYNTHESIS_IP = ipAddress;
 			} else if (msg.what == CloudletDiscovery.USER_CANCELED) {
-				showAlert("Info", "Select UPnP Server for Cloudlet Service");
+				// Ask IP Address
+				AlertDialog.Builder ab = new AlertDialog.Builder(CloudletActivity.this);
+				final EditText input = new EditText(getApplicationContext());
+				input.setText(CLOUDLET_SYNTHESIS_IP);
+				input.setInputType(InputType.TYPE_TEXT_FLAG_NO_SUGGESTIONS);
+				ab.setTitle("Cloudlet Conection");
+				ab.setMessage("Enter the IP address of Cloudlet since no result from discovery.\n(Specify default address at CLOUDLET_SYNTHESIS_IP in CloudletAcitivity.java)");
+				ab.setView(input);
+				ab.setIcon(R.drawable.ic_launcher);
+				ab.setPositiveButton("Ok", new DialogInterface.OnClickListener() {
+					public void onClick(DialogInterface dialog, int whichButton) {
+						String value = input.getText().toString();
+						CLOUDLET_SYNTHESIS_IP = value;
+					}
+				});
+				ab.show();
 			}
 		}
 	};
-	
+
 	/*
 	 * Synthesis callback handler
 	 */
 	Handler synthesisHandler = new Handler() {
-		
-		protected void updateMessage(String msg){
-			if ((progDialog != null) && (progDialog.isShowing())){
+
+		protected void updateMessage(String msg) {
+			if ((progDialog != null) && (progDialog.isShowing())) {
 				progDialog.setMessage(msg);
 			}
 		}
-		
+
 		public void handleMessage(Message msg) {
-			if (msg.what == CloudletConnector.SYNTHESIS_SUCCESS) {				
-				String appName = (String)msg.obj;
+			if (msg.what == CloudletConnector.SYNTHESIS_SUCCESS) {
+				String appName = (String) msg.obj;
 				this.updateMessage("Synthesis SUCESS");
-//				boolean isSuccess = runStandAlone(appName);
-				boolean isSuccess = false;
+				boolean isSuccess = runStandAlone(appName);
 				if (isSuccess == false) {
 					// If we cannot find matching application,
 					// then ask user to close VM
-					String message = "VM synthesis is successfully finished, but cannot find matching Android application named ("
-							+ appName + ")\n\nClose VM at Cloudlet?";
+					String message = "VM synthesis is successfully finished, but cannot find Android application matched with " +
+							"directory name (" + appName + ").\nPlease read README file for details.\n\nClose VM at Cloudlet?";
 					new AlertDialog.Builder(CloudletActivity.this).setTitle("Info").setMessage(message)
 							.setPositiveButton("Yes", new DialogInterface.OnClickListener() {
 								public void onClick(DialogInterface dialog, int which) {
@@ -292,21 +308,21 @@ public class CloudletActivity extends Activity {
 				else
 					this.updateMessage("Synthesis FAILED");
 				progDialog.dismiss();
-				
+
 				AlertDialog.Builder ab = new AlertDialog.Builder(CloudletActivity.this);
 				ab.setTitle("VM Synthesis Failed");
 				ab.setIcon(R.drawable.ic_launcher);
 				ab.setPositiveButton("Ok", null).setNegativeButton("Cancel", null);
-				ab.show();				
+				ab.show();
 			} else if (msg.what == CloudletConnector.SYNTHESIS_PROGRESS) {
-				String message = (String)msg.obj;
-				this.updateMessage(message);				
+				String message = (String) msg.obj;
+				this.updateMessage(message);
 			}
 		}
 	};
-	 
+
 	// TO BE DELETED (only for test purpose)
-	public static final String[] applications = { "MOPED", "GRAPHICS"};
+	public static final String[] applications = { "MOPED", "GRAPHICS" };
 	public static final int TEST_CLOUDLET_APP_MOPED_PORT = 9092; // 19092
 	public static final int TEST_CLOUDLET_APP_GRAPHICS_PORT = 9093;
 }

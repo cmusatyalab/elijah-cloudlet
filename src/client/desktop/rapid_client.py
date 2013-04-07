@@ -46,8 +46,12 @@ def process_command_line(argv):
             '-o', '--overlay-path', action='store', type='string', dest='overlay_path',
             help="Set overlay path (overlay meta path)")
     parser.add_option(
-            '-s', '--server', action='store', type='string', dest='server_ip',
-            help="Set cloudlet server's IP address")
+            '-s', '--server', action='store', type='string', dest='server_ip', \
+            default=None, help="Set cloudlet server's IP address")
+    parser.add_option(
+            '-c', '--cloudlet-discover', action='store', type='string', \
+            dest='discovery_server', default=None, \
+            help="Set cloudlet discovery server address")
     parser.add_option(
             '-d', '--display', action='store_false', dest='display_vnc', default=True,
             help='Turn on VNC display of VM (Default True)')
@@ -58,6 +62,9 @@ def process_command_line(argv):
 
     if settings.overlay_path == None:
         parser.error("Need path to overlay-meta file")
+    if (not settings.server_ip) and (not settings.discovery_server):
+        message = "You need either specify cloudlet ip(option -s) or enable to discover cloudlet service(option -c)"
+        parser.error(message)
     if not len(args) == 0:
         parser.error('program takes no command-line arguments; "%s" ignored.' % (args,))
     
@@ -80,8 +87,8 @@ def synthesis(address, port, overlay_path, app_function, synthesis_option):
     cloudlet = Cloudlet(ip_address=address)
     session_id = API.associate_with_cloudlet(cloudlet)
     if session_id == discovery_api.RET_FAILED:
-        sys.stderr.write("Cannot create session : \n")
-        sys.stderr.write(API.discovery_err_str)
+        sys.stderr.write("Cannot create session : ")
+        sys.stderr.write(API.discovery_err_str + "\n")
         sys.exit(1)
 
     start_cloudlet(cloudlet, session_id, overlay_path, app_function, synthesis_option)
@@ -264,7 +271,7 @@ def main(argv=None):
     cloudlet_ip = None
     if settings.server_ip:
         cloudlet_ip = settings.server_ip
-    else:
+    elif settings.discovery:
         cloudlet_list = list()
         if discovery_api.RET_FAILED == API.find_nearby_cloudlets(cloudlet_list):
             sys.stderr.write(API.discovery_err_str)
@@ -281,6 +288,10 @@ def main(argv=None):
             if 0 <= selected_number < len(cloudlet_list):
                 break
         cloudlet_ip = cloudlet_list[selected_number].ip_v4
+    else:
+        message = "You need either specify cloudlet ip(option -s) or enable to discover cloudlet service(option -c)"
+        sys.stderr.write(message)
+        sys.exit(1)
         
     synthesis(cloudlet_ip, port, settings.overlay_path, app_function, synthesis_options)
     return 0

@@ -68,6 +68,8 @@ public class UPnPDiscovery {
 		public void remoteDeviceDiscoveryFailed(Registry registry, final RemoteDevice device, final Exception ex) {
 			activity.runOnUiThread(new Runnable() {
 				public void run() {
+					KLog.println("UPNP Discovery failed of '" + device.getDisplayString() + "': "
+							+ (ex != null ? ex.toString() : "Couldn't retrieve device/service descriptors"));
 					/*
 					Toast.makeText(
 							context,
@@ -107,7 +109,7 @@ public class UPnPDiscovery {
 					// TODO: Search only Cloudlet service from the start
 					String deviceString = device.getDisplayString().toLowerCase();
 					if (deviceString.contains("cloudlet") == false){
-//						KLog.println("Skip found UPnP device since it's not Cloudlet\n");
+						KLog.println("Skip found UPnP device since it's not Cloudlet\n");
 						return;
 					}
 					

@@ -109,7 +109,7 @@ public class NetworkMsg {
 
 		// synthesis option
 		HashMap<String, Boolean> options = new HashMap<String, Boolean>();		
-		options.put(SYNTHESIS_OPTION_DISPLAY_VNC, false);
+		options.put(SYNTHESIS_OPTION_DISPLAY_VNC, true);
 		options.put(SYNTHESIS_OPTION_EARLY_START, false);
 		overlay_header.put(KEY_SYNTHESIS_OPTION, options);
 		NetworkMsg msg;

@@ -79,7 +79,7 @@ public class CloudletCameraActivity extends Activity implements TextToSpeech.OnI
 			server_ipaddress = extras.getString("address");
 			server_port = extras.getInt("port", CloudletActivity.TEST_CLOUDLET_APP_MOPED_PORT);
 		}else{
-			server_ipaddress = CloudletActivity.SYNTHESIS_SERVER_IP;
+			server_ipaddress = CloudletActivity.CLOUDLET_SYNTHESIS_IP;
 			server_port = CloudletActivity.TEST_CLOUDLET_APP_MOPED_PORT;
 		}
 

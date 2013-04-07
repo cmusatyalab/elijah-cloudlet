@@ -331,6 +331,5 @@ public class CloudletConnector extends Thread {
 
 	public void updateTransferredOverlay(File overlayFile) {
 		this.overlayVM.addTransferredOverlay(overlayFile);
-
 	}
 }
