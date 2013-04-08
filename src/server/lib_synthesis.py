@@ -409,15 +409,6 @@ class SynthesisHandler(SocketServer.StreamRequestHandler):
         Log.write("  - %s" % str(pformat(finish_message)))
         Log.write("\n")
 
-        # TO BE DELETED - save execution pattern
-        '''
-        app_url = str(overlay_urls[0])
-        mem_access_list = self.resumed_VM.monitor.mem_access_chunk_list
-        mem_access_str = [str(item) for item in mem_access_list]
-        filename = "exec_patter_%s" % (app_url.split("/")[-2])
-        open(filename, "w+a").write('\n'.join(mem_access_str))
-        '''
-
         # printout synthesis statistics
         if self.synthesis_option.get(Protocol.SYNTHESIS_OPTION_SHOW_STATISTICS):
             mem_access_list = self.resumed_VM.monitor.mem_access_chunk_list
