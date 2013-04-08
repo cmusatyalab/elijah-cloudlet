@@ -254,15 +254,12 @@ class VM_Overlay(threading.Thread):
         basevm_list = dbconn.list_item(db_table.BaseVM)
         for basevm_row in basevm_list:
             if basevm_row.disk_path == self.base_image:
-                base_hash_value = basevm_row.hash_value
-        if not base_hash_value:
+                base_hashvalue = basevm_row.hash_value
+        if not base_hashvalue:
             raise CloudletGenerationError("Cannot find hashvalue for %s" % self.base_image)
         
         # filename for overlay VM
         qemu_logfile = NamedTemporaryFile(prefix="cloudlet-qemu-log-", delete=False)
-        image_name = os.path.basename(self.base_image).split(".")[0]
-        dir_path = os.path.dirname(base_mem)
-        overlay_path = os.path.join(dir_path, image_name+Const.OVERLAY_FILE_PREFIX)
         
         # make FUSE disk & memory
         fuse = run_fuse(Const.VMNETFS_PATH, Const.CHUNK_SIZE, 
@@ -292,68 +289,24 @@ class VM_Overlay(threading.Thread):
         Log.write("[TIME] user interaction time for creating overlay: %f\n" % (time()-start_time))
 
         # 1-2. suspend VM and get monitoring information
-        basedisk_hashlist, basemem_hashlist, trim_dict, free_memory_dict, used_blocks_dict = \
-                VM_Overlay.get_monitoring_info(machine, self.options,
-                    base_memmeta, base_diskmeta, 
-                    fuse_stream_monitor, 
-                    self.base_image, base_mem, 
-                    modified_disk, modified_mem.name, 
-                    qemu_logfile, Log)
-        dma_dict = dict()
+        monitoring_info = VM_Overlay.get_monitoring_info(machine, self.options,
+                base_memmeta, base_diskmeta, 
+                fuse_stream_monitor, 
+                self.base_image, base_mem, 
+                modified_disk, modified_mem.name, 
+                qemu_logfile, Log)
 
-        # 2-1. get memory overlay
-        if not self.options.DISK_ONLY:
-            mem_deltalist= Memory.create_memory_deltalist(modified_mem.name,
-                    basemem_meta=base_memmeta, basemem_path=base_mem,
-                    apply_free_memory=self.options.FREE_SUPPORT,
-                    free_memory_info=free_memory_dict,
-                    print_out=Log)
-        else:
-            mem_deltalist = list()
-
-        # 2-2. get disk overlay
-        m_chunk_dict = fuse_stream_monitor.modified_chunk_dict
-        disk_statistics = dict()
-        disk_deltalist = Disk.create_disk_deltalist(modified_disk,
-            m_chunk_dict, Const.CHUNK_SIZE,
-            basedisk_hashlist=basedisk_hashlist, basedisk_path=self.base_image,
-            trim_dict=trim_dict,
-            apply_discard = True,
-            dma_dict=dma_dict,
-            used_blocks_dict=used_blocks_dict,
-            ret_statistics=disk_statistics,
-            print_out=Log)
-
-        # 2-3. Merge disk & memory delta_list to generate overlay file
-        # deduplication
-        merged_deltalist = delta.create_overlay(
-                mem_deltalist, Memory.Memory.RAM_PAGE_SIZE,
-                disk_deltalist, Const.CHUNK_SIZE,
-                basedisk_hashlist=basedisk_hashlist,
-                basemem_hashlist=basemem_hashlist,
-                print_out=Log)
-
-        free_pfn_counter = long(free_memory_dict.get("freed_counter", 0))
-
-        # 3. Reorder transfer order & Compression
-        Log.write("[DEBUG][LZMA] Compressing overlay blobs\n")
-        blob_list = delta.divide_blobs(merged_deltalist, overlay_path, 
-                Const.OVERLAY_BLOB_SIZE_KB, Const.CHUNK_SIZE,
-                Memory.Memory.RAM_PAGE_SIZE, print_out=Log)
-
-        disk_discarded_count = disk_statistics.get('trimed', 0)
-        DeltaList.statistics(merged_deltalist, print_out=Log, 
-                mem_discarded=free_pfn_counter,
-                disk_discarded=disk_discarded_count)
-
-        # 4. create metadata
+        # 2. get overlay VM
+        image_name = os.path.basename(self.base_image).split(".")[0]
+        dir_path = os.path.dirname(base_mem)
+        overlay_path = os.path.join(dir_path, image_name+Const.OVERLAY_FILE_PREFIX)
         self.overlay_metafile = os.path.join(dir_path, image_name+Const.OVERLAY_META)
-        if not self.options.DISK_ONLY:
-            _create_overlay_meta(base_hash_value, self.overlay_metafile, 
-                    modified_disk, modified_mem.name, blob_list)
-        else:
-            _create_overlay_meta(base_hash_value, self.overlay_metafile, 
-                    modified_disk, base_mem, blob_list)
+        self.overlay_files = VM_Overlay.get_diff(monitoring_info, self.options,
+                self.base_image, base_mem,
+                base_memmeta, base_hashvalue,
+                modified_disk, modified_mem.name,
+                self.overlay_metafile, overlay_path,
+                Log)
 
         # 5. terminting
         fuse.terminate()
@@ -370,7 +323,77 @@ class VM_Overlay(threading.Thread):
         if os.path.exists(qemu_logfile.name):
             os.unlink(qemu_logfile.name)
 
-        self.overlay_files = [item[Const.META_OVERLAY_FILE_NAME] for item in blob_list]
+    @staticmethod
+    def get_diff(monitoring_info, options, 
+            base_image, base_mem,
+            base_memmeta, base_hashvalue,
+            modified_disk, modified_mem,
+            overlay_metapath, overlay_path,
+            print_out):
+
+        basedisk_hashlist = getattr(monitoring_info, _MonitoringInfo.BASEDISK_HASHLIST, None)
+        basemem_hashlist = getattr(monitoring_info, _MonitoringInfo.BASEMEM_HASHLIST, None)
+        free_memory_dict = getattr(monitoring_info, _MonitoringInfo.MEMORY_FREE_BLOCKS, None)
+        m_chunk_dict = getattr(monitoring_info, _MonitoringInfo.DISK_MODIFIED_BLOCKS, None)
+        trim_dict = getattr(monitoring_info, _MonitoringInfo.DISK_FREE_BLOCKS, None)
+        used_blocks_dict = getattr(monitoring_info, _MonitoringInfo.DISK_USED_BLOCKS, None)
+        dma_dict = dict()
+
+        # 2-1. get memory overlay
+        if not options.DISK_ONLY:
+            mem_deltalist= Memory.create_memory_deltalist(modified_mem,
+                    basemem_meta=base_memmeta, basemem_path=base_mem,
+                    apply_free_memory=options.FREE_SUPPORT,
+                    free_memory_info=free_memory_dict,
+                    print_out=print_out)
+        else:
+            mem_deltalist = list()
+
+        # 2-2. get disk overlay
+        disk_statistics = dict()
+        disk_deltalist = Disk.create_disk_deltalist(modified_disk,
+            m_chunk_dict, Const.CHUNK_SIZE,
+            basedisk_hashlist=basedisk_hashlist, basedisk_path=base_image,
+            trim_dict=trim_dict,
+            apply_discard = True,
+            dma_dict=dma_dict,
+            used_blocks_dict=used_blocks_dict,
+            ret_statistics=disk_statistics,
+            print_out=print_out)
+
+        # 2-3. Merge disk & memory delta_list to generate overlay file
+        # deduplication
+        merged_deltalist = delta.create_overlay(
+                mem_deltalist, Memory.Memory.RAM_PAGE_SIZE,
+                disk_deltalist, Const.CHUNK_SIZE,
+                basedisk_hashlist=basedisk_hashlist,
+                basemem_hashlist=basemem_hashlist,
+                print_out=print_out)
+
+        free_pfn_counter = long(free_memory_dict.get("freed_counter", 0))
+
+        # 3. Reorder transfer order & Compression
+        print_out.write("[DEBUG][LZMA] Compressing overlay blobs\n")
+        blob_list = delta.divide_blobs(merged_deltalist, overlay_path, 
+                Const.OVERLAY_BLOB_SIZE_KB, Const.CHUNK_SIZE,
+                Memory.Memory.RAM_PAGE_SIZE, print_out=print_out)
+
+        disk_discarded_count = disk_statistics.get('trimed', 0)
+        DeltaList.statistics(merged_deltalist, print_out=print_out, 
+                mem_discarded=free_pfn_counter,
+                disk_discarded=disk_discarded_count)
+
+        # 4. create metadata
+        if not options.DISK_ONLY:
+            _create_overlay_meta(base_hashvalue, overlay_metapath, 
+                    modified_disk, modified_mem, blob_list)
+        else:
+            _create_overlay_meta(base_hashvalue, overlay_metapath, 
+                    modified_disk, base_mem, blob_list)
+
+
+        overlay_files = [item[Const.META_OVERLAY_FILE_NAME] for item in blob_list]
+        return overlay_files
 
     @staticmethod
     def get_monitoring_info(machine, options,
@@ -406,7 +429,40 @@ class VM_Overlay(threading.Thread):
         if options.XRAY_SUPPORT:
             used_blocks_dict = xray.get_used_blocks(modified_disk)
 
-        return basedisk_hashlist, basemem_hashlist, trim_dict, free_memory_dict, used_blocks_dict
+        m_chunk_dict = fuse_stream_monitor.modified_chunk_dict
+
+        info_dict = dict()
+        info_dict[_MonitoringInfo.BASEDISK_HASHLIST] = basedisk_hashlist
+        info_dict[_MonitoringInfo.BASEMEM_HASHLIST] = basemem_hashlist
+        info_dict[_MonitoringInfo.DISK_USED_BLOCKS] = used_blocks_dict
+        info_dict[_MonitoringInfo.DISK_MODIFIED_BLOCKS] = m_chunk_dict
+        info_dict[_MonitoringInfo.DISK_FREE_BLOCKS] = trim_dict
+        info_dict[_MonitoringInfo.MEMORY_FREE_BLOCKS] = free_memory_dict
+        monitoring_info = _MonitoringInfo(info_dict)
+        return monitoring_info
+
+
+class _MonitoringInfo(object):
+    BASEDISK_HASHLIST       = "basedisk_hashlist"
+    BASEMEM_HASHLIST        = "basemem_hashlist"
+    DISK_MODIFIED_BLOCKS    = "disk_modified_block" # from fuse monitoring
+    DISK_USED_BLOCKS        = "disk_used_block" # from xray support
+    DISK_FREE_BLOCKS        = "disk_free_block"
+    MEMORY_FREE_BLOCKS      = "memory_free_block"
+
+    def __init__(self, properties):
+        for k, v in properties.iteritems():
+            setattr(self, k, v)
+
+    def __str__(self):
+        ret = ""
+        for k, v in self.__dict__.iteritems():
+            ret += "%s\t:\t%s\n" % (str(k), str(v))
+        return ret
+
+    def __getitem__(self, item):
+        return self.__dict__[item]
+
 
 
 def _create_overlay_meta(base_hash, overlay_metafile, modified_disk, modified_mem, 
@@ -1135,10 +1191,10 @@ class ResumedVM(threading.Thread):
         self.qemu_monitor.join()
         
         # delete all temporary file
-        if os.path.exists(self.modified_disk):
-            os.unlink(self.modified_disk)
-        if os.path.exists(self.modified_mem):
-            os.unlink(self.modified_mem)
+        if os.path.exists(self.launch_disk):
+            os.unlink(self.launch_disk)
+        if os.path.exists(self.launch_mem):
+            os.unlink(self.launch_mem)
         if os.path.exists(self.qemu_logfile.name):
             os.unlink(self.qemu_logfile.name)
 

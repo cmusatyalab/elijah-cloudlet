@@ -32,7 +32,6 @@ class Options(object):
     ## for test purposes, we can optionally save modified memory snapshot
     MEMORY_SAVE_PATH                    = None
 
-
     def __str__(self):
         import pprint
         return pprint.pformat(self.__dict__)
