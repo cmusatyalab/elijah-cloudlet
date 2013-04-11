@@ -17,7 +17,7 @@
 
 import libvirt
 import time
-from Const import Const as Const
+import ResourceConst as Const
 import threading
 
 
@@ -54,6 +54,9 @@ class ResourceMonitorThread(threading.Thread):
         number_threads_pcore = machine_info[7]
 
         info_dict = {
+                Const.MACHINE_NUMBER_SOCKET : int(number_socket),
+                Const.MACHINE_NUMBER_CORES_PSOCKET : int(number_cores),
+                Const.MACHINE_NUMBER_THREADS_PCORE : int(number_threads_pcore),
                 Const.MACHINE_NUMBER_TOTAL_CPU: int(number_socket*number_cores*number_threads_pcore),
                 Const.MACHINE_CLOCK_SPEED: float(clock_speed),
                 Const.MACHINE_MEM_TOTAL: long(mem_total),

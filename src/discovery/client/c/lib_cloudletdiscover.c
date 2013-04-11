@@ -25,8 +25,8 @@
 #include <netdb.h>			// getaddrinfo	
 #include <msgpack.h>        // message pack
 
-#include "api.h"
-#include "protocol.h"
+#include "lib_cloudletdiscover.h"
+#include "lib_cloudletdiscover_protocol.h"
 
 
 
@@ -69,10 +69,17 @@ int static connect_server(char const *server_ip, int port_number){
 void print_cloudlet_t(cloudlet_t *cloudlet){
 	cloudlet_resource_t *resource = (cloudlet_resource_t *)(&cloudlet->hw_resource);
 	fprintf(stdout, "ip: %s, port: %d\n", cloudlet->ip_v4, cloudlet->port_number);
-	fprintf(stdout, " - number_cpu: %d, cpu_clock_speed_mhz: %f\n\
-			- mem_total_mb: %d, mem_free_mb: %d \n\
-			- cpu_usage_percent: %f\n",\
-			resource->number_cpu, resource->cpu_clock_speed_mhz,
+	fprintf(stdout, " - number_total_cpu: %d, \n"\
+					" - number_sockets : %d, \n"\
+					" - number_cores_per_socket : %d,\n"\
+					" - number_threads_per_core : %d,\n"\
+					" - cpu_clock: %f,\n"\
+					" - mem_total_mb: %d,\n"\
+					" - mem_free_mb: %d,\n"\
+					" - cpu_usage_percent: %f\n",\
+			resource->number_total_cpu, resource->number_sockets,
+			resource->number_cores_psocket, resource->number_threads_pcore,
+			resource->cpu_clock_speed_mhz,
 			resource->mem_total_mb, resource->mem_free_mb,
 			resource->cpu_usage_percent);
 	return;
@@ -210,10 +217,19 @@ static int parse_resource_info(cloudlet_t *cloudlet, msgpack_object o){
             memcpy(key, p->key.via.raw.ptr, key_size);
             if (strncmp(key, MACHINE_NUMBER_TOTAL_CPU, key_size) == 0){
                 int value = p->val.via.i64;
-                cloudlet->hw_resource.number_cpu = value;
+                cloudlet->hw_resource.number_total_cpu = value;
             } else if(strncmp(key, MACHINE_CLOCK_SPEED, key_size) == 0){
                 float value = p->val.via.dec;
                 cloudlet->hw_resource.cpu_clock_speed_mhz = value;
+            } else if(strncmp(key, MACHINE_NUMBER_SOCKET, key_size) == 0){
+                int value = p->val.via.i64;
+                cloudlet->hw_resource.number_sockets = value;
+            } else if(strncmp(key, MACHINE_NUMBER_CORES_PSOCKET, key_size) == 0){
+                int value = p->val.via.i64;
+                cloudlet->hw_resource.number_cores_psocket = value;
+            } else if(strncmp(key, MACHINE_NUMBER_THREADS_PCORE, key_size) == 0){
+                int value = p->val.via.i64;
+                cloudlet->hw_resource.number_threads_pcore = value;
             } else if(strncmp(key, MACHINE_MEM_TOTAL, key_size) == 0){
                 int value = p->val.via.i64;
                 cloudlet->hw_resource.mem_total_mb;

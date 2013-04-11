@@ -55,6 +55,12 @@
 #define MACHINE_NUMBER_TOTAL_CPU            "machine_cpu_num"
 #define MACHINE_CLOCK_SPEED                 "machine_cpu_clock_speed_mhz"
 #define MACHINE_MEM_TOTAL                   "machine_mem_total_mb"
+#define MACHINE_NUMBER_SOCKET               "machine_number_socket"
+#define MACHINE_NUMBER_CORES_PSOCKET        "machine_number_cores"
+#define MACHINE_NUMBER_THREADS_PCORE        "machine_number_threads_per_cores"
+#define MACHINE_MEM_FREE                    "machine_mem_free"
+#define MACHINE_CACHE_SIZE                  "machine_cache_size"
+#define MACHINE_CACHE_BLOCK_SIZE            "machine_cache_size"
 
 #define TOTAL_CPU_USE_PERCENT                  "machine_total_cpu_usage_percent"
 #define TOTAL_FREE_MEMORY                      "machine_total_free_memory_mb"

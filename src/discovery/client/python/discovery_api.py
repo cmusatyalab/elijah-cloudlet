@@ -16,17 +16,15 @@
 #
 
 import sys
-import os
 import struct
-import time
 import socket
 import pprint
 import msgpack
 from protocol import Protocol as protocol
-from Const import Const as Const
+import ResourceConst as Const
 
 
-CLOUDLET_DOMAIN = "findcloudlet.org"
+CLOUDLET_DOMAIN = "search.findcloudlet.org"
 CLOUDLET_PORT = 8021
 RET_FAILED  = 0
 RET_SUCCESS = 1
@@ -38,7 +36,10 @@ class CloudletFindError(Exception):
 
 class CloudletResourceStatic(object):
     def __init__(self):
-        self.number_cpu = None
+        self.number_socket = None
+        self.number_cores_per_socket = None
+        self.number_threads_per_core = None
+        self.number_total_cpu = None
         self.cpu_clock_speed_mhz = None
         self.mem_total_mb = None
 
@@ -49,9 +50,12 @@ class CloudletResourceStatic(object):
         return pprint.pformat(self.__dict__)
 
     def update(self, data):
-        self.number_cpu = data.get(Const.MACHINE_NUMBER_TOTAL_CPU, None)
-        self.cpu_clock_speed_mhz = data.get(Const.MACHINE_CLOCK_SPEED, None)
-        self.mem_total_mb = data.get(Const.MACHINE_MEM_TOTAL, None)
+        self.number_socket = data.get(Const.MACHINE_NUMBER_SOCKET, 0)
+        self.number_cores_per_socket = data.get(Const.MACHINE_NUMBER_CORES_PSOCKET, 0)
+        self.number_threads_per_core = data.get(Const.MACHINE_NUMBER_THREADS_PCORE, 0)
+        self.number_total_cpu = data.get(Const.MACHINE_NUMBER_TOTAL_CPU, 0)
+        self.cpu_clock_speed_mhz = data.get(Const.MACHINE_CLOCK_SPEED, float(0.0))
+        self.mem_total_mb = data.get(Const.MACHINE_MEM_TOTAL, 0)
 
 
 class CloudletResourceDynamic(object):
@@ -131,7 +135,12 @@ class API(object):
         :return: success/fail
         :rtype: int
         '''
-        addr_list = socket.getaddrinfo(CLOUDLET_DOMAIN, 80, socket.AF_INET, 0, socket.IPPROTO_TCP)
+        try:
+            addr_list = socket.getaddrinfo(CLOUDLET_DOMAIN, 80, socket.AF_INET, 0, socket.IPPROTO_TCP)
+        except socket.gaierror, e:
+            API.discovery_err_str = "Error, (%s) is not associated with any IP" % CLOUDLET_DOMAIN
+            return RET_FAILED
+
         if addr_list == None or len(addr_list) == 0:
             API.discovery_err_str = "No Available Cloudlet"
             return RET_FAILED
@@ -274,7 +283,7 @@ class API(object):
         pass
 
 def _wait_for_next():
-    print ""
+    sys.stdout.write("Enter for next: ")
     raw_input("")
 
 def main(argv):

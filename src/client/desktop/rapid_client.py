@@ -271,7 +271,7 @@ def main(argv=None):
     cloudlet_ip = None
     if settings.server_ip:
         cloudlet_ip = settings.server_ip
-    elif settings.discovery:
+    elif settings.discovery_server:
         cloudlet_list = list()
         if discovery_api.RET_FAILED == API.find_nearby_cloudlets(cloudlet_list):
             sys.stderr.write(API.discovery_err_str)

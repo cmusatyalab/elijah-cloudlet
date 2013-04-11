@@ -19,7 +19,7 @@
 #ifndef CLOUDLET_DISCOVERY_API_H_
 #define CLOUDLET_DISCOVERY_API_H_
 
-#define CLOUDLET_DOMAIN		"findcloudlet.org"
+#define CLOUDLET_DOMAIN		"search.findcloudlet.org"
 #define CLOUDLET_PORT		8021
 #define RET_FAILED  		0
 #define RET_SUCCESS 		1
@@ -28,7 +28,10 @@
  * Data Struct
  */
 typedef struct cloudlet_resource_t {
-	int number_cpu;
+	int number_total_cpu;
+	int number_sockets;
+	int number_cores_psocket;
+	int number_threads_pcore;
 	float cpu_clock_speed_mhz;
 	int mem_total_mb;
     int mem_free_mb;
