@@ -91,7 +91,7 @@ void print_cloudlets(cloudlet_t *cloudlet_list){
 	while(cloudlet){
 		count++;
 		fprintf(stdout, "%d : ", count);
-		print_cloudlet_t(cloudlet_list);
+		print_cloudlet_t(cloudlet);
 		cloudlet = cloudlet->next;
 	}
 }
@@ -232,13 +232,13 @@ static int parse_resource_info(cloudlet_t *cloudlet, msgpack_object o){
                 cloudlet->hw_resource.number_threads_pcore = value;
             } else if(strncmp(key, MACHINE_MEM_TOTAL, key_size) == 0){
                 int value = p->val.via.i64;
-                cloudlet->hw_resource.mem_total_mb;
+                cloudlet->hw_resource.mem_total_mb = value;
             } else if(strncmp(key, TOTAL_CPU_USE_PERCENT, key_size) == 0){
                 float value = p->val.via.dec;
                 cloudlet->hw_resource.cpu_usage_percent = value;
             } else if(strncmp(key, TOTAL_FREE_MEMORY, key_size) == 0){
                 int value = p->val.via.i64;
-                cloudlet->hw_resource.mem_free_mb;
+                cloudlet->hw_resource.mem_free_mb = value;
             }
             free(key);
 
@@ -416,6 +416,7 @@ int main(int argc, char **argv){
 		int ret = get_cloudlet_info(cloudlet);
 		if (ret == RET_SUCCESS){
 		    print_cloudlet_t(cloudlet);
+		    break;
         }else {
             fprintf(stdout, "Failed to get Cloudlet information from %s :\n", cloudlet->ip_v4);
             fprintf(stdout, "%s\n", discovery_error);

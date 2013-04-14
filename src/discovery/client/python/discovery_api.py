@@ -209,7 +209,7 @@ class API(object):
         recv_size, = struct.unpack("!I", Util.recvall(sock, 4))
         data = Util.recvall(sock, recv_size)
         data = Util.decoding(data)
-        session_id = data.get(protocol.KEY_SESSIOIN_ID, None)
+        session_id = data.get(protocol.KEY_SESSION_ID, None)
         if not session_id:
             session_id = RET_FAILED
             reason = data.get(protocol.KEY_FAILED_REASON, None)
@@ -236,7 +236,7 @@ class API(object):
         # send request
         header_dict = {
             protocol.KEY_COMMAND : protocol.MESSAGE_COMMAND_SESSION_CLOSE,
-            protocol.KEY_SESSIOIN_ID: session_id,
+            protocol.KEY_SESSION_ID: session_id,
             }
         header = Util.encoding(header_dict)
         sock.sendall(struct.pack("!I", len(header)))
@@ -248,8 +248,8 @@ class API(object):
         data = Util.decoding(data)
 
         sock.close()
-        ret_session_id = data.get(protocol.KEY_SESSIOIN_ID, None)
-        if session_id == ret_session_id:
+        is_success = data.get(protocol.KEY_COMMAND, False)
+        if is_success == protocol.MESSAGE_COMMAND_SUCCESS:
             return RET_SUCCESS
         
         API.discovery_err_str = "Failed to connect"

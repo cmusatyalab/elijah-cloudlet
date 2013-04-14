@@ -279,7 +279,7 @@ class SynthesisHandler(SocketServer.StreamRequestHandler):
         start_time = time.time()
         header_start_time = time.time()
         base_path, meta_info = self._check_validity(message)
-        session_id = message.get(Protocol.KEY_SESSIOIN_ID, None)
+        session_id = message.get(Protocol.KEY_SESSION_ID, None)
         if base_path and meta_info and meta_info.get(Cloudlet_Const.META_OVERLAY_FILES, None):
             self.ret_success(Protocol.MESSAGE_COMMAND_SEND_META)
         else:
@@ -433,11 +433,11 @@ class SynthesisHandler(SocketServer.StreamRequestHandler):
         self.server.dbconn.add_item(new_session)
 
         # send response
-        pay_load = {Protocol.KEY_SESSIOIN_ID : new_session.session_id}
+        pay_load = {Protocol.KEY_SESSION_ID : new_session.session_id}
         self.ret_success(Protocol.MESSAGE_COMMAND_SESSION_CREATE, pay_load)
 
     def _handle_session_close(self, message):
-        my_session_id = message.get(Protocol.KEY_SESSIOIN_ID, None)
+        my_session_id = message.get(Protocol.KEY_SESSION_ID, None)
         ret_session = self.server.dbconn.session.query(Session).filter(Session.session_id==my_session_id).first()
         if ret_session:
             ret_session.terminate()
@@ -447,7 +447,7 @@ class SynthesisHandler(SocketServer.StreamRequestHandler):
         self.ret_success(Protocol.MESSAGE_COMMAND_SESSION_CLOSE)
 
     def _check_session(self, message):
-        my_session_id = message.get(Protocol.KEY_SESSIOIN_ID, None)
+        my_session_id = message.get(Protocol.KEY_SESSION_ID, None)
         ret_session = self.server.dbconn.session.query(Session).filter(Session.session_id==my_session_id).first()
         if ret_session and ret_session.status == Session.STATUS_RUNNING:
             return True
@@ -457,7 +457,7 @@ class SynthesisHandler(SocketServer.StreamRequestHandler):
             return False
 
     def force_session_close(self, message):
-        my_session_id = message.get(Protocol.KEY_SESSIOIN_ID, None)
+        my_session_id = message.get(Protocol.KEY_SESSION_ID, None)
         ret_session = self.server.dbconn.session.query(Session).filter(Session.session_id==my_session_id).first()
         ret_session.terminate(status=Session.STATUS_UNEXPECT_CLOSE)
 

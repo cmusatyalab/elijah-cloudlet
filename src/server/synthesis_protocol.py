@@ -43,7 +43,7 @@ class Protocol(object):
     KEY_REQUEST_SEGMENT_SIZE    = "blob_size"
     KEY_FAILED_REASON           = "reasons"
     KEY_PAYLOAD                 = "payload"
-    KEY_SESSIOIN_ID             = "session_id"
+    KEY_SESSION_ID             = "session_id"
     KEY_REQUESTED_COMMAND       = "requested_command"
 
     # synthesis option

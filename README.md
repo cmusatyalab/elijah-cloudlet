@@ -138,7 +138,7 @@ How to use
 	mobile client and you can start the server as below.
   
         > $ cd ./bin
-        > $ ./synthesis
+        > $ ./server
     
 	You can test this server using the client. You also need to copy the
 	overlay that you like to reconstruct to the other machine when you execute
