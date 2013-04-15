@@ -101,17 +101,20 @@ public class CloudletCameraActivity extends Activity implements TextToSpeech.OnI
 		
 		// For OSDI Test, just start sending data
 		File testFile = new File(TEST_IMAGE_PATH);
-		if(testFile.exists() == false){
+		if(testFile.exists() == true){
+			testImageList = new ArrayList();
+			for(File testfile : new File(TEST_IMAGE_PATH).listFiles()){
+				if (testfile.exists() == true)
+					testImageList.add(testfile);
+			}
+		}else{
 			new AlertDialog.Builder(CloudletCameraActivity.this).setTitle("Error")
 			.setMessage("No test image at " + TEST_IMAGE_PATH)
 			.setIcon(R.drawable.ic_launcher)
 			.setNegativeButton("Confirm", null)
 			.show();
-		}		
-		testImageList = new ArrayList();
-		for(File testfile : new File(TEST_IMAGE_PATH).listFiles()){
-			testImageList.add(testfile);
 		}
+		
 		TimerTask autoStart = new TimerTask(){
 			@Override
 			public void run() {	
@@ -265,6 +268,7 @@ public class CloudletCameraActivity extends Activity implements TextToSpeech.OnI
 				Utilities.showError(CloudletCameraActivity.this, "Error", "Cannot connect to Server " + server_ipaddress + ":" + server_port);
 				client = null;
 				mDialog.dismiss();
+				return;
 			}
 		}
 		client.uploadImage(data);
