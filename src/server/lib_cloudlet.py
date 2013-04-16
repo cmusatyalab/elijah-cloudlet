@@ -26,7 +26,7 @@ import stat
 import delta
 import xray
 import msgpack
-import copy
+import hashlib
 import libvirt
 import shutil
 from db import api as db_api
@@ -236,7 +236,7 @@ class ResumedVM(threading.Thread):
                         uuid=str(uuid4()), qemu_args=self.qemu_args)
                 self.machine = run_vm(conn, new_xml_string, vnc_disable=True)
             else:
-                self.machine=run_snapshot(conn, self.resumed_disk, self.resumed_mem,
+                self.machine = run_snapshot(conn, self.resumed_disk, self.resumed_mem,
                         qemu_logfile=self.qemu_logfile.name, resume_time=self.resume_time,
                         qemu_args=self.qemu_args)
         except Exception as e:
@@ -247,7 +247,7 @@ class ResumedVM(threading.Thread):
             if self.machine:
                 self.machine.destroy()
         except libvirt.libvirtError as e:
-            sys.stderr.write("Cannot destory VM\n")
+            pass
 
         # terminate
         self.fuse.terminate()
@@ -488,8 +488,16 @@ def get_overlay(monitoring_info, options,
         base_memmeta, base_hashvalue,
         modified_disk, modified_mem,
         overlay_metapath, overlay_path,
-        print_out):
-    '''get difference between base vm and launch vm using monitoring information
+        print_out, prev_mem_deltalist=None):
+    '''Save overlay meta file to overlay_metapath and overlay files at overlay_path
+    Get difference between base vm (base_image, base_mem) and 
+    launch vm (modified_disk, modified_mem) using monitoring information
+
+    Args:
+        prev_mem_deltalist : Option only for creating_residue.
+            Different from disk, we create whole memory snapshot even for residue.
+            So, to get the precise difference between previous memory overlay,
+            we need previous memory deltalist
     '''
 
     basedisk_hashlist = getattr(monitoring_info, _MonitoringInfo.BASEDISK_HASHLIST, None)
@@ -501,14 +509,20 @@ def get_overlay(monitoring_info, options,
     dma_dict = dict()
 
     # 2-1. get memory overlay
-    if not options.DISK_ONLY:
+    if options.DISK_ONLY:
+        mem_deltalist = list()
+    else:
         mem_deltalist= Memory.create_memory_deltalist(modified_mem,
                 basemem_meta=base_memmeta, basemem_path=base_mem,
                 apply_free_memory=options.FREE_SUPPORT,
                 free_memory_info=free_memory_dict,
                 print_out=print_out)
-    else:
-        mem_deltalist = list()
+        if prev_mem_deltalist and len(prev_mem_deltalist) > 0:
+            # mem_deltalist here should not be deduplicated
+            # prev_mem_deltalist here should be RAW/XDELTA
+            diff_deltalist = delta.residue_diff_deltalists(mem_deltalist, \
+                    prev_mem_deltalist, print_out)
+            mem_deltalist = diff_deltalist
 
     # 2-2. get disk overlay
     disk_statistics = dict()
@@ -554,6 +568,8 @@ def get_overlay(monitoring_info, options,
 
 
     overlay_files = [item[Const.META_OVERLAY_FILE_NAME] for item in blob_list]
+    dirpath = os.path.dirname(overlay_path)
+    overlay_files = [os.path.join(dirpath, item) for item in overlay_files]
     return overlay_files
 
 
@@ -627,8 +643,9 @@ def recover_launchVM(base_image, meta_info, overlay_file, **kwargs):
     kwargs['print_out'] = log
     fuse = run_fuse(Const.VMNETFS_PATH, Const.CHUNK_SIZE,
             base_image, vm_disk_size, base_mem, vm_memory_size,
-            launch_disk.name,  disk_overlay_map,
-            launch_mem.name, memory_overlay_map, **kwargs)
+            resumed_disk=launch_disk.name,  disk_overlay_map=disk_overlay_map,
+            resumed_memory=launch_mem.name, memory_overlay_map=memory_overlay_map,
+            **kwargs)
     log.write("[INFO] Start FUSE\n")
 
     # Recover Modified Memory
@@ -898,7 +915,11 @@ def copy_with_xml(in_path, out_path, xml):
     fout.write(fin.read())
 
 
-def create_residue(base_disk, base_hashvalue, resumed_vm, options, print_out):
+def create_residue(base_disk, base_hashvalue, resumed_vm, options, 
+        prev_deltalist, print_out):
+    '''Get residue
+    Return : residue_metafile_path, residue_filelist
+    '''
     # 1 sanity check
     if (options == None) or (isinstance(options, Options) == False):
         raise CloudletGenerationError("Given option class is invalid: %s" % str(options))
@@ -925,12 +946,13 @@ def create_residue(base_disk, base_hashvalue, resumed_vm, options, print_out):
             base_memmeta, base_hashvalue,
             resumed_vm.resumed_disk, residue_mem.name,
             overlay_metafile, overlay_path,
-            print_out)
+            print_out, prev_mem_deltalist=prev_deltalist)
 
-    # 5. terminting
+    # 4. terminting
+    resumed_vm.machine = None   # protecting malaccess to machine 
     if os.path.exists(residue_mem.name):
         os.unlink(residue_mem.name);
-    resumed_vm.terminate()
+
     return overlay_metafile, overlay_files
     
 
@@ -1141,6 +1163,27 @@ def create_baseVM(disk_image_path):
     return disk_image_path, base_mempath
 
 
+def _reconstruct_mem_deltalist(launch_mempath, meta_info):
+    ret_deltalist = list()
+    memory_offset_list = list()
+    for each_file in meta_info[Const.META_OVERLAY_FILES]:
+        memory_chunks = each_file[Const.META_OVERLAY_FILE_MEMORY_CHUNKS]
+        memory_offset_list.extend([item*Const.CHUNK_SIZE for item in memory_chunks])
+    memfile = open(launch_mempath, "r")
+    memory_offset_list.sort()
+    for offset in memory_offset_list:
+        memfile.seek(offset)
+        data = memfile.read(Const.CHUNK_SIZE)
+        delta_item = DeltaItem(DeltaItem.DELTA_MEMORY,
+                offset, len(data),
+                hash_value=hashlib.sha256(data).digest(),
+                ref_id=DeltaItem.REF_RAW,
+                data_len=0,
+                data=None)
+        ret_deltalist.append(delta_item)
+    return ret_deltalist
+
+
 def synthesis(base_disk, meta, disk_only=False, return_residue=False, qemu_args=None):
     # VM Synthesis and run recoverd VM
     # param base_disk : path to base disk
@@ -1156,7 +1199,8 @@ def synthesis(base_disk, meta, disk_only=False, return_residue=False, qemu_args=
     # recover VM
     Log.write("[Debug] recover launch VM\n")
     launch_disk, launch_mem, fuse, delta_proc, fuse_thread = \
-            recover_launchVM(base_disk, meta_info, overlay_filename.name, log=Log)
+            recover_launchVM(base_disk, meta_info, overlay_filename.name, \
+            log=Log)
 
     # resume VM
     resumed_VM = ResumedVM(launch_disk, launch_mem, fuse,
@@ -1196,13 +1240,14 @@ def synthesis(base_disk, meta, disk_only=False, return_residue=False, qemu_args=
         options.FREE_SUPPORT = True
         options.DISK_ONLY = False
         try:
-            residue_meta, residue_metafiles = create_residue(base_disk, \
+            prev_mem_deltalist = _reconstruct_mem_deltalist(launch_mem, meta_info)
+            residue_meta, residue_files = create_residue(base_disk, \
                     meta_info[Const.META_BASE_VM_SHA256],
-                    resumed_VM,
-                    options,
-                    Log) 
-            import pdb;pdb.set_trace()
-
+                    resumed_VM, options, 
+                    prev_mem_deltalist, Log)
+            Log.write("[RESULE] Residue\n")
+            Log.write("[RESULE]   Metafile : %s\n" % (os.path.abspath(residue_meta)))
+            Log.write("[RESULE]   Files : %s\n" % str(residue_files))
         except CloudletGenerationError, e:
             sys.stderr.write("Memory Snapshotting error: %s" % str(e))
 

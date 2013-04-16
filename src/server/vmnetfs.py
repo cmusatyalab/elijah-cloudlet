@@ -1,4 +1,3 @@
-#
 # vmnetx.vmnetfs - Wrapper for vmnetfs FUSE driver
 #
 # Copyright (C) 2011-2012 Carnegie Mellon University
@@ -290,7 +289,6 @@ class FileMonitor(threading.Thread):
 
 
 class FuseFeedingThread(threading.Thread):
-
     def __init__(self, fuse, input_pipe, END_OF_PIPE, **kwargs):
         self.print_out = kwargs.get("print_out", open("/dev/null", "w+b"))
         self.fuse = fuse

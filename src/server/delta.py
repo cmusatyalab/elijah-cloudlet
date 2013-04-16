@@ -55,7 +55,7 @@ class DeltaItem(object):
         self.data = data
 
         # new field for identify delta_item
-        # because offset is not unique once we use both memory and disk
+        # offset is not unique identifier since we use both memory and disk
         self.index = DeltaItem.get_index(self.delta_type, self.offset)
 
     @staticmethod
@@ -76,8 +76,10 @@ class DeltaItem(object):
 
         if self.ref_id == DeltaItem.REF_RAW or \
                self.ref_id == DeltaItem.REF_XDELTA:
+            
             data += struct.pack("!Q", self.data_len)
-            data += struct.pack("!%ds" % self.data_len, self.data)
+            if self.data_len != 0:
+                data += struct.pack("!%ds" % self.data_len, self.data)
         elif self.ref_id == DeltaItem.REF_SELF:
             data += struct.pack("!Q", self.data)
         elif self.ref_id == DeltaItem.REF_BASE_DISK or \
@@ -431,10 +433,10 @@ class Recovered_delta(multiprocessing.Process):
             output_mem_path, output_mem_size, 
             output_disk_path, output_disk_size, chunk_size,
             out_pipe=None, time_queue=None, print_out=None):
-        # recover delta list using base disk/memory
-        # You have to specify parent to indicate whether you're recover memory or disk 
-        # optionally you can use overlay_memory to recover overlay disk which is
-        # de-duplicated with overlay memory
+        ''' recover delta list using base disk/memory
+        Args:
+        '''
+
         self.print_out = print_out
         if self.print_out == None:
             self.print_out = open("/dev/null", "w+b")
@@ -487,9 +489,9 @@ class Recovered_delta(multiprocessing.Process):
                 raise DeltaError(msg)
 
             # save it to dictionary to find self_reference easily
-            #print "recovred_delta_dict[%ld] exists" % (delta_item.index)
             self.recovered_delta_dict[delta_item.index] = delta_item
             self.delta_list.append(delta_item)
+
 
             # write to output file 
             overlay_chunk_id = long(delta_item.offset/self.chunk_size)
@@ -616,6 +618,7 @@ def create_overlay(memory_deltalist, memory_chunk_size,
     DeltaList.get_self_delta(delta_list)
 
     return delta_list
+
 
 def reorder_deltalist_linear(chunk_size, delta_list):
     if len(delta_list) == 0 or type(delta_list[0]) != DeltaItem:
@@ -853,3 +856,48 @@ def discard_free_chunks(merged_modified_list, chunk_size, disk_discard, memory_d
 
     for item in removing_item:
         merged_modified_list.remove(item)
+
+
+def residue_diff_deltalists(deltalist1, deltalist2, print_out):
+    '''return new_detlalist = deltalist1 - deltalist2
+
+    At this point, all delta items should be either 1) RAW of 2) XDELTA.
+    If it is not, it's not possible to compare the contents of delta item.
+    '''
+    delta_dict = dict()
+    for item in deltalist2:
+        delta_dict[item.index] = item
+
+    ret_deltalist = list()
+    statics_new_item = 0
+    statics_duplicated_item = 0
+    statics_overwrite_item = 0
+    for delta_item in deltalist1:
+        prev_deltaitem = delta_dict.get(delta_item.index, None)
+        if prev_deltaitem == None:
+            # newly create delta item
+            ret_deltalist.append(delta_item)
+            statics_new_item += 1
+        else:
+            # exists at previous memory, compare them
+            if not ((delta_item.ref_id == DeltaItem.REF_RAW) or (delta_item.ref_id == DeltaItem.REF_XDELTA)):
+                raise DeltaError("Delta Item should be REF_RAW or REF_XDELTA")
+            if not ((prev_deltaitem.ref_id == DeltaItem.REF_RAW) or (prev_deltaitem.ref_id == DeltaItem.REF_XDELTA)):
+                raise DeltaError("Delta Item should be REF_RAW or REF_XDELTA")
+
+            hash1 = delta_item.hash_value
+            hash2 = prev_deltaitem.hash_value
+            if hash1 != hash2:
+                ret_deltalist.append(delta_item)
+                statics_overwrite_item += 1
+            else:
+                statics_duplicated_item += 1
+
+    print_out.write("[INFO] residue_diff_statistics\n")
+    print_out.write("[INFO]   newly create chunks   : %d\n" % (statics_new_item))
+    print_out.write("[INFO]   overwrite to previous : %d\n" % (statics_overwrite_item))
+    print_out.write("[INFO]   identical to previous : %d\n" % (statics_duplicated_item))
+
+    return ret_deltalist
+
+
