@@ -127,7 +127,7 @@ class VM_Overlay(threading.Thread):
         qemu_monitor = vmnetfs.FileMonitor(qemu_logfile.name, vmnetfs.FileMonitor.QEMU_LOG)
         qemu_monitor.start()
 
-        # 1-1. resume & get modified disk
+        # 1. resume & get modified disk
         Log.write("[INFO] * Overlay creation configuration\n")
         Log.write("[INFO]  - %s\n" % str(self.options))
         conn = get_libvirt_connection()
@@ -135,7 +135,7 @@ class VM_Overlay(threading.Thread):
         connect_vnc(machine)
         Log.write("[TIME] user interaction time for creating overlay: %f\n" % (time()-start_time))
 
-        # 1-3. get montoring info
+        # 2. get montoring info
         monitoring_info = _get_monitoring_info(machine, self.options,
                 base_memmeta, base_diskmeta,
                 fuse_stream_monitor,
@@ -143,7 +143,7 @@ class VM_Overlay(threading.Thread):
                 modified_disk, modified_mem.name,
                 qemu_logfile, Log)
 
-        # 2. get overlay VM
+        # 3. get overlay VM
         image_name = os.path.basename(self.base_disk).split(".")[0]
         dir_path = os.path.dirname(base_mem)
         overlay_path = os.path.join(dir_path, image_name+Const.OVERLAY_FILE_PREFIX)
@@ -155,7 +155,7 @@ class VM_Overlay(threading.Thread):
                 self.overlay_metafile, overlay_path,
                 Log)
 
-        # 5. terminting
+        # 4. terminting
         fuse.terminate()
         fuse_stream_monitor.terminate()
         qemu_monitor.terminate()
@@ -169,6 +169,7 @@ class VM_Overlay(threading.Thread):
 
         if os.path.exists(qemu_logfile.name):
             os.unlink(qemu_logfile.name)
+
 
 class _MonitoringInfo(object):
     BASEDISK_HASHLIST       = "basedisk_hashlist"
