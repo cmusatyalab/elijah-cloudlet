@@ -59,14 +59,22 @@ def process_command_line(argv, commands):
     parser.add_option(
             '-d', '--disk', action='store_true', dest='disk_only', default=False,
             help='[overlay_creation] create only disk overlay only')
+    parser.add_option(
+            '-r', '--residue', action='store_true', dest='return_residue', default=False,
+            help='[synthesis] return residue after using synthesized VM')
     settings, args = parser.parse_args(argv)
 
     if len(args) < 1:
         parser.error("Choose command :\n  %s" % " | ".join(commands))
+        
 
     mode = str(args[0]).lower()
-    #if mode not in commands.keys():
-    #    parser.error("Invalid Command, Choose among :\n  %s" % " | ".join(commands))
+    if mode not in commands.keys():
+        parser.error("Invalid Command, Choose among :\n  %s" % " | ".join(commands))
+    
+    valid_residue_condition = (mode == "synthesis") or (settings.return_residue != True) 
+    if valid_residue_condition == False:
+        parser.error("-r (return residue) should be used only at synthesis command")
 
     return mode, args[1:], settings
 
@@ -108,7 +116,6 @@ def main(argv):
         print "Base VM is created from %s" % disk_image_path
         print "Disk: %s" % disk_path
         print "Mem: %s" % mem_path
-
     elif mode == CMD_OVERLAY_CREATION:
         # create overlay
         if len(left_args) < 1:
@@ -129,12 +136,15 @@ def main(argv):
     elif mode == CMD_SYNTEHSIS:
         if len(left_args) < 2:
             sys.stderr.write("Synthesis requires path to VM disk and overlay-meta\n \
-                    Ex) ./cloudlet synthesis [VM disk] /path/to/precise.overlay-meta \n")
+                    Ex) ./cloudlet synthesis [VM disk] /path/to/precise.overlay-meta [options]\n")
             sys.exit(1)
         disk_image_path = left_args[0] 
         meta = left_args[1]
         qemu_args = left_args[2:]
-        lib_cloudlet.synthesis(disk_image_path, meta, settings.disk_only, qemu_args=qemu_args)
+        lib_cloudlet.synthesis(disk_image_path, meta, \
+                               disk_only=settings.disk_only, \
+                               return_residue=settings.return_residue, \
+                               qemu_args=qemu_args)
     elif mode == CMD_LIST_BASE:
         from db.table_def import BaseVM
         dbconn = get_database()

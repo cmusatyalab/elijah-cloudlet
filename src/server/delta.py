@@ -320,7 +320,10 @@ class DeltaList(object):
             print_out.write("[INFO] raw                       : %ld\t( %f %%, real_size: %.0f KB )\n" % 
                     (disk_from_raw, disk_from_raw*100.0/total_disk_count, raw_size))
             print_out.write("-"*50 + "\n")
+        except ZeroDivisionError as e:
+            print_out.write("[INFO] No disk modification\n")
 
+        try:
             print_out.write("[INFO] Total Modified Memory #  : %ld\t( 100 %%, %f MB)\n" % 
                     (total_memory_count, mem_overlay_size/1024.0/1024))
             print_out.write("[INFO] FREE discard             : %ld\t( %f %% )\n" % 
