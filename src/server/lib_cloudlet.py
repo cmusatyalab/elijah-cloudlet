@@ -144,18 +144,23 @@ class VM_Overlay(threading.Thread):
                 qemu_logfile, Log)
 
         # 3. get overlay VM
-        image_name = os.path.basename(self.base_disk).split(".")[0]
-        dir_path = os.path.dirname(base_mem)
-        overlay_path = os.path.join(dir_path, image_name+Const.OVERLAY_FILE_PREFIX)
-        self.overlay_metafile = os.path.join(dir_path, image_name+Const.OVERLAY_META)
-        self.overlay_files = get_overlay(monitoring_info, self.options,
-                self.base_disk, base_mem,
-                base_memmeta, base_hashvalue,
+        overlay_deltalist = get_overlay_deltalist(monitoring_info, self.options,
+                self.base_disk, base_mem, base_memmeta, 
                 modified_disk, modified_mem.name,
-                self.overlay_metafile, overlay_path,
                 Log)
 
-        # 4. terminting
+        # 4. create_overlayfile
+        image_name = os.path.basename(self.base_disk).split(".")[0]
+        dir_path = os.path.dirname(base_mem)
+        overlay_prefix = os.path.join(dir_path, image_name+Const.OVERLAY_FILE_PREFIX)
+        overlay_metapath = os.path.join(dir_path, image_name+Const.OVERLAY_META)
+
+        self.overlay_metafile, self.overlay_files = \
+                generate_overlayfile(overlay_deltalist, self.options, 
+                base_hashvalue, os.path.getsize(modified_disk), os.path.getsize(modified_mem.name),
+                overlay_metapath, overlay_prefix, Log)
+
+        # 5. terminting
         fuse.terminate()
         fuse_stream_monitor.terminate()
         qemu_monitor.terminate()
@@ -265,14 +270,14 @@ class ResumedVM(threading.Thread):
             os.unlink(self.qemu_logfile.name)
 
 
-def _create_overlay_meta(base_hash, overlay_metafile, modified_disk, modified_mem,
+def _create_overlay_meta(base_hash, overlay_metafile, modified_disksize, modified_memsize,
         blob_info):
     fout = open(overlay_metafile, "wrb")
 
     meta_dict = dict()
     meta_dict[Const.META_BASE_VM_SHA256] = base_hash
-    meta_dict[Const.META_RESUME_VM_DISK_SIZE] = os.path.getsize(modified_disk)
-    meta_dict[Const.META_RESUME_VM_MEMORY_SIZE] = os.path.getsize(modified_mem)
+    meta_dict[Const.META_RESUME_VM_DISK_SIZE] = modified_disksize,
+    meta_dict[Const.META_RESUME_VM_MEMORY_SIZE] = modified_memsize,
     meta_dict[Const.META_OVERLAY_FILES] = blob_info
 
     serialized = msgpack.packb(meta_dict)
@@ -478,18 +483,17 @@ def copy_disk(in_path, out_path):
     if cp_proc.returncode != 0:
         raise IOError("Copy failed: from %s to %s " % (in_path, out_path))
 
+
 def get_libvirt_connection():
     conn = libvirt.open("qemu:///session")
     return conn
 
 
-def get_overlay(monitoring_info, options,
-        base_image, base_mem,
-        base_memmeta, base_hashvalue,
+def get_overlay_deltalist(monitoring_info, options,
+        base_image, base_mem, base_memmeta, 
         modified_disk, modified_mem,
-        overlay_metapath, overlay_path,
         print_out, prev_mem_deltalist=None):
-    '''Save overlay meta file to overlay_metapath and overlay files at overlay_path
+    '''return overlay deltalist
     Get difference between base vm (base_image, base_mem) and 
     launch vm (modified_disk, modified_mem) using monitoring information
 
@@ -545,33 +549,43 @@ def get_overlay(monitoring_info, options,
             basemem_hashlist=basemem_hashlist,
             print_out=print_out)
 
+    free_memory_dict = getattr(monitoring_info, _MonitoringInfo.MEMORY_FREE_BLOCKS, None)
     free_pfn_counter = long(free_memory_dict.get("freed_counter", 0))
-
-    # 3. Reorder transfer order & Compression
-    print_out.write("[DEBUG][LZMA] Compressing overlay blobs\n")
-    blob_list = delta.divide_blobs(merged_deltalist, overlay_path,
-            Const.OVERLAY_BLOB_SIZE_KB, Const.CHUNK_SIZE,
-            Memory.Memory.RAM_PAGE_SIZE, print_out=print_out)
-
     disk_discarded_count = disk_statistics.get('trimed', 0)
     DeltaList.statistics(merged_deltalist, print_out=print_out,
             mem_discarded=free_pfn_counter,
             disk_discarded=disk_discarded_count)
 
-    # 4. create metadata
+    return merged_deltalist
+
+
+def generate_overlayfile(overlay_deltalist, options, 
+        base_hashvalue, launchdisk_size, launchmem_size,
+        overlay_metapath, overlayfile_prefix, print_out):
+    ''' generate overlay metafile and file
+    Return:
+        [overlay_metapath, [overlayfilepath1, overlayfilepath2]]
+    '''
+
+    # Compression
+    print_out.write("[DEBUG][LZMA] Compressing overlay blobs\n")
+    blob_list = delta.divide_blobs(overlay_deltalist, overlayfile_prefix,
+            Const.OVERLAY_BLOB_SIZE_KB, Const.CHUNK_SIZE,
+            Memory.Memory.RAM_PAGE_SIZE, print_out=print_out)
+
+    # create metadata
     if not options.DISK_ONLY:
         _create_overlay_meta(base_hashvalue, overlay_metapath,
-                modified_disk, modified_mem, blob_list)
+                launchdisk_size, launchmem_size, blob_list)
     else:
         _create_overlay_meta(base_hashvalue, overlay_metapath,
-                modified_disk, base_mem, blob_list)
-
+                launchdisk_size, launchmem_size, blob_list)
 
     overlay_files = [item[Const.META_OVERLAY_FILE_NAME] for item in blob_list]
-    dirpath = os.path.dirname(overlay_path)
+    dirpath = os.path.dirname(overlayfile_prefix)
     overlay_files = [os.path.join(dirpath, item) for item in overlay_files]
-    return overlay_files
 
+    return overlay_metapath, overlay_files
 
 
 def run_delta_compression(output_list, **kwargs):
@@ -915,8 +929,9 @@ def copy_with_xml(in_path, out_path, xml):
     fout.write(fin.read())
 
 
-def create_residue(base_disk, base_hashvalue, resumed_vm, options, 
-        prev_deltalist, print_out):
+def create_residue(base_disk, base_hashvalue, 
+        resumed_vm, options, 
+        original_deltalist, print_out):
     '''Get residue
     Return : residue_metafile_path, residue_filelist
     '''
@@ -937,18 +952,27 @@ def create_residue(base_disk, base_hashvalue, resumed_vm, options,
             qemu_logfile, print_out)
 
     # 3. get overlay VM
+    residue_deltalist = get_overlay_deltalist(monitoring_info, options,
+            base_disk, base_mem, base_memmeta, 
+            resumed_vm.resumed_disk, residue_mem.name,
+            print_out, prev_mem_deltalist=original_deltalist)
+
+    # 4. merge with previous deltalist
+    #delta.merge_overlay(residue_deltalist, original_deltalist)
+
+    # 5. create_overlayfile
     image_name = os.path.basename(base_disk).split(".")[0]
     dir_path = os.path.dirname(base_mem)
-    overlay_path = os.path.join(dir_path, image_name+Const.OVERLAY_FILE_PREFIX)
-    overlay_metafile = os.path.join(dir_path, image_name+Const.OVERLAY_META)
-    overlay_files = get_overlay(monitoring_info, options,
-            base_disk, base_mem,
-            base_memmeta, base_hashvalue,
-            resumed_vm.resumed_disk, residue_mem.name,
-            overlay_metafile, overlay_path,
-            print_out, prev_mem_deltalist=prev_deltalist)
+    overlay_prefix = os.path.join(dir_path, image_name+Const.OVERLAY_FILE_PREFIX)
+    overlay_metapath = os.path.join(dir_path, image_name+Const.OVERLAY_META)
 
-    # 4. terminting
+    overlay_metafile, overlay_files = \
+            generate_overlayfile(residue_deltalist, options, 
+            base_hashvalue, os.path.getsize(resumed_vm.resumed_disk), 
+            os.path.getsize(residue_mem.name),
+            overlay_metapath, overlay_prefix, print_out)
+
+    # 6. terminting
     resumed_vm.machine = None   # protecting malaccess to machine 
     if os.path.exists(residue_mem.name):
         os.unlink(residue_mem.name);
