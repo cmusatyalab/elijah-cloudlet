@@ -910,33 +910,50 @@ def residue_merge_deltalist(old_deltalist, new_deltalist, print_out):
             if referred_deltalist != None:
                 # if old_deltaitem is referenced by other deltaitem,
                 # then, make the next one as a origin of reference
-                new_reference = referred_deltalist[0]
-                new_ref_index = old_deltalist.index(new_reference)
-                if new_ref_index == None:
-                    import pdb;pdb.set_trace()
-                new_reference.ref_id = old_item.ref_id
-                new_reference.data_len = old_item.data_len
-                new_reference.data = old_item.data
-                new_reference.hash_value = old_item.hash_value
-                old_deltalist[new_ref_index] = new_reference
-                for referred_item in referred_deltalist[1:]: 
-                    ref_item_index = old_deltalist.index(referred_item)
-                    old_deltalist[ref_item_index].data = new_reference.index
+                new_pivot = None
+                position_inlist = -1
+                new_pivot_position = -1
+                for position, item in enumerate(referred_deltalist):
+                    try:
+                        if item.index in debug_replaced_index:
+                            import pdb;pdb.set_trace()
+                        new_pivot_position = old_deltalist.index(item)
+                        new_pivot = item
+                        position_inlist = position
+                        break
+                    except ValueError, e:
+                        continue
+
+                if new_pivot== None:
+                    # all REF_SELF deltaitem is now replace
+                    pass
+                else:
+                    new_pivot_index = old_deltalist[new_pivot_position].index
+                    old_deltalist[new_pivot_position].ref_id = old_item.ref_id
+                    old_deltalist[new_pivot_position].data_len = old_item.data_len
+                    old_deltalist[new_pivot_position].data = old_item.data
+                    old_deltalist[new_pivot_position].hash_value = old_item.hash_value
+                    old_deltalist[new_pivot_position].is_ref = True
+                    for referred_item in referred_deltalist[position_inlist+1:]: 
+                        if referred_item.ref_id != DeltaItem.REF_SELF:
+                            continue
+                        ref_item_index = old_deltalist.index(referred_item)
+                        old_deltalist[ref_item_index].data = old_deltalist[new_pivot_position].index
+                        old_deltalist[ref_item_index].is_new_ref = True
+                        # add new reference item
+                        reference_dict[new_pivot_index].append(referred_item)
+                        del reference_dict[old_item.index]
 
             # make sure to replace origin, not reference
-            old_item_index = old_deltalist.index(old_item)
-            old_deltalist[old_item_index] = new_item
+            old_item_position = old_deltalist.index(old_item)
+            new_item.is_new = True
+            old_deltalist[old_item_position] = new_item
             if new_item.delta_type == DeltaItem.DELTA_DISK:
                 count_overwrite_disk += 1
             else:
                 count_overwrite_mem += 1
 
             debug_replaced_index.append(old_item.index)
-
-    for item in old_deltalist:
-        if hasattr(item, "is_new_ref") == True:
-            import pdb;pdb.set_trace()
-            print "normal"
         
     print_out.write("[INFO] merge residue with previous : \n")
     print_out.write("[INFO]     add new disk %d: \n" % (count_new_disk))
@@ -945,6 +962,15 @@ def residue_merge_deltalist(old_deltalist, new_deltalist, print_out):
     print_out.write("[INFO]     overwrite mem %d: \n" % (count_overwrite_mem))
     print_out.write("[INFO] %d - %d = %d\n" % \
             (len(old_deltalist), count_len_original, (count_new_disk + count_new_mem)))
+
+    for item in old_deltalist:
+        if hasattr(item, "is_ref") == True:
+            import pdb;pdb.set_trace()
+            print "working"
+        '''
+        if hasattr(item, "is_new") == True:
+            import pdb;pdb.set_trace()
+        '''
 
 
 def residue_diff_deltalists(deltalist1, deltalist2, print_out):

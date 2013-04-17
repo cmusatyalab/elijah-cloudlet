@@ -227,7 +227,7 @@ class Memory(object):
             print "end offset: %ld" % (ram_end_offset)
             raise MemoryError("ram header+data is not aligned with page size")
 
-        import pdb;pdb.set_trace()
+        #import pdb;pdb.set_trace()
         if diff:
             # case for getting modified memory list
             if apply_free_memory == True:
@@ -405,8 +405,6 @@ def recover_memory(base_disk, base_mem, delta_path, out_path, verify_with_origin
 
             base_data = base_file.read(Memory.RAM_PAGE_SIZE)
             
-            #import pdb; pdb.set_trace()
-
             if offset != delta_list[delta_list_index].offset:
                 #print "from base data: %d" % len(base_data)
                 modi_mem.seek(offset)
