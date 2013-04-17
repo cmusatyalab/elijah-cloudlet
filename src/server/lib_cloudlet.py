@@ -492,7 +492,7 @@ def get_libvirt_connection():
 def get_overlay_deltalist(monitoring_info, options,
         base_image, base_mem, base_memmeta, 
         modified_disk, modified_mem,
-        print_out, prev_mem_deltalist=None):
+        print_out, prev_deltalist=None):
     '''return overlay deltalist
     Get difference between base vm (base_image, base_mem) and 
     launch vm (modified_disk, modified_mem) using monitoring information
@@ -522,10 +522,10 @@ def get_overlay_deltalist(monitoring_info, options,
                 apply_free_memory=options.FREE_SUPPORT,
                 free_memory_info=free_memory_dict,
                 print_out=print_out)
-        if prev_mem_deltalist and len(prev_mem_deltalist) > 0:
-            diff_deltalist = delta.residue_diff_deltalists(mem_deltalist, \
-                    prev_mem_deltalist, print_out)
-            mem_deltalist = diff_deltalist
+        #if prev_deltalist and len(prev_deltalist) > 0:
+        #    diff_deltalist = delta.residue_diff_deltalists(mem_deltalist, \
+        #            prev_deltalist, print_out)
+        #    mem_deltalist = diff_deltalist
 
     # 2-2. get disk overlay
     disk_statistics = dict()
@@ -538,6 +538,12 @@ def get_overlay_deltalist(monitoring_info, options,
         used_blocks_dict=used_blocks_dict,
         ret_statistics=disk_statistics,
         print_out=print_out)
+
+    if prev_deltalist and len(prev_deltalist) > 0:
+        # reconsruct all disk delta from original deltalist
+        result_deltalist = delta.residue_union_deltalist( \
+                prev_deltalist, disk_deltalist, print_out)
+        disk_deltalist = result_deltalist
 
     # 2-3. Merge disk & memory delta_list to generate overlay file
     # deduplication
@@ -954,10 +960,12 @@ def create_residue(base_disk, base_hashvalue,
     residue_deltalist = get_overlay_deltalist(monitoring_info, options,
             base_disk, base_mem, base_memmeta, 
             resumed_vm.resumed_disk, residue_mem.name,
-            print_out, prev_mem_deltalist=original_deltalist)
+            print_out, prev_deltalist=original_deltalist)
 
     # 4. merge with previous deltalist
-    delta.residue_merge_deltalist(original_deltalist, residue_deltalist, print_out)
+    #merged_list = delta.residue_merge_deltalist(original_deltalist, \
+    #        residue_deltalist, print_out)
+
 
     # 5. create_overlayfile
     image_name = os.path.basename(base_disk).split(".")[0]
@@ -966,7 +974,7 @@ def create_residue(base_disk, base_hashvalue,
     overlay_metapath = os.path.join(dir_path, image_name+Const.OVERLAY_META)
 
     overlay_metafile, overlay_files = \
-            generate_overlayfile(original_deltalist, options, 
+            generate_overlayfile(residue_deltalist, options, 
             base_hashvalue, os.path.getsize(resumed_vm.resumed_disk), 
             os.path.getsize(residue_mem.name),
             overlay_metapath, overlay_prefix, print_out)
@@ -1250,8 +1258,9 @@ def _reconstruct_mem_deltalist(base_disk, base_mem, overlay_filepath):
             raise CloudletGenerationError(msg)
 
         # recover
-        #delta_item.ref_id = DeltaItem.REF_RAW
-        #delta_item.data = recover_data
+        delta_item.ref_id = DeltaItem.REF_RAW
+        delta_item.data = recover_data
+        delta_item.data_len = len(recover_data)
         delta_item.hash_value = hashlib.sha256(recover_data).digest()
         recovered_data_dict[delta_item.index] = recover_data
         ret_deltalist.append(delta_item)
@@ -1328,10 +1337,10 @@ def synthesis(base_disk, meta, disk_only=False, return_residue=False, qemu_args=
                     meta_info[Const.META_BASE_VM_SHA256],
                     resumed_VM, options, 
                     prev_mem_deltalist, Log)
-            Log.write("[RESULE] Residue\n")
-            Log.write("[RESULE]   Metafile : %s\n" % \
+            Log.write("[RESULT] Residue\n")
+            Log.write("[RESULT]   Metafile : %s\n" % \
                     (os.path.abspath(residue_meta)))
-            Log.write("[RESULE]   Files : %s\n" % str(residue_files))
+            Log.write("[RESULT]   Files : %s\n" % str(residue_files))
         except CloudletGenerationError, e:
             sys.stderr.write("Cannot create residue : %s" % (str(e)))
 
@@ -1343,7 +1352,6 @@ def synthesis(base_disk, meta, disk_only=False, return_residue=False, qemu_args=
         os.unlink(launch_disk)
     if os.path.exists(launch_mem):
         os.unlink(launch_mem)
-
 
 '''External API End
 '''

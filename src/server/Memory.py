@@ -102,6 +102,7 @@ class Memory(object):
             else:
                 # compare input with hash or corresponding base memory, save only when it is different
                 self_hash_value = self.hash_list[ram_offset/Memory.RAM_PAGE_SIZE][2]
+
                 if self_hash_value != sha256(data).digest():
                     is_free_memory = False
                     if (free_pfn_dict != None) and \
@@ -214,16 +215,21 @@ class Memory(object):
         libvirt_mem_hdr = vmnetx._QemuMemoryHeader(fin)
         libvirt_mem_hdr.seek_body(fin)
         libvirt_header_len = fin.tell()
-        if (libvirt_header_len % Memory.RAM_PAGE_SIZE) != 0:
+        if (libvirt_header_len != Memory.RAM_PAGE_SIZE):
             # TODO: need to modify libvirt migration file header 
             # in case it is not aligned with memory page size
-            raise MemoryError("libvirt memory header is not aligned with PAGE SIZE(%ld)" % libvirt_header_len)
+            msg = "Error description:\n"
+            msg += "libvirt header length : %ld\n" % (libvirt_header_len)
+            msg += "This happends when resiude generated multiple times\n"
+            msg += "It's not easy to fix since header length change will make VM's memory snapshot size\n"
+            msg += "different from base VM"
+            raise MemoryError(msg)
 
         # get memory meta data from snapshot
         fin.seek(libvirt_header_len)
         hash_list = []
         ram_end_offset, ram_info = Memory._seek_to_end_of_ram(fin)
-        if ram_end_offset % Memory.RAM_PAGE_SIZE != 0:
+        if ram_end_offset == Memory.RAM_PAGE_SIZE:
             print "end offset: %ld" % (ram_end_offset)
             raise MemoryError("ram header+data is not aligned with page size")
 
@@ -454,8 +460,7 @@ def get_free_pfn_dict(snapshot_path, mem_size, libvirt_header_len, mem_offset_in
     if free_pfn_list:
         # shift 4096*2 for libvirt header and KVM header
         offset = mem_offset_infile/Memory.RAM_PAGE_SIZE
-        libvirt_offset = libvirt_header_len/Memory.RAM_PAGE_SIZE
-        free_pfn_dict_aligned = dict([(long(page)+offset+libvirt_offset,1) for page in free_pfn_list])
+        free_pfn_dict_aligned = dict([(long(page)+offset,1) for page in free_pfn_list])
         return free_pfn_dict_aligned
     else:
         return None
@@ -464,8 +469,8 @@ def get_free_pfn_dict(snapshot_path, mem_size, libvirt_header_len, mem_offset_in
 def _get_free_pfn_list(snapshot_path, pglist_addr, pgn0_addr, mem_size_gb, libvirt_offset):
     # get list of free memory page number
     BIN_PATH = Const.FREE_MEMORY_BIN_PATH
-    cmd = "%s %s %s %s %d %d" % (BIN_PATH, snapshot_path, pglist_addr, pgn0_addr, \
-            mem_size_gb, libvirt_offset)
+    cmd = "%s %s %s %s %d" % (BIN_PATH, snapshot_path, pglist_addr, pgn0_addr, \
+            mem_size_gb)
     _PIPE = subprocess.PIPE
     proc = subprocess.Popen(cmd, shell=True, stdin=_PIPE, stdout=_PIPE, stderr=_PIPE)
     out, err = proc.communicate()
