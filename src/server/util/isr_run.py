@@ -114,9 +114,7 @@ def remove_cache(user_name, server_address, vm_name):
     # erase memory
     '''
     mem_dir = '/home/krha/.isr/hoard/img/'
-    print 'aaaaaaaaaaaaaaaaaaaaaaaaaa'
     if os.path.exists(mem_dir):
-        print 'aaaaaaaaaaaaaaaaaaaaaaaaaa'
         command_str = "rm -rf %s*" %(mem_dir)
         print command_str
         ret, ret_string = commands.getstatusoutput(command_str)

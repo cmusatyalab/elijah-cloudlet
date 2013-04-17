@@ -504,12 +504,13 @@ def get_overlay_deltalist(monitoring_info, options,
             we need previous memory deltalist
     '''
 
-    basedisk_hashlist = getattr(monitoring_info, _MonitoringInfo.BASEDISK_HASHLIST, None)
-    basemem_hashlist = getattr(monitoring_info, _MonitoringInfo.BASEMEM_HASHLIST, None)
-    free_memory_dict = getattr(monitoring_info, _MonitoringInfo.MEMORY_FREE_BLOCKS, None)
-    m_chunk_dict = getattr(monitoring_info, _MonitoringInfo.DISK_MODIFIED_BLOCKS, None)
-    trim_dict = getattr(monitoring_info, _MonitoringInfo.DISK_FREE_BLOCKS, None)
-    used_blocks_dict = getattr(monitoring_info, _MonitoringInfo.DISK_USED_BLOCKS, None)
+    INFO = _MonitoringInfo
+    basedisk_hashlist = getattr(monitoring_info, INFO.BASEDISK_HASHLIST, None)
+    basemem_hashlist = getattr(monitoring_info, INFO.BASEMEM_HASHLIST, None)
+    free_memory_dict = getattr(monitoring_info, INFO.MEMORY_FREE_BLOCKS, None)
+    m_chunk_dict = getattr(monitoring_info, INFO.DISK_MODIFIED_BLOCKS, None)
+    trim_dict = getattr(monitoring_info, INFO.DISK_FREE_BLOCKS, None)
+    used_blocks_dict = getattr(monitoring_info, INFO.DISK_USED_BLOCKS, None)
     dma_dict = dict()
 
     # 2-1. get memory overlay
@@ -522,8 +523,6 @@ def get_overlay_deltalist(monitoring_info, options,
                 free_memory_info=free_memory_dict,
                 print_out=print_out)
         if prev_mem_deltalist and len(prev_mem_deltalist) > 0:
-            # mem_deltalist here should not be deduplicated
-            # prev_mem_deltalist here should be RAW/XDELTA
             diff_deltalist = delta.residue_diff_deltalists(mem_deltalist, \
                     prev_mem_deltalist, print_out)
             mem_deltalist = diff_deltalist
@@ -958,7 +957,7 @@ def create_residue(base_disk, base_hashvalue,
             print_out, prev_mem_deltalist=original_deltalist)
 
     # 4. merge with previous deltalist
-    #delta.merge_overlay(residue_deltalist, original_deltalist)
+    delta.residue_merge_deltalist(original_deltalist, residue_deltalist, print_out)
 
     # 5. create_overlayfile
     image_name = os.path.basename(base_disk).split(".")[0]
@@ -967,7 +966,7 @@ def create_residue(base_disk, base_hashvalue,
     overlay_metapath = os.path.join(dir_path, image_name+Const.OVERLAY_META)
 
     overlay_metafile, overlay_files = \
-            generate_overlayfile(residue_deltalist, options, 
+            generate_overlayfile(original_deltalist, options, 
             base_hashvalue, os.path.getsize(resumed_vm.resumed_disk), 
             os.path.getsize(residue_mem.name),
             overlay_metapath, overlay_prefix, print_out)
@@ -1186,25 +1185,79 @@ def create_baseVM(disk_image_path):
 
     return disk_image_path, base_mempath
 
-
-def _reconstruct_mem_deltalist(launch_mempath, meta_info):
+def _reconstruct_mem_deltalist(base_disk, base_mem, overlay_filepath):
     ret_deltalist = list()
-    memory_offset_list = list()
-    for each_file in meta_info[Const.META_OVERLAY_FILES]:
-        memory_chunks = each_file[Const.META_OVERLAY_FILE_MEMORY_CHUNKS]
-        memory_offset_list.extend([item*Const.CHUNK_SIZE for item in memory_chunks])
-    memfile = open(launch_mempath, "r")
-    memory_offset_list.sort()
-    for offset in memory_offset_list:
-        memfile.seek(offset)
-        data = memfile.read(Const.CHUNK_SIZE)
-        delta_item = DeltaItem(DeltaItem.DELTA_MEMORY,
-                offset, len(data),
-                hash_value=hashlib.sha256(data).digest(),
-                ref_id=DeltaItem.REF_RAW,
-                data_len=0,
-                data=None)
+    deltalist = DeltaList.fromfile(overlay_filepath)
+
+    #const
+    import struct
+    import tool
+    import mmap
+
+    # initialize reference data to use mmap
+    base_disk_fd = open(base_disk, "rb")
+    raw_disk = mmap.mmap(base_disk_fd.fileno(), 0, prot=mmap.PROT_READ)
+    base_mem_fd = open(base_mem, "rb")
+    raw_mem = mmap.mmap(base_mem_fd.fileno(), 0, prot=mmap.PROT_READ)
+    ZERO_DATA = struct.pack("!s", chr(0x00)) * Const.CHUNK_SIZE
+    chunk_size = Const.CHUNK_SIZE
+    recovered_data_dict = dict()
+
+    for delta_item in deltalist:
+        if type(delta_item) != DeltaItem:
+            raise CloudletGenerationError("Failed to reconstruct deltalist")
+
+        #print "recovering %ld/%ld" % (index, len(delta_list))
+        if (delta_item.ref_id == DeltaItem.REF_RAW):
+            recover_data = delta_item.data
+        elif (delta_item.ref_id == DeltaItem.REF_ZEROS):
+            recover_data = ZERO_DATA
+        elif (delta_item.ref_id == DeltaItem.REF_BASE_MEM):
+            offset = delta_item.data
+            recover_data = raw_mem[offset:offset+chunk_size]
+        elif (delta_item.ref_id == DeltaItem.REF_BASE_DISK):
+            offset = delta_item.data
+            recover_data = raw_disk[offset:offset+chunk_size]
+        elif delta_item.ref_id == DeltaItem.REF_SELF:
+            ref_index = delta_item.data
+            self_ref_data = recovered_data_dict.get(ref_index, None)
+            if self_ref_data == None:
+                msg = "Cannot find self reference: type(%ld), offset(%ld), \
+                        index(%ld), ref_index(%ld)" % \
+                        (delta_item.delta_type, delta_item.offset, \
+                        delta_item.index, ref_index)
+                raise MemoryError(msg)
+            recover_data = self_ref_data
+        elif delta_item.ref_id == DeltaItem.REF_XDELTA:
+            patch_data = delta_item.data
+            patch_original_size = delta_item.offset_len
+            if delta_item.delta_type == DeltaItem.DELTA_MEMORY:
+                base_data = raw_mem[delta_item.offset:delta_item.offset+patch_original_size]
+            elif delta_item.delta_type == DeltaItem.DELTA_DISK:
+                base_data = raw_disk[delta_item.offset:delta_item.offset+patch_original_size]
+            else:
+                msg = "Delta should be either disk or memory"
+                raise CloudletGenerationError(msg)
+            recover_data = tool.merge_data(base_data, patch_data, len(base_data)*5)
+        else:
+            msg ="Cannot recover: invalid referce id %d" % delta_item.ref_id
+            raise MemoryError(msg)
+
+        if len(recover_data) != delta_item.offset_len:
+            msg = "Recovered Size Error: %d, ref_id: %s, %ld %ld" % \
+                    (len(recover_data), delta_item.ref_id, \
+                    delta_item.data_len, delta_item.offset)
+            raise CloudletGenerationError(msg)
+
+        # recover
+        #delta_item.ref_id = DeltaItem.REF_RAW
+        #delta_item.data = recover_data
+        delta_item.hash_value = hashlib.sha256(recover_data).digest()
+        recovered_data_dict[delta_item.index] = recover_data
         ret_deltalist.append(delta_item)
+
+    base_disk_fd.close()
+    base_mem_fd.close()
     return ret_deltalist
 
 
@@ -1264,16 +1317,23 @@ def synthesis(base_disk, meta, disk_only=False, return_residue=False, qemu_args=
         options.FREE_SUPPORT = True
         options.DISK_ONLY = False
         try:
-            prev_mem_deltalist = _reconstruct_mem_deltalist(launch_mem, meta_info)
+            # FIX: here we revisit all overlay to reconstruct hash information
+            # we can leverage Recovered_delta class reconstruction process,
+            # but that does not generate hash value
+            (base_diskmeta, base_mem, base_memmeta) = \
+                    Const.get_basepath(base_disk, check_exist=True)
+            prev_mem_deltalist = _reconstruct_mem_deltalist( \
+                    base_disk, base_mem, overlay_filename.name)
             residue_meta, residue_files = create_residue(base_disk, \
                     meta_info[Const.META_BASE_VM_SHA256],
                     resumed_VM, options, 
                     prev_mem_deltalist, Log)
             Log.write("[RESULE] Residue\n")
-            Log.write("[RESULE]   Metafile : %s\n" % (os.path.abspath(residue_meta)))
+            Log.write("[RESULE]   Metafile : %s\n" % \
+                    (os.path.abspath(residue_meta)))
             Log.write("[RESULE]   Files : %s\n" % str(residue_files))
         except CloudletGenerationError, e:
-            sys.stderr.write("Memory Snapshotting error: %s" % str(e))
+            sys.stderr.write("Cannot create residue : %s" % (str(e)))
 
     # terminate
     resumed_VM.terminate()

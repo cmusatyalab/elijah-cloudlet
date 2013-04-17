@@ -214,7 +214,7 @@ class Memory(object):
         libvirt_mem_hdr = vmnetx._QemuMemoryHeader(fin)
         libvirt_mem_hdr.seek_body(fin)
         libvirt_header_len = fin.tell()
-        if libvirt_header_len != Memory.RAM_PAGE_SIZE:
+        if (libvirt_header_len % Memory.RAM_PAGE_SIZE) != 0:
             # TODO: need to modify libvirt migration file header 
             # in case it is not aligned with memory page size
             raise MemoryError("libvirt memory header is not aligned with PAGE SIZE(%ld)" % libvirt_header_len)
@@ -227,20 +227,21 @@ class Memory(object):
             print "end offset: %ld" % (ram_end_offset)
             raise MemoryError("ram header+data is not aligned with page size")
 
+        import pdb;pdb.set_trace()
         if diff:
             # case for getting modified memory list
             if apply_free_memory == True:
                 # get free memory list
                 mem_size_mb = ram_info.get('pc.ram').get('length')/1024/1024
                 mem_offset_infile = ram_info.get('pc.ram').get('offset')
-                self.free_pfn_dict = get_free_pfn_dict(filepath, mem_size_mb, mem_offset_infile)
+                self.free_pfn_dict = get_free_pfn_dict(filepath, mem_size_mb, \
+                        libvirt_header_len, mem_offset_infile)
             else:
                 self.free_pfn_dict = None
 
             freed_counter = self._get_mem_hash(fin, 0, file_size, hash_list, \
                     diff=diff, free_pfn_dict=self.free_pfn_dict, \
                     apply_free_memory=apply_free_memory, print_out=print_out)
-
         else:
             # case for generating base memory hash list
             freed_counter = self._get_mem_hash(fin, 0, file_size, hash_list, \
@@ -442,7 +443,7 @@ def base_hashlist(base_memmeta_path):
     return hashlist
 
 
-def get_free_pfn_dict(snapshot_path, mem_size, mem_offset_infile):
+def get_free_pfn_dict(snapshot_path, mem_size, libvirt_header_len, mem_offset_infile):
     pglist_addr = 'c1840a80'
     pgn0_addr = 'f73fd000'
     mem_size_mb = 1024
@@ -450,20 +451,23 @@ def get_free_pfn_dict(snapshot_path, mem_size, mem_offset_infile):
         sys.stdout.write("WARNING: Ignore free memory information\n")
         return None
 
-    free_pfn_list = _get_free_pfn_list(snapshot_path, pglist_addr, pgn0_addr, mem_size_mb)
+    free_pfn_list = _get_free_pfn_list(snapshot_path, pglist_addr, pgn0_addr, \
+            mem_size_mb, libvirt_header_len)
     if free_pfn_list:
-        # shift 4096*2 for libvirt header abd KVM header
+        # shift 4096*2 for libvirt header and KVM header
         offset = mem_offset_infile/Memory.RAM_PAGE_SIZE
-        free_pfn_dict_aligned = dict([(long(page)+offset, 1) for page in free_pfn_list])
+        libvirt_offset = libvirt_header_len/Memory.RAM_PAGE_SIZE
+        free_pfn_dict_aligned = dict([(long(page)+offset+libvirt_offset,1) for page in free_pfn_list])
         return free_pfn_dict_aligned
     else:
         return None
 
 
-def _get_free_pfn_list(snapshot_path, pglist_addr, pgn0_addr, mem_size_gb):
+def _get_free_pfn_list(snapshot_path, pglist_addr, pgn0_addr, mem_size_gb, libvirt_offset):
     # get list of free memory page number
     BIN_PATH = Const.FREE_MEMORY_BIN_PATH
-    cmd = "%s %s %s %s %d" % (BIN_PATH, snapshot_path, pglist_addr, pgn0_addr, mem_size_gb)
+    cmd = "%s %s %s %s %d %d" % (BIN_PATH, snapshot_path, pglist_addr, pgn0_addr, \
+            mem_size_gb, libvirt_offset)
     _PIPE = subprocess.PIPE
     proc = subprocess.Popen(cmd, shell=True, stdin=_PIPE, stdout=_PIPE, stderr=_PIPE)
     out, err = proc.communicate()

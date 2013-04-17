@@ -65,7 +65,7 @@ class DeltaItem(object):
     def __getitem__(self, item):
         return self.__dict__[item]
 
-    def get_serialized(self):
+    def get_serialized(self, with_hashvalue=False):
         # offset        : unsigned long long
         # offset_length : unsigned short
         # ref_id        : unsigned char
@@ -76,7 +76,6 @@ class DeltaItem(object):
 
         if self.ref_id == DeltaItem.REF_RAW or \
                self.ref_id == DeltaItem.REF_XDELTA:
-            
             data += struct.pack("!Q", self.data_len)
             if self.data_len != 0:
                 data += struct.pack("!%ds" % self.data_len, self.data)
@@ -85,10 +84,16 @@ class DeltaItem(object):
         elif self.ref_id == DeltaItem.REF_BASE_DISK or \
                 self.ref_id == DeltaItem.REF_BASE_MEM:
             data += struct.pack("!Q", self.data)
+
+        if with_hashvalue:
+            print "hash size is %d" % len(self.hash_value)
+            if self.hash_value and (len(self.hash_value) > 0):
+                data += struct.pack("!%ds" % len(self.hash_value), self.hashvalue)
+
         return data
 
     @staticmethod
-    def unpack_stream(stream):
+    def unpack_stream(stream, with_hashvalue=False):
         data = stream.read(8 + 2 + 1)
         data_len = 0
         if not data:
@@ -109,14 +114,19 @@ class DeltaItem(object):
                 ref_id == DeltaItem.REF_BASE_MEM:
             data = struct.unpack("!Q", stream.read(8))[0]
 
-        # hash value does not exist when recovered
-        item = DeltaItem(delta_type, offset, offset_len, None, ref_id, data_len, data)
+        # hash_value typically does not exist when recovered becuase we don't need it
+        if with_hashvalue:
+            # hash_value is only needed for residue case
+            hash_value = struct.unpack("!32s", stream.read(32))[0]
+            item = DeltaItem(delta_type, offset, offset_len, hash_value, ref_id, data_len, data)
+        else:
+            item = DeltaItem(delta_type, offset, offset_len, None, ref_id, data_len, data)
         return item
 
 
 class DeltaList(object):
     @staticmethod
-    def tofile(delta_list, f_path):
+    def tofile(delta_list, f_path, with_hashvalue=False):
         if len(delta_list) == 0 or type(delta_list[0]) != DeltaItem:
             raise MemoryError("Need list of DeltaItem")
 
@@ -124,7 +134,7 @@ class DeltaList(object):
         # Write list if delta item
         for item in delta_list:
             # save it as little endian format
-            fd.write(item.get_serialized())
+            fd.write(item.get_serialized(with_hashvalue=with_hashvalue))
         fd.close()
 
     @staticmethod
@@ -432,7 +442,8 @@ class Recovered_delta(multiprocessing.Process):
     def __init__(self, base_disk, base_mem, overlay_path, 
             output_mem_path, output_mem_size, 
             output_disk_path, output_disk_size, chunk_size,
-            out_pipe=None, time_queue=None, print_out=None):
+            out_pipe=None, time_queue=None, print_out=None,
+            deltalist_savepath=None):
         ''' recover delta list using base disk/memory
         Args:
         '''
@@ -453,6 +464,7 @@ class Recovered_delta(multiprocessing.Process):
         self.time_queue = time_queue
         self.base_disk = base_disk
         self.base_mem = base_mem
+        self.deltalist_savepath = deltalist_savepath
 
         self.base_disk_fd = None
         self.base_mem_fd = None
@@ -492,7 +504,6 @@ class Recovered_delta(multiprocessing.Process):
             self.recovered_delta_dict[delta_item.index] = delta_item
             self.delta_list.append(delta_item)
 
-
             # write to output file 
             overlay_chunk_id = long(delta_item.offset/self.chunk_size)
             if delta_item.delta_type == DeltaItem.DELTA_MEMORY:
@@ -528,6 +539,9 @@ class Recovered_delta(multiprocessing.Process):
             self.time_queue.put({'start_time':start_time, 'end_time':end_time})
         self.print_out.write("[Delta] : (%s)-(%s)=(%s), delta %ld chunks\n" % \
                 (start_time, end_time, (end_time-start_time), count))
+
+        if self.deltalist_savepath:
+            DeltaList.tofile(self.delta_list, self.deltalist_savepath, with_hashvalue=True)
 
     def recover_item(self, delta_item):
         if type(delta_item) != DeltaItem:
@@ -857,6 +871,81 @@ def discard_free_chunks(merged_modified_list, chunk_size, disk_discard, memory_d
     for item in removing_item:
         merged_modified_list.remove(item)
 
+def residue_merge_deltalist(old_deltalist, new_deltalist, print_out):
+    '''return new_detlalist = old_deltalist+new_deltalist
+    '''
+
+    # construct dictionary for O(1) search
+    delta_dict = dict()
+    for item in old_deltalist:
+        delta_dict[item.index] = item
+
+    # construct dictionary to get SELF_REFERENCE information
+    from collections import defaultdict
+    reference_dict = defaultdict(list)
+    for item in old_deltalist:
+        if item.ref_id == DeltaItem.REF_SELF:
+            index = item.data
+            reference_dict[index].append(item)
+
+    count_new_disk = 0
+    count_new_mem = 0
+    count_overwrite_disk = 0
+    count_overwrite_mem = 0
+    count_len_original = len(old_deltalist)
+
+    debug_replaced_index = []
+    for index, new_item in enumerate(new_deltalist):
+        old_item = delta_dict.get(new_item.index, None)
+        if old_item == None:
+            # newly generate chunk. Just append
+            old_deltalist.append(new_item)
+            if new_item.delta_type == DeltaItem.DELTA_DISK:
+                count_new_disk += 1
+            else:
+                count_new_mem += 1
+        else:
+            # overwrite existing one
+            referred_deltalist = reference_dict.get(old_item.index, None)
+            if referred_deltalist != None:
+                # if old_deltaitem is referenced by other deltaitem,
+                # then, make the next one as a origin of reference
+                new_reference = referred_deltalist[0]
+                new_ref_index = old_deltalist.index(new_reference)
+                if new_ref_index == None:
+                    import pdb;pdb.set_trace()
+                new_reference.ref_id = old_item.ref_id
+                new_reference.data_len = old_item.data_len
+                new_reference.data = old_item.data
+                new_reference.hash_value = old_item.hash_value
+                old_deltalist[new_ref_index] = new_reference
+                for referred_item in referred_deltalist[1:]: 
+                    ref_item_index = old_deltalist.index(referred_item)
+                    old_deltalist[ref_item_index].data = new_reference.index
+
+            # make sure to replace origin, not reference
+            old_item_index = old_deltalist.index(old_item)
+            old_deltalist[old_item_index] = new_item
+            if new_item.delta_type == DeltaItem.DELTA_DISK:
+                count_overwrite_disk += 1
+            else:
+                count_overwrite_mem += 1
+
+            debug_replaced_index.append(old_item.index)
+
+    for item in old_deltalist:
+        if hasattr(item, "is_new_ref") == True:
+            import pdb;pdb.set_trace()
+            print "normal"
+        
+    print_out.write("[INFO] merge residue with previous : \n")
+    print_out.write("[INFO]     add new disk %d: \n" % (count_new_disk))
+    print_out.write("[INFO]     add new mem %d: \n" % (count_new_mem))
+    print_out.write("[INFO]     overwrite disk %d: \n" % (count_overwrite_disk))
+    print_out.write("[INFO]     overwrite mem %d: \n" % (count_overwrite_mem))
+    print_out.write("[INFO] %d - %d = %d\n" % \
+            (len(old_deltalist), count_len_original, (count_new_disk + count_new_mem)))
+
 
 def residue_diff_deltalists(deltalist1, deltalist2, print_out):
     '''return new_detlalist = deltalist1 - deltalist2
@@ -882,8 +971,6 @@ def residue_diff_deltalists(deltalist1, deltalist2, print_out):
             # exists at previous memory, compare them
             if not ((delta_item.ref_id == DeltaItem.REF_RAW) or (delta_item.ref_id == DeltaItem.REF_XDELTA)):
                 raise DeltaError("Delta Item should be REF_RAW or REF_XDELTA")
-            if not ((prev_deltaitem.ref_id == DeltaItem.REF_RAW) or (prev_deltaitem.ref_id == DeltaItem.REF_XDELTA)):
-                raise DeltaError("Delta Item should be REF_RAW or REF_XDELTA")
 
             hash1 = delta_item.hash_value
             hash2 = prev_deltaitem.hash_value
@@ -899,5 +986,4 @@ def residue_diff_deltalists(deltalist1, deltalist2, print_out):
     print_out.write("[INFO]   identical to previous : %d\n" % (statics_duplicated_item))
 
     return ret_deltalist
-
 
