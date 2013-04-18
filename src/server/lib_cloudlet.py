@@ -97,12 +97,13 @@ class VM_Overlay(threading.Thread):
                 Const.get_basepath(self.base_disk, check_exist=True)
 
         # find base vm from DB
+        base_hashvalue = None
         dbconn = db_api.DBConnector()
         basevm_list = dbconn.list_item(db_table.BaseVM)
         for basevm_row in basevm_list:
             if basevm_row.disk_path == self.base_disk:
                 base_hashvalue = basevm_row.hash_value
-        if not base_hashvalue:
+        if base_hashvalue == None:
             raise CloudletGenerationError("Cannot find hashvalue for %s" % self.base_disk)
 
         # filename for overlay VM

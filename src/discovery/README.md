@@ -70,3 +70,59 @@ UPnP discovery
 - Zeroconf type discovery within broadcasting domain
 
 ## Install ##
+
+
+
+SAMBA
+--------------------
+###Server side###
+1. $ sudo apt-get install samba system-config-samba
+2. make samba directory and chagen owner to nobody:nogroup
+3. samba configuration at /etc/samba/smb.conf
+
+	> [global]
+	> workgroup = workgroup
+	> display charset = UTF8
+	> unix charset = UTF8
+	> 
+	> ; load printers = yes
+	> ; printing = lpmg
+	> 
+	> server string = CloudletSamba
+	> printcap name = /etc/printcap
+	> cups options = raw
+	> log file = /var/log/samba/log
+	> max log size = 100
+	> 
+	> interfaces = eth0 lo
+	> bind interfaces only = true
+	> hosts allow = localhost 127.0.0.1
+	> ;security = USER
+	> security = share
+	> guest account = nobody
+	> guest ok = yes
+	> ;public = yes
+	> writeable = yes
+	> read only = no
+	> usershare allow guests = yes 
+	> create mask = 0666
+	> directory mask = 0777
+	> force user = nobody
+	> force group = nogroup
+	> 
+	> socket options = TCP_NODELAY SO_RCVBUF=8192 SO_SNDBUF=8192
+	> dns proxy = no
+	> password server = None
+	> 
+	> [cloudlet]
+	> comment = cloudlet samba
+	> path = /var/samba
+	>  
+
+###Client side###
+1. $ sudo addgroup user_name nogroup
+	otherwise, typically user does not belong to nogroup, so it will limite you write permission
+2. samba mount
+	> $ sudo mkdir /share
+	> $ sudo mount -t cifs //10.0.2.2/cloudlet /share -o username=guest,iocharset=utf8
+

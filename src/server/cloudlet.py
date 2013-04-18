@@ -131,8 +131,11 @@ def main(argv):
         overlay = lib_cloudlet.VM_Overlay(disk_image_path, options, qemu_args)
         overlay.start()
         overlay.join()
-        print "[INFO] overlay metafile : %s" % overlay.overlay_metafile
-        print "[INFO] overlay : %s" % str(overlay.overlay_files[0])
+        print "[INFO] overlay metafile (%ld) : %s" % \
+                (os.path.getsize(overlay.overlay_metafile), overlay.overlay_metafile)
+        for overlay_file in overlay.overla_files:
+            print "[INFO] overlay (%ld) : %s" % \
+                    (os.path.getsize(overlay_file), overlay_file)
     elif mode == CMD_SYNTEHSIS:
         if len(left_args) < 2:
             sys.stderr.write("Synthesis requires path to VM disk and overlay-meta\n \
