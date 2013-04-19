@@ -77,7 +77,7 @@ SAMBA
 --------------------
 ###Server side###
 1. $ sudo apt-get install samba system-config-samba
-2. make samba directory and chagen owner to nobody:nogroup
+2. make samba directory and change owner to nobody:nogroup
 3. samba configuration at /etc/samba/smb.conf
 
 	> [global]
@@ -124,5 +124,6 @@ SAMBA
 	otherwise, typically user does not belong to nogroup, so it will limite you write permission
 2. samba mount
 	> $ sudo mkdir /share
-	> $ sudo mount -t cifs //10.0.2.2/cloudlet /share -o username=guest,iocharset=utf8
+	> $ sudo mount -t cifs //10.0.2.2/cloudlet /share -o directio,username=guest,iocharset=utf8
+	> % it's important to mount with directio option to avoid page cache
 
