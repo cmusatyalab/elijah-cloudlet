@@ -37,10 +37,9 @@ from lzma import LZMADecompressor
 from datetime import datetime
 from synthesis_protocol import Protocol as Protocol
 from upnp_server import UPnPServer, UPnPError
+from RESTServer_binder import RESTServer, RESTServerError
 from discovery.ds_register import RegisterError
 from discovery.ds_register import RegisterThread
-from monitor.resource import ResourceMonitorThread
-from monitor.resource import ResourceMonitorError
 
 Log = cloudlet.CloudletLog("./log_synthesis/log_synthesis-%s" % str(datetime.now()).split(" ")[1])
 
@@ -640,13 +639,15 @@ class SynthesisServer(SocketServer.TCPServer):
                 Log.write(str(e))
                 Log.write("[Warning] Cannot register Cloudlet to central server\n")
 
-        # cloudlet machine monitor
+        # cloudlet REST Server
         try:
-            self.resource_monitor = ResourceMonitorThread(log=Log) 
-            self.resource_monitor.start()
-        except ResourceMonitorError as e:
+            self.rest_server = RESTServer()
+            self.rest_server.start()
+        except RESTServerError as e:
             Log.write(str(e))
-            Log.write("[Warning] Cannot register Cloudlet to central server\n")
+            Log.write("[Warning] Cannot start REST API Server\n")
+            self.rest_server = None
+        Log.write("[INFO] Start RESTful API Server\n")
         Log.flush()
 
     def handle_error(self, request, client_address):
@@ -680,10 +681,10 @@ class SynthesisServer(SocketServer.TCPServer):
             Log.write("[TERMINATE] Deregister from directory service\n")
             self.register_client.terminate()
             self.register_client.join()
-        if hasattr(self, 'resource_monitor') and self.resource_monitor != None:
-            Log.write("[TERMINATE] Terminate resource monitor\n")
-            self.resource_monitor.terminate()
-            self.resource_monitor.join()
+        if hasattr(self, 'rest_server') and self.rest_server != None:
+            Log.write("[TERMINATE] Terminate REST API monitor\n")
+            self.rest_server.terminate()
+            self.rest_server.join()
         Log.write("[TERMINATE] Finish synthesis server connection\n")
 
     @staticmethod

@@ -25,13 +25,16 @@ class UPnPServer(threading.Thread):
         self.proc = subprocess.Popen(cmd, shell=True, stdin=_PIPE, stdout=_PIPE, stderr=_PIPE)
         try:
             while(not self.stop.wait(10)):
-                return_code = self.proc.poll()
+                self.proc.poll()
+                return_code = self.proc.returncode
                 if return_code != None:
                     if return_code == 0:
                         self.proc = None
                         break
                     if return_code != 0:
-                        sys.stderr.write("[Error] UPnP is closed unexpectedly")
+                        msg = "[Error] UPnP is closed unexpectedly: %d\n" % \
+                                return_code
+                        sys.stderr.write(msg)
                         break
         except KeyboardInterrupt, e:
             self.terminate()
@@ -39,4 +42,16 @@ class UPnPServer(threading.Thread):
     def terminate(self):
         self.stop.set()
         if self.proc != None:
-            self.proc.terminate()
+            import signal
+            self.proc.send_signal(signal.SIGINT) 
+            return_code = self.proc.poll()
+            if return_code == None:
+                self.proc.terminate()
+            elif return_code != 0:
+                msg = "[Error] UPnP is closed unexpectedly: %d\n" % \
+                        return_code
+                sys.stderr.write(msg)
+            else:
+                print "terminate success!"
+
+

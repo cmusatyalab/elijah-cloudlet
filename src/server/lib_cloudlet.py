@@ -958,6 +958,18 @@ def create_residue(base_disk, base_hashvalue,
             resumed_vm.resumed_disk, residue_mem.name,
             print_out, old_deltalist=original_deltalist)
 
+    # 3-1. save residue overlay only for measurement
+    # Free to delete
+    image_name = os.path.basename(base_disk).split(".")[0]
+    dir_path = os.path.abspath(".")
+    residue_prefix = os.path.join(dir_path, "residue")
+    residue_metapath = os.path.join(dir_path, "residue"+Const.OVERLAY_META)
+    residue_metafile, residue_files = \
+            generate_overlayfile(residue_deltalist, options, 
+            base_hashvalue, os.path.getsize(resumed_vm.resumed_disk), 
+            os.path.getsize(residue_mem.name),
+            residue_metapath, residue_prefix, print_out)
+
     # 4. merge with previous deltalist
     merged_list = delta.residue_merge_deltalist(original_deltalist, \
             residue_deltalist, print_out)

@@ -68,6 +68,7 @@ class Const(object):
     TEMPLATE_XML            = os.path.abspath(os.path.join(MODULE_DIR, "./config/VM_TEMPLATE.xml"))
     TEMPLATE_OVF            = os.path.abspath(os.path.join(MODULE_DIR, "./config/ovftransport.iso"))
     UPnP_SERVER             = os.path.abspath(os.path.join(MODULE_DIR, "../../lib/bin/upnp_server.jar"))
+    REST_SERVER_BIN         = os.path.abspath(os.path.join(MODULE_DIR, "./RESTServer"))
     CHUNK_SIZE=4096
 
     @staticmethod
