@@ -136,7 +136,7 @@ def main(argv):
         overlay.join()
         print "[INFO] overlay metafile (%ld) : %s" % \
                 (os.path.getsize(overlay.overlay_metafile), overlay.overlay_metafile)
-        for overlay_file in overlay.overla_files:
+        for overlay_file in overlay.overlay_files:
             print "[INFO] overlay (%ld) : %s" % \
                     (os.path.getsize(overlay_file), overlay_file)
     elif mode == CMD_SYNTEHSIS:
