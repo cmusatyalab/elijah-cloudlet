@@ -1,1 +1,1 @@
-../../../server/monitor/ResourceConst.py
+../../../server/discovery/monitor/ResourceConst.py

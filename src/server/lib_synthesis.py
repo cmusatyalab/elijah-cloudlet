@@ -40,6 +40,8 @@ from upnp_server import UPnPServer, UPnPError
 from RESTServer_binder import RESTServer, RESTServerError
 from discovery.ds_register import RegisterError
 from discovery.ds_register import RegisterThread
+from discovery.monitor.resource import ResourceMonitorThread
+from discovery.monitor.resource import ResourceMonitorError
 
 Log = cloudlet.CloudletLog("./log_synthesis/log_synthesis-%s" % str(datetime.now()).split(" ")[1])
 
@@ -648,6 +650,15 @@ class SynthesisServer(SocketServer.TCPServer):
             Log.write("[Warning] Cannot start REST API Server\n")
             self.rest_server = None
         Log.write("[INFO] Start RESTful API Server\n")
+
+        # cloudlet machine monitor
+        try:
+            self.resource_monitor = ResourceMonitorThread(log=Log) 
+            self.resource_monitor.start()
+        except ResourceMonitorError as e:
+            Log.write(str(e))
+            Log.write("[Warning] Cannot register Cloudlet to central server\n")
+
         Log.flush()
 
     def handle_error(self, request, client_address):
@@ -685,6 +696,10 @@ class SynthesisServer(SocketServer.TCPServer):
             Log.write("[TERMINATE] Terminate REST API monitor\n")
             self.rest_server.terminate()
             self.rest_server.join()
+        if hasattr(self, 'resource_monitor') and self.resource_monitor != None:
+            Log.write("[TERMINATE] Terminate resource monitor\n")
+            self.resource_monitor.terminate()
+            self.resource_monitor.join()
         Log.write("[TERMINATE] Finish synthesis server connection\n")
 
     @staticmethod
