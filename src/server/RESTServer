@@ -1,0 +1,97 @@
+#!/usr/bin/env python
+
+import sys
+import signal
+import json
+from db.table_def import Session
+from db.api import DBConnector
+from discovery.monitor.resource import ResourceMonitorThread
+from flask import Flask
+from flask.ext import restful
+from flask.ext.restful import reqparse
+from flask.ext.restful import Resource
+from flask.ext.restful import abort
+
+
+def sigint_handler(signum, frame):
+    sys.stdout.write("Exit by SIGINT\n")
+    if resource_monitor != None:
+        resource_monitor.terminate()
+    raise SystemExit
+
+# handling keyboard interrupt
+signal.signal(signal.SIGINT, sigint_handler)
+
+
+class CreateSession(Resource):
+    KEY_SESSION_ID  = "session_id"
+    KEY_RET         = "return"
+
+    def post(self):
+        global dbconn
+
+        new_session = Session()
+        dbconn.add_item(new_session)
+        # send response
+        ret_msg = {\
+                CreateSession.KEY_RET: "success", \
+                CreateSession.KEY_SESSION_ID: new_session.session_id, \
+                }
+        return ret_msg, 201
+
+
+class ManageSession(Resource):
+    def delete(self, session_id):
+        global dbconn
+
+        request_session_id = session_id
+        if request_session_id == None:
+            msg = "Need session ID" % request_session_id
+            abort(404, message=msg)
+
+        ret_session = dbconn.session.query(Session). \
+                filter(Session.session_id==request_session_id).first()
+        if ret_session == None:
+            msg = "Not a valid session : %d" % request_session_id
+            abort(404, message=msg)
+            
+        ret_session.terminate()
+        dbconn.session.commit()
+        ret_msg = {\
+                CreateSession.KEY_RET: "success", \
+                CreateSession.KEY_SESSION_ID: request_session_id, \
+                }
+        return ret_msg, 201
+
+
+class HWResource(Resource):
+    parser = reqparse.RequestParser()
+    parser.add_argument('task', type=str)
+
+    def get(self):
+        global resource_monitor
+        ret_data = resource_monitor.get_static_resource()
+        ret_data.update(resource_monitor.get_dynamic_resource())
+        return json.dumps(ret_data)
+
+
+# resource monitorThread
+resource_monitor = ResourceMonitorThread(sys.stdout)
+resource_monitor.start()
+
+# db connection
+dbconn = DBConnector()
+parser = reqparse.RequestParser()
+parser.add_argument(CreateSession.KEY_SESSION_ID, type=str)
+
+
+# run REST server
+app = Flask(__name__)
+api = restful.Api(app)
+api.add_resource(HWResource, '/api/v1/resource')
+api.add_resource(CreateSession, '/api/v1/sessions')
+api.add_resource(ManageSession, '/api/v1/session/<string:session_id>')
+
+# do no turn on debug mode. it make a mess for graceful terminate
+#app.run(debug=True)
+app.run()
