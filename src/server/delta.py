@@ -788,8 +788,6 @@ def _save_blob(start_index, delta_list, self_ref_dict, blob_name, blob_size, sta
 
     comp_data += comp.flush()
     if len(comp_data) > 0 :
-        print "savefile for %s(%ld delta item) %ld --> %ld" % \
-                (blob_name, item_count, original_length, len(comp_data))
         blob_file = open(blob_name, "w+b")
         blob_file.write(comp_data)
         blob_file.close()
@@ -847,7 +845,7 @@ def divide_blobs(delta_list, overlay_path, blob_size_kb,
     end_time = time.time()
     print_out.write("[Debug] Overlay Compression time: %f, delta_item: %ld\n" % 
             ((end_time-start_time), comp_counter))
-    print_out.write("[SIZE] total blob size: %ld\n" % blob_output_size)
+    print_out.write("[Debug] Total OVerlay Size : %ld\n" % blob_output_size)
     return overlay_list 
 
 
@@ -886,12 +884,10 @@ def residue_merge_deltalist(old_deltalist, new_deltalist, print_out):
     reference_dict = defaultdict(list)
     for item in old_deltalist:
         if item.ref_id == DeltaItem.REF_SELF:
-            index = item.data
-            reference_dict[index].append(item)
+            original_item = delta_dict[item.data]
+            reference_dict[original_item].append(item)
 
     for item in old_deltalist:
-        if not (item.ref_id == DeltaItem.REF_RAW or item.ref_id == DeltaItem.REF_XDELTA):
-            raise DeltaError("old deltalist should be raw")
         ret_deltalist.append(item)
 
     count_new_disk = 0
@@ -899,7 +895,7 @@ def residue_merge_deltalist(old_deltalist, new_deltalist, print_out):
     count_overwrite_disk = 0
     count_overwrite_mem = 0
 
-    for index, new_item in enumerate(new_deltalist):
+    for new_item in new_deltalist:
         old_item = delta_dict.get(new_item.index, None)
         if old_item == None:
             # newly generate chunk. Just append
@@ -910,9 +906,12 @@ def residue_merge_deltalist(old_deltalist, new_deltalist, print_out):
                 count_new_mem += 1
         else:
             # overwrite existing one
-            referred_deltalist = reference_dict.get(old_item.index, None)
+            referred_deltalist = reference_dict.get(old_item, None)
             if referred_deltalist != None:
-                raise DeltaError("failed")
+                #msg = "Currently RESONCSTRUCT ALL SELF_REF pointer to RAW\n"
+                #msg += "Windows makes kernel panic with below code"
+                #raise DeltaError(msg)
+
                 # if old_deltaitem is referenced by other deltaitem,
                 # then, make the next one as a origin of reference
                 new_pivot = None
@@ -920,7 +919,7 @@ def residue_merge_deltalist(old_deltalist, new_deltalist, print_out):
                 new_pivot_position = -1
                 for position, item in enumerate(referred_deltalist):
                     try:
-                        new_pivot_position = old_deltalist.index(item)
+                        new_pivot_position = ret_deltalist.index(item)
                         new_pivot = item
                         position_inlist = position
                         break
@@ -931,21 +930,19 @@ def residue_merge_deltalist(old_deltalist, new_deltalist, print_out):
                     # all REF_SELF deltaitem is now replace
                     pass
                 else:
-                    new_pivot_index = old_deltalist[new_pivot_position].index
-                    old_deltalist[new_pivot_position].ref_id = old_item.ref_id
-                    old_deltalist[new_pivot_position].data_len = old_item.data_len
-                    old_deltalist[new_pivot_position].data = old_item.data
-                    old_deltalist[new_pivot_position].hash_value = old_item.hash_value
-                    old_deltalist[new_pivot_position].is_ref = True
+                    ret_deltalist[new_pivot_position].ref_id = old_item.ref_id
+                    ret_deltalist[new_pivot_position].data_len = old_item.data_len
+                    ret_deltalist[new_pivot_position].data = old_item.data
+                    ret_deltalist[new_pivot_position].hash_value = old_item.hash_value
+                    del reference_dict[old_item]
                     for referred_item in referred_deltalist[position_inlist+1:]: 
-                        if referred_item.ref_id != DeltaItem.REF_SELF:
-                            continue
-                        ref_item_index = old_deltalist.index(referred_item)
-                        old_deltalist[ref_item_index].data = old_deltalist[new_pivot_position].index
-                        old_deltalist[ref_item_index].is_new_ref = True
-                        # add new reference item
-                        reference_dict[new_pivot_index].append(referred_item)
-                        del reference_dict[old_item.index]
+                        try:
+                            ref_item_index = ret_deltalist.index(referred_item)
+                            ret_deltalist[ref_item_index].data = ret_deltalist[new_pivot_position].index
+                            reference_dict[new_pivot].append(referred_item)
+                        except ValueError, e:
+                            # referred item can be already overwritten
+                            pass
 
             # make sure to replace origin, not reference
             old_item_position = ret_deltalist.index(old_item)
@@ -958,10 +955,10 @@ def residue_merge_deltalist(old_deltalist, new_deltalist, print_out):
                 count_overwrite_mem += 1
         
     print_out.write("[INFO] merge residue with previous : \n")
-    print_out.write("[INFO]     add new disk %d: \n" % (count_new_disk))
-    print_out.write("[INFO]     add new mem %d: \n" % (count_new_mem))
-    print_out.write("[INFO]     overwrite disk %d: \n" % (count_overwrite_disk))
-    print_out.write("[INFO]     overwrite mem %d: \n" % (count_overwrite_mem))
+    print_out.write("[INFO]     add new disk   : %d \n" % (count_new_disk))
+    print_out.write("[INFO]     add new mem    : %d \n" % (count_new_mem))
+    print_out.write("[INFO]     overwrite disk : %d \n" % (count_overwrite_disk))
+    print_out.write("[INFO]     overwrite mem  : %d \n" % (count_overwrite_mem))
     
     return ret_deltalist
 
@@ -999,29 +996,25 @@ def residue_diff_deltalists(old_deltalist, new_deltalist, base_mem, print_out):
             statics_new_item += 1
         else:
             # exists at previous memory, compare them
-            if not ((old_deltaitem.ref_id == DeltaItem.REF_RAW) or (old_deltaitem.ref_id == DeltaItem.REF_XDELTA)):
-                raise DeltaError("Previous delta item should be REF_RAW or REF_XDELTA")
-
             hash1 = old_deltaitem.hash_value
             hash2 = item.hash_value
+            if hash1 == None:
+                raise DeltaError("Previous delta item should have hash value")
+
             if hash1 != hash2:
                 statics_overwrite_item += 1
                 ret_deltalist.append(item)
             else:
                 statics_duplicated_item += 1
 
+    # exists at previous overlay, but not in current overlay
+    # --> chunks that are converted to original
     for item in old_deltalist:
         if item.delta_type == DeltaItem.DELTA_DISK:
             continue
         new_item = new_deltadict.get(item.index, None)
         if new_item != None:
             continue
-
-        # exists at previous overlay, but not in current overlay
-        # converted to original
-        if not ((item.ref_id == DeltaItem.REF_RAW) or \
-                (item.ref_id == DeltaItem.REF_XDELTA)):
-            raise DeltaError("have to be RAW/xdelta to copy the data")
 
         if item.offset_len != Const.CHUNK_SIZE:
             # special case: end of memory snapshot
@@ -1042,7 +1035,7 @@ def residue_diff_deltalists(old_deltalist, new_deltalist, base_mem, print_out):
                     data_len=data_len, data=base_mem_data)
         else:
             delta_item = DeltaItem(item.delta_type, item.offset, item.offset_len,
-                    hash_value = item.hash_value, ref_id=DeltaItem.REF_BASE_MEM,
+                    hash_value=None, ref_id=DeltaItem.REF_BASE_MEM,
                     data_len=8, data=item.offset)
         ret_deltalist.append(delta_item)
         statics_reverted += 1

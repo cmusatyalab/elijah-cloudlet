@@ -1265,9 +1265,9 @@ def _reconstruct_mem_deltalist(base_disk, base_mem, overlay_filepath):
             raise CloudletGenerationError(msg)
 
         # recover
-        delta_item.ref_id = DeltaItem.REF_RAW
-        delta_item.data = recover_data
-        delta_item.data_len = len(recover_data)
+        #delta_item.ref_id = DeltaItem.REF_RAW
+        #delta_item.data = recover_data
+        #delta_item.data_len = len(recover_data)
         delta_item.hash_value = hashlib.sha256(recover_data).digest()
         recovered_data_dict[delta_item.index] = recover_data
         ret_deltalist.append(delta_item)
