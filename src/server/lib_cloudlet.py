@@ -167,6 +167,7 @@ class VM_Overlay(threading.Thread):
         qemu_monitor.terminate()
         fuse_stream_monitor.join()
         qemu_monitor.join()
+        fuse.join()
         if self.options.MEMORY_SAVE_PATH:
             Log.write("[INFO] moving memory sansphost to %s\n" % self.options.MEMORY_SAVE_PATH)
             shutil.move(modified_mem.name, self.options.MEMORY_SAVE_PATH)

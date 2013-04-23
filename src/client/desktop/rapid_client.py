@@ -115,7 +115,7 @@ def start_cloudlet(cloudlet, session_id, overlay_meta_path, app_function, synthe
     header_dict = {
         protocol.KEY_COMMAND : protocol.MESSAGE_COMMAND_SEND_META,
         protocol.KEY_META_SIZE : os.path.getsize(overlay_meta_path),
-        protocol.KEY_SESSIOIN_ID: session_id,
+        protocol.KEY_SESSION_ID: session_id,
         }
     if len(synthesis_options) > 0:
         header_dict[protocol.KEY_SYNTHESIS_OPTION] = synthesis_options
@@ -187,7 +187,7 @@ def start_cloudlet(cloudlet, session_id, overlay_meta_path, app_function, synthe
                         protocol.KEY_COMMAND : protocol.MESSAGE_COMMAND_SEND_OVERLAY,
                         protocol.KEY_REQUEST_SEGMENT : requested_uri,
                         protocol.KEY_REQUEST_SEGMENT_SIZE : os.path.getsize(blob_path),
-                        protocol.KEY_SESSIOIN_ID: session_id,
+                        protocol.KEY_SESSION_ID: session_id,
                         }
 
                 # send close signal to cloudlet server
@@ -214,7 +214,7 @@ def start_cloudlet(cloudlet, session_id, overlay_meta_path, app_function, synthe
     app_end = time_dict['app_end']
     client_info = {
             protocol.KEY_COMMAND : protocol.MESSAGE_COMMAND_FINISH,
-            protocol.KEY_SESSIOIN_ID : session_id,
+            protocol.KEY_SESSION_ID : session_id,
             'Transfer End':(send_end-start_time), 
             'Synthesis Success': (recv_end-start_time),
             'App Start': (app_start-start_time),
