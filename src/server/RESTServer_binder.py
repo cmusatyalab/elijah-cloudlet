@@ -19,9 +19,9 @@ class RESTServer(threading.Thread):
         threading.Thread.__init__(self, target=self.run_exec)
 
     def run_exec(self):
-        cmd = "python %s" % (self.REST_bin)
+        cmd = ["python", "%s" % (self.REST_bin)]
         _PIPE = subprocess.PIPE
-        self.proc = subprocess.Popen(cmd, shell=True, \
+        self.proc = subprocess.Popen(cmd, close_fds=True, \
                 stdin=_PIPE, stdout=_PIPE, stderr=_PIPE)
         try:
             while(not self.stop.wait(10)):

@@ -479,8 +479,8 @@ def _get_monitoring_info(machine, options,
 
 def copy_disk(in_path, out_path):
     print "[INFO] Copying disk image to %s" % out_path
-    cmd = "cp %s %s" % (in_path, out_path)
-    cp_proc = subprocess.Popen(cmd, shell=True)
+    cmd = ["cp",  "%s" % (in_path), "%s" % (out_path)]
+    cp_proc = subprocess.Popen(cmd, close_fds=True)
     cp_proc.wait()
     if cp_proc.returncode != 0:
         raise IOError("Copy failed: from %s to %s " % (in_path, out_path))
@@ -741,8 +741,9 @@ def run_vm(conn, domain_xml, **kwargs):
         sys.stderr.write("Warning, Possible VNC port error:%s\n" % str(e))
 
     _PIPE = subprocess.PIPE
-    vnc_process = subprocess.Popen("gvncviewer localhost:%d" % vnc_port,
-            shell=True, stdin=_PIPE, stdout=_PIPE, stderr=_PIPE)
+    vnc_process = subprocess.Popen(["gvncviewer", "localhost:%d" % vnc_port],
+            stdout=_PIPE, stderr=_PIPE,
+            close_fds=True)
     if kwargs.get('wait_vnc'):
         try:
             vnc_process.wait()
@@ -836,9 +837,9 @@ def connect_vnc(machine, no_wait=False):
         sys.stderr.write("Warning, Possible VNC port error:%s\n" % str(e))
 
     # Run VNC
-    vnc_process = subprocess.Popen("gvncviewer localhost:%d" % vnc_port,
+    vnc_process = subprocess.Popen(["gvncviewer", "localhost:%d" % vnc_port],
             stdout=subprocess.PIPE, stderr=subprocess.PIPE,
-            shell=True)
+            close_fds=True)
     if no_wait == True:
         return
 
@@ -1120,8 +1121,9 @@ def synthesis_statistics(meta_info, decomp_overlay_file,
 '''External API Start
 '''
 def validate_congifuration():
-    cmd = "%s --version" % Const.QEMU_BIN_PATH
-    proc = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, shell=True)
+    cmd = ["%s" % Const.QEMU_BIN_PATH, "--version"]
+    proc = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, 
+            close_fds=True)
     out, err = proc.communicate()
     if len(err) > 0:
         print "KVM validation Error: %s" % (err)

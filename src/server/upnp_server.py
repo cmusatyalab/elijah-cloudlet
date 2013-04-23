@@ -20,9 +20,9 @@ class UPnPServer(threading.Thread):
         threading.Thread.__init__(self, target=self.run_exec)
 
     def run_exec(self):
-        cmd = "java -jar %s" % (self.upnp_bin)
+        cmd = ["java", "-jar", "%s" % (self.upnp_bin)]
         _PIPE = subprocess.PIPE
-        self.proc = subprocess.Popen(cmd, shell=True, stdin=_PIPE, stdout=_PIPE, stderr=_PIPE)
+        self.proc = subprocess.Popen(cmd, close_fds=True, stdin=_PIPE, stdout=_PIPE, stderr=_PIPE)
         try:
             while(not self.stop.wait(10)):
                 self.proc.poll()

@@ -17,9 +17,13 @@ def _analyze_fs(disk_path, bson_path):
     XRAY_BIN = Const.XRAY_BIN_PATH
     if os.path.exists(XRAY_BIN) == False:
          raise xrayError("Cannot find binary at %s" % XRAY_BIN);
-    cmd = "%s %s %s" % (os.path.abspath(XRAY_BIN), os.path.abspath(disk_path), bson_path)
+    cmd = [
+            "%s" % os.path.abspath(XRAY_BIN),
+            "%s" % os.path.abspath(disk_path),
+            "%s" % bson_path,
+        ]
     _PIPE = subprocess.PIPE
-    proc = subprocess.Popen(cmd, stdout=_PIPE, stderr=_PIPE, shell=True)
+    proc = subprocess.Popen(cmd, stdout=_PIPE, stderr=_PIPE, close_fds=True)
     out, err = proc.communicate()
     if proc.returncode > 0:
          raise xrayError("XRAY returned status %d" % proc.returncode)

@@ -469,10 +469,15 @@ def get_free_pfn_dict(snapshot_path, mem_size, libvirt_header_len, mem_offset_in
 def _get_free_pfn_list(snapshot_path, pglist_addr, pgn0_addr, mem_size_gb, libvirt_offset):
     # get list of free memory page number
     BIN_PATH = Const.FREE_MEMORY_BIN_PATH
-    cmd = "%s %s %s %s %d" % (BIN_PATH, snapshot_path, pglist_addr, pgn0_addr, \
-            mem_size_gb)
+    cmd = [
+            "%s" % BIN_PATH,
+            "%s" % snapshot_path,
+            "%s" % pglist_addr,
+            "%s" % pgn0_addr,
+            "%d" % mem_size_gb,
+        ]
     _PIPE = subprocess.PIPE
-    proc = subprocess.Popen(cmd, shell=True, stdin=_PIPE, stdout=_PIPE, stderr=_PIPE)
+    proc = subprocess.Popen(cmd, close_fds=True, stdin=_PIPE, stdout=_PIPE, stderr=_PIPE)
     out, err = proc.communicate()
     if err:
         print "Error: " + err

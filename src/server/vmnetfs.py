@@ -142,7 +142,7 @@ class VMNetFS(threading.Thread):
         if self._pipe is not None:
             self.print_out.write("[INFO] Fuse close pipe\n")
             # invalid formated string will shutdown fuse
-            self.fuse_write("terminate")
+            #self.fuse_write("terminate")
             self._pipe.close()
             self._pipe = None
 
