@@ -82,7 +82,7 @@ public class GNetworkClientSender extends Thread {
 			Message msg = Message.obtain();
 			msg.what = GNetworkClient.CONNECTION_ERROR;
 			Bundle data = new Bundle();
-			data.putString("message", "Cannot Connect to " + this.Server_ipAddress + ":" + this.Server_port);
+			data.putString("message", "Cannot connect to " + this.Server_ipAddress + ":" + this.Server_port);
 			msg.setData(data);
 			mHandler.sendMessage(msg);
 			return false;
@@ -91,7 +91,7 @@ public class GNetworkClientSender extends Thread {
 			Message msg = Message.obtain();
 			msg.what = GNetworkClient.CONNECTION_ERROR;
 			Bundle data = new Bundle();
-			data.putString("message", "Cannot Connect to " + this.Server_ipAddress + ":" + this.Server_port);
+			data.putString("message", "Error in connecting to " + this.Server_ipAddress + ":" + this.Server_port);
 			msg.setData(data);
 			mHandler.sendMessage(msg);
 			return false;

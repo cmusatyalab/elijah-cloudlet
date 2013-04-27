@@ -189,12 +189,14 @@ public class CloudletCameraActivity extends Activity implements TextToSpeech.OnI
 	private static final String FEEDBACK_PREFIX = "Found items are ";
 	private void TTSFeedback(String ttsString) {
 		// Show Application Runtime
+		/*
 		String message = "Time for app run\n start: " + startApp + "\nend: " + endApp + "\ndiff: " + (endApp-startApp);		
 		new AlertDialog.Builder(CloudletCameraActivity.this).setTitle("Info")
 		.setMessage(message)
 		.setIcon(R.drawable.ic_launcher)
 		.setNegativeButton("Confirm", null)
 		.show();
+		*/
 		
 		// Select a random hello.
 		Log.d("krha", "tts string origin: " + ttsString);

@@ -73,7 +73,8 @@ public class CloudletConnector extends Thread {
 	// Synthesis callback mmessage
 	public static final int SYNTHESIS_SUCCESS = 10;
 	public static final int SYNTHESIS_FAILED = 11;
-	public static final int SYNTHESIS_PROGRESS = 12;
+	public static final int SYNTHESIS_PROGRESS_MESSAGE = 21;
+	public static final int SYNTHESIS_PROGRESS_PERCENT = 22;
 
 	protected Handler synthesisCallbackHandler;
 	protected Context mContext;
@@ -324,8 +325,15 @@ public class CloudletConnector extends Thread {
 
 	public void updateMessage(String messageString) {
 		Message msg = Message.obtain();
-		msg.what = CloudletConnector.SYNTHESIS_PROGRESS;
+		msg.what = CloudletConnector.SYNTHESIS_PROGRESS_MESSAGE;
 		msg.obj = messageString;
+		synthesisCallbackHandler.sendMessage(msg);
+	}
+	
+	public void updateStatus(int percent) {
+		Message msg = Message.obtain();
+		msg.what = CloudletConnector.SYNTHESIS_PROGRESS_PERCENT;
+		msg.obj = new Integer(percent);
 		synthesisCallbackHandler.sendMessage(msg);
 	}
 

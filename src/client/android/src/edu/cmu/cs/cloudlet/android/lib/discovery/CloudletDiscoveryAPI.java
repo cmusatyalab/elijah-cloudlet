@@ -103,6 +103,8 @@ public class CloudletDiscoveryAPI {
 		Socket socket = connect(ipAddress, port);
 		BigInteger sessionID = INVALID_SESSION_ID;
 		try {
+			if (socket == null)
+				throw new IOException();
 			DataInputStream networkReader = new DataInputStream(socket.getInputStream());
 			DataOutputStream networkWriter = new DataOutputStream(socket.getOutputStream());
 			

@@ -14,6 +14,7 @@
 package edu.cmu.cs.cloudlet.android;
 
 import java.io.File;
+import java.text.NumberFormat;
 import java.util.ArrayList;
 
 import edu.cmu.cs.cloudlet.android.application.CloudletCameraActivity;
@@ -36,11 +37,13 @@ import android.os.Handler;
 import android.os.Message;
 import android.preference.PreferenceManager;
 import android.text.InputType;
+import android.view.Gravity;
 import android.view.KeyEvent;
 import android.view.Menu;
 import android.view.View;
 import android.widget.Button;
 import android.widget.EditText;
+import android.widget.TextView;
 
 public class CloudletActivity extends Activity {
 	public static String CLOUDLET_SYNTHESIS_IP = "cloudlet.krha.kr";
@@ -111,7 +114,10 @@ public class CloudletActivity extends Activity {
 		this.connector.start();
 
 		if (this.progDialog == null) {
-			this.progDialog = ProgressDialog.show(this, "Info", "Connecting to " + address, true);
+			this.progDialog = new ProgressDialog(this);
+			this.progDialog.setMessage("Connecting to " + address);
+            this.progDialog.setProgressStyle(ProgressDialog.STYLE_HORIZONTAL);
+            this.progDialog.setCancelable(false);
 			this.progDialog.setIcon(R.drawable.ic_launcher);
 		} else {
 			this.progDialog.setMessage("Connecting to " + address);
@@ -276,10 +282,17 @@ public class CloudletActivity extends Activity {
 	 * Synthesis callback handler
 	 */
 	Handler synthesisHandler = new Handler() {
-
+		private int PROGRESS_NONE = -1;
+		private int PROGRESS_FINISH = 100;
+		
 		protected void updateMessage(String msg) {
 			if ((progDialog != null) && (progDialog.isShowing())) {
 				progDialog.setMessage(msg);
+			}
+		}
+		protected void updatePercent(int percent){
+			if ((progDialog != null) && (progDialog.isShowing())) {
+				progDialog.setProgress(percent);		
 			}
 		}
 
@@ -287,6 +300,7 @@ public class CloudletActivity extends Activity {
 			if (msg.what == CloudletConnector.SYNTHESIS_SUCCESS) {
 				String appName = (String) msg.obj;
 				this.updateMessage("Synthesis SUCESS");
+				this.updatePercent(PROGRESS_FINISH);
 				boolean isSuccess = runStandAlone(appName);
 				if (isSuccess == false) {
 					// If we cannot find matching application,
@@ -314,9 +328,12 @@ public class CloudletActivity extends Activity {
 				ab.setIcon(R.drawable.ic_launcher);
 				ab.setPositiveButton("Ok", null).setNegativeButton("Cancel", null);
 				ab.show();
-			} else if (msg.what == CloudletConnector.SYNTHESIS_PROGRESS) {
+			} else if (msg.what == CloudletConnector.SYNTHESIS_PROGRESS_MESSAGE) {
 				String message = (String) msg.obj;
 				this.updateMessage(message);
+			} else if (msg.what == CloudletConnector.SYNTHESIS_PROGRESS_PERCENT) {
+				int percent = (Integer) msg.obj;
+				this.updatePercent(percent);
 			}
 		}
 	};

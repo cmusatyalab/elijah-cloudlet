@@ -123,7 +123,7 @@ public class BatchSynthesisTest extends Activity {
 				ab.setPositiveButton("Ok", null).setNegativeButton("Cancel",
 						null);
 				ab.show();
-			} else if (msg.what == CloudletConnector.SYNTHESIS_PROGRESS) {
+			} else if (msg.what == CloudletConnector.SYNTHESIS_PROGRESS_PERCENT) {
 				String message = (String) msg.obj;
 				this.updateMessage(message);
 			}
