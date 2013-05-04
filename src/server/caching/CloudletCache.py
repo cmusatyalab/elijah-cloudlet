@@ -19,6 +19,7 @@ import os
 import sys
 import threading 
 import requests
+import redis
 from BeautifulSoup import BeautifulSoup
 from Queue import Queue, Empty
 
@@ -203,11 +204,47 @@ class Util(object):
 
 
 class CacheManager(threading.Thread):
-    def __init__(self, cache_dir, print_out=None):
+    def __init__(self, cache_dir, redis_addr, print_out=None):
         self.cache_dir = cache_dir
         self.print_out = print_out
         if self.print_out == None:
             self.print_out = open("/dev/null", "w+b")
+        self.redis = self._init_redis(redis_addr)
+
+    def _init_redis(self, redis_addr):
+        """Initialize redis connection and 
+        Upload current cache status
+        """
+        try:
+            conn = redis.StrictRedis(host=str(redis_addr[0]), port=int(redis_addr[1]), db=0)
+            conn.flushall()
+        except redis.exceptions.ConnectionError, e:
+            raise CachingError("Failed to connect to Redis")
+
+        for (root, dirs, files) in os.walk(self.cache_dir):
+            for each_file in files:
+                abspath = os.path.join(root, each_file)
+                relpath = os.path.relpath(abspath, self.cache_dir)
+                st = os.lstat(abspath)
+                value = dict((key, getattr(st, key)) for key \
+                        in ('st_atime', 'st_ctime', 'st_gid', \
+                        'st_mode', 'st_mtime', 'st_nlink', \
+                        'st_size', 'st_uid'))
+                value['exists'] = True
+                conn.set(relpath, str(value))
+
+            for each_dir in dirs:
+                abspath = os.path.join(root, each_dir)
+                relpath = os.path.relpath(abspath, self.cache_dir) + "/" # directory
+                st = os.lstat(abspath)
+                value = dict((key, getattr(st, key)) for key \
+                        in ('st_atime', 'st_ctime', 'st_gid', \
+                        'st_mode', 'st_mtime', 'st_nlink', \
+                        'st_size', 'st_uid'))
+                value['exists'] = True
+                conn.set(relpath, str(value))
+
+        return conn
 
     def fetch_source_URI(self, sourceURI):
         if not Util.is_valid_uri(sourceURI, is_source_uri=True):
@@ -270,25 +307,49 @@ class CacheManager(threading.Thread):
                     os.makedirs(diskpath)
         return fetch_root
 
-    def launch_fuse(self, URI_list):
+    def launch_fuse(self, URIInfo_list):
         """ Construct FUSE directory structure at give Samba directory
         Return:
             fuse obejct that has connection to FUSE executable 
         """
-        from fuse import FUSE
-        from FuseMount import CacheFuse
 
-        uri = URI_list[0].info_dict[_URIInfo.URI]
+        uri = URIInfo_list[0].info_dict[_URIInfo.URI]
         parse_ret = requests.utils.urlparse(uri)
-        fuse_root = os.path.join(self.cache_dir, parse_ret.netloc, ".")
-        fuse = FUSE(CacheFuse(URI_list), fuse_root, forground=True)
-        import pdb;pdb.set_trace()
-        return fuse
+        for each_uri in URIInfo_list:
+            uri = URIInfo_list[0].info_dict[_URIInfo.URI]
+            parse_ret = requests.utils.urlparse(uri)
+            url_path = parse_ret.path[1:] # remove "/"
+            cache_filepath = os.path.join(parse_ret.netloc, url_path)
+            redis_ret = self.redis.get(cache_filepath)
+            if redis_ret == None:
+                self._update_redis(each_uri, cache_filepath)
+            else:
+                # check validity of cache
+                pass
+
+    def _update_redis(self, uri, filepath):
+        if os.path.exists(filepath) == True:
+            st = os.lstat(filepath)
+            value = dict((key, getattr(st, key)) for key \
+                    in ('st_atime', 'st_ctime', 'st_gid', \
+                    'st_mode', 'st_mtime', 'st_nlink', \
+                    'st_size', 'st_uid'))
+            value['exists'] = True
+            self.redis.set(filepath, str(value))
+        else:
+            pass
+        print "update redis"
+        print "%s --> %s" % (filepath, value)
 
 
 # Global
-cache_rootdir = '/tmp/cloudlet_cache/'
-cache_manager = CacheManager(cache_rootdir, print_out=sys.stdout)
+REDIS_ADDR = ('localhost', 6379)
+CACHE_ROOT = '/tmp/cloudlet_cache/'
+try:
+    cache_manager = CacheManager(CACHE_ROOT, REDIS_ADDR, print_out=sys.stdout)
+except CachingError, e:
+    sys.stderr.write(str(e) + "\n")
+    sys.exit(1)
 
 if __name__ == '__main__':
     if len(sys.argv) != 2:
@@ -297,6 +358,7 @@ if __name__ == '__main__':
 
     compiled_list = Util.get_compiled_URIs(sys.argv[1])
     try:
-        cache_manager.fetch_compiled_URIs(compiled_list)
+        cache_manager.launch_fuse(compiled_list)
+        #cache_manager.fetch_compiled_URIs(compiled_list)
     except CachingError, e:
         print str(e)

@@ -1,12 +1,13 @@
 .SUFFIXES : .c .o
 
 CC = gcc
+REDIS_LIB = libhiredis.a
 INC = `pkg-config glib-2.0 fuse --cflags`
-LIBS = -lpthread `pkg-config glib-2.0 fuse --libs`
-CFLAGS = -g $(INC)
+LIBS = -lpthread `pkg-config glib-2.0 fuse --libs` $(REDIS_LIB)
+CFLAGS = -g -Wall $(INC)
 
-OBJS = cloudlet_cachefs.o fuse.o
-SRCS = cloudlet_cachefs.c fuse.c
+OBJS = cloudlet_cachefs.o fuse.o redis.o
+REDIS_OBJS = example.o
 
 TARGET = "cachefs"
 

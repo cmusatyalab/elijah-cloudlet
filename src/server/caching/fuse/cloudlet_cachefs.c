@@ -40,6 +40,9 @@
     do { } while (0)
 #endif
 
+// TODO: get it using argument
+const char *REDIS_IP = "localhost";
+int REDIS_PORT = 6379;
 
 static bool handle_stdin(struct cachefs *fs, const char *oneline, GError **err)
 {
@@ -118,7 +121,7 @@ static void fuse_main()
     struct cachefs *fs;
     GThread *loop_thread = NULL;
     GIOChannel *chan_in;
-    GIOChannel *chan_out;
+    //GIOChannel *chan_out;
     GIOFlags flags;
     GError *err = NULL;
 
@@ -126,10 +129,14 @@ static void fuse_main()
     if (!g_thread_supported()) {
         g_thread_init(NULL);
     }
+    if (!_redis_init(REDIS_IP, REDIS_PORT)){
+    	fprintf(stdout, "Cannot connect to redis\n");
+    	return;
+	}
 
     /* open io channel*/
     chan_in = g_io_channel_unix_new(0);
-    chan_out = g_io_channel_unix_new(1);
+    //chan_out = g_io_channel_unix_new(1);
 
     /* Set up fuse */
     fs = g_slice_new0(struct cachefs);

@@ -126,6 +126,11 @@ void _cachefs_fuse_new(struct cachefs *fs, GError **err);
 void _cachefs_fuse_run();
 void _cachefs_fuse_terminate();
 void _cachefs_fuse_free();
+
+/* redis */
+bool _redis_init(const char *address, int port);
+void _redis_close();
+
 //struct vmnetfs_fuse_dentry *_vmnetfs_fuse_add_dir(
 //        struct vmnetfs_fuse_dentry *parent, const char *name);
 //void _vmnetfs_fuse_add_file(struct vmnetfs_fuse_dentry *parent,
