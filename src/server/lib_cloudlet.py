@@ -31,7 +31,9 @@ import libvirt
 import shutil
 from db import api as db_api
 from db import table_def as db_table
-from Configuration import Const, Options
+from Configuration import Const
+from Configuration import Options
+from Configuration import Discovery_Const
 from delta import DeltaList
 from delta import DeltaItem
 from xml.etree import ElementTree
@@ -43,6 +45,7 @@ from time import sleep
 import threading
 from optparse import OptionParser
 from multiprocessing import Pipe
+from caching import CloudletCache as cache
 
 from tool import comp_lzma
 from tool import diff_files
@@ -92,7 +95,6 @@ class VM_Overlay(threading.Thread):
 
         if (self.options == None) or (isinstance(self.options, Options) == False):
             raise CloudletGenerationError("Given option class is invalid: %s" % str(self.options))
-
         (base_diskmeta, base_mem, base_memmeta) = \
                 Const.get_basepath(self.base_disk, check_exist=True)
 
@@ -104,10 +106,35 @@ class VM_Overlay(threading.Thread):
             if basevm_row.disk_path == self.base_disk:
                 base_hashvalue = basevm_row.hash_value
         if base_hashvalue == None:
-            raise CloudletGenerationError("Cannot find hashvalue for %s" % self.base_disk)
+            msg = "Cannot find hashvalue for %s" % self.base_disk
+            raise CloudletGenerationError(msg)
 
         # filename for overlay VM
         qemu_logfile = NamedTemporaryFile(prefix="cloudlet-qemu-log-", delete=False)
+
+        # option for data-intensive application
+        if self.options.DATA_SOURCE_URI != None:
+            # check samba
+            if os.path.exists(Discovery_Const.HOST_SAMBA_DIR) == False:
+                msg = "Cloudlet does not have samba directory at %s\n" % \
+                        Discovery_Const.HOST_SAMBA_DIR
+                msg += "You can change samba path at Configuration.py\n"
+                raise CloudletGenerationError(msg)
+            # fetch URI to cache
+            try:
+                compiled_list = cache.Util.get_compiled_URIs( \
+                        self.options.DATA_SOURCE_URI)
+                fetch_root = cache.cache_manager.fetch_compiled_URIs(compiled_list)
+            except cache.CachingError, e:
+                msg = "Cannot retrieve data from URI: %s" % str(e)
+                raise CloudletGenerationError(msg)
+            # create symbolic link to samba dir
+            dirname = os.path.dirname(fetch_root).split("/")[-1]
+            symlink_dir = os.path.join(Discovery_Const.HOST_SAMBA_DIR, dirname)
+            if os.path.exists(symlink_dir) == True:
+                os.unlink(symlink_dir)
+            os.symlink(fetch_root, symlink_dir)
+            Log.write("[INFO] create symbolic link to %s\n" % symlink_dir)
 
         # make FUSE disk & memory
         fuse = run_fuse(Const.VMNETFS_PATH, Const.CHUNK_SIZE,
@@ -158,8 +185,25 @@ class VM_Overlay(threading.Thread):
 
         self.overlay_metafile, self.overlay_files = \
                 generate_overlayfile(overlay_deltalist, self.options, 
-                base_hashvalue, os.path.getsize(modified_disk), os.path.getsize(modified_mem.name),
+                base_hashvalue, os.path.getsize(modified_disk), 
+                os.path.getsize(modified_mem.name),
                 overlay_metapath, overlay_prefix, Log)
+
+        # option for data-intensive application
+        if self.options.DATA_SOURCE_URI != None:
+            uri_list = []
+            for each_info in compiled_list:
+                uri_list.append(each_info.get_uri())
+            uri_data = {
+                    'source_URI' : self.options.DATA_SOURCE_URI,
+                    'compiled_URIs' : uri_list,
+                    }
+
+            overlay_uri_meta = os.path.join(dir_path, image_name+Const.OVERLAY_URIs)
+            with open(overlay_uri_meta, "w+b") as f:
+                import json
+                f.write(json.dumps(uri_data))
+            self.overlay_uri_meta = overlay_uri_meta
 
         # 5. terminting
         fuse.terminate()

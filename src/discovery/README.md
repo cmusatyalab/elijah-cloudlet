@@ -77,9 +77,13 @@ SAMBA
 --------------------
 ###Server side###
 1. $ sudo apt-get install samba system-config-samba
-2. make samba directory and change owner to nobody:nogroup
-3. samba configuration at /etc/samba/smb.conf
 
+2. make samba directory and change owner and mode
+	> $ sudo mkdir /var/samba
+	> $ sudo chown nobody:nogroup /var/samba
+	> $ sudo chmod 771 /var/samba
+
+3. samba configuration at /etc/samba/smb.conf
 	> [global]
 	> workgroup = workgroup
 	> display charset = UTF8
@@ -91,8 +95,14 @@ SAMBA
 	> server string = CloudletSamba
 	> printcap name = /etc/printcap
 	> cups options = raw
-	> log file = /var/log/samba/log
-	> max log size = 100
+	> log file = /var/log/samba/log.%m
+	> include = /var/log/samba/smb.conf.%m
+	> log level = 1
+	> max log size = 100000
+	> 
+	> follow symlinks = yes
+	> wide links = yes
+	> unix extensions = no
 	> 
 	> interfaces = eth0 lo
 	> bind interfaces only = true
@@ -105,8 +115,8 @@ SAMBA
 	> writeable = yes
 	> read only = no
 	> usershare allow guests = yes 
-	> create mask = 0666
-	> directory mask = 0777
+	> create mask = 0771
+	> directory mask = 0771
 	> force user = nobody
 	> force group = nogroup
 	> 
@@ -117,7 +127,7 @@ SAMBA
 	> [cloudlet]
 	> comment = cloudlet samba
 	> path = /var/samba
-	>  
+
 
 ###Client side###
 1. $ sudo addgroup user_name nogroup

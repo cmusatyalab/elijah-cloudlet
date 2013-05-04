@@ -43,7 +43,7 @@ def get_database():
 
 
 def process_command_line(argv, commands):
-    VERSION = '%prog 0.7'
+    VERSION = '%prog 0.8'
     DESCRIPTION = 'Cloudlet Overlay Generation & Synthesis'
 
     parser = OptionParser(usage=print_usage(commands), version=VERSION, description=DESCRIPTION)
@@ -61,6 +61,9 @@ def process_command_line(argv, commands):
             '-d', '--disk', action='store_true', dest='disk_only', default=False,
             help='[overlay_creation] create only disk overlay only')
     parser.add_option(
+            '-s', '--samba-mount', action='store', dest='source_uri', default=None,
+            help='[overlay_creation] mount samba for data-intensive application')
+    parser.add_option(
             '-r', '--residue', action='store_true', dest='return_residue', default=False,
             help='[synthesis] return residue after using synthesized VM')
     settings, args = parser.parse_args(argv)
@@ -72,10 +75,16 @@ def process_command_line(argv, commands):
     mode = str(args[0]).lower()
     if mode not in commands.keys():
         parser.error("Invalid Command, Choose among :\n  %s" % " | ".join(commands))
-    
+
+    # option for creating residue 
     valid_residue_condition = (mode == "synthesis") or (settings.return_residue != True) 
     if valid_residue_condition == False:
-        parser.error("-r (return residue) should be used only at synthesis command")
+        parser.error("-r (return residue) should be used only with synthesis command")
+
+    # option for samba mount
+    valid_samba_mount = (mode == "overlay") or (settings.source_uri == None) 
+    if valid_samba_mount == False:
+        parser.error("-s (mount samba) should be used only with overlay command")
 
     return mode, args[1:], settings
 
@@ -130,15 +139,27 @@ def main(argv):
         options.TRIM_SUPPORT = not settings.disable_trim_support
         options.FREE_SUPPORT = settings.enable_free_support
         options.DISK_ONLY = settings.disk_only
+        options.DATA_SOURCE_URI = settings.source_uri
 
         overlay = lib_cloudlet.VM_Overlay(disk_image_path, options, qemu_args)
         overlay.start()
         overlay.join()
-        print "[INFO] overlay metafile (%ld) : %s" % \
-                (os.path.getsize(overlay.overlay_metafile), overlay.overlay_metafile)
-        for overlay_file in overlay.overlay_files:
-            print "[INFO] overlay (%ld) : %s" % \
-                    (os.path.getsize(overlay_file), overlay_file)
+        if hasattr(overlay, "overlay_metafile") and hasattr(overlay, "overlay_files"):
+            sys.stdout.write("[INFO] overlay metafile (%ld) : %s\n" % \
+                    (os.path.getsize(overlay.overlay_metafile), \
+                    overlay.overlay_metafile))
+            for overlay_file in overlay.overlay_files:
+                sys.stdout.write("[INFO] overlay (%ld) : %s\n" % \
+                        (os.path.getsize(overlay_file), overlay_file))
+
+            # option for data-intensive application
+            if options.DATA_SOURCE_URI != None and hasattr(overlay, "overlay_uri_meta"):
+                sys.stdout.write("[INFO] overlay URIs : %s\n" % \
+                        overlay.overlay_uri_meta)
+        else:
+            sys.stderr.write("Failed to create overlay\n")
+            sys.exit(1)
+
     elif mode == CMD_SYNTEHSIS:
         if len(left_args) < 2:
             sys.stderr.write("Synthesis requires path to VM disk and overlay-meta\n \

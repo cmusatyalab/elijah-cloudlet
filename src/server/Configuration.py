@@ -26,10 +26,11 @@ class Options(object):
     FREE_SUPPORT                        = True
     XRAY_SUPPORT                        = False
     DISK_ONLY                           = False
+    DATA_SOURCE_URI                     = None
 
-    ## see the effect of dedup and reducing semantic by generating two indenpendent overlay
+    # see the effect of dedup and reducing semantic by generating two indenpendent overlay
     SEPERATE_DEDUP_REDUCING_SEMANTICS   = False     
-    ## for test purposes, we can optionally save modified memory snapshot
+    # for test purposes, we can optionally save modified memory snapshot
     MEMORY_SAVE_PATH                    = None
 
     def __str__(self):
@@ -43,6 +44,7 @@ class Const(object):
     BASE_DISK_META          = ".base-img-meta"
     BASE_MEM_META           = ".base-mem-meta"
     OVERLAY_META            = ".overlay-meta"
+    OVERLAY_URIs            = ".overlay-URIs"
     OVERLAY_FILE_PREFIX     = ".overlay"
     OVERLAY_LOG             = ".overlay-log"
     OVERLAY_BLOB_SIZE_KB    = 1024*1024 # 1G
@@ -111,3 +113,6 @@ class Synthesis_Const(object):
     LOCAL_IPADDRESS = 'localhost'
     SERVER_PORT_NUMBER = 8021
 
+
+class Discovery_Const(object):
+    HOST_SAMBA_DIR = "/var/samba/"

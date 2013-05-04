@@ -45,6 +45,10 @@ class _URIInfo(object):
                 _URIInfo.SIZE : size,
                 _URIInfo.LAST_MODIFIED : last_modified,
                 }
+
+    def get_uri(self):
+        return self.info_dict.get(_URIInfo.URI, None)
+
     def __repr__(self):
         import pprint
         return pprint.pformat(self.info_dict)
@@ -148,7 +152,7 @@ class _URIParser(threading.Thread):
         self.stop.set()
 
 
-class CacheUtil(object):
+class Util(object):
     @staticmethod
     def is_valid_uri(uri, is_source_uri=False):
         parse_ret = requests.utils.urlparse(uri)
@@ -165,12 +169,12 @@ class CacheUtil(object):
 
     @staticmethod
     def get_compiled_URIs(sourceURI):
-        if not CacheUtil.is_valid_uri(sourceURI, is_source_uri=True):
+        if not Util.is_valid_uri(sourceURI, is_source_uri=True):
             msg = "Invalid URI: %s" % sourceURI
             raise CachingError(msg)
         visited = set()
         uri_queue = Queue()
-        uri_queue.put(host)
+        uri_queue.put(sourceURI)
         thread_list = []
         for index in xrange(FETCHING_THREAD_NUM):
             parser = _URIParser(visited, uri_queue)
@@ -206,11 +210,11 @@ class CacheManager(threading.Thread):
             self.print_out = open("/dev/null", "w+b")
 
     def fetch_source_URI(self, sourceURI):
-        if not CacheUtil.is_valid_uri(sourceURI, is_source_uri=True):
+        if not Util.is_valid_uri(sourceURI, is_source_uri=True):
             raise CachingError("Invalid URI: %s" % sourceURI)
         visited = set()
         uri_queue = Queue()
-        uri_queue.put(host)
+        uri_queue.put(sourceURI)
         thread_list = []
         for index in xrange(3):
             parser = _URIParser(visited, uri_queue, cache_dir=self.cache_dir,
@@ -230,16 +234,22 @@ class CacheManager(threading.Thread):
         Exception:
             CachingError if failed to fetching URI
         """
+        if URIInfo_list == None or len(URIInfo_list) == 0:
+            raise CachingError("No element in URI list")
+
         for each_info in URIInfo_list:
             compiled_uri = each_info.info_dict[_URIInfo.URI]
-            if not CacheUtil.is_valid_uri(compiled_uri):
+            if not Util.is_valid_uri(compiled_uri):
                 raise CachingError("Invalid URI: %s" % compiled_uri)
 
+        uri = URIInfo_list[0].info_dict[_URIInfo.URI]
+        parse_ret = requests.utils.urlparse(uri)
+        fetch_root = os.path.join(self.cache_dir, parse_ret.netloc, ".")
         for each_info in URIInfo_list:
             uri = each_info.info_dict[_URIInfo.URI]
             parse_ret = requests.utils.urlparse(uri)
-            uri_path = parse_ret.path[1:] # remove "/"
-            diskpath = os.path.join(self.cache_dir, parse_ret.netloc, uri_path)
+            uri_path = parse_ret.path[1:] # remove "/" from path
+            diskpath = os.path.join(fetch_root, uri_path)
             # save to disk
             if diskpath.endswith('/') == False and os.path.isdir(diskpath) == False:
                 dirpath = os.path.dirname(diskpath)
@@ -248,7 +258,7 @@ class CacheManager(threading.Thread):
                 r = requests.get(uri, stream=True)
                 if r.ok: 
                     diskfile = open(diskpath, "w+b")
-                    self.print_out.write("%s --> %s\n" % (uri, diskpath))
+                    #self.print_out.write("%s --> %s\n" % (uri, diskpath))
                     while True:
                         raw_data = r.raw.read(1024*1024*5)
                         if raw_data == None or len(raw_data) == 0:
@@ -258,13 +268,21 @@ class CacheManager(threading.Thread):
             else: # directory
                 if os.path.exists(diskpath) == False:
                     os.makedirs(diskpath)
+        return fetch_root
 
-    def launch_fuse(self, URI_list, samba_dir):
+    def launch_fuse(self, URI_list):
         """ Construct FUSE directory structure at give Samba directory
         Return:
             fuse obejct that has connection to FUSE executable 
         """
-        fuse = None
+        from fuse import FUSE
+        from FuseMount import CacheFuse
+
+        uri = URI_list[0].info_dict[_URIInfo.URI]
+        parse_ret = requests.utils.urlparse(uri)
+        fuse_root = os.path.join(self.cache_dir, parse_ret.netloc, ".")
+        fuse = FUSE(CacheFuse(URI_list), fuse_root, forground=True)
+        import pdb;pdb.set_trace()
         return fuse
 
 
@@ -277,8 +295,7 @@ if __name__ == '__main__':
         print "> $ prog [root_uri]"
         sys.exit(1)
 
-    host = sys.argv[1]
-    compiled_list = CacheUtil.get_compiled_URIs(host)
+    compiled_list = Util.get_compiled_URIs(sys.argv[1])
     try:
         cache_manager.fetch_compiled_URIs(compiled_list)
     except CachingError, e:
