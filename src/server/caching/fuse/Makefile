@@ -4,7 +4,7 @@ CC = gcc
 REDIS_LIB = libhiredis.a
 INC = `pkg-config glib-2.0 fuse --cflags`
 LIBS = -lpthread `pkg-config glib-2.0 fuse --libs` $(REDIS_LIB)
-CFLAGS = -g -Wall $(INC)
+CFLAGS = -g -std=gnu99 $(INC)
 
 OBJS = cloudlet_cachefs.o fuse.o redis.o
 REDIS_OBJS = example.o
@@ -15,6 +15,9 @@ all : $(TARGET)
 
 $(TARGET) : $(OBJS)
 	$(CC) -o $@ $(OBJS) $(LIBS)
+
+example : $(REDIS_OBJS)
+	$(CC) -o $@ $(REDIS_OBJS) $(LIBS)
 
 clean : 
 	rm -rf $(OBJS) $(TARGET)

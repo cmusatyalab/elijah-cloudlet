@@ -16,6 +16,7 @@
  */
 
 #include <sys/types.h>
+#include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 #include <unistd.h>
@@ -25,6 +26,19 @@
 #include <fuse.h>
 #include "cachefs-private.h"
 
+
+#define DEBUG_FUSE
+#ifdef DEBUG_FUSE
+#define DPRINTF(fmt, ...) \
+    do { \
+    	fprintf(stdout, "[DEBUG][fuse] " fmt, ## __VA_ARGS__); \
+    	fprintf(stdout, "\n"); fflush(stdout); \
+    } while (0) 
+#else
+#define DPRINTF(fmt, ...) \
+    do { } while (0)
+#endif
+
 static const char *hello_str = "Hello World!\n";
 static const char *hello_path = "/hello";
 
@@ -33,17 +47,24 @@ static int do_getattr(const char *path, struct stat *stbuf)
 {
 	int res = 0;
 	memset(stbuf, 0, sizeof(struct stat));
+	DPRINTF("getattr : %s",  path);
 	if(strcmp(path, "/") == 0) {
 		stbuf->st_mode = S_IFDIR | 0755;
 		stbuf->st_nlink = 2;
-	}
-	else if(strcmp(path, hello_path) == 0) {
+	} else {
 		stbuf->st_mode = S_IFREG | 0444;
 		stbuf->st_nlink = 1;
 		stbuf->st_size = strlen(hello_str);
+		/*
+		if (_redis_get_attr(path, stbuf)){
+			stbuf->st_mode = S_IFREG | 0444;
+			stbuf->st_nlink = 1;
+			stbuf->st_size = strlen(hello_str);
+		}else{
+			res = -ENOENT;
+		}
+		*/
 	}
-	else
-		res = -ENOENT;
 
 	return res;
 }

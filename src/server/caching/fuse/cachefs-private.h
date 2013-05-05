@@ -130,6 +130,9 @@ void _cachefs_fuse_free();
 /* redis */
 bool _redis_init(const char *address, int port);
 void _redis_close();
+int _redis_get_attr(const char* path, char** ret_buf);
+int _redis_get_readdir(const char* path, GSList *ret_list);
+
 
 //struct vmnetfs_fuse_dentry *_vmnetfs_fuse_add_dir(
 //        struct vmnetfs_fuse_dentry *parent, const char *name);

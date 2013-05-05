@@ -165,6 +165,30 @@ static void fuse_main()
 
     /* Started successfully. */
     fprintf(stdout, "%s\n", fs->mountpoint);
+
+    // attr
+    char *ret_buf = NULL;
+    if (_redis_get_attr("localhost/", &ret_buf) == EXIT_SUCCESS){
+		DPRINTF("%s", ret_buf);
+		free(ret_buf);
+	}else{
+    	DPRINTF("FAILED");
+	}
+
+	// dir
+    GSList *dirlist = g_slist_append(dirlist, "test");
+    if(_redis_get_readdir("localhost/", dirlist) == EXIT_SUCCESS){
+		int i = 0;
+		for(i = 0; i < g_slist_length(dirlist); i++){
+			gpointer dirname = g_slist_nth_data(dirlist, i);
+			//DPRINTF("%s", (char *)dirname);
+		}
+		g_slist_free(dirlist);
+	}else{
+    	DPRINTF("FAILED");
+	}
+
+
     fflush(stdout);
     _cachefs_fuse_run(fs);
 

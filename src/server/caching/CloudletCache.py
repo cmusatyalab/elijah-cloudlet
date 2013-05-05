@@ -204,6 +204,9 @@ class Util(object):
 
 
 class CacheManager(threading.Thread):
+    POST_FIX_ATTRIBUTE  = u'\u03b1'
+    POST_FIX_LIST_DIR   = u'\u03b2'
+
     def __init__(self, cache_dir, redis_addr, print_out=None):
         self.cache_dir = cache_dir
         self.print_out = print_out
@@ -222,27 +225,42 @@ class CacheManager(threading.Thread):
             raise CachingError("Failed to connect to Redis")
 
         for (root, dirs, files) in os.walk(self.cache_dir):
+            relpath_cache_root = os.path.relpath(root, self.cache_dir) + "/"
             for each_file in files:
                 abspath = os.path.join(root, each_file)
                 relpath = os.path.relpath(abspath, self.cache_dir)
+                # set attribute
+                key = unicode(relpath, "utf-8") + CacheManager.POST_FIX_ATTRIBUTE
                 st = os.lstat(abspath)
                 value = dict((key, getattr(st, key)) for key \
                         in ('st_atime', 'st_ctime', 'st_gid', \
                         'st_mode', 'st_mtime', 'st_nlink', \
                         'st_size', 'st_uid'))
                 value['exists'] = True
-                conn.set(relpath, str(value))
-
+                conn.set(relpath, unicode(value))
+                # set file list
+                key = unicode(relpath_cache_root, "utf-8") + CacheManager.POST_FIX_LIST_DIR
+                print key + " --> " + each_file
+                conn.rpush(key, each_file)
+                
             for each_dir in dirs:
                 abspath = os.path.join(root, each_dir)
                 relpath = os.path.relpath(abspath, self.cache_dir) + "/" # directory
+                # set attribute
+                key = unicode(relpath, "utf-8") + CacheManager.POST_FIX_ATTRIBUTE
                 st = os.lstat(abspath)
                 value = dict((key, getattr(st, key)) for key \
                         in ('st_atime', 'st_ctime', 'st_gid', \
                         'st_mode', 'st_mtime', 'st_nlink', \
                         'st_size', 'st_uid'))
                 value['exists'] = True
-                conn.set(relpath, str(value))
+                conn.set(key, unicode(value))
+                # set file list
+                print "dir : " + key + " --> " + each_dir
+                key = unicode(relpath_cache_root, "utf-8") + CacheManager.POST_FIX_LIST_DIR
+                if not each_dir.endswith("/"):
+                    each_dir += "/"
+                conn.rpush(key, unicode(each_dir))
 
         return conn
 
