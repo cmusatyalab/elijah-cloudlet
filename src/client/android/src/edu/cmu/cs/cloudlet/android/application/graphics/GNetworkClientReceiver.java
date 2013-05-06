@@ -169,8 +169,10 @@ public class GNetworkClientReceiver extends Thread {
 	public void close() {
 		this.isThreadRun = false;		
 		try {
-			if(this.networkReader != null)
+			if(this.networkReader != null){
 				this.networkReader.close();
+				this.networkReader = null;
+			}
 		} catch (IOException e) {
 			Log.e("krha", e.toString());
 		}

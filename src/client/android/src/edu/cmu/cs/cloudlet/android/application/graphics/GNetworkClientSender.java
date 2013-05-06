@@ -168,12 +168,18 @@ public class GNetworkClientSender extends Thread {
 		try {
 			this.isThreadRun = false;
 			
-			if(this.receiver != null)
+			if(this.receiver != null){
 				this.receiver.close();
-			if(this.networkWriter != null)
+				this.receiver = null;
+			}
+			if(this.networkWriter != null){
 				this.networkWriter.close();
-			if(this.mClientSocket != null)
+				this.networkWriter = null;
+			}
+			if(this.mClientSocket != null){
 				this.mClientSocket.close();
+				this.mClientSocket = null;
+			}
 		} catch (IOException e) {
 			Log.e("krha", e.toString());
 		}

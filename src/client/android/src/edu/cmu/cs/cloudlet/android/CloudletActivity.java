@@ -158,13 +158,13 @@ public class CloudletActivity extends Activity {
 	public boolean runStandAlone(String application) {
 		application = application.trim();
 
-		if (application.equalsIgnoreCase("moped") || application.equalsIgnoreCase("moped_disk")) {
+		if (application.equalsIgnoreCase("moped") || application.equalsIgnoreCase("object")) {
 			Intent intent = new Intent(CloudletActivity.this, CloudletCameraActivity.class);
 			intent.putExtra("address", CLOUDLET_SYNTHESIS_IP);
 			intent.putExtra("port", TEST_CLOUDLET_APP_MOPED_PORT);
 			startActivityForResult(intent, 0);
 			return true;
-		} else if (application.equalsIgnoreCase("graphics")) {
+		} else if (application.equalsIgnoreCase("graphics") || application.equalsIgnoreCase("fluid")) {
 			Intent intent = new Intent(CloudletActivity.this, GraphicsClientActivity.class);
 			intent.putExtra("address", CLOUDLET_SYNTHESIS_IP);
 			intent.putExtra("port", TEST_CLOUDLET_APP_GRAPHICS_PORT);

@@ -136,8 +136,7 @@ static int do_getattr(const char *path, struct stat *stbuf)
 		return -ENOENT;
 	}
 
-	if (is_local){
-		// cached 
+	if (is_local){ // cached 
 		free(ret_buf);
 		return res;
 	}else{

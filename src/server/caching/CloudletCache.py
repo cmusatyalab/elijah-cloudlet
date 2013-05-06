@@ -225,7 +225,6 @@ class CacheManager(threading.Thread):
             raise CachingError("Failed to connect to Redis")
 
         for (root, dirs, files) in os.walk(self.cache_dir):
-            print ""
             relpath_cache_root = os.path.relpath(root, self.cache_dir)
             for each_file in files:
                 abspath = os.path.join(root, each_file)
@@ -241,7 +240,7 @@ class CacheManager(threading.Thread):
                 conn.set(key, unicode(value))
                 # set file list
                 key = unicode(relpath_cache_root, "utf-8") + CacheManager.POST_FIX_LIST_DIR
-                print "file : " + key + " --> " + each_file
+                #print "file : " + key + " --> " + each_file
                 conn.rpush(key, unicode(each_file))
                 
             for each_dir in dirs:
@@ -258,7 +257,7 @@ class CacheManager(threading.Thread):
                 conn.set(key, unicode(value))
                 # set file list
                 key = unicode(relpath_cache_root, "utf-8") + CacheManager.POST_FIX_LIST_DIR
-                print "dir : " + key + " --> " + each_dir
+                #print "dir : " + key + " --> " + each_dir
                 conn.rpush(key, unicode(each_dir))
 
         return conn

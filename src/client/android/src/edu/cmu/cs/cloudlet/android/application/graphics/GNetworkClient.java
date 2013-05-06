@@ -95,8 +95,10 @@ public class GNetworkClient {
 	}
 
 	public void close() {
-		if (this.networkClient != null)
+		if (this.networkClient != null){
 			this.networkClient.close();
+			this.networkClient.stop();
+		}
 	}
 
 	/*

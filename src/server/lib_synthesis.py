@@ -613,7 +613,7 @@ class SynthesisServer(SocketServer.TCPServer):
         self.socket.setsockopt(socket.IPPROTO_TCP, socket.TCP_NODELAY, 1)
         Log.write("* Server configuration\n")
         Log.write(" - Open TCP Server at %s\n" % (str(server_address)))
-        Log.write(" - Disable Nalge(No TCP delay)  : %s\n" \
+        Log.write(" - Disable Nagle(No TCP delay)  : %s\n" \
                 % str(self.socket.getsockopt(socket.IPPROTO_TCP, socket.TCP_NODELAY)))
         Log.write("-"*50)
         Log.write("\n")
