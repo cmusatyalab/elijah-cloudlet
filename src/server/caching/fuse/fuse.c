@@ -141,8 +141,7 @@ static int do_getattr(const char *path, struct stat *stbuf)
 		free(ret_buf);
 		return res;
 	}else{
-		// Need to fetch
-		// TO BE IMPLEMENTED
+		// TODO:TO BE IMPLEMENTED
 	}
 }
 
