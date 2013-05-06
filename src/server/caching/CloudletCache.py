@@ -110,7 +110,7 @@ class _URIParser(threading.Thread):
                     r = requests.get(url, stream=True)
                     if r.ok: 
                         diskfile = open(cache_filepath, "w+b")
-                        self.print_out.write("%s --> %s\n" % (url, cache_filepath))
+                        #self.print_out.write("%s --> %s\n" % (url, cache_filepath))
                         while True:
                             raw_data = r.raw.read(1024*1024*5)
                             if raw_data == None or len(raw_data) == 0:
@@ -225,7 +225,8 @@ class CacheManager(threading.Thread):
             raise CachingError("Failed to connect to Redis")
 
         for (root, dirs, files) in os.walk(self.cache_dir):
-            relpath_cache_root = os.path.relpath(root, self.cache_dir) + "/"
+            print ""
+            relpath_cache_root = os.path.relpath(root, self.cache_dir)
             for each_file in files:
                 abspath = os.path.join(root, each_file)
                 relpath = os.path.relpath(abspath, self.cache_dir)
@@ -240,8 +241,8 @@ class CacheManager(threading.Thread):
                 conn.set(key, unicode(value))
                 # set file list
                 key = unicode(relpath_cache_root, "utf-8") + CacheManager.POST_FIX_LIST_DIR
-                print key + " --> " + each_file
-                conn.rpush(key, each_file)
+                print "file : " + key + " --> " + each_file
+                conn.rpush(key, unicode(each_file))
                 
             for each_dir in dirs:
                 abspath = os.path.join(root, each_dir)
@@ -256,10 +257,8 @@ class CacheManager(threading.Thread):
                         getattr(st, 'st_size'), getattr(st, 'st_nlink'))
                 conn.set(key, unicode(value))
                 # set file list
-                print "dir : " + key + " --> " + each_dir
                 key = unicode(relpath_cache_root, "utf-8") + CacheManager.POST_FIX_LIST_DIR
-                if not each_dir.endswith("/"):
-                    each_dir += "/"
+                print "dir : " + key + " --> " + each_dir
                 conn.rpush(key, unicode(each_dir))
 
         return conn

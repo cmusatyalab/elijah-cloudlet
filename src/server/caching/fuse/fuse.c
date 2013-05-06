@@ -94,17 +94,12 @@ static bool parse_stinfo(const char *buf, bool *is_local, struct stat *stbuf)
     return true;
 }
 
-/* FUSE operation */
 extern const char *URL_ROOT;
-
-static int do_getattr(const char *path, struct stat *stbuf)
+static char* convert_to_relpath(const char* path)
 {
-	int res = 0;
-	char *ret_buf = NULL;
 	int url_root_len = strlen(URL_ROOT);
 	char *rel_path = (char*)malloc(strlen(path)+url_root_len+1);
 	rel_path[strlen(path)+url_root_len] = '\0';
-
 	if (strcmp(path, "/") == 0){
 		// remove '/'
 		memset(rel_path, '\0', strlen(path)+url_root_len+1);
@@ -114,26 +109,41 @@ static int do_getattr(const char *path, struct stat *stbuf)
 		memcpy(rel_path+url_root_len, path, strlen(path));
 	}
 
+	return rel_path;
+}
+
+
+/* FUSE operation */
+
+static int do_getattr(const char *path, struct stat *stbuf)
+{
+	int res = 0;
+	char *ret_buf = NULL;
+	char* rel_path = convert_to_relpath(path);
+
 	memset(stbuf, 0, sizeof(struct stat));
 	DPRINTF("request getattr : %s (%s)", path, rel_path);
-	if (_redis_get_attr(rel_path, &ret_buf) == EXIT_SUCCESS){
-		if (ret_buf != NULL){
-			DPRINTF("ret getattr : %s --> %s", rel_path, ret_buf);
-			bool is_local = false;
-			// parse result
-			parse_stinfo(ret_buf, &is_local, stbuf);
-			free(ret_buf);
-			if (!is_local){
-				// Need to fetch
-				// TO BE IMPLEMENTED
-			}
-		} else{
-			res == -ENOENT;
-		}
-	}else{
-		res = -ENOENT;
+	if (_redis_get_attr(rel_path, &ret_buf) != EXIT_SUCCESS){
+		return -ENOENT;
 	}
-	return res;
+	if (ret_buf == NULL){
+		return -ENOENT;
+	}
+
+	DPRINTF("ret getattr : %s --> %s", rel_path, ret_buf);
+	bool is_local = false;
+	if (!parse_stinfo(ret_buf, &is_local, stbuf)){
+		return -ENOENT;
+	}
+
+	if (is_local){
+		// cached 
+		free(ret_buf);
+		return res;
+	}else{
+		// Need to fetch
+		// TO BE IMPLEMENTED
+	}
 }
 
 static int do_readdir(const char *path, void *buf, fuse_fill_dir_t filler,
@@ -143,12 +153,7 @@ static int do_readdir(const char *path, void *buf, fuse_fill_dir_t filler,
 	(void) offset;
 	(void) fi;
 
-	int url_root_len = strlen(URL_ROOT);
-	char *rel_path = (char*)malloc(strlen(path)+url_root_len+1);
-	rel_path[strlen(path)+url_root_len] = '\0';
-	memcpy(rel_path, URL_ROOT, url_root_len);
-	memcpy(rel_path+url_root_len, path, strlen(path));
-
+	char* rel_path = convert_to_relpath(path);
     DPRINTF("readdir : %s", rel_path);
 	filler(buf, ".", NULL, 0);
 	filler(buf, "..", NULL, 0);
@@ -160,12 +165,14 @@ static int do_readdir(const char *path, void *buf, fuse_fill_dir_t filler,
 			DPRINTF("readir : %s", (char *)dirname);
 			filler(buf, dirname, NULL, 0);
 		}
+		g_slist_free(dirlist);
 	}else{
     	DPRINTF("FAILED");
+    	free(rel_path);
     	return -ENOENT;
 	}
-	g_slist_free(dirlist);
 
+	free(rel_path);
 	return 0;
 }
 
