@@ -123,19 +123,18 @@ int _redis_get_attr(const char* path, char** ret_buf)
 
     redisReply* reply;
     reply = redisCommand(handle->conn, REDIS_GET_ATTRIBUTE, path);
-    DPRINTF(REDIS_GET_ATTRIBUTE, path);
+    //DPRINTF(REDIS_GET_ATTRIBUTE, path);
     if (reply->type == REDIS_REPLY_STRING && reply->len > 0){
         *ret_buf = (char *)malloc(sizeof(char)*(reply->len));
-        DPRINTF("return st: %s", reply->str);
         memcpy(*ret_buf, reply->str, reply->len);
     } else {
-        fprintf(stderr, "reply->len = %d\n", reply->len);
+        //fprintf(stderr, "reply->len = %d\n", reply->len);
     }
 
     return check_redis_return(handle, reply);
 }
 
-int _redis_get_readdir(const char* path, GSList *ret_list)
+int _redis_get_readdir(const char* path, GSList **ret_list)
 {
 	if (!check_connection())
 		return EXIT_FAILURE;
@@ -145,11 +144,11 @@ int _redis_get_readdir(const char* path, GSList *ret_list)
     reply = redisCommand(handle->conn, REDIS_GET_LIST_DIR, path);
     DPRINTF(REDIS_GET_LIST_DIR, path);
     if (reply->type == REDIS_REPLY_ARRAY) {
-    	DPRINTF("size of return : %zu", reply->elements);
         for (i = 0; i < reply->elements; i++) {
-        	char *tmp = (char *)malloc(sizeof(char)*(reply->element[i]->len));
+        	char *tmp = (char *)malloc(sizeof(char)*(reply->element[i]->len)+1);
+        	tmp[reply->element[i]->len] = '\0';
         	memcpy(tmp, reply->element[i]->str, reply->element[i]->len);
-        	ret_list = g_slist_append(ret_list, tmp);
+        	*ret_list = g_slist_append(*ret_list, tmp);
         }
     }else{
     	fprintf(stderr, "no return\n");

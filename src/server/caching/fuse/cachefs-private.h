@@ -23,9 +23,11 @@
 #include <stdbool.h>
 #include <glib.h>
 
+
 struct cachefs {
     GMainLoop *glib_loop;
     char *mountpoint;
+    char *uri_root;
     struct fuse *fuse;
     struct fuse_chan *chan;
 };
@@ -131,7 +133,7 @@ void _cachefs_fuse_free();
 bool _redis_init(const char *address, int port);
 void _redis_close();
 int _redis_get_attr(const char* path, char** ret_buf);
-int _redis_get_readdir(const char* path, GSList *ret_list);
+int _redis_get_readdir(const char* path, GSList **ret_list);
 
 
 //struct vmnetfs_fuse_dentry *_vmnetfs_fuse_add_dir(

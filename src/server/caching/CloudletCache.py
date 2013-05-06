@@ -232,12 +232,12 @@ class CacheManager(threading.Thread):
                 # set attribute
                 key = unicode(relpath, "utf-8") + CacheManager.POST_FIX_ATTRIBUTE
                 st = os.lstat(abspath)
-                value = dict((key, getattr(st, key)) for key \
-                        in ('st_atime', 'st_ctime', 'st_gid', \
-                        'st_mode', 'st_mtime', 'st_nlink', \
-                        'st_size', 'st_uid'))
-                value['exists'] = True
-                conn.set(relpath, unicode(value))
+                value = "exists:1,atime:%ld,ctime:%ld,mtime:%ld,gid:%ld,uid:%ld,mode:%ld,size:%ld,nlink:%ld" % \
+                        ( getattr(st, 'st_atime'), getattr(st, 'st_ctime'),\
+                        getattr(st, 'st_mtime'), getattr(st, 'st_gid'),\
+                        getattr(st, 'st_uid'), getattr(st, 'st_mode'),\
+                        getattr(st, 'st_size'), getattr(st, 'st_nlink'))
+                conn.set(key, unicode(value))
                 # set file list
                 key = unicode(relpath_cache_root, "utf-8") + CacheManager.POST_FIX_LIST_DIR
                 print key + " --> " + each_file
@@ -245,15 +245,15 @@ class CacheManager(threading.Thread):
                 
             for each_dir in dirs:
                 abspath = os.path.join(root, each_dir)
-                relpath = os.path.relpath(abspath, self.cache_dir) + "/" # directory
+                relpath = os.path.relpath(abspath, self.cache_dir) 
                 # set attribute
                 key = unicode(relpath, "utf-8") + CacheManager.POST_FIX_ATTRIBUTE
                 st = os.lstat(abspath)
-                value = dict((key, getattr(st, key)) for key \
-                        in ('st_atime', 'st_ctime', 'st_gid', \
-                        'st_mode', 'st_mtime', 'st_nlink', \
-                        'st_size', 'st_uid'))
-                value['exists'] = True
+                value = "exists:1,atime:%ld,ctime:%ld,mtime:%ld,gid:%ld,uid:%ld,mode:%ld,size:%ld,nlink:%ld" % \
+                        ( getattr(st, 'st_atime'), getattr(st, 'st_ctime'),\
+                        getattr(st, 'st_mtime'), getattr(st, 'st_gid'),\
+                        getattr(st, 'st_uid'), getattr(st, 'st_mode'),\
+                        getattr(st, 'st_size'), getattr(st, 'st_nlink'))
                 conn.set(key, unicode(value))
                 # set file list
                 print "dir : " + key + " --> " + each_dir

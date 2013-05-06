@@ -42,45 +42,129 @@
 static const char *hello_str = "Hello World!\n";
 static const char *hello_path = "/hello";
 
+/* internal utility methods */
+static bool parse_stinfo(const char *buf, bool *is_local, struct stat *stbuf)
+{
+	gchar *st_key;
+	guint64 st_value = -1;
+
+    gchar **components;
+    gchar **cur;
+	gchar *end;
+	components = g_strsplit(buf, ",", 0);
+	if (!components){
+		return false;
+	}
+
+	for (cur = components; *cur != NULL; cur++) {
+		gchar **each_stinfo= g_strsplit(*cur, ":", 0);
+		if ((*each_stinfo == NULL) || (*(each_stinfo+1) == NULL)){
+			return false;
+		}
+		st_key = *(each_stinfo+0);
+		st_value = g_ascii_strtoull(*(each_stinfo+1), &end, 10);
+		if (*(each_stinfo+1) == end) {
+			// string conversion failed
+			return false;
+		}
+		if (strcmp(st_key, "atime") == 0){
+			stbuf->st_atime = st_value;
+		} else if (strcmp(st_key, "ctime") == 0){
+			stbuf->st_ctime = st_value;
+		} else if (strcmp(st_key, "mtime") == 0){
+			stbuf->st_mtime = st_value;
+		} else if (strcmp(st_key, "mode") == 0){
+			stbuf->st_mode = st_value;
+		} else if (strcmp(st_key, "gid") == 0){
+			stbuf->st_gid = st_value;
+		} else if (strcmp(st_key, "uid") == 0){
+			stbuf->st_uid = st_value;
+		} else if (strcmp(st_key, "nlink") == 0){
+			stbuf->st_nlink= st_value;
+		} else if (strcmp(st_key, "size") == 0){
+			stbuf->st_size = st_value;
+		} else if (strcmp(st_key, "exists") == 0){
+			*is_local = st_value;
+		} else {
+			return false;
+		}
+		g_strfreev(each_stinfo);
+	}
+    g_strfreev(components);
+    return true;
+}
+
 /* FUSE operation */
+extern const char *URL_ROOT;
+
 static int do_getattr(const char *path, struct stat *stbuf)
 {
 	int res = 0;
-	memset(stbuf, 0, sizeof(struct stat));
-	DPRINTF("getattr : %s",  path);
-	if(strcmp(path, "/") == 0) {
-		stbuf->st_mode = S_IFDIR | 0755;
-		stbuf->st_nlink = 2;
-	} else {
-		stbuf->st_mode = S_IFREG | 0444;
-		stbuf->st_nlink = 1;
-		stbuf->st_size = strlen(hello_str);
-		/*
-		if (_redis_get_attr(path, stbuf)){
-			stbuf->st_mode = S_IFREG | 0444;
-			stbuf->st_nlink = 1;
-			stbuf->st_size = strlen(hello_str);
-		}else{
-			res = -ENOENT;
-		}
-		*/
+	char *ret_buf = NULL;
+	int url_root_len = strlen(URL_ROOT);
+	char *rel_path = (char*)malloc(strlen(path)+url_root_len+1);
+	rel_path[strlen(path)+url_root_len] = '\0';
+
+	if (strcmp(path, "/") == 0){
+		// remove '/'
+		memset(rel_path, '\0', strlen(path)+url_root_len+1);
+		memcpy(rel_path, URL_ROOT, url_root_len);
+	}else{
+		memcpy(rel_path, URL_ROOT, url_root_len);
+		memcpy(rel_path+url_root_len, path, strlen(path));
 	}
 
+	memset(stbuf, 0, sizeof(struct stat));
+	DPRINTF("request getattr : %s (%s)", path, rel_path);
+	if (_redis_get_attr(rel_path, &ret_buf) == EXIT_SUCCESS){
+		if (ret_buf != NULL){
+			DPRINTF("ret getattr : %s --> %s", rel_path, ret_buf);
+			bool is_local = false;
+			// parse result
+			parse_stinfo(ret_buf, &is_local, stbuf);
+			free(ret_buf);
+			if (!is_local){
+				// Need to fetch
+				// TO BE IMPLEMENTED
+			}
+		} else{
+			res == -ENOENT;
+		}
+	}else{
+		res = -ENOENT;
+	}
 	return res;
 }
 
 static int do_readdir(const char *path, void *buf, fuse_fill_dir_t filler,
 		off_t offset, struct fuse_file_info *fi)
 {
+	int i = 0;
 	(void) offset;
 	(void) fi;
 
-	if(strcmp(path, "/") != 0)
-		return -ENOENT;
+	int url_root_len = strlen(URL_ROOT);
+	char *rel_path = (char*)malloc(strlen(path)+url_root_len+1);
+	rel_path[strlen(path)+url_root_len] = '\0';
+	memcpy(rel_path, URL_ROOT, url_root_len);
+	memcpy(rel_path+url_root_len, path, strlen(path));
 
+    DPRINTF("readdir : %s", rel_path);
 	filler(buf, ".", NULL, 0);
 	filler(buf, "..", NULL, 0);
-	filler(buf, hello_path + 1, NULL, 0);
+
+    GSList *dirlist = NULL;
+    if(_redis_get_readdir(rel_path, &dirlist) == EXIT_SUCCESS){
+		for(i = 0; i < g_slist_length(dirlist); i++){
+			gpointer dirname = g_slist_nth_data(dirlist, i);
+			DPRINTF("readir : %s", (char *)dirname);
+			filler(buf, dirname, NULL, 0);
+		}
+	}else{
+    	DPRINTF("FAILED");
+    	return -ENOENT;
+	}
+	g_slist_free(dirlist);
 
 	return 0;
 }
@@ -139,6 +223,9 @@ void _cachefs_fuse_new(struct cachefs *fs, GError **err)
         //        "Could not create mountpoint: %s", strerror(errno));
         goto bad_dealloc;
     }
+
+    /* validate cache directory for a given URI */
+    fs->uri_root = g_strdup(URL_ROOT);
 
     /* Build FUSE command line */
     argv = g_ptr_array_new();
