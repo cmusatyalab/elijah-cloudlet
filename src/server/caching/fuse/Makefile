@@ -6,7 +6,7 @@ INC = `pkg-config glib-2.0 fuse --cflags`
 LIBS = -lpthread `pkg-config glib-2.0 fuse --libs` $(REDIS_LIB)
 CFLAGS = -g -std=gnu99 $(INC)
 
-OBJS = cloudlet_cachefs.o fuse.o redis.o
+OBJS = cloudlet_cachefs.o fuse.o redis.o io.o
 REDIS_OBJS = example.o
 
 TARGET = "cachefs"

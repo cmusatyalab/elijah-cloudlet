@@ -240,7 +240,7 @@ class CacheManager(threading.Thread):
                 conn.set(key, unicode(value))
                 # set file list
                 key = unicode(relpath_cache_root, "utf-8") + CacheManager.POST_FIX_LIST_DIR
-                #print "file : " + key + " --> " + each_file
+                print "file : " + key + " --> " + each_file
                 conn.rpush(key, unicode(each_file))
                 
             for each_dir in dirs:
@@ -257,7 +257,7 @@ class CacheManager(threading.Thread):
                 conn.set(key, unicode(value))
                 # set file list
                 key = unicode(relpath_cache_root, "utf-8") + CacheManager.POST_FIX_LIST_DIR
-                #print "dir : " + key + " --> " + each_dir
+                print "dir : " + key + " --> " + each_dir
                 conn.rpush(key, unicode(each_dir))
 
         return conn
@@ -352,10 +352,10 @@ class CacheManager(threading.Thread):
                     'st_size', 'st_uid'))
             value['exists'] = True
             self.redis.set(filepath, str(value))
+            print "update redis"
+            print "%s --> %s" % (filepath, value)
         else:
             pass
-        print "update redis"
-        print "%s --> %s" % (filepath, value)
 
 
 # Global
@@ -374,7 +374,7 @@ if __name__ == '__main__':
 
     compiled_list = Util.get_compiled_URIs(sys.argv[1])
     try:
-        cache_manager.launch_fuse(compiled_list)
         #cache_manager.fetch_compiled_URIs(compiled_list)
+        cache_manager.launch_fuse(compiled_list)
     except CachingError, e:
         print str(e)

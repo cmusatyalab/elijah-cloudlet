@@ -94,18 +94,17 @@ static bool parse_stinfo(const char *buf, bool *is_local, struct stat *stbuf)
     return true;
 }
 
-extern const char *URL_ROOT;
-static char* convert_to_relpath(const char* path)
+static char* convert_to_relpath(const char* url_root, const char* path)
 {
-	int url_root_len = strlen(URL_ROOT);
+	int url_root_len = strlen(url_root);
 	char *rel_path = (char*)malloc(strlen(path)+url_root_len+1);
 	rel_path[strlen(path)+url_root_len] = '\0';
 	if (strcmp(path, "/") == 0){
 		// remove '/'
 		memset(rel_path, '\0', strlen(path)+url_root_len+1);
-		memcpy(rel_path, URL_ROOT, url_root_len);
+		memcpy(rel_path, url_root, url_root_len);
 	}else{
-		memcpy(rel_path, URL_ROOT, url_root_len);
+		memcpy(rel_path, url_root, url_root_len);
 		memcpy(rel_path+url_root_len, path, strlen(path));
 	}
 
@@ -117,12 +116,13 @@ static char* convert_to_relpath(const char* path)
 
 static int do_getattr(const char *path, struct stat *stbuf)
 {
+    struct cachefs *fs= fuse_get_context()->private_data;
 	int res = 0;
 	char *ret_buf = NULL;
-	char* rel_path = convert_to_relpath(path);
+	char* rel_path = convert_to_relpath(fs->url_root, path);
 
 	memset(stbuf, 0, sizeof(struct stat));
-	DPRINTF("request getattr : %s (%s)", path, rel_path);
+	//DPRINTF("request getattr : %s (%s)", path, rel_path);
 	if (_redis_get_attr(rel_path, &ret_buf) != EXIT_SUCCESS){
 		return -ENOENT;
 	}
@@ -130,7 +130,7 @@ static int do_getattr(const char *path, struct stat *stbuf)
 		return -ENOENT;
 	}
 
-	DPRINTF("ret getattr : %s --> %s", rel_path, ret_buf);
+	//DPRINTF("ret getattr : %s --> %s", rel_path, ret_buf);
 	bool is_local = false;
 	if (!parse_stinfo(ret_buf, &is_local, stbuf)){
 		return -ENOENT;
@@ -141,17 +141,19 @@ static int do_getattr(const char *path, struct stat *stbuf)
 		return res;
 	}else{
 		// TODO:TO BE IMPLEMENTED
+		DPRINTF("TO BE IMPLEMENTED");
 	}
 }
 
 static int do_readdir(const char *path, void *buf, fuse_fill_dir_t filler,
 		off_t offset, struct fuse_file_info *fi)
 {
+    struct cachefs *fs= fuse_get_context()->private_data;
 	int i = 0;
 	(void) offset;
 	(void) fi;
 
-	char* rel_path = convert_to_relpath(path);
+	char* rel_path = convert_to_relpath(fs->url_root, path);
     DPRINTF("readdir : %s", rel_path);
 	filler(buf, ".", NULL, 0);
 	filler(buf, "..", NULL, 0);
@@ -176,8 +178,19 @@ static int do_readdir(const char *path, void *buf, fuse_fill_dir_t filler,
 
 static int do_open(const char *path, struct fuse_file_info *fi)
 {
-	if(strcmp(path, hello_path) != 0)
+    struct cachefs *fs= fuse_get_context()->private_data;
+	char* rel_path = convert_to_relpath(fs->url_root, path);
+	bool is_exists = false;
+
+	DPRINTF("open existance : %s (%s)", path, rel_path);
+	if (_redis_file_exists(rel_path, &is_exists) != EXIT_SUCCESS){
+		DPRINTF("[error] failed to check redis for open %s", rel_path);
 		return -ENOENT;
+	}
+	if (is_exists == false){
+		DPRINTF("[error] %s does not exists at redis", rel_path);
+		return -ENOENT;
+	}
 
 	if((fi->flags & 3) != O_RDONLY)
 		return -EACCES;
@@ -188,20 +201,66 @@ static int do_open(const char *path, struct fuse_file_info *fi)
 static int do_read(const char *path, char *buf, size_t size, off_t offset,
 		struct fuse_file_info *fi)
 {
-	size_t len;
-	(void) fi;
-	if(strcmp(path, hello_path) != 0)
+    struct cachefs *fs= fuse_get_context()->private_data;
+	char* rel_path = convert_to_relpath(fs->url_root, path);
+    struct stat stbuf;
+    uint64_t end = 0;
+	int res = 0;
+	char *ret_buf = NULL;
+
+	memset(&stbuf, 0, sizeof(struct stat));
+	DPRINTF("file existance : %s (%s)", path, rel_path);
+	bool is_exists = false;
+	if (_redis_file_exists(rel_path, &is_exists) != EXIT_SUCCESS){
+		DPRINTF("[error] failed to check redis %s", rel_path);
 		return -ENOENT;
+	}
+	if (is_exists == false){
+		DPRINTF("[error] %s does not exists at redis", rel_path);
+		return -ENOENT;
+	}
+	if (_redis_get_attr(rel_path, &ret_buf) != EXIT_SUCCESS){
+		DPRINTF("[error] attribute does not exists : %s ", rel_path);
+		return -ENOENT;
+	}
+	if (ret_buf == NULL){
+		DPRINTF("[error] redis returned attribute is null for %s ", rel_path);
+		return -ENOENT;
+	}
 
-	len = strlen(hello_str);
-	if (offset < len) {
-		if (offset + size > len)
-			size = len - offset;
-		memcpy(buf, hello_str + offset, size);
-	} else
-		size = 0;
+	// check file is at local
+	bool is_local = false;
+	if (!parse_stinfo(ret_buf, &is_local, &stbuf)){
+		DPRINTF("[error] cannot parser stinfor for %s ", ret_buf);
+		return -ENOENT;
+	}
 
-	return size;
+	// check request validity
+    if (offset > stbuf.st_size)
+        return 0;
+    if (offset + size > stbuf.st_size)
+        size = stbuf.st_size - offset;
+
+	free(ret_buf);
+	if (is_local){ // cached 
+		// get absolute path for the file
+		const char* cache_root = fs->cache_root;
+		char *abspath = g_strdup_printf("%s/%s", cache_root, rel_path);
+		DPRINTF("abs path to read : %s", abspath);
+
+		if (_cachefs_safe_pread(abspath, buf, size, offset) == true){
+			g_free(abspath);
+			return size;
+		} else{
+			g_free(abspath);
+			DPRINTF("cannot read from file %s", abspath);
+			return -EINVAL;
+		}
+	}else{
+		// TODO: TO BE IMPLEMENTED
+		DPRINTF("TO BE IMPLEMENTED");
+		return -EINVAL;
+	}
 }
 
 static const struct fuse_operations fuse_ops = {
@@ -229,9 +288,6 @@ void _cachefs_fuse_new(struct cachefs *fs, GError **err)
         goto bad_dealloc;
     }
 
-    /* validate cache directory for a given URI */
-    fs->uri_root = g_strdup(URL_ROOT);
-
     /* Build FUSE command line */
     argv = g_ptr_array_new();
     g_ptr_array_add(argv, g_strdup("-odefault_permissions"));
@@ -256,7 +312,7 @@ void _cachefs_fuse_new(struct cachefs *fs, GError **err)
         //g_strfreev(args.argv);
         goto bad_rmdir;
     }
-    fs->fuse = fuse_new(fs->chan, &args, &fuse_ops, sizeof(fuse_ops), NULL);
+    fs->fuse = fuse_new(fs->chan, &args, &fuse_ops, sizeof(fuse_ops), fs);
     g_strfreev(args.argv);
     if (fs->fuse == NULL) {
         //g_set_error(err, VMNETFS_FUSE_ERROR, VMNETFS_FUSE_ERROR_FAILED,

@@ -43,6 +43,7 @@
 // TODO: get it using argument
 const char *REDIS_IP = "localhost";
 const int REDIS_PORT = 6379;
+const char *CACHE_ROOT = "/tmp/cloudlet_cache";
 const char *URL_ROOT = "localhost";
 
 static bool handle_stdin(struct cachefs *fs, const char *oneline, GError **err)
@@ -128,10 +129,16 @@ static void fuse_main()
     GError *err = NULL;
 
     /* Initialize */
+    fs = g_slice_new0(struct cachefs);
+    fs->redis_ip = g_strdup("localhost");
+    fs->redis_port = 6379;
+    fs->cache_root = g_strdup("/tmp/cloudlet_cache");
+    fs->url_root = g_strdup("localhost");
+
     if (!g_thread_supported()) {
         g_thread_init(NULL);
     }
-    if (!_redis_init(REDIS_IP, REDIS_PORT)){
+    if (!_redis_init(fs->redis_ip, fs->redis_port)){
     	fprintf(stdout, "Cannot connect to redis\n");
     	return;
 	}
@@ -141,7 +148,6 @@ static void fuse_main()
     //chan_out = g_io_channel_unix_new(1);
 
     /* Set up fuse */
-    fs = g_slice_new0(struct cachefs);
     _cachefs_fuse_new(fs, &err);
     if (err) {
         fprintf(stdout, "%s\n", err->message);

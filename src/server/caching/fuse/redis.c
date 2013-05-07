@@ -20,8 +20,9 @@
 #include "hiredis.h"
 #include "cachefs-private.h"
 
-#define REDIS_GET_ATTRIBUTE "GET %s\u03b1"
-#define REDIS_GET_LIST_DIR "LRANGE %s\u03b2 0 -1"
+#define REDIS_GET_ATTRIBUTE		"GET %s\u03b1"
+#define REDIS_GET_LIST_DIR		"LRANGE %s\u03b2 0 -1"
+#define REDIS_KEY_EXISTS		"EXISTS %s\u03b1"
 
 
 #define DEBUG_REDIS
@@ -116,6 +117,22 @@ void _redis_close()
     }
 }
 
+int _redis_file_exists(const char *path, bool *is_exists)
+{
+	if (!check_connection())
+		return EXIT_FAILURE;
+    redisReply* reply;
+    reply = redisCommand(handle->conn, REDIS_KEY_EXISTS, path);
+    if (reply->type == REDIS_REPLY_INTEGER){
+    	if (reply->integer == 1){
+    		*is_exists = true;
+    	}else{
+    		*is_exists = false;
+		}
+    }
+    return check_redis_return(handle, reply);
+}
+
 int _redis_get_attr(const char* path, char** ret_buf)
 { 
 	if (!check_connection())
@@ -151,7 +168,7 @@ int _redis_get_readdir(const char* path, GSList **ret_list)
         	*ret_list = g_slist_append(*ret_list, tmp);
         }
     }else{
-    	fprintf(stderr, "no return\n");
+    	//fprintf(stderr, "no return\n");
 	}
     return check_redis_return(handle, reply);
 }

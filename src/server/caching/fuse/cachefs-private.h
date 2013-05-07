@@ -30,6 +30,12 @@ struct cachefs {
     char *uri_root;
     struct fuse *fuse;
     struct fuse_chan *chan;
+
+    // const variables
+    char *redis_ip;
+    int redis_port;
+    char *cache_root;
+    char *url_root;
 };
 
 //struct vmnetfs_image {
@@ -129,23 +135,16 @@ void _cachefs_fuse_run();
 void _cachefs_fuse_terminate();
 void _cachefs_fuse_free();
 
+/* io */
+bool _cachefs_safe_pread(const char *file, void *buf, uint64_t count, uint64_t offset);
+bool _cachefs_safe_pwrite(const char *file, const void *buf, uint64_t count, uint64_t offset);
+
 /* redis */
 bool _redis_init(const char *address, int port);
 void _redis_close();
+int _redis_file_exists(const char *path, bool *is_exists);
 int _redis_get_attr(const char* path, char** ret_buf);
 int _redis_get_readdir(const char* path, GSList **ret_list);
 
-
-//struct vmnetfs_fuse_dentry *_vmnetfs_fuse_add_dir(
-//        struct vmnetfs_fuse_dentry *parent, const char *name);
-//void _vmnetfs_fuse_add_file(struct vmnetfs_fuse_dentry *parent,
-//        const char *name, const struct vmnetfs_fuse_ops *ops, void *ctx);
-//void _vmnetfs_fuse_image_populate(struct vmnetfs_fuse_dentry *dir,
-//        struct vmnetfs_image *img);
-//void _vmnetfs_fuse_stats_populate(struct vmnetfs_fuse_dentry *dir,
-//        struct vmnetfs_image *img);
-//void _vmnetfs_fuse_stream_populate(struct vmnetfs_fuse_dentry *dir,
-//        struct vmnetfs_image *img);
-//bool _vmnetfs_interrupted(void);
 
 #endif
