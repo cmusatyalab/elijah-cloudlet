@@ -1,7 +1,7 @@
 /*
  * cloudletcachefs - cloudlet cachcing emulation fs
  *
- * copyright (c) 2006-2012 carnegie mellon university
+ * copyright (c) 2011-2013 carnegie mellon university
  *
  * this program is free software; you can redistribute it and/or modify it
  * under the terms of version 2 of the gnu general public license as published
@@ -24,18 +24,6 @@
 #define REDIS_GET_LIST_DIR		"LRANGE %s\u03b2 0 -1"
 #define REDIS_KEY_EXISTS		"EXISTS %s\u03b1"
 
-
-#define DEBUG_REDIS
-#ifdef DEBUG_REDIS
-#define DPRINTF(fmt, ...) \
-    do { \
-    	fprintf(stdout, "[DEBUG][redis] " fmt, ## __VA_ARGS__); \
-    	fprintf(stdout, "\n"); fflush(stdout); \
-    } while (0) 
-#else
-#define DPRINTF(fmt, ...) \
-    do { } while (0)
-#endif
 
 /* Internal structure to encapsulate REDIS connection */
 struct redis_handler
@@ -140,7 +128,7 @@ int _redis_get_attr(const char* path, char** ret_buf)
 
     redisReply* reply;
     reply = redisCommand(handle->conn, REDIS_GET_ATTRIBUTE, path);
-    //DPRINTF(REDIS_GET_ATTRIBUTE, path);
+    //_cachefs_write_debug(REDIS_GET_ATTRIBUTE, path);
     if (reply->type == REDIS_REPLY_STRING && reply->len > 0){
         *ret_buf = (char *)malloc(sizeof(char)*(reply->len));
         memcpy(*ret_buf, reply->str, reply->len);
@@ -159,7 +147,7 @@ int _redis_get_readdir(const char* path, GSList **ret_list)
     redisReply* reply;
 	int i = 0;
     reply = redisCommand(handle->conn, REDIS_GET_LIST_DIR, path);
-    DPRINTF(REDIS_GET_LIST_DIR, path);
+    _cachefs_write_debug(REDIS_GET_LIST_DIR, path);
     if (reply->type == REDIS_REPLY_ARRAY) {
         for (i = 0; i < reply->elements; i++) {
         	char *tmp = (char *)malloc(sizeof(char)*(reply->element[i]->len)+1);

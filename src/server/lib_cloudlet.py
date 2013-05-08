@@ -45,7 +45,7 @@ from time import sleep
 import threading
 from optparse import OptionParser
 from multiprocessing import Pipe
-from caching import CloudletCache as cache
+#from caching import CloudletCache as cache
 
 from tool import comp_lzma
 from tool import diff_files
@@ -121,6 +121,9 @@ class VM_Overlay(threading.Thread):
                 msg += "You can change samba path at Configuration.py\n"
                 raise CloudletGenerationError(msg)
             # fetch URI to cache
+            sys.stderr.write("Work in progress\n")
+            sys.exit(1)
+            '''
             try:
                 compiled_list = cache.Util.get_compiled_URIs( \
                         self.options.DATA_SOURCE_URI)
@@ -135,6 +138,7 @@ class VM_Overlay(threading.Thread):
                 os.unlink(symlink_dir)
             os.symlink(fetch_root, symlink_dir)
             Log.write("[INFO] create symbolic link to %s\n" % symlink_dir)
+            '''
 
         # make FUSE disk & memory
         fuse = run_fuse(Const.VMNETFS_PATH, Const.CHUNK_SIZE,

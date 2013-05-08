@@ -16,49 +16,66 @@
 #
 
 import os
+import stat
 import sys
 import threading 
 import requests
 import redis
 from BeautifulSoup import BeautifulSoup
 from Queue import Queue, Empty
-from operator import itemgetter
+from CacheFuse import CacheFS
+from CacheFuse import CacheFuseError
+import dateutil.parser
+import time
 
 
 # URL fetching thread
 # python has multitheading issue
-FETCHING_THREAD_NUM = 2
+FETCHING_THREAD_NUM = 1
 
 class CachingError(Exception):
     pass
 
-
-class _URIInfo(object):
+class URIItem(object):
     URI             = "uri"
     NAME            = "cache_filename"
     SIZE            = "size"
     MODIFIED_TIME   = "mtime"
     IS_DIR          = "is_dir"
+    IS_CACHED       = "is_cached"
 
-    def __init__(self, uri, cache_filename, filesize, modified_time, is_directory):
-        setattr(self, _URIInfo.URI, uri)
-        setattr(self, _URIInfo.NAME, cache_filename)
-        setattr(self, _URIInfo.SIZE, filesize)
-        setattr(self, _URIInfo.MODIFIED_TIME, modified_time)
-        setattr(self, _URIInfo.IS_DIR, is_directory)
+    def __init__(self, uri, cache_filename, filesize, modified_time, 
+            is_directory, is_cached):
+        setattr(self, URIItem.URI, str(uri))
+        setattr(self, URIItem.NAME, str(cache_filename))
+
+        date_time = dateutil.parser.parse(modified_time)
+        unix_time = time.mktime(date_time.timetuple())
+        setattr(self, URIItem.MODIFIED_TIME, long(unix_time))
+        setattr(self, URIItem.IS_DIR, bool(is_directory))
+        setattr(self, URIItem.IS_CACHED, bool(is_cached))
+        if is_directory == True:
+            setattr(self, URIItem.SIZE, 4096) # page size
+        else:
+            setattr(self, URIItem.SIZE, filesize)
+        self.child_list = list()
 
     def get_uri(self):
-        return self.__dict__.get(_URIInfo.URI, None)
+        return self.__dict__.get(URIItem.URI, None)
 
-    def get_nlink(self):
-        return 1
+    def get_childlist(self):
+        return self.child_list
+
+    def append_child(self, child_uriinfo):
+        if type(child_uriinfo) != URIItem:
+            raise CachingError("Need URIItem object")
+        self.child_list.append(child_uriinfo)
 
     def __getitem__(self, item):
         return self.__dict__[item]
 
     def __repr__(self):
-        import pprint
-        return pprint.pformat(self.__dict__)
+        return "name: %s, children: %d" % (getattr(self, URIItem.NAME), len(self.child_list))
 
 
 class _URIParser(threading.Thread):
@@ -69,7 +86,7 @@ class _URIParser(threading.Thread):
         self.visited_set = visited_set
         self.uri_queue = uri_queue
         self.cache_root = cache_root
-        self.is_fetch_data = fetch_data
+        self.is_fetch_data = bool(fetch_data)
         self.compiled_list = list()
         self.print_out = print_out
         if self.print_out == None:
@@ -92,7 +109,7 @@ class _URIParser(threading.Thread):
             try:
                 if is_first_time_access:
                     url = self.uri_queue.get(True, 1) # block for 1 second
-                    is_first_time_access = True
+                    is_first_time_access = False
                 else:
                     url = self.uri_queue.get_nowait()
                 header_ret = requests.head(url)
@@ -108,13 +125,11 @@ class _URIParser(threading.Thread):
             parse_ret = requests.utils.urlparse(url)
             url_path = parse_ret.path[1:] # remove "/"
             cache_filepath = os.path.join(self.cache_root, parse_ret.netloc, url_path)
+            if cache_filepath.endswith("/"):
+                cache_filepath = cache_filepath[0:-1]
+
             if self._is_file(header) == True:
-                # save information to compiled list
-                self.compiled_list.append(_URIInfo(url, cache_filepath, \
-                        header.get('content-length', None),
-                        header.get('last-modified', None),
-                        is_directory=False))
-                if self.is_fetch_data:
+                if self.is_fetch_data == True:
                     # save to disk
                     dirpath = os.path.dirname(cache_filepath)
                     if os.path.exists(dirpath) == False:
@@ -123,21 +138,26 @@ class _URIParser(threading.Thread):
                     if r.ok: 
                         diskfile = open(cache_filepath, "w+b")
                         #self.print_out.write("%s --> %s\n" % (url, cache_filepath))
-                        while True:
-                            raw_data = r.raw.read(1024*1024*5)
-                            if raw_data == None or len(raw_data) == 0:
-                                break
-                            diskfile.write(raw_data)
+                        diskfile.write(r.content)
                         diskfile.close()
-            else:
                 # save information to compiled list
-                self.compiled_list.append(_URIInfo(url, cache_filepath, \
+                self.compiled_list.append(URIItem(url, cache_filepath, \
                         header.get('content-length', None),
                         header.get('last-modified', None),
-                        is_directory=True))
-                if self.is_fetch_data != None:
+                        is_directory=False, is_cached=self.is_fetch_data))
+            else:
+                # save information to compiled list
+                modified_time = header.get('last-modified', None)
+                if modified_time == None:
+                    modified_time = header.get('date', None)
+                if self.is_fetch_data == True:
                     if os.path.exists(cache_filepath) == False:
                         os.makedirs(cache_filepath)
+
+                self.compiled_list.append(URIItem(url, cache_filepath, \
+                        header.get('content-length', None),
+                        modified_time,
+                        is_directory=True, is_cached=self.is_fetch_data))
 
             if self._is_file(header) == True:
                 # leaf node
@@ -190,9 +210,10 @@ class Util(object):
         if not Util.is_valid_uri(sourceURI, is_source_uri=True):
             msg = "Invalid URI: %s" % sourceURI
             raise CachingError(msg)
-        visited = set()
         uri_queue = Queue()
+        visited = set()
         uri_queue.put(sourceURI)
+        visited.add(sourceURI)
         thread_list = []
         for index in xrange(FETCHING_THREAD_NUM):
             parser = _URIParser(visited, uri_queue, \
@@ -213,16 +234,31 @@ class Util(object):
                 t.terminate()
                 t.join()
             sys.stderr.write("Keyboard Interrupt")
-
+        
         Util.organize_compiled_list(compiled_list)
         return compiled_list
 
     @staticmethod
     def organize_compiled_list(compiled_list):
-        """Construct file-system like tree structure
+        """Construct file-system like tree structure 
         """
-        compiled_list.sort(key=itemgetter(_URIInfo.NAME))
-        import pdb;pdb.set_trace()
+        directory_dict = dict()
+        for uri_info in compiled_list:
+            # contruct hash table of (key: pathname, value: uri)
+            if getattr(uri_info, URIItem.IS_DIR) == True:
+                if directory_dict.get(getattr(uri_info, URIItem.NAME), None) != None:
+                    msg = "Do not expect duplicated elemenet in compiled list"
+                    raise CachingError(msg)
+                directory_dict[getattr(uri_info, URIItem.NAME)] = uri_info
+
+        for uri_info in compiled_list:
+            pathname = getattr(uri_info, URIItem.NAME)
+            parentpath = os.path.dirname(pathname)
+            if parentpath.endswith('/'):
+                parentpath = parentpath[0:-1]
+            parent_uri_info = directory_dict.get(parentpath, None)
+            if parent_uri_info != None:
+                parent_uri_info.append_child(uri_info)
 
     @staticmethod
     def get_cache_score(compiledURI_list):
@@ -230,13 +266,13 @@ class Util(object):
         return cache_score
 
 
+# TODO: change thread to process
 class CacheManager(threading.Thread):
     POST_FIX_ATTRIBUTE  = u'\u03b1'
     POST_FIX_LIST_DIR   = u'\u03b2'
 
-    DEFAULT_GID = 1000
-    DEFAULT_UID = 1000
-    DEFAULT_MODE = 33204
+    DEFAULT_GID = 1000 #65534 : nogroup
+    DEFAULT_UID = 1000 #65534 : nobody
 
     def __init__(self, cache_dir, redis_addr, print_out=None):
         self.cache_dir = cache_dir
@@ -244,6 +280,44 @@ class CacheManager(threading.Thread):
         if self.print_out == None:
             self.print_out = open("/dev/null", "w+b")
         self.redis = self._init_redis(redis_addr)
+        self.fuse_queue_list = list()
+        self.stop = threading.Event()
+        threading.Thread.__init__(self, target=self.monitor_fuse_request)
+
+    def monitor_fuse_request(self):
+        while(not self.stop.wait(0.0001)):
+            for (fuse, queue) in self.fuse_queue_list:
+                relpath = None
+                try:
+                    relpath = queue.get_nowait()
+                except Empty:
+                    pass
+                if relpath == None:
+                    continue;
+                
+                # fetch data
+                cache_filepath = os.path.join(self.cache_dir, relpath)
+                fetch_uri = "http://%s" % relpath
+                ret = requests.get(fetch_uri, stream=True)
+                if ret.ok: 
+                    dirpath = os.path.dirname(cache_filepath)
+                    if os.path.exists(dirpath) == False:
+                        os.makedirs(dirpath)
+                    diskfile = open(cache_filepath, "w+b")
+                    diskfile.write(ret.content)
+                    diskfile.close()
+                else:
+                    raise CachingError("Cannot cache from %s to %s" % \
+                            fetch_uri, cache_filepath)
+
+                # update redis
+                relpath = os.path.relpath(cache_filepath, self.cache_dir)
+                key = unicode(relpath, "utf-8") + CacheManager.POST_FIX_ATTRIBUTE
+                value = self._get_file_attribute(cache_filepath)
+                self.redis.set(key, unicode(value))
+
+                # update fuse
+                fuse.fuse_write("fetch:%s" % relpath)
 
     def _init_redis(self, redis_addr):
         """Initialize redis connection and 
@@ -254,6 +328,7 @@ class CacheManager(threading.Thread):
             conn.flushall()
         except redis.exceptions.ConnectionError, e:
             raise CachingError("Failed to connect to Redis")
+        self.redis = conn
 
         for (root, dirs, files) in os.walk(self.cache_dir):
             relpath_cache_root = os.path.relpath(root, self.cache_dir)
@@ -263,10 +338,10 @@ class CacheManager(threading.Thread):
                 # set attribute
                 key = unicode(relpath, "utf-8") + CacheManager.POST_FIX_ATTRIBUTE
                 value = self._get_file_attribute(abspath)
-                conn.set(key, unicode(value))
+                self.redis.set(key, unicode(value))
                 # set file list
                 key = unicode(relpath_cache_root, "utf-8") + CacheManager.POST_FIX_LIST_DIR
-                conn.rpush(key, unicode(each_file))
+                self.redis.rpush(key, unicode(each_file))
                 #print "file : " + key + " --> " + each_file
                 
             for each_dir in dirs:
@@ -275,10 +350,10 @@ class CacheManager(threading.Thread):
                 # set attribute
                 key = unicode(relpath, "utf-8") + CacheManager.POST_FIX_ATTRIBUTE
                 value = self._get_file_attribute(abspath)
-                conn.set(key, unicode(value))
+                self.redis.set(key, unicode(value))
                 # set file list
                 key = unicode(relpath_cache_root, "utf-8") + CacheManager.POST_FIX_LIST_DIR
-                conn.rpush(key, unicode(each_dir))
+                self.redis.rpush(key, unicode(each_dir))
                 #print "dir : " + key + " --> " + each_dir
         return conn
 
@@ -299,25 +374,38 @@ class CacheManager(threading.Thread):
         for t in thread_list:
             t.join()
             compiled_list.extend(t.compiled_list) 
+
+        # update to REDIS since it saved to cache
+        self.update_cachedfile_info(compiled_list)
         Util.organize_compiled_list(compiled_list)
         return compiled_list
 
+    def update_cachedfile_info(self, compiled_list):
+        for each_item in  compield_list:
+            if type(each_item) != URIItem:
+                raise CachingError("Expect URIItem")
+            abspath = os.path.join(root, getattr(each_item, URIItem.NAME))
+            relpath = os.path.relpath(abspath, self.cache_dir)
+            # set attribute
+            key = unicode(relpath, "utf-8") + CacheManager.POST_FIX_ATTRIBUTE
+            value = self._get_file_attribute(abspath)
+            self.redis.set(key, unicode(value))
 
-    def fetch_compiled_URIs(self, URIInfo_list):
-        """ Warm cache from the URI list
+    def fetch_compiled_URIs(self, URIItem_list):
+        """ Fetch URIs and save is as cache
         Exception:
             CachingError if failed to fetching URI
         """
-        if URIInfo_list == None or len(URIInfo_list) == 0:
+        if URIItem_list == None or len(URIItem_list) == 0:
             raise CachingError("No element in URI list")
 
-        for each_info in URIInfo_list:
-            compiled_uri = getattr(each_info, _URIInfo.URI)
+        for each_info in URIItem_list:
+            compiled_uri = getattr(each_info, URIItem.URI)
             if not Util.is_valid_uri(compiled_uri):
                 raise CachingError("Invalid URI: %s" % compiled_uri)
 
-        for each_info in URIInfo_list:
-            uri = getattr(each_info, _URIInfo.URI)
+        for each_info in URIItem_list:
+            uri = getattr(each_info, URIItem.URI)
             parse_ret = requests.utils.urlparse(uri)
             fetch_root = os.path.join(self.cache_dir, parse_ret.netloc, ".")
             uri_path = parse_ret.path[1:] # remove "/" from path
@@ -326,41 +414,74 @@ class CacheManager(threading.Thread):
             if diskpath.endswith('/') == False and os.path.isdir(diskpath) == False:
                 dirpath = os.path.dirname(diskpath)
                 if os.path.exists(dirpath) == False:
+                    import pdb;pdb.set_trace()
                     os.makedirs(dirpath)
                 r = requests.get(uri, stream=True)
                 if r.ok: 
                     diskfile = open(diskpath, "w+b")
                     #self.print_out.write("%s --> %s\n" % (uri, diskpath))
-                    while True:
-                        raw_data = r.raw.read(1024*1024*5)
-                        if raw_data == None or len(raw_data) == 0:
-                            break
-                        diskfile.write(raw_data)
+                    diskfile.write(r.content)
                     diskfile.close()
             else: # directory
                 if os.path.exists(diskpath) == False:
+                    import pdb;pdb.set_trace()
                     os.makedirs(diskpath)
         return fetch_root
 
-    def launch_fuse(self, URIInfo_list):
+    def launch_fuse(self, URIItem_list):
         """ Construct FUSE directory structure at give Samba directory
         Return:
+            fuse object
+        Exception:
+            CachingError if element of input list is not URIItem
         """
-        for uri_info in URIInfo_list:
-            uri = getattr(uri_info, _URIInfo.URI)
-            parse_ret = requests.utils.urlparse(uri)
-            url_path = parse_ret.path[1:] # remove "/"
-            cache_filepath = os.path.join(parse_ret.netloc, url_path)
-            redis_ret = self.redis.get(cache_filepath + CacheManager.POST_FIX_ATTRIBUTE)
+
+        if len(URIItem_list) == 0 or (type(URIItem_list[0]) != URIItem):
+            raise CachingError("Expect list of URIItem")
+
+        for uri_info in URIItem_list:
+            cache_filepath = getattr(uri_info, URIItem.NAME)
+            abspath = os.path.abspath(cache_filepath)
+            relpath = os.path.relpath(abspath, self.cache_dir)
+            redis_ret = self.redis.get(unicode(relpath) + CacheManager.POST_FIX_ATTRIBUTE)
             if redis_ret != None:
                 # cached
                 # TODO: check expiration of the cache
                 pass
             else:
                 # not cached
-                import pdb;pdb.set_trace()
-                key = unicode(cache_filepath, "utf-8") + CacheManager.POST_FIX_ATTRIBUTE
+                # update attributes
+                key = unicode(relpath) + CacheManager.POST_FIX_ATTRIBUTE
                 value = self._get_default_attribute(uri_info)
+                self.redis.set(key, unicode(value))
+                # update directory information
+                child_list = uri_info.get_childlist()
+                for child_file in child_list:
+                    key = unicode(relpath) + CacheManager.POST_FIX_LIST_DIR
+                    value = os.path.basename(getattr(child_file, URIItem.NAME))
+                    #print "update : " + key + " --> " + value
+                    self.redis.rpush(key, unicode(value))
+
+        # launch FUSE
+        parse_ret = requests.utils.urlparse(getattr(URIItem_list[0], URIItem.URI))
+        url_root = parse_ret.netloc
+        if url_root.endswith("/") == True:
+            url_root = url_root[0:-1]
+        args = "%s %s %s %s" % \
+                (str(self.cache_dir), str(url_root), str(REDIS_ADDR[0]), str(REDIS_ADDR[1]))
+        request_queue = Queue()
+        fuse = CacheFS(CACHE_FUSE_BINPATH, args, request_queue, print_out=self.print_out)
+        try:
+            fuse.launch()
+            fuse.start()
+            self.add_fuse_request_queue(fuse, request_queue)
+            return fuse
+        except CacheFuseError, e:
+            raise CacheFuseError(str(e))
+
+    def add_fuse_request_queue(self, fuse, request_queue):
+        self.fuse_queue_list.append((fuse, request_queue))
+        pass
 
     def _get_file_attribute(self, filepath):
         st = os.lstat(filepath)
@@ -372,36 +493,60 @@ class CacheManager(threading.Thread):
         return value
 
     def _get_default_attribute(self, uri_info):
-        mtime = getattr(uri_info, _URIInfo.MODIFIED_TIME)
+        mtime = getattr(uri_info, URIItem.MODIFIED_TIME)
         atime = ctime = mtime
-        gid = DEFAULT_GID
-        uid = DEFAULT_UID
-        mode = DEFAULT_MODE
-        size = getattr(uri_info, _URIInfo.SIZE)
-        nlink = uri_info.get_nlink()
+        gid = CacheManager.DEFAULT_GID
+        uid = CacheManager.DEFAULT_UID
+        mode = stat.S_IRUSR | stat.S_IWUSR | stat.S_IRGRP | stat.S_IWGRP | stat.S_IROTH
+        if getattr(uri_info, URIItem.IS_DIR) == True:
+            mode |= stat.S_IFDIR
+        else:
+            mode |= stat.S_IFREG
+        size = getattr(uri_info, URIItem.SIZE)
+        nlink = len(uri_info.get_childlist())
 
         value = "exists:0,atime:%ld,ctime:%ld,mtime:%ld,gid:%ld,uid:%ld,mode:%ld,size:%ld,nlink:%ld" % \
-                (atime, ctime, mtime, gid, uid, mode, size, nlink)
+                (atime, ctime, mtime, long(gid), long(uid), 
+                        long(mode), long(size), long(nlink))
         return value
 
+    def terminate(self):
+        self.print_out.write("[INFO] CacheManager terminate\n")
+        self.stop.set()
 
 # Global
 REDIS_ADDR = ('localhost', 6379)
+CACHE_FUSE_BINPATH = "./fuse/cachefs"
 CACHE_ROOT = '/tmp/cloudlet_cache/'
-try:
-    cache_manager = CacheManager(CACHE_ROOT, REDIS_ADDR, print_out=sys.stdout)
-except CachingError, e:
-    sys.stderr.write(str(e) + "\n")
-    sys.exit(1)
 
 if __name__ == '__main__':
     if len(sys.argv) != 2:
         print "> $ prog [root_uri]"
         sys.exit(1)
 
+    try:
+        cache_manager = CacheManager(CACHE_ROOT, REDIS_ADDR, print_out=sys.stdout)
+        cache_manager.start()
+    except CachingError, e:
+        sys.stderr.write(str(e) + "\n")
+        sys.exit(1)
+
     compiled_list = Util.get_compiled_URIs(cache_manager.cache_dir, sys.argv[1])
     try:
-        cache_manager.launch_fuse(compiled_list)
         #cache_manager.fetch_compiled_URIs(compiled_list)
+        cache_fuse = cache_manager.launch_fuse(compiled_list)
+        print "mount : %s" % (cache_fuse.mountpoint)
+        while True:
+            time.sleep(100)
+
     except CachingError, e:
         print str(e)
+    except KeyboardInterrupt,e :
+        print "user exit"
+    finally:
+        if cache_fuse:
+            cache_fuse.terminate()
+            cache_fuse.join()
+        if cache_manager:
+            cache_manager.terminate()
+            cache_manager.join()

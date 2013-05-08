@@ -1,7 +1,7 @@
 /*
  * cloudletcacheFS - Cloudlet Cachcing emulation FS
  *
- * copyright (c) 2006-2012 carnegie mellon university
+ * copyright (c) 2011-2013 carnegie mellon university
  *
  * this program is free software; you can redistribute it and/or modify it
  * under the terms of version 2 of the gnu general public license as published
@@ -24,6 +24,80 @@
 #include <unistd.h>
 #include <errno.h>
 #include "cachefs-private.h"
+
+static GMutex *pipe_lock = NULL;
+
+bool _cachefs_init_pipe_communication()
+{
+	pipe_lock = g_mutex_new();
+	return true;
+}
+
+void _cachefs_close_pipe_communication()
+{
+	if (pipe_lock != NULL){
+		g_mutex_free(pipe_lock);
+	}
+}
+
+cachefs_cond* _cachefs_write_request(cachefs* fs, const char *format, ... )
+{
+	va_list arg;
+	int done;
+
+    g_mutex_lock(pipe_lock);
+
+	// create conditional variable
+	struct cachefs_cond* cond = NULL;
+	cond = g_hash_table_lookup(fs->file_locks, request_file);
+	if (cond == NULL){
+		cond = _cachefs_cond_new();
+		g_hash_table_insert(fs->file_locks, request_file, cond);
+
+		// only the first thread send a request
+		fprintf(stdout, "[request]");
+		va_start (arg, format);
+		done = vfprintf(stdout, format, arg);
+		va_end (arg);
+		fprintf(stdout, "\n");
+		fflush(stdout);
+	}
+	// add myself to the list
+    cond->threads = g_list_prepend(cond->threads, &pthread_self());
+
+    g_mutex_unlock(pipe_lock);
+    return cond;
+}
+
+void _cachefs_write_error(const char *format, ... )
+{
+	va_list arg;
+	int done;
+
+    g_mutex_lock(pipe_lock);
+	fprintf(stdout, "[error]");
+	va_start (arg, format);
+	done = vfprintf(stdout, format, arg);
+	va_end (arg);
+	fprintf(stdout, "\n");
+	fflush(stdout);
+    g_mutex_unlock(pipe_lock);
+}
+
+void _cachefs_write_debug(const char *format, ... )
+{
+	va_list arg;
+	int done;
+
+    g_mutex_lock(pipe_lock);
+	fprintf(stdout, "[debug]");
+	va_start (arg, format);
+	done = vfprintf(stdout, format, arg);
+	va_end (arg);
+	fprintf(stdout, "\n");
+	fflush(stdout);
+    g_mutex_unlock(pipe_lock);
+}
 
 bool _cachefs_safe_pread(const char *file, void *buf, uint64_t count, uint64_t offset)
 {

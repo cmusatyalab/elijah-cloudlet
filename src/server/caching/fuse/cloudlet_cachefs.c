@@ -1,7 +1,7 @@
 /*
  * cloudletcacheFS - Cloudlet Cachcing emulation FS
  *
- * copyright (c) 2006-2012 carnegie mellon university
+ * copyright (c) 2011-2013 carnegie mellon university
  *
  * this program is free software; you can redistribute it and/or modify it
  * under the terms of version 2 of the gnu general public license as published
@@ -28,23 +28,6 @@
 #include <errno.h>
 #include "cachefs-private.h"
 
-#define DEBUG_MAIN
-#ifdef DEBUG_MAIN
-#define DPRINTF(fmt, ...) \
-    do { \
-    	fprintf(stdout, "[DEBUG][main] " fmt, ## __VA_ARGS__); \
-    	fprintf(stdout, "\n"); fflush(stdout); \
-    } while (0) 
-#else
-#define DPRINTF(fmt, ...) \
-    do { } while (0)
-#endif
-
-// TODO: get it using argument
-const char *REDIS_IP = "localhost";
-const int REDIS_PORT = 6379;
-const char *CACHE_ROOT = "/tmp/cloudlet_cache";
-const char *URL_ROOT = "localhost";
 
 static bool handle_stdin(struct cachefs *fs, const char *oneline, GError **err)
 {
@@ -54,7 +37,36 @@ static bool handle_stdin(struct cachefs *fs, const char *oneline, GError **err)
 		fflush(stdout);
 		return false;
 	}
-	return true;
+
+    gchar **fetch_info = g_strsplit(*oneline, ":", 0);
+    if ((*fetch_info == NULL) || (*(fetch_info +1) == NULL)){
+        _cachefs_write_error("Wrong stdinput : %s", oneline);
+        return false;
+    }
+
+    // 1 for disk, 2 for memory
+    gchar *command = g_strdup(*fetch_info);
+    gchar *relpath = g_strdup(*(fetch_info+1));
+    if (strcmp(command, "fetch") == 0){
+        _cachefs_write_debug("retry with fetching data : %s", relpath);
+        return true;
+    } else{
+        _cachefs_write_error("Wrong command : %s, %s", command, relpath);
+        return false;
+    }
+}
+
+static bool parse_uint(const char *str, unsigned int *ret_int)
+{
+    char *endptr;
+    uint64_t ret;
+
+    ret = g_ascii_strtoull(str, &endptr, 10);
+    if (*str == 0 || *endptr != 0) {
+        return false;
+    }
+    *ret_int = (unsigned int)ret;
+    return true;
 }
 
 static gboolean read_stdin(GIOChannel *source,
@@ -85,8 +97,7 @@ static gboolean read_stdin(GIOChannel *source,
 
 		success_stdin = handle_stdin(fs, buf, &err);
         if (!success_stdin) {
-        	DPRINTF("FUSE TERMINATED: Invalid stdin format\n");
-        	break;
+        	_cachefs_write_error("[main] FUSE TERMINATED: Invalid stdin format\n");
 		}
         g_free(buf);
     }
@@ -119,9 +130,10 @@ static void *glib_loop_thread(void *data)
 }
 
 
-static void fuse_main()
+static bool fuse_main(int argc, char **argv)
 {
     struct cachefs *fs;
+    bool parse_ret = false;
     GThread *loop_thread = NULL;
     GIOChannel *chan_in;
     //GIOChannel *chan_out;
@@ -130,17 +142,27 @@ static void fuse_main()
 
     /* Initialize */
     fs = g_slice_new0(struct cachefs);
-    fs->redis_ip = g_strdup("localhost");
-    fs->redis_port = 6379;
-    fs->cache_root = g_strdup("/tmp/cloudlet_cache");
-    fs->url_root = g_strdup("localhost");
+    fs->cache_root = g_strdup(argv[1]);
+    fs->url_root = g_strdup(argv[2]);
+    fs->redis_ip = g_strdup(argv[3]);
+    parse_ret = parse_uint(argv[4], &(fs->redis_port));
+    if (parse_ret == false){
+    	_cachefs_write_error("[main] Invalid redis port number : %s, (%d)\n", \
+    			argv[4], fs->redis_port);
+        return EXIT_FAILURE;
+    }
+
+	if (_cachefs_init_pipe_communication() == false){
+    	_cachefs_write_error("[main] Invalid redis port number : %s\n", argv[4]);
+        return EXIT_FAILURE;
+	}
 
     if (!g_thread_supported()) {
         g_thread_init(NULL);
     }
     if (!_redis_init(fs->redis_ip, fs->redis_port)){
-    	fprintf(stdout, "Cannot connect to redis\n");
-    	return;
+    	_cachefs_write_error("[main] Cannot connect to redis\n");
+    	return EXIT_FAILURE;
 	}
 
     /* open io channel*/
@@ -173,31 +195,6 @@ static void fuse_main()
 
     /* Started successfully. */
     fprintf(stdout, "%s\n", fs->mountpoint);
-
-    /*
-    char *ret_buf = NULL;
-    if (_redis_get_attr("localhost/", &ret_buf) == EXIT_SUCCESS){
-		DPRINTF("%s", ret_buf);
-		// parse result
-		parse_stinfo(ret_buf);
-		free(ret_buf);
-	}else{
-    	DPRINTF("FAILED");
-	}
-
-    GSList *dirlist = NULL;
-    if(_redis_get_readdir("localhost/", &dirlist) == EXIT_SUCCESS){
-		int i = 0;
-		for(i = 0; i < g_slist_length(dirlist); i++){
-			gpointer dirname = g_slist_nth_data(dirlist, i);
-			DPRINTF("%s", (char *)dirname);
-		}
-		g_slist_free(dirlist);
-	}else{
-    	DPRINTF("FAILED");
-	}
-	*/
-
     fflush(stdout);
     _cachefs_fuse_run(fs);
 
@@ -213,6 +210,10 @@ out:
     _cachefs_fuse_free(fs);
     g_slice_free(struct cachefs, fs);
     g_io_channel_unref(chan_in);
+
+	_cachefs_write_debug("[main] gracefully closed");
+    _cachefs_close_pipe_communication();
+    return EXIT_SUCCESS;
 }
 
 static void setsignal(int signum, void (*handler)(int))
@@ -225,10 +226,19 @@ static void setsignal(int signum, void (*handler)(int))
     sigaction(signum, &sa, NULL);
 }
 
-
-int main(int argc G_GNUC_UNUSED, char **argv G_GNUC_UNUSED)
+void static print_usage(char **argv)
 {
+    fprintf(stdout, "$ prog [/path/to/cache_root] [url_root] [REDIS_IP] [REDIS_PORT]\n");
+    return;
+}
+
+int main(int argc, char **argv)
+{
+    if (argc != 5){
+        print_usage(argv);
+        return EXIT_FAILURE;
+    }
+
     setsignal(SIGINT, SIG_IGN);
-    fuse_main();
-    return 0;
+    return fuse_main(argc, argv);
 }

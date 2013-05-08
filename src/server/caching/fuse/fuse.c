@@ -1,7 +1,7 @@
 /*
  * cloudletcachefs - cloudlet cachcing emulation fs
  *
- * copyright (c) 2006-2012 carnegie mellon university
+ * copyright (c) 2011-2013 carnegie mellon university
  *
  * this program is free software; you can redistribute it and/or modify it
  * under the terms of version 2 of the gnu general public license as published
@@ -26,18 +26,6 @@
 #include <fuse.h>
 #include "cachefs-private.h"
 
-
-#define DEBUG_FUSE
-#ifdef DEBUG_FUSE
-#define DPRINTF(fmt, ...) \
-    do { \
-    	fprintf(stdout, "[DEBUG][fuse] " fmt, ## __VA_ARGS__); \
-    	fprintf(stdout, "\n"); fflush(stdout); \
-    } while (0) 
-#else
-#define DPRINTF(fmt, ...) \
-    do { } while (0)
-#endif
 
 static const char *hello_str = "Hello World!\n";
 static const char *hello_path = "/hello";
@@ -116,13 +104,14 @@ static char* convert_to_relpath(const char* url_root, const char* path)
 
 static int do_getattr(const char *path, struct stat *stbuf)
 {
-    struct cachefs *fs= fuse_get_context()->private_data;
+    struct cachefs *fs = fuse_get_context()->private_data;
 	int res = 0;
+	bool is_local = false;
 	char *ret_buf = NULL;
 	char* rel_path = convert_to_relpath(fs->url_root, path);
 
 	memset(stbuf, 0, sizeof(struct stat));
-	//DPRINTF("request getattr : %s (%s)", path, rel_path);
+	//_cachefs_write_debug("[fuse] request getattr : %s (%s)", path, rel_path);
 	if (_redis_get_attr(rel_path, &ret_buf) != EXIT_SUCCESS){
 		return -ENOENT;
 	}
@@ -130,31 +119,24 @@ static int do_getattr(const char *path, struct stat *stbuf)
 		return -ENOENT;
 	}
 
-	//DPRINTF("ret getattr : %s --> %s", rel_path, ret_buf);
-	bool is_local = false;
+	//_cachefs_write_debug("[fuse] ret getattr : %s --> %s", rel_path, ret_buf);
 	if (!parse_stinfo(ret_buf, &is_local, stbuf)){
 		return -ENOENT;
 	}
-
-	if (is_local){ // cached 
-		free(ret_buf);
-		return res;
-	}else{
-		// TODO:TO BE IMPLEMENTED
-		DPRINTF("TO BE IMPLEMENTED");
-	}
+	free(ret_buf);
+	return res;
 }
 
 static int do_readdir(const char *path, void *buf, fuse_fill_dir_t filler,
 		off_t offset, struct fuse_file_info *fi)
 {
-    struct cachefs *fs= fuse_get_context()->private_data;
+    struct cachefs *fs = fuse_get_context()->private_data;
 	int i = 0;
 	(void) offset;
 	(void) fi;
 
 	char* rel_path = convert_to_relpath(fs->url_root, path);
-    DPRINTF("readdir : %s", rel_path);
+    _cachefs_write_debug("[fuse] readdir : %s", rel_path);
 	filler(buf, ".", NULL, 0);
 	filler(buf, "..", NULL, 0);
 
@@ -162,12 +144,12 @@ static int do_readdir(const char *path, void *buf, fuse_fill_dir_t filler,
     if(_redis_get_readdir(rel_path, &dirlist) == EXIT_SUCCESS){
 		for(i = 0; i < g_slist_length(dirlist); i++){
 			gpointer dirname = g_slist_nth_data(dirlist, i);
-			DPRINTF("readir : %s", (char *)dirname);
+			_cachefs_write_debug("[fuse] readir : %s", (char *)dirname);
 			filler(buf, dirname, NULL, 0);
 		}
 		g_slist_free(dirlist);
 	}else{
-    	DPRINTF("FAILED");
+    	_cachefs_write_error("[fuse] failed to readdir for %s (%s)", path, rel_path);
     	free(rel_path);
     	return -ENOENT;
 	}
@@ -178,17 +160,17 @@ static int do_readdir(const char *path, void *buf, fuse_fill_dir_t filler,
 
 static int do_open(const char *path, struct fuse_file_info *fi)
 {
-    struct cachefs *fs= fuse_get_context()->private_data;
+    struct cachefs *fs = fuse_get_context()->private_data;
 	char* rel_path = convert_to_relpath(fs->url_root, path);
 	bool is_exists = false;
 
-	DPRINTF("open existance : %s (%s)", path, rel_path);
+	_cachefs_write_debug("[fuse] open existance : %s (%s)", path, rel_path);
 	if (_redis_file_exists(rel_path, &is_exists) != EXIT_SUCCESS){
-		DPRINTF("[error] failed to check redis for open %s", rel_path);
+		_cachefs_write_error("[fuse] failed to check redis for open %s", rel_path);
 		return -ENOENT;
 	}
 	if (is_exists == false){
-		DPRINTF("[error] %s does not exists at redis", rel_path);
+		_cachefs_write_error("[fuse] %s does not exists at redis", rel_path);
 		return -ENOENT;
 	}
 
@@ -201,7 +183,7 @@ static int do_open(const char *path, struct fuse_file_info *fi)
 static int do_read(const char *path, char *buf, size_t size, off_t offset,
 		struct fuse_file_info *fi)
 {
-    struct cachefs *fs= fuse_get_context()->private_data;
+    struct cachefs *fs = fuse_get_context()->private_data;
 	char* rel_path = convert_to_relpath(fs->url_root, path);
     struct stat stbuf;
     uint64_t end = 0;
@@ -209,29 +191,29 @@ static int do_read(const char *path, char *buf, size_t size, off_t offset,
 	char *ret_buf = NULL;
 
 	memset(&stbuf, 0, sizeof(struct stat));
-	DPRINTF("file existance : %s (%s)", path, rel_path);
+	_cachefs_write_debug("[fuse] file existance : %s (%s)", path, rel_path);
 	bool is_exists = false;
 	if (_redis_file_exists(rel_path, &is_exists) != EXIT_SUCCESS){
-		DPRINTF("[error] failed to check redis %s", rel_path);
+		_cachefs_write_error("[fuse] failed to check redis %s", rel_path);
 		return -ENOENT;
 	}
 	if (is_exists == false){
-		DPRINTF("[error] %s does not exists at redis", rel_path);
+		_cachefs_write_error("[fuse] %s does not exists at redis", rel_path);
 		return -ENOENT;
 	}
 	if (_redis_get_attr(rel_path, &ret_buf) != EXIT_SUCCESS){
-		DPRINTF("[error] attribute does not exists : %s ", rel_path);
+		_cachefs_write_error("[fuse] attribute does not exists : %s ", rel_path);
 		return -ENOENT;
 	}
 	if (ret_buf == NULL){
-		DPRINTF("[error] redis returned attribute is null for %s ", rel_path);
+		_cachefs_write_error("[fuse] redis returned attribute is null for %s ", rel_path);
 		return -ENOENT;
 	}
 
 	// check file is at local
 	bool is_local = false;
 	if (!parse_stinfo(ret_buf, &is_local, &stbuf)){
-		DPRINTF("[error] cannot parser stinfor for %s ", ret_buf);
+		_cachefs_write_error("[fuse] cannot parser stinfor for %s ", ret_buf);
 		return -ENOENT;
 	}
 
@@ -242,24 +224,43 @@ static int do_read(const char *path, char *buf, size_t size, off_t offset,
         size = stbuf.st_size - offset;
 
 	free(ret_buf);
+	char *abspath = g_strdup_printf("%s%s", fs->cache_root, rel_path);
 	if (is_local){ // cached 
 		// get absolute path for the file
-		const char* cache_root = fs->cache_root;
-		char *abspath = g_strdup_printf("%s/%s", cache_root, rel_path);
-		DPRINTF("abs path to read : %s", abspath);
+		_cachefs_write_debug("[fuse] abs path to read : %s", abspath);
 
 		if (_cachefs_safe_pread(abspath, buf, size, offset) == true){
 			g_free(abspath);
 			return size;
 		} else{
+			_cachefs_write_error("[fuse] cannot read from file %s", abspath);
 			g_free(abspath);
-			DPRINTF("cannot read from file %s", abspath);
 			return -EINVAL;
 		}
 	}else{
-		// TODO: TO BE IMPLEMENTED
-		DPRINTF("TO BE IMPLEMENTED");
-		return -EINVAL;
+		// request fetching data to CacheManager
+		gchar* request_filename = g_strdup_printf("%s%s", fs->uri_root, path);
+		struct cachefs_cond* cond = _cachefs_write_request("%s", request_filename);
+
+		// wait on conditional variable
+		g_mutex_lock(cond->lock);
+		is_local = false;
+		while(is_local == false){
+			g_cond_wait(cond->condition, cond->lock);
+			_redis_get_attr(rel_path, &ret_buf);
+			parse_stinfo(ret_buf, &is_local, &stbuf);
+		}
+		g_mutex_unlock(cond->lock);
+
+		// read file
+		if (_cachefs_safe_pread(abspath, buf, size, offset) == false){
+			_cachefs_write_error("[fuse] cannot read from file %s", abspath);
+			size = -EINVAL;
+		}
+
+		g_free(request_filename);
+		g_free(abspath);
+		return size;
 	}
 }
 
@@ -280,7 +281,7 @@ void _cachefs_fuse_new(struct cachefs *fs, GError **err)
     struct fuse_args args;
 
     /* Construct mountpoint */
-    fs->mountpoint = g_strdup("/var/tmp/cloudlet-cachefs-XXXXXX");
+    fs->mountpoint = g_strdup("/tmp/cachefs-XXXXXX");
     if (mkdtemp(fs->mountpoint) == NULL) {
         //g_set_error(err, VMNETFS_FUSE_ERROR,
         //        VMNETFS_FUSE_ERROR_BAD_MOUNTPOINT,
