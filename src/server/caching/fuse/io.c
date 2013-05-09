@@ -40,30 +40,22 @@ void _cachefs_close_pipe_communication()
 	}
 }
 
-cachefs_cond* _cachefs_write_request(cachefs* fs, const char *format, ... )
-{
-	va_list arg;
-	int done;
 
+struct cachefs_cond* _cachefs_write_request(struct cachefs *fs, char *request_path)
+{
     g_mutex_lock(pipe_lock);
 
 	// create conditional variable
 	struct cachefs_cond* cond = NULL;
-	cond = g_hash_table_lookup(fs->file_locks, request_file);
+	cond = g_hash_table_lookup(fs->file_locks, request_path);
 	if (cond == NULL){
 		cond = _cachefs_cond_new();
-		g_hash_table_insert(fs->file_locks, request_file, cond);
+		g_hash_table_insert(fs->file_locks, request_path, cond);
 
 		// only the first thread send a request
-		fprintf(stdout, "[request]");
-		va_start (arg, format);
-		done = vfprintf(stdout, format, arg);
-		va_end (arg);
-		fprintf(stdout, "\n");
+		fprintf(stdout, "[request] %s\n", request_path);
 		fflush(stdout);
 	}
-	// add myself to the list
-    cond->threads = g_list_prepend(cond->threads, &pthread_self());
 
     g_mutex_unlock(pipe_lock);
     return cond;

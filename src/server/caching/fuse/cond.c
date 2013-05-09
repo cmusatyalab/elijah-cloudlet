@@ -17,7 +17,7 @@
 
 #include <signal.h>
 #include <pthread.h>
-#include "vmnetfs-private.h"
+#include "cachefs-private.h"
 
 struct cachefs_cond *_cachefs_cond_new(void)
 {
@@ -30,16 +30,14 @@ struct cachefs_cond *_cachefs_cond_new(void)
 
 void _cachefs_cond_free(struct cachefs_cond *cond)
 {
-    g_assert(cond->waiting_threads == NULL);
     g_mutex_free(cond->lock);
     g_slice_free(struct cachefs_cond, cond);
 }
 
 void _cachefs_cond_broadcast(struct cachefs_cond *cond)
 {
-    int32_t max = -1;
-
     g_mutex_lock(cond->lock);
-    g_list_foreach(cond->waiting_threads, (GFunc) signal_cond, &max);
+    _cachefs_write_debug("broadcasting");
+    g_cond_broadcast(cond->condition);
     g_mutex_unlock(cond->lock);
 }

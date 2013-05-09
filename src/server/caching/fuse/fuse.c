@@ -82,18 +82,18 @@ static bool parse_stinfo(const char *buf, bool *is_local, struct stat *stbuf)
     return true;
 }
 
-static char* convert_to_relpath(const char* url_root, const char* path)
+static char* convert_to_relpath(const char* uri_root, const char* path)
 {
-	int url_root_len = strlen(url_root);
-	char *rel_path = (char*)malloc(strlen(path)+url_root_len+1);
-	rel_path[strlen(path)+url_root_len] = '\0';
+	int uri_root_len = strlen(uri_root);
+	char *rel_path = (char*)malloc(strlen(path)+uri_root_len+1);
+	rel_path[strlen(path)+uri_root_len] = '\0';
 	if (strcmp(path, "/") == 0){
 		// remove '/'
-		memset(rel_path, '\0', strlen(path)+url_root_len+1);
-		memcpy(rel_path, url_root, url_root_len);
+		memset(rel_path, '\0', strlen(path)+uri_root_len+1);
+		memcpy(rel_path, uri_root, uri_root_len);
 	}else{
-		memcpy(rel_path, url_root, url_root_len);
-		memcpy(rel_path+url_root_len, path, strlen(path));
+		memcpy(rel_path, uri_root, uri_root_len);
+		memcpy(rel_path+uri_root_len, path, strlen(path));
 	}
 
 	return rel_path;
@@ -108,7 +108,7 @@ static int do_getattr(const char *path, struct stat *stbuf)
 	int res = 0;
 	bool is_local = false;
 	char *ret_buf = NULL;
-	char* rel_path = convert_to_relpath(fs->url_root, path);
+	char* rel_path = convert_to_relpath(fs->uri_root, path);
 
 	memset(stbuf, 0, sizeof(struct stat));
 	//_cachefs_write_debug("[fuse] request getattr : %s (%s)", path, rel_path);
@@ -135,7 +135,7 @@ static int do_readdir(const char *path, void *buf, fuse_fill_dir_t filler,
 	(void) offset;
 	(void) fi;
 
-	char* rel_path = convert_to_relpath(fs->url_root, path);
+	char* rel_path = convert_to_relpath(fs->uri_root, path);
     _cachefs_write_debug("[fuse] readdir : %s", rel_path);
 	filler(buf, ".", NULL, 0);
 	filler(buf, "..", NULL, 0);
@@ -161,7 +161,7 @@ static int do_readdir(const char *path, void *buf, fuse_fill_dir_t filler,
 static int do_open(const char *path, struct fuse_file_info *fi)
 {
     struct cachefs *fs = fuse_get_context()->private_data;
-	char* rel_path = convert_to_relpath(fs->url_root, path);
+	char* rel_path = convert_to_relpath(fs->uri_root, path);
 	bool is_exists = false;
 
 	_cachefs_write_debug("[fuse] open existance : %s (%s)", path, rel_path);
@@ -184,7 +184,7 @@ static int do_read(const char *path, char *buf, size_t size, off_t offset,
 		struct fuse_file_info *fi)
 {
     struct cachefs *fs = fuse_get_context()->private_data;
-	char* rel_path = convert_to_relpath(fs->url_root, path);
+	char* rel_path = convert_to_relpath(fs->uri_root, path);
     struct stat stbuf;
     uint64_t end = 0;
 	int res = 0;
@@ -240,13 +240,15 @@ static int do_read(const char *path, char *buf, size_t size, off_t offset,
 	}else{
 		// request fetching data to CacheManager
 		gchar* request_filename = g_strdup_printf("%s%s", fs->uri_root, path);
-		struct cachefs_cond* cond = _cachefs_write_request("%s", request_filename);
+		struct cachefs_cond* cond = _cachefs_write_request(fs, request_filename);
 
 		// wait on conditional variable
 		g_mutex_lock(cond->lock);
 		is_local = false;
 		while(is_local == false){
+			_cachefs_write_debug("waiting for fetching %s", rel_path);
 			g_cond_wait(cond->condition, cond->lock);
+			_cachefs_write_debug("wake for read %s", rel_path);
 			_redis_get_attr(rel_path, &ret_buf);
 			parse_stinfo(ret_buf, &is_local, &stbuf);
 		}
@@ -279,6 +281,9 @@ void _cachefs_fuse_new(struct cachefs *fs, GError **err)
 	// TODO: clean-up error message
     GPtrArray *argv;
     struct fuse_args args;
+
+    /* create hash table for demand-fetching */
+    fs->file_locks = g_hash_table_new(g_str_hash, g_str_equal);
 
     /* Construct mountpoint */
     fs->mountpoint = g_strdup("/tmp/cachefs-XXXXXX");
@@ -355,6 +360,7 @@ void _cachefs_fuse_free(struct cachefs *fs)
     /* Normally the filesystem will already have been unmounted.  Try
        to make sure. */
     fuse_unmount(fs->mountpoint, fs->chan);
+    g_hash_table_destroy(fs->file_locks);
     fuse_destroy(fs->fuse);
     rmdir(fs->mountpoint);
     g_free(fs->mountpoint);

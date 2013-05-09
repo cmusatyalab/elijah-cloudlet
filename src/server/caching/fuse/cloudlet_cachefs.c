@@ -38,17 +38,22 @@ static bool handle_stdin(struct cachefs *fs, const char *oneline, GError **err)
 		return false;
 	}
 
-    gchar **fetch_info = g_strsplit(*oneline, ":", 0);
+    gchar **fetch_info = g_strsplit(oneline, ":", 0);
     if ((*fetch_info == NULL) || (*(fetch_info +1) == NULL)){
         _cachefs_write_error("Wrong stdinput : %s", oneline);
         return false;
     }
 
-    // 1 for disk, 2 for memory
     gchar *command = g_strdup(*fetch_info);
     gchar *relpath = g_strdup(*(fetch_info+1));
     if (strcmp(command, "fetch") == 0){
-        _cachefs_write_debug("retry with fetching data : %s", relpath);
+        _cachefs_write_debug("retry with fetching data : %s", relpath); 
+        struct cachefs_cond* cond = g_hash_table_lookup(fs->file_locks, relpath);
+        if (cond != NULL){
+        	_cachefs_cond_broadcast(cond);
+        	g_hash_table_remove(fs->file_locks, relpath);
+        	_cachefs_cond_free(cond);
+		}
         return true;
     } else{
         _cachefs_write_error("Wrong command : %s, %s", command, relpath);
@@ -143,7 +148,7 @@ static bool fuse_main(int argc, char **argv)
     /* Initialize */
     fs = g_slice_new0(struct cachefs);
     fs->cache_root = g_strdup(argv[1]);
-    fs->url_root = g_strdup(argv[2]);
+    fs->uri_root = g_strdup(argv[2]);
     fs->redis_ip = g_strdup(argv[3]);
     parse_ret = parse_uint(argv[4], &(fs->redis_port));
     if (parse_ret == false){
@@ -228,7 +233,7 @@ static void setsignal(int signum, void (*handler)(int))
 
 void static print_usage(char **argv)
 {
-    fprintf(stdout, "$ prog [/path/to/cache_root] [url_root] [REDIS_IP] [REDIS_PORT]\n");
+    fprintf(stdout, "$ prog [/path/to/cache_root] [uri_root] [REDIS_IP] [REDIS_PORT]\n");
     return;
 }
 
