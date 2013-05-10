@@ -115,4 +115,8 @@ class Synthesis_Const(object):
 
 
 class Discovery_Const(object):
-    HOST_SAMBA_DIR = "/var/samba/"
+    MODULE_DIR          = os.path.dirname(os.path.abspath(__file__))
+    CACHE_FUSE_BINPATH  = os.path.abspath(os.path.join(MODULE_DIR, "./caching/fuse/cachefs"))
+    HOST_SAMBA_DIR      = "/var/samba/"
+    CACHE_ROOT          = '/tmp/cloudlet_cache/'
+    REDIS_ADDR          = ('localhost', 6379)

@@ -29,9 +29,13 @@ class CacheFS(threading.Thread):
     PREFIX_DEBUG = "[debug]"
     PREFIX_ERROR = "[error]"
 
-    def __init__(self, bin_path, args, request_queue, print_out=None):
+    def __init__(self, bin_path, cache_root, url_root, redis_addr, request_queue, print_out=None):
+        self._running = True
         self.cachefs_bin = bin_path
-        self._args = args
+        self.cache_root = cache_root
+        self.url_root = url_root
+        self._args = "%s %s %s %s" % \
+                (str(self.cache_root), str(self.url_root), str(redis_addr[0]), str(redis_addr[1]))
         self.request_queue = request_queue
         self.print_out = print_out
         if self.print_out == None:
@@ -65,7 +69,6 @@ class CacheFS(threading.Thread):
 
     def fuse_read(self):
         while(not self.stop.wait(0.0001)):
-            self._running = True
             oneline = self.proc.stdout.readline()
             if len(oneline.strip()) <= 0:
                 continue
@@ -76,15 +79,15 @@ class CacheFS(threading.Thread):
                 #self.print_out.write(oneline)
                 pass
             elif oneline.startswith(CacheFS.PREFIX_ERROR) == True:
-                self.print_out.write(oneline)
+                self.print_out.write(oneline+"\n")
 
-        self._running = False
         if self.proc != None:
             return_code = self.proc.poll()
             if return_code == None:
-                self.proc.terminate()
+                self.proc.wait()
                 self.proc = None
         self.print_out.write("[INFO] close Fuse Exec thread\n")
+        self._running = False
 
     def fuse_write(self, data):
         self._pipe.write(data + "\n")

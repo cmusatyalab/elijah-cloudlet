@@ -32,15 +32,9 @@
 static bool handle_stdin(struct cachefs *fs, const char *oneline, GError **err)
 {
 	// check end signal
-	if (strcmp(oneline, "q") == 0){
-		fprintf(stdout, "[FUSE] Receive quit message\n");
-		fflush(stdout);
-		return false;
-	}
-
     gchar **fetch_info = g_strsplit(oneline, ":", 0);
     if ((*fetch_info == NULL) || (*(fetch_info +1) == NULL)){
-        _cachefs_write_error("[main] Wrong stdinput : %s", oneline);
+        _cachefs_write_debug("[main] Wrong stdinput : %s", oneline);
         return false;
     }
 

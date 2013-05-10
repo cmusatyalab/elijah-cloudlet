@@ -269,7 +269,6 @@ static const struct fuse_operations fuse_ops = {
 /* FUSE operation */
 void _cachefs_fuse_new(struct cachefs *fs, GError **err)
 {
-	// TODO: clean-up error message
     GPtrArray *argv;
     struct fuse_args args;
 
@@ -279,9 +278,7 @@ void _cachefs_fuse_new(struct cachefs *fs, GError **err)
     /* Construct mountpoint */
     fs->mountpoint = g_strdup("/tmp/cachefs-XXXXXX");
     if (mkdtemp(fs->mountpoint) == NULL) {
-        //g_set_error(err, VMNETFS_FUSE_ERROR,
-        //        VMNETFS_FUSE_ERROR_BAD_MOUNTPOINT,
-        //        "Could not create mountpoint: %s", strerror(errno));
+        _cachefs_write_error("[fuse] failed to create tmp directory");
         goto bad_dealloc;
     }
 
@@ -289,6 +286,7 @@ void _cachefs_fuse_new(struct cachefs *fs, GError **err)
     argv = g_ptr_array_new();
     g_ptr_array_add(argv, g_strdup("-odefault_permissions"));
 	//g_ptr_array_add(argv, g_strdup("-oallow_root"));
+	g_ptr_array_add(argv, g_strdup("-oallow_other"));
     g_ptr_array_add(argv, g_strdup_printf("-ofsname=cachefs#%d", getpid()));
     g_ptr_array_add(argv, g_strdup("-osubtype=cachefs"));
     g_ptr_array_add(argv, g_strdup("-obig_writes"));
@@ -304,16 +302,13 @@ void _cachefs_fuse_new(struct cachefs *fs, GError **err)
     /* Initialize FUSE */
     fs->chan = fuse_mount(fs->mountpoint, &args);
     if (fs->chan == NULL) {
-        //g_set_error(err, VMNETFS_FUSE_ERROR, VMNETFS_FUSE_ERROR_FAILED,
-        //        "Couldn't mount FUSE filesystem");
-        //g_strfreev(args.argv);
+        _cachefs_write_error("[fuse] failed to mount fuse");
         goto bad_rmdir;
     }
     fs->fuse = fuse_new(fs->chan, &args, &fuse_ops, sizeof(fuse_ops), fs);
     g_strfreev(args.argv);
     if (fs->fuse == NULL) {
-        //g_set_error(err, VMNETFS_FUSE_ERROR, VMNETFS_FUSE_ERROR_FAILED,
-        //        "Couldn't create FUSE filesystem");
+        _cachefs_write_error("[fuse] failed to create new fuse");
         goto bad_unmount;
     }
 

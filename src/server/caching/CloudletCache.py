@@ -210,6 +210,8 @@ class Util(object):
     def get_compiled_URIs(cache_root, sourceURI):
         """Return list of _UIRInfo
         """
+        if sourceURI.endswith("/") == False:
+                sourceURI += "/"
         if not Util.is_valid_uri(sourceURI, is_source_uri=True):
             msg = "Invalid URI: %s" % sourceURI
             raise CachingError(msg)
@@ -250,7 +252,8 @@ class Util(object):
             # contruct hash table of (key: pathname, value: uri)
             if getattr(uri_info, URIItem.IS_DIR) == True:
                 if directory_dict.get(getattr(uri_info, URIItem.NAME), None) != None:
-                    msg = "Do not expect duplicated elemenet in compiled list"
+                    msg = "Do not expect duplicated elemenet in compiled list : %s" % \
+                            (getattr(uri_info, URIItem.NAME))
                     raise CachingError(msg)
                 directory_dict[getattr(uri_info, URIItem.NAME)] = uri_info
 
@@ -277,19 +280,26 @@ class CacheManager(threading.Thread):
     DEFAULT_GID = 1000 #65534 : nogroup
     DEFAULT_UID = 1000 #65534 : nobody
 
-    def __init__(self, cache_dir, redis_addr, print_out=None):
+    def __init__(self, cache_dir, redis_addr, fuse_binpath, print_out=None):
         self.cache_dir = cache_dir
         self.print_out = print_out
+        self.fuse_binpath = fuse_binpath
         if self.print_out == None:
             self.print_out = open("/dev/null", "w+b")
         self.redis = self._init_redis(redis_addr)
+        self.redis_addr = redis_addr
         self.fuse_queue_list = list()
         self.stop = threading.Event()
         threading.Thread.__init__(self, target=self.monitor_fuse_request)
 
     def monitor_fuse_request(self):
         while(not self.stop.wait(0.0001)):
-            for (fuse, queue) in self.fuse_queue_list:
+            for fuse_item in self.fuse_queue_list:
+                (fuse, queue) = fuse_item
+                if fuse == None or fuse._running == False:
+                    self.print_out.write("[INFO] delete unused fuse")
+                    self.fuse_queue_list.remove(fuse_item)
+
                 relpath = None
                 try:
                     relpath = queue.get_nowait()
@@ -321,6 +331,12 @@ class CacheManager(threading.Thread):
 
                 # update fuse
                 fuse.fuse_write("fetch:%s" % relpath)
+
+        # terminate all fuse
+        for (fuse, queue) in self.fuse_queue_list:
+            if (fuse != None) and (fuse._running == True):
+                fuse.terminate()
+                fuse.join()
 
     def _init_redis(self, redis_addr):
         """Initialize redis connection and 
@@ -384,10 +400,10 @@ class CacheManager(threading.Thread):
         return compiled_list
 
     def update_cachedfile_info(self, compiled_list):
-        for each_item in  compield_list:
+        for each_item in compiled_list:
             if type(each_item) != URIItem:
                 raise CachingError("Expect URIItem")
-            abspath = os.path.join(root, getattr(each_item, URIItem.NAME))
+            abspath = os.path.join(self.cache_dir, getattr(each_item, URIItem.NAME))
             relpath = os.path.relpath(abspath, self.cache_dir)
             # set attribute
             key = unicode(relpath, "utf-8") + CacheManager.POST_FIX_ATTRIBUTE
@@ -421,12 +437,10 @@ class CacheManager(threading.Thread):
                 r = requests.get(uri, stream=True)
                 if r.ok: 
                     diskfile = open(diskpath, "w+b")
-                    #self.print_out.write("%s --> %s\n" % (uri, diskpath))
                     diskfile.write(r.content)
                     diskfile.close()
             else: # directory
                 if os.path.exists(diskpath) == False:
-                    import pdb;pdb.set_trace()
                     os.makedirs(diskpath)
         return fetch_root
 
@@ -469,10 +483,9 @@ class CacheManager(threading.Thread):
         url_root = parse_ret.netloc
         if url_root.endswith("/") == True:
             url_root = url_root[0:-1]
-        args = "%s %s %s %s" % \
-                (str(self.cache_dir), str(url_root), str(REDIS_ADDR[0]), str(REDIS_ADDR[1]))
         request_queue = Queue()
-        fuse = CacheFS(CACHE_FUSE_BINPATH, args, request_queue, print_out=self.print_out)
+        fuse = CacheFS(self.fuse_binpath, self.cache_dir, url_root, self.redis_addr,
+                request_queue, print_out=self.print_out)
         try:
             fuse.launch()
             fuse.start()
@@ -516,27 +529,29 @@ class CacheManager(threading.Thread):
         self.print_out.write("[INFO] CacheManager terminate\n")
         self.stop.set()
 
-# Global
-REDIS_ADDR = ('localhost', 6379)
-CACHE_FUSE_BINPATH = "./fuse/cachefs"
-CACHE_ROOT = '/tmp/cloudlet_cache/'
 
 if __name__ == '__main__':
+    import sys
+    sys.path.append("../../server");
+    from Configuration import Discovery_Const
+
     if len(sys.argv) != 2:
         print "> $ prog [root_uri]"
         sys.exit(1)
 
     try:
-        cache_manager = CacheManager(CACHE_ROOT, REDIS_ADDR, print_out=sys.stdout)
+        cache_manager = CacheManager(Discovery_Const.CACHE_ROOT, \
+                Discovery_Const.REDIS_ADDR, Discovery_Const.CACHE_FUSE_BINPATH,
+                print_out=sys.stdout)
         cache_manager.start()
     except CachingError, e:
         sys.stderr.write(str(e) + "\n")
         sys.exit(1)
 
-    compiled_list = Util.get_compiled_URIs(cache_manager.cache_dir, sys.argv[1])
-    #cache_manager.fetch_compiled_URIs(compiled_list)
     cache_fuse = None
     try:
+        #cache_manager.fetch_compiled_URIs(compiled_list)
+        compiled_list = Util.get_compiled_URIs(cache_manager.cache_dir, sys.argv[1])
         cache_fuse = cache_manager.launch_fuse(compiled_list)
         print "mount : %s" % (cache_fuse.mountpoint)
         while True:

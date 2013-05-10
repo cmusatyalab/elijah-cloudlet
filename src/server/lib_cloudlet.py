@@ -45,7 +45,7 @@ from time import sleep
 import threading
 from optparse import OptionParser
 from multiprocessing import Pipe
-#from caching import CloudletCache as cache
+from caching import CloudletCache as cache
 
 from tool import comp_lzma
 from tool import diff_files
@@ -113,6 +113,8 @@ class VM_Overlay(threading.Thread):
         qemu_logfile = NamedTemporaryFile(prefix="cloudlet-qemu-log-", delete=False)
 
         # option for data-intensive application
+        cache_manager = None
+        mount_point = None
         if self.options.DATA_SOURCE_URI != None:
             # check samba
             if os.path.exists(Discovery_Const.HOST_SAMBA_DIR) == False:
@@ -121,24 +123,26 @@ class VM_Overlay(threading.Thread):
                 msg += "You can change samba path at Configuration.py\n"
                 raise CloudletGenerationError(msg)
             # fetch URI to cache
-            sys.stderr.write("Work in progress\n")
-            sys.exit(1)
-            '''
             try:
+                cache_manager = cache.CacheManager(Discovery_Const.CACHE_ROOT, \
+                        Discovery_Const.REDIS_ADDR, Discovery_Const.CACHE_FUSE_BINPATH,
+                        print_out=sys.stdout)
+                cache_manager.start()
                 compiled_list = cache.Util.get_compiled_URIs( \
-                        self.options.DATA_SOURCE_URI)
-                fetch_root = cache.cache_manager.fetch_compiled_URIs(compiled_list)
+                        cache_manager.cache_dir, self.options.DATA_SOURCE_URI)
+                #cache_manager.fetch_compiled_URIs(compiled_list)
+                cache_fuse = cache_manager.launch_fuse(compiled_list)
+                Log.write("[INFO] cache fuse mount : %s, %s\n" % \
+                        (cache_fuse.url_root, cache_fuse.mountpoint))
             except cache.CachingError, e:
                 msg = "Cannot retrieve data from URI: %s" % str(e)
                 raise CloudletGenerationError(msg)
             # create symbolic link to samba dir
-            dirname = os.path.dirname(fetch_root).split("/")[-1]
-            symlink_dir = os.path.join(Discovery_Const.HOST_SAMBA_DIR, dirname)
-            if os.path.exists(symlink_dir) == True:
-                os.unlink(symlink_dir)
-            os.symlink(fetch_root, symlink_dir)
-            Log.write("[INFO] create symbolic link to %s\n" % symlink_dir)
-            '''
+            mount_point = os.path.join(Discovery_Const.HOST_SAMBA_DIR, cache_fuse.url_root)
+            if os.path.lexists(mount_point) == True:
+                os.unlink(mount_point)
+            os.symlink(cache_fuse.mountpoint, mount_point)
+            Log.write("[INFO] create symbolic link to %s\n" % mount_point)
 
         # make FUSE disk & memory
         fuse = run_fuse(Const.VMNETFS_PATH, Const.CHUNK_SIZE,
@@ -216,6 +220,12 @@ class VM_Overlay(threading.Thread):
         fuse_stream_monitor.join()
         qemu_monitor.join()
         fuse.join()
+        if cache_manager != None:
+            cache_manager.terminate()
+            cache_manager.join()
+        if mount_point != None and os.path.lexists(mount_point):
+            os.unlink(mount_point)
+
         if self.options.MEMORY_SAVE_PATH:
             Log.write("[INFO] moving memory sansphost to %s\n" % self.options.MEMORY_SAVE_PATH)
             shutil.move(modified_mem.name, self.options.MEMORY_SAVE_PATH)
