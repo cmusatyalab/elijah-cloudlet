@@ -1,5 +1,4 @@
-/*
- * cloudletcachefs - cloudlet cachcing emulation fs
+/* cloudletcachefs - cloudlet cachcing emulation fs
  *
  * copyright (c) 2011-2013 carnegie mellon university
  *
@@ -29,7 +28,9 @@
 struct redis_handler
 {
     redisContext* conn;
+    GMutex *lock;
 };
+
 struct redis_handler* handle = NULL;
 
 
@@ -38,7 +39,6 @@ bool static check_connection(){
 	if ((handle != NULL) && (handle->conn != NULL)){
 		return true;
 	}
-
 	return false;
 }
 
@@ -90,6 +90,7 @@ bool _redis_init(const char *address, int port)
 		freeReplyObject(reply);
 	}
 
+	handle->lock = g_mutex_new();
 	return true;
 }
 
@@ -101,6 +102,7 @@ void _redis_close()
         if (handle->conn) {
             redisFree(handle->conn);
         }
+        g_mutex_free(handle->lock);
         free(handle);
     }
 }
@@ -109,6 +111,8 @@ int _redis_file_exists(const char *path, bool *is_exists)
 {
 	if (!check_connection())
 		return EXIT_FAILURE;
+
+    g_mutex_lock(handle->lock);
     redisReply* reply;
     reply = redisCommand(handle->conn, REDIS_KEY_EXISTS, path);
     if (reply->type == REDIS_REPLY_INTEGER){
@@ -118,6 +122,7 @@ int _redis_file_exists(const char *path, bool *is_exists)
     		*is_exists = false;
 		}
     }
+    g_mutex_unlock(handle->lock);
     return check_redis_return(handle, reply);
 }
 
@@ -126,15 +131,17 @@ int _redis_get_attr(const char* path, char** ret_buf)
 	if (!check_connection())
 		return EXIT_FAILURE;
 
+    g_mutex_lock(handle->lock);
     redisReply* reply;
     reply = redisCommand(handle->conn, REDIS_GET_ATTRIBUTE, path);
     //_cachefs_write_debug(REDIS_GET_ATTRIBUTE, path);
     if (reply->type == REDIS_REPLY_STRING && reply->len > 0){
         *ret_buf = g_strndup(reply->str, reply->len);
     } else {
-        //fprintf(stderr, "reply->len = %d\n", reply->len);
+        //_cachefs_write_debug("[redis] cannot get attr from redis %s(%d)\n", path, reply->len);
     }
 
+    g_mutex_unlock(handle->lock);
     return check_redis_return(handle, reply);
 }
 
@@ -143,6 +150,7 @@ int _redis_get_readdir(const char* path, GSList **ret_list)
 	if (!check_connection())
 		return EXIT_FAILURE;
 
+    g_mutex_lock(handle->lock);
     redisReply* reply;
 	int i = 0;
 	gchar *attr_str;
@@ -156,5 +164,6 @@ int _redis_get_readdir(const char* path, GSList **ret_list)
     }else{
     	//fprintf(stderr, "no return\n");
 	}
+    g_mutex_unlock(handle->lock);
     return check_redis_return(handle, reply);
 }

@@ -189,16 +189,7 @@ static int do_read(const char *path, char *buf, size_t size, off_t offset,
 	char *ret_buf = NULL;
 
 	memset(&stbuf, 0, sizeof(struct stat));
-	_cachefs_write_debug("[fuse] file existance : %s (%s)", path, rel_path);
 	bool is_exists = false;
-	if (_redis_file_exists(rel_path, &is_exists) != EXIT_SUCCESS){
-		_cachefs_write_error("[fuse] failed to check redis %s", rel_path);
-		return -ENOENT;
-	}
-	if (is_exists == false){
-		_cachefs_write_error("[fuse] %s does not exists at redis", rel_path);
-		return -ENOENT;
-	}
 	if (_redis_get_attr(rel_path, &ret_buf) != EXIT_SUCCESS){
 		_cachefs_write_error("[fuse] attribute does not exists : %s ", rel_path);
 		return -ENOENT;
@@ -225,7 +216,6 @@ static int do_read(const char *path, char *buf, size_t size, off_t offset,
 	char *abspath = g_strdup_printf("%s%s", fs->cache_root, rel_path);
 	if (is_local){ // cached 
 		// get absolute path for the file
-		_cachefs_write_debug("[fuse] abs path to read : %s", abspath);
 		if (_cachefs_safe_pread(abspath, buf, size, offset) == true){
 			g_free(abspath);
 			return size;

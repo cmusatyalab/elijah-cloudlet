@@ -57,7 +57,7 @@ class URIItem(object):
         if is_directory == True:
             setattr(self, URIItem.SIZE, 4096) # page size
         else:
-            setattr(self, URIItem.SIZE, filesize)
+            setattr(self, URIItem.SIZE, long(filesize))
         self.child_list = list()
 
     def get_uri(self):
@@ -116,11 +116,14 @@ class _URIParser(threading.Thread):
                 if header_ret.ok == True:
                     header = header_ret.headers
                 else:
+                    self.print_out.write("[Error] header false(%s) : %s\n" % \
+                            (str(header_ret.reason), url))
                     continue
             except Empty:
                 break
             except UnicodeDecodeError:
                 continue
+
 
             parse_ret = requests.utils.urlparse(url)
             url_path = parse_ret.path[1:] # remove "/"
@@ -158,7 +161,7 @@ class _URIParser(threading.Thread):
                         header.get('content-length', None),
                         modified_time,
                         is_directory=True, is_cached=self.is_fetch_data))
-
+            
             if self._is_file(header) == True:
                 # leaf node
                 pass
@@ -303,10 +306,9 @@ class CacheManager(threading.Thread):
                     dirpath = os.path.dirname(cache_filepath)
                     if os.path.exists(dirpath) == False:
                         os.makedirs(dirpath)
-                    savefile_ds = os.open(cache_filepath, os.O_CREAT | os.O_TRUNC | os.O_RDWR)
-                    os.write(savefile_ds, ret.content)
-                    os.fsync(savefile_ds)
-                    os.close(savefile_ds)
+                    fd = open(cache_filepath, "w+b")
+                    fd.write(ret.content)
+                    fd.close()
                 else:
                     raise CachingError("Cannot cache from %s to %s" % \
                             fetch_uri, cache_filepath)
@@ -415,7 +417,6 @@ class CacheManager(threading.Thread):
             if diskpath.endswith('/') == False and os.path.isdir(diskpath) == False:
                 dirpath = os.path.dirname(diskpath)
                 if os.path.exists(dirpath) == False:
-                    import pdb;pdb.set_trace()
                     os.makedirs(dirpath)
                 r = requests.get(uri, stream=True)
                 if r.ok: 

@@ -67,7 +67,7 @@ void _cachefs_write_error(const char *format, ... )
 	int done;
 
     g_mutex_lock(pipe_lock);
-	fprintf(stdout, "[error]");
+	fprintf(stdout, "[error][%lu]", (unsigned long)pthread_self());
 	va_start (arg, format);
 	done = vfprintf(stdout, format, arg);
 	va_end (arg);
@@ -110,7 +110,7 @@ bool _cachefs_safe_pread(const char *file, void *buf, uint64_t count, uint64_t o
         return false;
     } else {
         g_file_error_from_errno(errno); 
-    	_cachefs_write_error("[io] Couldn't read %s: error %d", errno);
+    	_cachefs_write_error("[io] Couldn't read %s: error %d", file, errno);
         return false;
     }
 }
