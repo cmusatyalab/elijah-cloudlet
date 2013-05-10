@@ -130,8 +130,7 @@ int _redis_get_attr(const char* path, char** ret_buf)
     reply = redisCommand(handle->conn, REDIS_GET_ATTRIBUTE, path);
     //_cachefs_write_debug(REDIS_GET_ATTRIBUTE, path);
     if (reply->type == REDIS_REPLY_STRING && reply->len > 0){
-        *ret_buf = (char *)malloc(sizeof(char)*(reply->len));
-        memcpy(*ret_buf, reply->str, reply->len);
+        *ret_buf = g_strndup(reply->str, reply->len);
     } else {
         //fprintf(stderr, "reply->len = %d\n", reply->len);
     }
@@ -146,14 +145,13 @@ int _redis_get_readdir(const char* path, GSList **ret_list)
 
     redisReply* reply;
 	int i = 0;
+	gchar *attr_str;
     reply = redisCommand(handle->conn, REDIS_GET_LIST_DIR, path);
     _cachefs_write_debug(REDIS_GET_LIST_DIR, path);
     if (reply->type == REDIS_REPLY_ARRAY) {
         for (i = 0; i < reply->elements; i++) {
-        	char *tmp = (char *)malloc(sizeof(char)*(reply->element[i]->len)+1);
-        	tmp[reply->element[i]->len] = '\0';
-        	memcpy(tmp, reply->element[i]->str, reply->element[i]->len);
-        	*ret_list = g_slist_append(*ret_list, tmp);
+        	attr_str = g_strndup(reply->element[i]->str, reply->element[i]->len);
+        	*ret_list = g_slist_append(*ret_list, attr_str);
         }
     }else{
     	//fprintf(stderr, "no return\n");

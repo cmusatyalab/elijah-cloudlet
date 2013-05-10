@@ -79,6 +79,11 @@ class CacheFS(threading.Thread):
                 self.print_out.write(oneline)
 
         self._running = False
+        if self.proc != None:
+            return_code = self.proc.poll()
+            if return_code == None:
+                self.proc.terminate()
+                self.proc = None
         self.print_out.write("[INFO] close Fuse Exec thread\n")
 
     def fuse_write(self, data):
@@ -93,7 +98,7 @@ class CacheFS(threading.Thread):
         if self._pipe is not None:
             self.print_out.write("[INFO] Fuse close pipe\n")
             # mal-formatted string will shutdown fuse
-            #self.fuse_write("terminate")
+            self.fuse_write("terminate")
             self._pipe.close()
             self._pipe = None
 

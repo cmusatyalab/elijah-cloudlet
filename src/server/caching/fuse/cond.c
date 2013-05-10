@@ -25,19 +25,22 @@ struct cachefs_cond *_cachefs_cond_new(void)
 
     cond = g_slice_new0(struct cachefs_cond);
     cond->lock = g_mutex_new();
+    cond->condition = g_cond_new();
     return cond;
 }
 
 void _cachefs_cond_free(struct cachefs_cond *cond)
 {
     g_mutex_free(cond->lock);
+    g_cond_free(cond->condition);
     g_slice_free(struct cachefs_cond, cond);
 }
 
 void _cachefs_cond_broadcast(struct cachefs_cond *cond)
 {
     g_mutex_lock(cond->lock);
-    _cachefs_write_debug("broadcasting");
+    _cachefs_write_debug("[cond] before broadcasting %x", cond->condition);
     g_cond_broadcast(cond->condition);
+	//_cachefs_write_debug("[cond] after broadcasting %x", cond->condition);
     g_mutex_unlock(cond->lock);
 }

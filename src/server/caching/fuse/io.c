@@ -106,11 +106,11 @@ bool _cachefs_safe_pread(const char *file, void *buf, uint64_t count, uint64_t o
     if (count == 0) {
         return true;
     } else if (cur == 0) {
-        fprintf(stderr, "Couldn't read %s: Premature end of file", file);
+    	_cachefs_write_error("[io] Couldn't read %s: Premature end of file", file);
         return false;
     } else {
         g_file_error_from_errno(errno); 
-        fprintf(stderr, "Couldn't read %s: %s", file, strerror(errno));
+    	_cachefs_write_error("[io] Couldn't read %s: error %d", errno);
         return false;
     }
 }
@@ -128,7 +128,7 @@ bool _cachefs_safe_pwrite(const char *file, const void *buf, uint64_t count, uin
     close(fd);
     if (count > 0) {
         g_file_error_from_errno(errno); 
-    	fprintf(stderr, "Counln't write %s: %s", file, strerror(errno));
+    	_cachefs_write_error("[io] Couldn't write %s: Premature end of file", file);
         return false;
     }
     return true;

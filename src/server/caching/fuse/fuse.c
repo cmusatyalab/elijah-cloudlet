@@ -84,19 +84,14 @@ static bool parse_stinfo(const char *buf, bool *is_local, struct stat *stbuf)
 
 static char* convert_to_relpath(const char* uri_root, const char* path)
 {
-	int uri_root_len = strlen(uri_root);
-	char *rel_path = (char*)malloc(strlen(path)+uri_root_len+1);
-	rel_path[strlen(path)+uri_root_len] = '\0';
 	if (strcmp(path, "/") == 0){
 		// remove '/'
-		memset(rel_path, '\0', strlen(path)+uri_root_len+1);
-		memcpy(rel_path, uri_root, uri_root_len);
+		gchar* relpath = g_strdup_printf("%s", uri_root);
+		return relpath;
 	}else{
-		memcpy(rel_path, uri_root, uri_root_len);
-		memcpy(rel_path+uri_root_len, path, strlen(path));
+		gchar* relpath = g_strdup_printf("%s%s", uri_root, path);
+		return relpath;
 	}
-
-	return rel_path;
 }
 
 
@@ -174,9 +169,12 @@ static int do_open(const char *path, struct fuse_file_info *fi)
 		return -ENOENT;
 	}
 
-	if((fi->flags & 3) != O_RDONLY)
+	if((fi->flags & 3) != O_RDONLY){
+		_cachefs_write_error("[fuse] allow read only : %s ", rel_path);
 		return -EACCES;
+	}
 
+	_cachefs_write_debug("[fuse] open success : %s (%s)", path, rel_path);
 	return 0;
 }
 
@@ -228,7 +226,6 @@ static int do_read(const char *path, char *buf, size_t size, off_t offset,
 	if (is_local){ // cached 
 		// get absolute path for the file
 		_cachefs_write_debug("[fuse] abs path to read : %s", abspath);
-
 		if (_cachefs_safe_pread(abspath, buf, size, offset) == true){
 			g_free(abspath);
 			return size;
@@ -246,11 +243,15 @@ static int do_read(const char *path, char *buf, size_t size, off_t offset,
 		g_mutex_lock(cond->lock);
 		is_local = false;
 		while(is_local == false){
-			_cachefs_write_debug("waiting for fetching %s", rel_path);
+			_cachefs_write_debug("[fuse] waiting for fetching %s", rel_path);
 			g_cond_wait(cond->condition, cond->lock);
-			_cachefs_write_debug("wake for read %s", rel_path);
 			_redis_get_attr(rel_path, &ret_buf);
 			parse_stinfo(ret_buf, &is_local, &stbuf);
+			_cachefs_write_debug("[fuse] get updated attribute %s", ret_buf);
+		}
+		// data size can be changes after fetching, so verify that
+		if (stbuf.st_size < size){
+			size = stbuf.st_size;
 		}
 		g_mutex_unlock(cond->lock);
 
@@ -356,6 +357,15 @@ void _cachefs_fuse_free(struct cachefs *fs)
     if (fs->fuse == NULL) {
         return;
     }
+
+    /* free hash table */
+    GHashTableIter iter;
+	gpointer key, value;
+	g_hash_table_iter_init(&iter, fs->file_locks);
+	while (g_hash_table_iter_next (&iter, &key, &value)) {
+		g_hash_table_remove(fs->file_locks, (gchar* )key);
+		_cachefs_cond_free((struct cachefs_cond *)value);
+	}
 
     /* Normally the filesystem will already have been unmounted.  Try
        to make sure. */

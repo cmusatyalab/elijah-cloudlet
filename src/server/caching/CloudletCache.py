@@ -303,9 +303,10 @@ class CacheManager(threading.Thread):
                     dirpath = os.path.dirname(cache_filepath)
                     if os.path.exists(dirpath) == False:
                         os.makedirs(dirpath)
-                    diskfile = open(cache_filepath, "w+b")
-                    diskfile.write(ret.content)
-                    diskfile.close()
+                    savefile_ds = os.open(cache_filepath, os.O_CREAT | os.O_TRUNC | os.O_RDWR)
+                    os.write(savefile_ds, ret.content)
+                    os.fsync(savefile_ds)
+                    os.close(savefile_ds)
                 else:
                     raise CachingError("Cannot cache from %s to %s" % \
                             fetch_uri, cache_filepath)
@@ -532,13 +533,13 @@ if __name__ == '__main__':
         sys.exit(1)
 
     compiled_list = Util.get_compiled_URIs(cache_manager.cache_dir, sys.argv[1])
+    #cache_manager.fetch_compiled_URIs(compiled_list)
+    cache_fuse = None
     try:
-        #cache_manager.fetch_compiled_URIs(compiled_list)
         cache_fuse = cache_manager.launch_fuse(compiled_list)
         print "mount : %s" % (cache_fuse.mountpoint)
         while True:
             time.sleep(100)
-
     except CachingError, e:
         print str(e)
     except KeyboardInterrupt,e :

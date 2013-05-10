@@ -40,23 +40,24 @@ static bool handle_stdin(struct cachefs *fs, const char *oneline, GError **err)
 
     gchar **fetch_info = g_strsplit(oneline, ":", 0);
     if ((*fetch_info == NULL) || (*(fetch_info +1) == NULL)){
-        _cachefs_write_error("Wrong stdinput : %s", oneline);
+        _cachefs_write_error("[main] Wrong stdinput : %s", oneline);
         return false;
     }
 
     gchar *command = g_strdup(*fetch_info);
     gchar *relpath = g_strdup(*(fetch_info+1));
     if (strcmp(command, "fetch") == 0){
-        _cachefs_write_debug("retry with fetching data : %s", relpath); 
+        _cachefs_write_debug("[main] wake up waiting thread for : %s", relpath); 
         struct cachefs_cond* cond = g_hash_table_lookup(fs->file_locks, relpath);
         if (cond != NULL){
         	_cachefs_cond_broadcast(cond);
-        	g_hash_table_remove(fs->file_locks, relpath);
-        	_cachefs_cond_free(cond);
+        	//_cachefs_write_debug("[main] hash entry is disallocated: %s", relpath); 
+		} else{
+			_cachefs_write_debug("[main] Cannot find any condition for : %s", relpath);
 		}
         return true;
     } else{
-        _cachefs_write_error("Wrong command : %s, %s", command, relpath);
+        _cachefs_write_error("[main] Wrong command : %s, %s", command, relpath);
         return false;
     }
 }
@@ -103,6 +104,8 @@ static gboolean read_stdin(GIOChannel *source,
 		success_stdin = handle_stdin(fs, buf, &err);
         if (!success_stdin) {
         	_cachefs_write_error("[main] FUSE TERMINATED: Invalid stdin format\n");
+        	g_free(buf);
+        	break;
 		}
         g_free(buf);
     }
