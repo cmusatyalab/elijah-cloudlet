@@ -287,57 +287,60 @@ class CacheManager(threading.Thread):
         self.fuse_binpath = fuse_binpath
         if self.print_out == None:
             self.print_out = open("/dev/null", "w+b")
-        self.redis = self._init_redis(redis_addr)
         self.redis_addr = redis_addr
+        self.redis, self.redis_pub, self.redis_sub = self._init_redis(redis_addr)
         self.fuse_queue_list = list()
         self.stop = threading.Event()
         threading.Thread.__init__(self, target=self.monitor_fuse_request)
 
     def monitor_fuse_request(self):
-        while(not self.stop.wait(0.0001)):
-            for fuse_item in self.fuse_queue_list:
-                (fuse, queue) = fuse_item
-                if fuse == None or fuse._running == False:
-                    self.print_out.write("[INFO] delete unused fuse")
-                    self.fuse_queue_list.remove(fuse_item)
-
-                relpath = None
-                try:
-                    relpath = queue.get_nowait()
-                except Empty:
-                    pass
-                if relpath == None:
-                    continue;
-                
-                # fetch data
+        try:
+            for item in self.redis_sub.listen():
+                if item['type'] != 'message':
+                    continue
+                relpath = item['data']
                 cache_filepath = os.path.join(self.cache_dir, relpath)
                 fetch_uri = "http://%s" % relpath
-                ret = requests.get(fetch_uri, stream=True)
-                if ret.ok: 
-                    dirpath = os.path.dirname(cache_filepath)
-                    if os.path.exists(dirpath) == False:
-                        os.makedirs(dirpath)
-                    fd = open(cache_filepath, "w+b")
-                    fd.write(ret.content)
-                    fd.close()
-                else:
-                    raise CachingError("Cannot cache from %s to %s" % \
-                            fetch_uri, cache_filepath)
-
+                if not Util.is_valid_uri(fetch_uri, is_source_uri=False):
+                    self.print_out.write("Invalid URL : %s\n" % fetch_uri)
+                    continue
+                # fetch data
+                try:
+                    self.print_out.write("[INFO][REDIS] fetching %s\n" % fetch_uri)
+                    ret = requests.get(fetch_uri, stream=True)
+                    if ret.ok: 
+                        dirpath = os.path.dirname(cache_filepath)
+                        if os.path.exists(dirpath) == False:
+                            os.makedirs(dirpath)
+                        fd = open(cache_filepath, "w+b")
+                        fd.write(ret.content)
+                        fd.close()
+                    else:
+                        raise CachingError("Cannot cache from %s to %s" % \
+                                fetch_uri, cache_filepath)
+                except requests.ConnectionError, e:
+                    self.print_out.write("Connection Error to %s\n" % fetch_uri)
+                    self.print_out.flush()
+                    continue
                 # update redis
                 relpath = os.path.relpath(cache_filepath, self.cache_dir)
                 key = unicode(relpath, "utf-8") + CacheManager.POST_FIX_ATTRIBUTE
                 value = self._get_file_attribute(cache_filepath)
                 self.redis.set(key, unicode(value))
 
-                # update fuse
-                fuse.fuse_write("fetch:%s" % relpath)
+                # update fuse via redis pub/sub
+                response_str = "fetch:%s" % relpath
+                self.print_out.write("[INFO][REDIS] response %s\n" % response_str)
+                self.redis_pub.publish(Discovery_Const.REDIS_RES_CHANNEL, response_str)
+        except AttributeError, e:
+            # terminate all fuse
+            for fuse in self.fuse_queue_list:
+                if (fuse != None) and (fuse._running == True):
+                    self.fuse_queue_list.remove(fuse)
+                    fuse.terminate()
+                    fuse.join()
+            self.print_out.write("terminated by user\n")
 
-        # terminate all fuse
-        for (fuse, queue) in self.fuse_queue_list:
-            if (fuse != None) and (fuse._running == True):
-                fuse.terminate()
-                fuse.join()
 
     def _init_redis(self, redis_addr):
         """Initialize redis connection and 
@@ -346,9 +349,11 @@ class CacheManager(threading.Thread):
         try:
             conn = redis.StrictRedis(host=str(redis_addr[0]), port=int(redis_addr[1]), db=0)
             conn.flushall()
+            rc = redis.Redis(host=str(self.redis_addr[0]), port=int(self.redis_addr[1]), db=0)
+            pubsub = rc.pubsub()
+            pubsub.subscribe(Discovery_Const.REDIS_REQ_CHANNEL)
         except redis.exceptions.ConnectionError, e:
             raise CachingError("Failed to connect to Redis")
-        self.redis = conn
 
         for (root, dirs, files) in os.walk(self.cache_dir):
             relpath_cache_root = os.path.relpath(root, self.cache_dir)
@@ -358,10 +363,10 @@ class CacheManager(threading.Thread):
                 # set attribute
                 key = unicode(relpath, "utf-8") + CacheManager.POST_FIX_ATTRIBUTE
                 value = self._get_file_attribute(abspath)
-                self.redis.set(key, unicode(value))
+                conn.set(key, unicode(value))
                 # set file list
                 key = unicode(relpath_cache_root, "utf-8") + CacheManager.POST_FIX_LIST_DIR
-                self.redis.rpush(key, unicode(each_file))
+                conn.rpush(key, unicode(each_file))
                 #print "file : " + key + " --> " + each_file
                 
             for each_dir in dirs:
@@ -370,12 +375,12 @@ class CacheManager(threading.Thread):
                 # set attribute
                 key = unicode(relpath, "utf-8") + CacheManager.POST_FIX_ATTRIBUTE
                 value = self._get_file_attribute(abspath)
-                self.redis.set(key, unicode(value))
+                conn.set(key, unicode(value))
                 # set file list
                 key = unicode(relpath_cache_root, "utf-8") + CacheManager.POST_FIX_LIST_DIR
-                self.redis.rpush(key, unicode(each_dir))
+                conn.rpush(key, unicode(each_dir))
                 #print "dir : " + key + " --> " + each_dir
-        return conn
+        return conn, rc, pubsub
 
     def fetch_source_URI(self, sourceURI):
         if not Util.is_valid_uri(sourceURI, is_source_uri=True):
@@ -484,20 +489,15 @@ class CacheManager(threading.Thread):
         url_root = parse_ret.netloc
         if url_root.endswith("/") == True:
             url_root = url_root[0:-1]
-        request_queue = Queue()
         fuse = CacheFS(self.fuse_binpath, self.cache_dir, url_root, self.redis_addr,
-                request_queue, print_out=self.print_out)
+                print_out=self.print_out)
         try:
             fuse.launch()
             fuse.start()
-            self.add_fuse_request_queue(fuse, request_queue)
+            self.fuse_queue_list.append(fuse)
             return fuse
         except CacheFuseError, e:
             raise CacheFuseError(str(e))
-
-    def add_fuse_request_queue(self, fuse, request_queue):
-        self.fuse_queue_list.append((fuse, request_queue))
-        pass
 
     def _get_file_attribute(self, filepath):
         st = os.lstat(filepath)
@@ -530,6 +530,17 @@ class CacheManager(threading.Thread):
         self.print_out.write("[INFO] CacheManager terminate\n")
         self.stop.set()
 
+        # terminate redis subscribe connection
+        self.redis_sub.unsubscribe(Discovery_Const.REDIS_REQ_CHANNEL)
+        self.redis_sub.close()
+
+        # terminate all fuse
+        for fuse in self.fuse_queue_list:
+            if (fuse != None) and (fuse._running == True):
+                self.fuse_queue_list.remove(fuse)
+                fuse.terminate()
+                fuse.join()
+
 
 if __name__ == '__main__':
     import sys
@@ -544,12 +555,12 @@ if __name__ == '__main__':
         cache_manager = CacheManager(Discovery_Const.CACHE_ROOT, \
                 Discovery_Const.REDIS_ADDR, Discovery_Const.CACHE_FUSE_BINPATH,
                 print_out=sys.stdout)
+        cache_manager.setDaemon(True)
         cache_manager.start()
     except CachingError, e:
         sys.stderr.write(str(e) + "\n")
         sys.exit(1)
 
-    cache_fuse = None
     try:
         #cache_manager.fetch_compiled_URIs(compiled_list)
         compiled_list = Util.get_compiled_URIs(cache_manager.cache_dir, sys.argv[1])
@@ -562,9 +573,6 @@ if __name__ == '__main__':
     except KeyboardInterrupt,e :
         print "user exit"
     finally:
-        if cache_fuse:
-            cache_fuse.terminate()
-            cache_fuse.join()
         if cache_manager:
             cache_manager.terminate()
             cache_manager.join()

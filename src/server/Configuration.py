@@ -120,3 +120,5 @@ class Discovery_Const(object):
     HOST_SAMBA_DIR      = "/var/samba/"
     CACHE_ROOT          = '/tmp/cloudlet_cache/'
     REDIS_ADDR          = ('localhost', 6379)
+    REDIS_REQ_CHANNEL   = "fuse_request"
+    REDIS_RES_CHANNEL   = "fuse_response"
