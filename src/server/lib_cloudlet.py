@@ -233,7 +233,7 @@ class VM_Overlay(threading.Thread):
             os.unlink(modified_mem.name)
 
         if os.path.exists(qemu_logfile.name):
-            os.unlink(qemu_logfile.name)
+            os.remove(qemu_logfile.name)
 
 
 class _MonitoringInfo(object):

@@ -27,6 +27,7 @@ from CacheFuse import CacheFS
 from CacheFuse import CacheFuseError
 import dateutil.parser
 import time
+from datetime import datetime
 
 
 # URL fetching thread
@@ -145,8 +146,8 @@ class _URIParser(threading.Thread):
                         diskfile.close()
                 # save information to compiled list
                 self.compiled_list.append(URIItem(url, cache_filepath, \
-                        header.get('content-length', None),
-                        header.get('last-modified', None),
+                        header.get('content-length', 0),
+                        header.get('last-modified', datetime.now()),
                         is_directory=False, is_cached=self.is_fetch_data))
             else:
                 # save information to compiled list
@@ -158,7 +159,7 @@ class _URIParser(threading.Thread):
                         os.makedirs(cache_filepath)
 
                 self.compiled_list.append(URIItem(url, cache_filepath, \
-                        header.get('content-length', None),
+                        header.get('content-length', 0),
                         modified_time,
                         is_directory=True, is_cached=self.is_fetch_data))
             
