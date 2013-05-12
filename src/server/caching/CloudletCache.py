@@ -39,7 +39,7 @@ class CachingError(Exception):
 
 class URIItem(object):
     URI             = "uri"
-    NAME            = "cache_filename"
+    DISK_PATH       = "cache_filename"
     SIZE            = "size"
     MODIFIED_TIME   = "mtime"
     IS_DIR          = "is_dir"
@@ -48,7 +48,7 @@ class URIItem(object):
     def __init__(self, uri, cache_filename, filesize, modified_time, 
             is_directory, is_cached):
         setattr(self, URIItem.URI, str(uri))
-        setattr(self, URIItem.NAME, str(cache_filename))
+        setattr(self, URIItem.DISK_PATH, str(cache_filename))
 
         date_time = dateutil.parser.parse(modified_time)
         unix_time = time.mktime(date_time.timetuple())
@@ -76,7 +76,7 @@ class URIItem(object):
         return self.__dict__[item]
 
     def __repr__(self):
-        return "name: %s, children: %d" % (getattr(self, URIItem.NAME), len(self.child_list))
+        return "diskpath: %s, children: %d" % (getattr(self, URIItem.DISK_PATH), len(self.child_list))
 
 
 class _URIParser(threading.Thread):
@@ -209,7 +209,8 @@ class Util(object):
 
     @staticmethod
     def get_compiled_URIs(cache_root, sourceURI):
-        """Return list of _UIRInfo
+        """Return list of URIItem
+        Items in the URIItem list has tree structure, which is necessary for FUSE
         """
         if sourceURI.endswith("/") == False:
                 sourceURI += "/"
@@ -252,25 +253,20 @@ class Util(object):
         for uri_info in compiled_list:
             # contruct hash table of (key: pathname, value: uri)
             if getattr(uri_info, URIItem.IS_DIR) == True:
-                if directory_dict.get(getattr(uri_info, URIItem.NAME), None) != None:
+                if directory_dict.get(getattr(uri_info, URIItem.DISK_PATH), None) != None:
                     msg = "Do not expect duplicated elemenet in compiled list : %s" % \
-                            (getattr(uri_info, URIItem.NAME))
+                            (getattr(uri_info, URIItem.DISK_PATH))
                     raise CachingError(msg)
-                directory_dict[getattr(uri_info, URIItem.NAME)] = uri_info
+                directory_dict[getattr(uri_info, URIItem.DISK_PATH)] = uri_info
 
         for uri_info in compiled_list:
-            pathname = getattr(uri_info, URIItem.NAME)
+            pathname = getattr(uri_info, URIItem.DISK_PATH)
             parentpath = os.path.dirname(pathname)
             if parentpath.endswith('/'):
                 parentpath = parentpath[0:-1]
             parent_uri_info = directory_dict.get(parentpath, None)
             if parent_uri_info != None:
                 parent_uri_info.append_child(uri_info)
-
-    @staticmethod
-    def get_cache_score(compiledURI_list):
-        cache_score = 0
-        return cache_score
 
 
 # TODO: change thread to process
@@ -382,6 +378,45 @@ class CacheManager(threading.Thread):
                 #print "dir : " + key + " --> " + each_dir
         return conn, rc, pubsub
 
+    CACHE_MIN_SCORE = float(0)
+    CACHE_MAX_SCORE = float(10)
+    def get_cache_score(self, compiledURI_list):
+        ''' return cache score list for each entry of compiled URI
+        Return:
+            weighted_score, score_for_each_entry
+        '''
+        def _convert_attr_to_dict(str_attr):
+            attr_list = str_attr.split(",")
+            ret_dict = dict()
+            for attr in attr_list:
+                key, value = attr.split(":", 2)
+                ret_dict[key] = long(value)
+            return ret_dict
+
+        weighted_score = float(0)
+        score_list = list()
+        for item in compiledURI_list:
+            abspath = getattr(item, URIItem.DISK_PATH)
+            relpath = os.path.relpath(abspath, self.cache_dir) 
+            key = unicode(relpath, "utf-8") + CacheManager.POST_FIX_ATTRIBUTE
+            ret_attr = self.redis.get(key)
+            if ret_attr == None:
+                score_list.append(CacheManager.CACHE_MIN_SCORE)
+                weighted_score += CacheManager.CACHE_MIN_SCORE
+                continue
+            ret_attr_dict = _convert_attr_to_dict(ret_attr)
+            import pdb;pdb.set_trace()
+            if ret_attr_dict.get("exists", 0) == 1:
+                score_list.append(CacheManager.CACHE_MAX_SCORE)
+                weighted_score += CacheManager.CACHE_MAX_SCORE
+            else:
+                score_list.append(CacheManager.CACHE_MIN_SCORE)
+                weighted_score += CacheManager.CACHE_MIN_SCORE
+
+        weighted_score = weighted_score / len(compiledURI_list)
+        return weighted_score, score_list
+
+
     def fetch_source_URI(self, sourceURI):
         if not Util.is_valid_uri(sourceURI, is_source_uri=True):
             raise CachingError("Invalid URI: %s" % sourceURI)
@@ -409,7 +444,7 @@ class CacheManager(threading.Thread):
         for each_item in compiled_list:
             if type(each_item) != URIItem:
                 raise CachingError("Expect URIItem")
-            abspath = os.path.join(self.cache_dir, getattr(each_item, URIItem.NAME))
+            abspath = os.path.join(self.cache_dir, getattr(each_item, URIItem.DISK_PATH))
             relpath = os.path.relpath(abspath, self.cache_dir)
             # set attribute
             key = unicode(relpath, "utf-8") + CacheManager.POST_FIX_ATTRIBUTE
@@ -462,7 +497,7 @@ class CacheManager(threading.Thread):
             raise CachingError("Expect list of URIItem")
 
         for uri_info in URIItem_list:
-            cache_filepath = getattr(uri_info, URIItem.NAME)
+            cache_filepath = getattr(uri_info, URIItem.DISK_PATH)
             abspath = os.path.abspath(cache_filepath)
             relpath = os.path.relpath(abspath, self.cache_dir)
             redis_ret = self.redis.get(unicode(relpath) + CacheManager.POST_FIX_ATTRIBUTE)
@@ -480,7 +515,7 @@ class CacheManager(threading.Thread):
                 child_list = uri_info.get_childlist()
                 for child_file in child_list:
                     key = unicode(relpath) + CacheManager.POST_FIX_LIST_DIR
-                    value = os.path.basename(getattr(child_file, URIItem.NAME))
+                    value = os.path.basename(getattr(child_file, URIItem.DISK_PATH))
                     #print "update : " + key + " --> " + value
                     self.redis.rpush(key, unicode(value))
 
@@ -564,6 +599,7 @@ if __name__ == '__main__':
     try:
         #cache_manager.fetch_compiled_URIs(compiled_list)
         compiled_list = Util.get_compiled_URIs(cache_manager.cache_dir, sys.argv[1])
+        score, score_list = cache_manager.get_cache_score(compiled_list)
         cache_fuse = cache_manager.launch_fuse(compiled_list)
         print "mount : %s" % (cache_fuse.mountpoint)
         while True:
@@ -573,6 +609,10 @@ if __name__ == '__main__':
     except KeyboardInterrupt,e :
         print "user exit"
     finally:
+        for index, item in enumerate(compiled_list):
+            print "%f : %s" % \
+                    (score_list[index], getattr(compiled_list[index], URIItem.DISK_PATH))
+        print "cache score : %f" % score
         if cache_manager:
             cache_manager.terminate()
             cache_manager.join()
