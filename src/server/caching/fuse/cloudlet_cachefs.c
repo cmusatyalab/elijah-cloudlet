@@ -104,10 +104,6 @@ static gboolean read_stdin(GIOChannel *source,
         g_free(buf);
     }
 out:
-    //image_close(fs->disk);
-    //if (fs->memory != NULL) {
-    //    image_close(fs->memory);
-    //}
     _cachefs_fuse_terminate(fs);
     return FALSE;
 }
@@ -123,7 +119,6 @@ static gboolean shutdown_callback(void *data)
 static void *glib_loop_thread(void *data)
 {
     struct cachefs *fs = data;
-
     fs->glib_loop = g_main_loop_new(NULL, TRUE);
     g_main_loop_run(fs->glib_loop);
     g_main_loop_unref(fs->glib_loop);
@@ -131,12 +126,22 @@ static void *glib_loop_thread(void *data)
     return NULL;
 }
 
+/* redis subscribe thread */
+static void *glib_redis_thread(void *data)
+{
+    struct cachefs *fs = data;
+	fprintf(stdout, "thread test\n");
+    return NULL;
+}
 
+
+/* fuse main */
 static bool fuse_main(int argc, char **argv)
 {
     struct cachefs *fs;
     bool parse_ret = false;
     GThread *loop_thread = NULL;
+    GThread *redis_subscribe_thread = NULL;
     GIOChannel *chan_in;
     //GIOChannel *chan_out;
     GIOFlags flags;
@@ -181,7 +186,14 @@ static bool fuse_main(int argc, char **argv)
     /* Start main loop thread */
     loop_thread = g_thread_create(glib_loop_thread, fs, TRUE, &err);
     if (err) {
-        fprintf(stdout, "%s\n", err->message);
+    	_cachefs_write_error("%s\n", err->message);
+        goto out;
+    }
+
+    /* start redis subscribe thread */
+    redis_subscribe_thread = g_thread_create(glib_redis_thread, fs, TRUE, &err);
+    if (err) {
+    	_cachefs_write_error("%s\n", err->message);
         goto out;
     }
 
@@ -189,7 +201,7 @@ static bool fuse_main(int argc, char **argv)
     flags = g_io_channel_get_flags(chan_in);
     g_io_channel_set_flags(chan_in, flags | G_IO_FLAG_NONBLOCK, &err);
     if (err) {
-        fprintf(stdout, "%s\n", err->message);
+    	_cachefs_write_error("%s\n", err->message);
         g_io_channel_unref(chan_in);
         goto out;
     }
@@ -208,6 +220,10 @@ out:
     if (loop_thread != NULL) {
         g_idle_add(shutdown_callback, fs);
         g_thread_join(loop_thread);
+    }
+    if (redis_subscribe_thread != NULL){
+    	g_idle_add(shutdown_callback, fs);
+    	g_thread_join(redis_subscribe_thread);
     }
     _cachefs_fuse_free(fs);
     g_slice_free(struct cachefs, fs);
