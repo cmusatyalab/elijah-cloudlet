@@ -28,6 +28,12 @@ from CacheFuse import CacheFuseError
 import dateutil.parser
 import time
 from datetime import datetime
+try:
+    from Configuration import Discovery_Const
+except ImportError, e:
+    sys.path.append("../../server");
+    from Configuration import Discovery_Const
+
 
 
 # URL fetching thread
@@ -269,6 +275,19 @@ class Util(object):
                 parent_uri_info.append_child(uri_info)
 
 
+    @staticmethod
+    def redis_set_attr(redis, relpath, attr_str):
+        key = unicode(relpath, "utf-8") + CacheManager.POST_FIX_ATTRIBUTE
+        redis.set(key, unicode(attr_str))
+
+    @staticmethod
+    def redis_set_directory(redis, relpath, sub_file):
+        key = unicode(relpath, "utf-8") + CacheManager.POST_FIX_LIST_DIR
+        redis.rpush(key, unicode(sub_file))
+        #print "dir: %s --> %s" % (key, sub_file)
+
+
+
 # TODO: change thread to process
 class CacheManager(threading.Thread):
     POST_FIX_ATTRIBUTE  = u'\u03b1'
@@ -320,9 +339,8 @@ class CacheManager(threading.Thread):
                     continue
                 # update redis
                 relpath = os.path.relpath(cache_filepath, self.cache_dir)
-                key = unicode(relpath, "utf-8") + CacheManager.POST_FIX_ATTRIBUTE
                 value = self._get_file_attribute(cache_filepath)
-                self.redis.set(key, unicode(value))
+                Util.redis_set_attr(self.redis, relpath, value)
 
                 # update fuse via redis pub/sub
                 response_str = "fetch:%s" % relpath
@@ -335,12 +353,11 @@ class CacheManager(threading.Thread):
                     self.fuse_queue_list.remove(fuse)
                     fuse.terminate()
                     fuse.join()
-            self.print_out.write("terminated by user\n")
+            self.print_out.write("[INFO] terminated by user\n")
 
 
     def _init_redis(self, redis_addr):
-        """Initialize redis connection and 
-        Upload current cache status
+        """Initialize redis connection
         """
         try:
             conn = redis.StrictRedis(host=str(redis_addr[0]), port=int(redis_addr[1]), db=0)
@@ -357,25 +374,19 @@ class CacheManager(threading.Thread):
                 abspath = os.path.join(root, each_file)
                 relpath = os.path.relpath(abspath, self.cache_dir)
                 # set attribute
-                key = unicode(relpath, "utf-8") + CacheManager.POST_FIX_ATTRIBUTE
                 value = self._get_file_attribute(abspath)
-                conn.set(key, unicode(value))
+                Util.redis_set_attr(conn, relpath, value)
                 # set file list
-                key = unicode(relpath_cache_root, "utf-8") + CacheManager.POST_FIX_LIST_DIR
-                conn.rpush(key, unicode(each_file))
-                #print "file : " + key + " --> " + each_file
+                Util.redis_set_directory(conn, relpath_cache_root, each_file)
                 
             for each_dir in dirs:
                 abspath = os.path.join(root, each_dir)
                 relpath = os.path.relpath(abspath, self.cache_dir) 
                 # set attribute
-                key = unicode(relpath, "utf-8") + CacheManager.POST_FIX_ATTRIBUTE
                 value = self._get_file_attribute(abspath)
-                conn.set(key, unicode(value))
+                Util.redis_set_attr(conn, relpath, value)
                 # set file list
-                key = unicode(relpath_cache_root, "utf-8") + CacheManager.POST_FIX_LIST_DIR
-                conn.rpush(key, unicode(each_dir))
-                #print "dir : " + key + " --> " + each_dir
+                Util.redis_set_directory(conn, relpath_cache_root, each_dir)
         return conn, rc, pubsub
 
     CACHE_MIN_SCORE = float(0)
@@ -446,9 +457,8 @@ class CacheManager(threading.Thread):
             abspath = os.path.join(self.cache_dir, getattr(each_item, URIItem.DISK_PATH))
             relpath = os.path.relpath(abspath, self.cache_dir)
             # set attribute
-            key = unicode(relpath, "utf-8") + CacheManager.POST_FIX_ATTRIBUTE
             value = self._get_file_attribute(abspath)
-            self.redis.set(key, unicode(value))
+            Util.redis_set_attr(relpath, value)
 
     def fetch_compiled_URIs(self, URIItem_list):
         """ Fetch URIs and save is as cache
@@ -513,18 +523,17 @@ class CacheManager(threading.Thread):
                 # update directory information
                 child_list = uri_info.get_childlist()
                 for child_file in child_list:
-                    key = unicode(relpath) + CacheManager.POST_FIX_LIST_DIR
                     value = os.path.basename(getattr(child_file, URIItem.DISK_PATH))
-                    #print "update : " + key + " --> " + value
-                    self.redis.rpush(key, unicode(value))
+                    Util.redis_set_directory(self.redis, relpath, value)
 
         # launch FUSE
         parse_ret = requests.utils.urlparse(getattr(URIItem_list[0], URIItem.URI))
         url_root = parse_ret.netloc
         if url_root.endswith("/") == True:
             url_root = url_root[0:-1]
-        fuse = CacheFS(self.fuse_binpath, self.cache_dir, url_root, self.redis_addr,
-                print_out=self.print_out)
+        fuse = CacheFS(self.fuse_binpath, self.cache_dir, url_root, 
+                self.redis_addr, Discovery_Const.REDIS_REQ_CHANNEL,
+                Discovery_Const.REDIS_RES_CHANNEL, print_out=self.print_out)
         try:
             fuse.launch()
             fuse.start()
@@ -577,10 +586,6 @@ class CacheManager(threading.Thread):
 
 
 if __name__ == '__main__':
-    import sys
-    sys.path.append("../../server");
-    from Configuration import Discovery_Const
-
     if len(sys.argv) != 2:
         print "> $ prog [root_uri]"
         sys.exit(1)
@@ -612,7 +617,7 @@ if __name__ == '__main__':
     except CachingError, e:
         print str(e)
     except KeyboardInterrupt,e :
-        print "user exit"
+        sys.stdout.write("[INFO] user exit\n")
     finally:
         if cache_manager:
             cache_manager.terminate()

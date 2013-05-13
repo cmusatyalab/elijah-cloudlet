@@ -152,6 +152,6 @@ SAMBA
 
 2. samba mount
 		$ sudo mkdir /share
-		$ sudo mount -t cifs //10.0.2.2/cloudlet /share -o directio,username=guest,iocharset=utf8
+		$ sudo mount -t cifs //10.0.2.2/cloudlet /share -o directio,username=guest,gid=1000,forcegid
 		% it's important to mount with directio option to avoid page cache
 

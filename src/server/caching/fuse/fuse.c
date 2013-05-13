@@ -114,7 +114,7 @@ static int do_getattr(const char *path, struct stat *stbuf)
 		return -ENOENT;
 	}
 
-	//_cachefs_write_debug("[fuse] ret getattr : %s --> %s", rel_path, ret_buf);
+	_cachefs_write_debug("[fuse] ret getattr : %s --> %s", rel_path, ret_buf);
 	if (!parse_stinfo(ret_buf, &is_local, stbuf)){
 		return -ENOENT;
 	}
@@ -227,7 +227,7 @@ static int do_read(const char *path, char *buf, size_t size, off_t offset,
 	}else{
 		// request fetching data to CacheManager
 		gchar* request_filename = g_strdup_printf("%s%s", fs->uri_root, path);
-		struct cachefs_cond* cond = _cachefs_write_request(fs, request_filename);
+		struct cachefs_cond* cond = _redis_publish(fs, request_filename);
 
 		// wait on conditional variable
 		g_mutex_lock(cond->lock);
@@ -357,6 +357,12 @@ void _cachefs_fuse_free(struct cachefs *fs)
     fuse_unmount(fs->mountpoint, fs->chan);
     g_hash_table_destroy(fs->file_locks);
     fuse_destroy(fs->fuse);
+    g_free(fs->cache_root);
+    g_free(fs->uri_root);
+    g_free(fs->redis_ip);
+    g_free(fs->redis_req_channel);
+    g_free(fs->redis_res_channel);
+
     rmdir(fs->mountpoint);
     g_free(fs->mountpoint);
 }

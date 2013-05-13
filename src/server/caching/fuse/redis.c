@@ -25,11 +25,13 @@
 #define REDIS_GET_ATTRIBUTE		"GET %s\u03b1"
 #define REDIS_GET_LIST_DIR		"LRANGE %s\u03b2 0 -1"
 #define REDIS_KEY_EXISTS		"EXISTS %s\u03b1"
+#define REDIS_PUBLISH			"PUBLISH %s %s"
 
 
 /* Internal structure to encapsulate REDIS connection */
 struct redis_handler
 {
+	// regular redis connection
     redisContext* conn;
     GMutex *lock;
 
@@ -91,7 +93,7 @@ static void on_subscribe_msg(redisAsyncContext *c, void *reply, void *privdata) 
         const char *request = (char *)r->element[2]->str;
 		gchar **fetch_info = g_strsplit(request, ":", 0);
 		if ((*fetch_info == NULL) || (*(fetch_info +1) == NULL)){
-			_cachefs_write_debug("[main] Wrong redis message : %s %s %s", \
+			_cachefs_write_debug("[redis] Wrong redis message : %s %s %s", \
 					r->element[0]->str, r->element[1]->str, r->element[2]->str);
 			return;
 		}
@@ -117,9 +119,11 @@ static void *redis_subscribe(void *args)
 {
 	struct cachefs *fs = (struct cachefs *)args;
 	redisLibeventAttach(handle->async, handle->event_base);
-	redisAsyncCommand(handle->async, on_subscribe_msg, fs, "SUBSCRIBE foo");
+	redisAsyncCommand(handle->async, on_subscribe_msg, fs, \
+			"SUBSCRIBE %s", fs->redis_res_channel);
 	event_base_dispatch(handle->event_base);
 }
+
 
 /* public methods */
 bool _redis_init(struct cachefs *fs)
@@ -135,6 +139,14 @@ bool _redis_init(struct cachefs *fs)
 		struct timeval timeout = { 1, 500000 }; // 1.5 seconds
 		handle->conn = redisConnectWithTimeout((char*)address, port, timeout);
 		if (handle->conn == NULL || handle->conn->err) {
+			if (handle->conn) {
+				redisFree(handle->conn);
+			}
+            free(handle);
+			return false;
+		}
+		/* make keepalive connection */
+		if (redisEnableKeepAlive(handle->conn) != REDIS_OK){
 			if (handle->conn) {
 				redisFree(handle->conn);
 			}
@@ -188,6 +200,35 @@ void _redis_close()
     }
 }
 
+struct cachefs_cond* _redis_publish(struct cachefs *fs, char *request_path)
+{
+    g_mutex_lock(handle->lock);
+
+	// create conditional variable
+	struct cachefs_cond* cond = NULL;
+	cond = g_hash_table_lookup(fs->file_locks, request_path);
+	redisReply* reply = NULL;
+	if (cond == NULL){
+		cond = _cachefs_cond_new();
+		g_hash_table_insert(fs->file_locks, request_path, cond);
+
+		// only the first thread send a request
+		const char *request_channel = fs->redis_req_channel;
+		_cachefs_write_debug("[redis] publish %s %s", request_channel, request_path);
+		reply = redisCommand(handle->conn, REDIS_PUBLISH, request_channel, request_path);
+		if (reply->type == REDIS_REPLY_INTEGER){
+			if (reply->integer == 0){
+				_cachefs_write_debug("[redis] No listener for %s\n", request_channel);
+			}
+		}
+	}
+
+    g_mutex_unlock(handle->lock);
+    check_redis_return(handle, reply);
+    return cond;
+}
+
+
 int _redis_file_exists(const char *path, bool *is_exists)
 {
 	if (!check_connection())
@@ -215,7 +256,6 @@ int _redis_get_attr(const char* path, char** ret_buf)
     g_mutex_lock(handle->lock);
     redisReply* reply;
     reply = redisCommand(handle->conn, REDIS_GET_ATTRIBUTE, path);
-    //_cachefs_write_debug(REDIS_GET_ATTRIBUTE, path);
     if (reply->type == REDIS_REPLY_STRING && reply->len > 0){
         *ret_buf = g_strndup(reply->str, reply->len);
     } else {
@@ -236,7 +276,7 @@ int _redis_get_readdir(const char* path, GSList **ret_list)
 	int i = 0;
 	gchar *attr_str;
     reply = redisCommand(handle->conn, REDIS_GET_LIST_DIR, path);
-    _cachefs_write_debug(REDIS_GET_LIST_DIR, path);
+    _cachefs_write_debug("[redis] get dir at : %s", path);
     if (reply->type == REDIS_REPLY_ARRAY) {
         for (i = 0; i < reply->elements; i++) {
         	attr_str = g_strndup(reply->element[i]->str, reply->element[i]->len);

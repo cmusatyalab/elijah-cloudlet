@@ -127,6 +127,8 @@ static bool fuse_main(int argc, char **argv)
     fs->uri_root = g_strdup(argv[2]);
     fs->redis_ip = g_strdup(argv[3]);
     parse_ret = parse_uint(argv[4], &(fs->redis_port));
+    fs->redis_req_channel = g_strdup(argv[5]);
+    fs->redis_res_channel = g_strdup(argv[6]);
     if (parse_ret == false){
     	_cachefs_write_error("[main] Invalid redis port number : %s, (%d)\n", \
     			argv[4], fs->redis_port);
@@ -214,13 +216,13 @@ static void setsignal(int signum, void (*handler)(int))
 
 void static print_usage(char **argv)
 {
-    fprintf(stdout, "$ prog [/path/to/cache_root] [uri_root] [REDIS_IP] [REDIS_PORT]\n");
+    fprintf(stdout, "$ prog [/path/to/cache_root] [uri_root] [REDIS_IP] [REDIS_PORT] [REDIS_REQ_CHANNEL] [REDIS_RES_CHANNLE]\n");
     return;
 }
 
 int main(int argc, char **argv)
 {
-    if (argc != 5){
+    if (argc != 7){
         print_usage(argv);
         return EXIT_FAILURE;
     }

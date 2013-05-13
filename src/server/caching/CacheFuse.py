@@ -29,13 +29,17 @@ class CacheFS(threading.Thread):
     PREFIX_DEBUG = "[debug]"
     PREFIX_ERROR = "[error]"
 
-    def __init__(self, bin_path, cache_root, url_root, redis_addr, print_out=None):
+    def __init__(self, bin_path, cache_root, url_root, redis_addr, \
+            redis_req, redis_res, print_out=None):
         self._running = True
         self.cachefs_bin = bin_path
         self.cache_root = cache_root
         self.url_root = url_root
-        self._args = "%s %s %s %s" % \
-                (str(self.cache_root), str(self.url_root), str(redis_addr[0]), str(redis_addr[1]))
+        self._args = "%s %s %s %s %s %s" % \
+                (str(self.cache_root), str(self.url_root), \
+                str(redis_addr[0]), str(redis_addr[1]), \
+                str(redis_req), \
+                str(redis_res))
         self.print_out = print_out
         if self.print_out == None:
             self.print_out = open("/dev/null", "w+b")

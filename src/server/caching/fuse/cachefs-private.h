@@ -53,7 +53,6 @@ void _cachefs_fuse_free();
 /* io */
 bool _cachefs_init_pipe_communication();
 void _cachefs_close_pipe_communication();
-struct cachefs_cond* _cachefs_write_request(struct cachefs *fs, char *request_path);
 void _cachefs_write_error(const char *format, ... );
 void _cachefs_write_debug(const char *format, ... );
 bool _cachefs_safe_pread(const char *file, void *buf, uint64_t count, uint64_t offset);
@@ -65,6 +64,7 @@ void _redis_close();
 int _redis_file_exists(const char *path, bool *is_exists);
 int _redis_get_attr(const char* path, char** ret_buf);
 int _redis_get_readdir(const char* path, GSList **ret_list);
+struct cachefs_cond* _redis_publish(struct cachefs *fs, char *request_path);
 
 /* cond */
 struct cachefs_cond *_cachefs_cond_new(void);
