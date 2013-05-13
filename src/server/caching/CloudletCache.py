@@ -284,7 +284,7 @@ class Util(object):
     def redis_set_directory(redis, relpath, sub_file):
         key = unicode(relpath, "utf-8") + CacheManager.POST_FIX_LIST_DIR
         redis.rpush(key, unicode(sub_file))
-        #print "dir: %s --> %s" % (key, sub_file)
+        print "dir: %s --> %s" % (key, sub_file)
 
 
 
@@ -368,6 +368,7 @@ class CacheManager(threading.Thread):
         except redis.exceptions.ConnectionError, e:
             raise CachingError("Failed to connect to Redis")
 
+        '''
         for (root, dirs, files) in os.walk(self.cache_dir):
             relpath_cache_root = os.path.relpath(root, self.cache_dir)
             for each_file in files:
@@ -387,6 +388,7 @@ class CacheManager(threading.Thread):
                 Util.redis_set_attr(conn, relpath, value)
                 # set file list
                 Util.redis_set_directory(conn, relpath_cache_root, each_dir)
+        '''
         return conn, rc, pubsub
 
     CACHE_MIN_SCORE = float(0)
@@ -609,11 +611,11 @@ if __name__ == '__main__':
             print "%f : %s" % \
                     (score_list[index], getattr(compiled_list[index], URIItem.DISK_PATH))
         print "cache score : %f" % score
+        '''
         cache_fuse = cache_manager.launch_fuse(compiled_list)
         print "mount : %s" % (cache_fuse.mountpoint)
         while True:
             time.sleep(100)
-        '''
     except CachingError, e:
         print str(e)
     except KeyboardInterrupt,e :

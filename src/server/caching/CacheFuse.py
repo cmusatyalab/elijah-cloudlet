@@ -79,7 +79,7 @@ class CacheFS(threading.Thread):
             if oneline.startswith(CacheFS.PREFIX_REQUEST) == True:
                 self.handle_request(oneline[len(CacheFS.PREFIX_REQUEST):])
             elif oneline.startswith(CacheFS.PREFIX_DEBUG) == True:
-                #self.print_out.write(oneline)
+                self.print_out.write(oneline)
                 pass
             elif oneline.startswith(CacheFS.PREFIX_ERROR) == True:
                 self.print_out.write(oneline+"\n")
