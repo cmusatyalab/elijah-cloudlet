@@ -35,6 +35,8 @@ struct cachefs {
     unsigned int redis_port;
     char *cache_root;
     char *uri_root;
+    char *redis_req_channel;
+    char *redis_res_channel;
 };
 
 struct cachefs_cond {
@@ -58,7 +60,7 @@ bool _cachefs_safe_pread(const char *file, void *buf, uint64_t count, uint64_t o
 bool _cachefs_safe_pwrite(const char *file, const void *buf, uint64_t count, uint64_t offset);
 
 /* redis */
-bool _redis_init(const char *address, int port);
+bool _redis_init(struct cachefs *fs);
 void _redis_close();
 int _redis_file_exists(const char *path, bool *is_exists);
 int _redis_get_attr(const char* path, char** ret_buf);

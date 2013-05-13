@@ -37,23 +37,6 @@ static bool handle_stdin(struct cachefs *fs, const char *oneline, GError **err)
         _cachefs_write_debug("[main] Wrong stdinput : %s", oneline);
         return false;
     }
-
-    gchar *command = g_strdup(*fetch_info);
-    gchar *relpath = g_strdup(*(fetch_info+1));
-    if (strcmp(command, "fetch") == 0){
-        _cachefs_write_debug("[main] wake up waiting thread for : %s", relpath); 
-        struct cachefs_cond* cond = g_hash_table_lookup(fs->file_locks, relpath);
-        if (cond != NULL){
-        	_cachefs_cond_broadcast(cond);
-        	//_cachefs_write_debug("[main] hash entry is disallocated: %s", relpath); 
-		} else{
-			_cachefs_write_debug("[main] Cannot find any condition for : %s", relpath);
-		}
-        return true;
-    } else{
-        _cachefs_write_error("[main] Wrong command : %s, %s", command, relpath);
-        return false;
-    }
 }
 
 static bool parse_uint(const char *str, unsigned int *ret_int)
@@ -97,7 +80,7 @@ static gboolean read_stdin(GIOChannel *source,
 
 		success_stdin = handle_stdin(fs, buf, &err);
         if (!success_stdin) {
-        	_cachefs_write_error("[main] FUSE TERMINATED: Invalid stdin format\n");
+        	_cachefs_write_error("[main] FUSE TERMINATED: Invalid stdin format");
         	g_free(buf);
         	break;
 		}
@@ -125,15 +108,6 @@ static void *glib_loop_thread(void *data)
     fs->glib_loop = NULL;
     return NULL;
 }
-
-/* redis subscribe thread */
-static void *glib_redis_thread(void *data)
-{
-    struct cachefs *fs = data;
-	fprintf(stdout, "thread test\n");
-    return NULL;
-}
-
 
 /* fuse main */
 static bool fuse_main(int argc, char **argv)
@@ -167,7 +141,7 @@ static bool fuse_main(int argc, char **argv)
     if (!g_thread_supported()) {
         g_thread_init(NULL);
     }
-    if (!_redis_init(fs->redis_ip, fs->redis_port)){
+    if (!_redis_init(fs)){
     	_cachefs_write_error("[main] Cannot connect to redis\n");
     	return EXIT_FAILURE;
 	}
@@ -185,13 +159,6 @@ static bool fuse_main(int argc, char **argv)
 
     /* Start main loop thread */
     loop_thread = g_thread_create(glib_loop_thread, fs, TRUE, &err);
-    if (err) {
-    	_cachefs_write_error("%s\n", err->message);
-        goto out;
-    }
-
-    /* start redis subscribe thread */
-    redis_subscribe_thread = g_thread_create(glib_redis_thread, fs, TRUE, &err);
     if (err) {
     	_cachefs_write_error("%s\n", err->message);
         goto out;
@@ -228,6 +195,7 @@ out:
     _cachefs_fuse_free(fs);
     g_slice_free(struct cachefs, fs);
     g_io_channel_unref(chan_in);
+    _redis_close();
 
 	_cachefs_write_debug("[main] gracefully closed");
     _cachefs_close_pipe_communication();

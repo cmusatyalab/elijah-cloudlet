@@ -405,7 +405,6 @@ class CacheManager(threading.Thread):
                 weighted_score += CacheManager.CACHE_MIN_SCORE
                 continue
             ret_attr_dict = _convert_attr_to_dict(ret_attr)
-            import pdb;pdb.set_trace()
             if ret_attr_dict.get("exists", 0) == 1:
                 score_list.append(CacheManager.CACHE_MAX_SCORE)
                 weighted_score += CacheManager.CACHE_MAX_SCORE
@@ -599,20 +598,22 @@ if __name__ == '__main__':
     try:
         #cache_manager.fetch_compiled_URIs(compiled_list)
         compiled_list = Util.get_compiled_URIs(cache_manager.cache_dir, sys.argv[1])
+        '''
         score, score_list = cache_manager.get_cache_score(compiled_list)
+        for index, item in enumerate(compiled_list):
+            print "%f : %s" % \
+                    (score_list[index], getattr(compiled_list[index], URIItem.DISK_PATH))
+        print "cache score : %f" % score
         cache_fuse = cache_manager.launch_fuse(compiled_list)
         print "mount : %s" % (cache_fuse.mountpoint)
         while True:
             time.sleep(100)
+        '''
     except CachingError, e:
         print str(e)
     except KeyboardInterrupt,e :
         print "user exit"
     finally:
-        for index, item in enumerate(compiled_list):
-            print "%f : %s" % \
-                    (score_list[index], getattr(compiled_list[index], URIItem.DISK_PATH))
-        print "cache score : %f" % score
         if cache_manager:
             cache_manager.terminate()
             cache_manager.join()
