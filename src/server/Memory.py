@@ -239,9 +239,9 @@ class Memory(object):
             if apply_free_memory == True:
                 # get free memory list
                 mem_size_mb = ram_info.get('pc.ram').get('length')/1024/1024
-                mem_offset_infile = ram_info.get('pc.ram').get('offset')
+                mem_offset = ram_info.get('pc.ram').get('offset')
                 self.free_pfn_dict = get_free_pfn_dict(filepath, mem_size_mb, \
-                        libvirt_header_len, mem_offset_infile)
+                        mem_offset)
             else:
                 self.free_pfn_dict = None
 
@@ -447,26 +447,29 @@ def base_hashlist(base_memmeta_path):
     return hashlist
 
 
-def get_free_pfn_dict(snapshot_path, mem_size, libvirt_header_len, mem_offset_infile):
-    pglist_addr = 'c1840a80'
-    pgn0_addr = 'f73fd000'
-    mem_size_mb = 1024
-    if mem_size_mb != mem_size:
-        sys.stdout.write("WARNING: Ignore free memory information\n")
+def get_free_pfn_dict(snapshot_path, mem_size, mem_offset):
+    if mem_size == 1024:
+        pglist_addr = 'c1840a80'
+        pgn0_addr = 'f73fd000'
+    elif mem_size == 2048:
+        pglist_addr = 'c1840a80'
+        pgn0_addr = 'f553c000'
+    else:
+        print "Error, memory size %ld KB is not valid" % (mem_size)
         return None
 
     free_pfn_list = _get_free_pfn_list(snapshot_path, pglist_addr, pgn0_addr, \
-            mem_size_mb, libvirt_header_len)
+            mem_size, mem_offset)
     if free_pfn_list:
         # shift 4096*2 for libvirt header and KVM header
-        offset = mem_offset_infile/Memory.RAM_PAGE_SIZE
-        free_pfn_dict_aligned = dict([(long(page)+offset,1) for page in free_pfn_list])
-        return free_pfn_dict_aligned
+        offset = (mem_offset)/Memory.RAM_PAGE_SIZE
+        free_pfn_aligned = dict([(long(page)+offset,1) for page in free_pfn_list])
+        return free_pfn_aligned
     else:
         return None
 
 
-def _get_free_pfn_list(snapshot_path, pglist_addr, pgn0_addr, mem_size_gb, libvirt_offset):
+def _get_free_pfn_list(snapshot_path, pglist_addr, pgn0_addr, mem_size_gb, mem_offset):
     # get list of free memory page number
     BIN_PATH = Const.FREE_MEMORY_BIN_PATH
     cmd = [
@@ -475,6 +478,7 @@ def _get_free_pfn_list(snapshot_path, pglist_addr, pgn0_addr, mem_size_gb, libvi
             "%s" % pglist_addr,
             "%s" % pgn0_addr,
             "%d" % mem_size_gb,
+            "%d" % mem_offset,
         ]
     _PIPE = subprocess.PIPE
     proc = subprocess.Popen(cmd, close_fds=True, stdin=_PIPE, stdout=_PIPE, stderr=_PIPE)

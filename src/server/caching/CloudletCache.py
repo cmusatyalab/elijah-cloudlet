@@ -284,7 +284,7 @@ class Util(object):
     def redis_set_directory(redis, relpath, sub_file):
         key = unicode(relpath, "utf-8") + CacheManager.POST_FIX_LIST_DIR
         redis.rpush(key, unicode(sub_file))
-        print "dir: %s --> %s" % (key, sub_file)
+        #print "dir: %s --> %s" % (key, sub_file)
 
 
 

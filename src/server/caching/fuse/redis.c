@@ -167,6 +167,8 @@ static void *redisCommandAlive(struct redis_handler *handle, const char *format,
 		handle->conn = redis_connection(handle);
 		if (handle->conn != NULL){
 			reply = redisCommand(handle->conn, format, new_string->str);
+			_cachefs_write_debug("[redis] retry command : %s, return : %x", \
+					new_string->str, reply);
 		}else{
 			reply = NULL;
 		}
