@@ -23,7 +23,7 @@ class ConfigurationError(Exception):
 
 class Options(object):
     TRIM_SUPPORT                        = True
-    FREE_SUPPORT                        = True
+    FREE_SUPPORT                        = False
     XRAY_SUPPORT                        = False
     DISK_ONLY                           = False
     DATA_SOURCE_URI                     = None

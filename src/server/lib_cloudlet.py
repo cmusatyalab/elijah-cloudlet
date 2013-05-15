@@ -837,6 +837,7 @@ def save_mem_snapshot(machine, fout_path, **kwargs):
     print "[INFO] (Check file at %s)" % fout_path
     try:
         ret = machine.save(fout_path)
+        machine = None
     except libvirt.libvirtError, e:
         raise CloudletGenerationError("libvirt memory save : " + str(e))
     if ret != 0:
@@ -1244,7 +1245,7 @@ def create_baseVM(disk_image_path):
         base_hashvalue = Disk.hashing(disk_image_path, base_diskmeta, print_out = sys.stdout)
     except Exception as e:
         sys.stderr.write(str(e) + "\n")
-        if machine:
+        if machine != None:
             machine.destroy()
         sys.exit(1)
 
