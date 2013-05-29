@@ -1193,6 +1193,19 @@ def validate_congifuration():
     return True
 
 
+def _create_baseVM(machine, base_mempath, base_memmeta, base_diskpath, base_diskmeta, print_out=None):
+    # make memory snapshot
+    # VM has to be paused first to perform stable disk hashing
+    save_mem_snapshot(machine, base_mempath)
+    base_mem = Memory.hashing(base_mempath)
+    base_mem.export_to_file(base_memmeta)
+
+    # generate disk hashing
+    # TODO: need more efficient implementation, e.g. bisect
+    base_hashvalue = Disk.hashing(base_diskpath, base_diskmeta, print_out = sys.stdout)
+    return base_hashvalue
+
+
 def create_baseVM(disk_image_path):
     # Create Base VM(disk, memory) snapshot using given VM disk image
     # :param disk_image_path : file path of the VM disk image
@@ -1234,15 +1247,8 @@ def create_baseVM(disk_image_path):
     machine = None
     try:
         machine = run_vm(conn, new_xml_string, wait_vnc=True)
-        # make memory snapshot
-        # VM has to be paused first to perform stable disk hashing
-        save_mem_snapshot(machine, base_mempath)
-        base_mem = Memory.hashing(base_mempath)
-        base_mem.export_to_file(base_memmeta)
-
-        # generate disk hashing
-        # TODO: need more efficient implementation, e.g. bisect
-        base_hashvalue = Disk.hashing(disk_image_path, base_diskmeta, print_out = sys.stdout)
+        base_hashvalue = _create_baseVM(machine, base_mempath, base_memmeta, \
+                disk_image_path, base_diskmeta, print_out=None)
     except Exception as e:
         sys.stderr.write(str(e) + "\n")
         if machine != None:
