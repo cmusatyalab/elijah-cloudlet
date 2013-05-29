@@ -21,15 +21,16 @@ import sys
 import struct
 import tool
 import mmap
-import vmnetx
 import subprocess
-from Configuration import Const
-from progressbar import AnimatedProgressBar
-from delta import DeltaItem
-from delta import DeltaList
-from hashlib import sha256
 from optparse import OptionParser
-from delta import Recovered_delta
+from hashlib import sha256
+
+from synthesis import vmnetx
+from synthesis.Configuration import Const
+from synthesis.progressbar import AnimatedProgressBar
+from synthesis.delta import DeltaItem
+from synthesis.delta import DeltaList
+from synthesis.delta import Recovered_delta
 
 #GLOBAL
 EXT_RAW = ".raw"
@@ -223,6 +224,7 @@ class Memory(object):
             msg += "This happends when resiude generated multiple times\n"
             msg += "It's not easy to fix since header length change will make VM's memory snapshot size\n"
             msg += "different from base VM"
+            import pdb;pdb.set_trace()
             raise MemoryError(msg)
 
         # get memory meta data from snapshot

@@ -22,11 +22,12 @@ import mmap
 import tool
 import os
 import random
-from Configuration import Const
+import multiprocessing 
 from operator import itemgetter
 from hashlib import sha256
-import multiprocessing 
 from lzma import LZMACompressor
+
+from synthesis.Configuration import Const
 
 class DeltaError(Exception):
     pass

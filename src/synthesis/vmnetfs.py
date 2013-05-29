@@ -17,11 +17,9 @@
 import os
 import subprocess
 import select
-import io
 import threading
 import time
 import sys
-from pprint import pprint
 
 
 # system.py is built at install time, so pylint may fail to import it.

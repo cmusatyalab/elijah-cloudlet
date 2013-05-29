@@ -6,7 +6,8 @@ import sys
 import subprocess
 import os
 from tempfile import NamedTemporaryFile
-from Configuration import Const
+
+from synthesis.Configuration import Const
 
 
 class xrayError(Exception):

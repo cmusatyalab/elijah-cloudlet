@@ -20,15 +20,16 @@ import struct
 import os
 import sys
 import mmap
-import tool
-import delta
 from math import ceil
-from delta import DeltaItem
-from delta import DeltaList
-from delta import Recovered_delta
-from progressbar import AnimatedProgressBar
 from hashlib import sha256
 from operator import itemgetter
+
+from synthesis import tool
+from synthesis import delta
+from synthesis.delta import DeltaItem
+from synthesis.delta import DeltaList
+from synthesis.delta import Recovered_delta
+from synthesis.progressbar import AnimatedProgressBar
 
 class DiskError(Exception):
     pass

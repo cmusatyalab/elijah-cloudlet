@@ -2,7 +2,7 @@ import subprocess
 import threading
 import os
 import sys
-from Configuration import Const as Const
+from synthesis.Configuration import Const as Const
 
 
 class RESTServerError(Exception):

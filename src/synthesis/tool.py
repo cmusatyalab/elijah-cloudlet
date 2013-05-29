@@ -26,9 +26,11 @@ from hashlib import sha256
 import mmap
 import struct
 import msgpack 
-from Configuration import Const
 from lzma import LZMACompressor
 from lzma import LZMADecompressor
+
+from synthesis.Configuration import Const
+
 
 #global
 HASHFILE_MAGIC = 0x1145511a
