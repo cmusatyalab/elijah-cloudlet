@@ -29,13 +29,16 @@ import msgpack
 import hashlib
 import libvirt
 import shutil
-from db import api as db_api
-from db import table_def as db_table
-from Configuration import Const
-from Configuration import Options
-from Configuration import Discovery_Const
-from delta import DeltaList
-from delta import DeltaItem
+
+from synthesis.db import api as db_api
+from synthesis.db import table_def as db_table
+from synthesis.Configuration import Const
+from synthesis.Configuration import Options
+from synthesis.Configuration import Discovery_Const
+from synthesis.delta import DeltaList
+from synthesis.delta import DeltaItem
+#from synthesis.caching import CloudletCache as cache
+
 from xml.etree import ElementTree
 from xml.etree.ElementTree import Element
 from uuid import uuid4
@@ -45,7 +48,6 @@ from time import sleep
 import threading
 from optparse import OptionParser
 from multiprocessing import Pipe
-#from caching import CloudletCache as cache
 
 from tool import comp_lzma
 from tool import diff_files

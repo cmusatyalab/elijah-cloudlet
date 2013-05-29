@@ -19,12 +19,10 @@
 DB wrapper for cloudlet
 """
 
-from Configuration import Const
-from contextlib import closing
-import sqlite3
 import os
 import sqlalchemy
 import sys
+from synthesis.Configuration import Const
 from sqlalchemy.orm import sessionmaker
 
 from table_def import create_db

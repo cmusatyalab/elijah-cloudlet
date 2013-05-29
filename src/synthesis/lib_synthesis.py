@@ -23,25 +23,26 @@ import socket
 import msgpack
 import tempfile
 import struct
-import lib_cloudlet as cloudlet
-from db.api import DBConnector
-from db.table_def import BaseVM, Session, OverlayVM
 import shutil
+
+from synthesis import lib_cloudlet as cloudlet
+from synthesis.db.api import DBConnector
+from synthesis.db.table_def import BaseVM, Session, OverlayVM
+from synthesis.synthesis_protocol import Protocol as Protocol
+from synthesis.upnp_server import UPnPServer, UPnPError
+from synthesis.RESTServer_binder import RESTServer, RESTServerError
+from synthesis.discovery.ds_register import RegisterError
+from synthesis.discovery.ds_register import RegisterThread
+from synthesis.discovery.monitor.resource import ResourceMonitorThread
+from synthesis.discovery.monitor.resource import ResourceMonitorError
+from synthesis.Configuration import Const as Cloudlet_Const
+from synthesis.Configuration import Synthesis_Const as Synthesis_Const
 
 from pprint import pformat
 from optparse import OptionParser
 from multiprocessing import Process, JoinableQueue, Queue, Manager
-from Configuration import Const as Cloudlet_Const
-from Configuration import Synthesis_Const as Synthesis_Const
 from lzma import LZMADecompressor
 from datetime import datetime
-from synthesis_protocol import Protocol as Protocol
-from upnp_server import UPnPServer, UPnPError
-from RESTServer_binder import RESTServer, RESTServerError
-from discovery.ds_register import RegisterError
-from discovery.ds_register import RegisterThread
-from discovery.monitor.resource import ResourceMonitorThread
-from discovery.monitor.resource import ResourceMonitorError
 
 Log = cloudlet.CloudletLog("./log_synthesis/log_synthesis-%s" % str(datetime.now()).split(" ")[1])
 
