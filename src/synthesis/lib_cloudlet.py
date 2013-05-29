@@ -45,7 +45,7 @@ from time import sleep
 import threading
 from optparse import OptionParser
 from multiprocessing import Pipe
-from caching import CloudletCache as cache
+#from caching import CloudletCache as cache
 
 from tool import comp_lzma
 from tool import diff_files

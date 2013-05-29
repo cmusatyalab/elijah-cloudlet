@@ -15,7 +15,7 @@
 # for more details.
 #
 import sys
-sys.path.append("../src/server/")
+sys.path.append("../src/synthesis/")
 
 import signal
 from lib_synthesis import SynthesisServer

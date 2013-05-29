@@ -16,7 +16,7 @@
 #
 
 import sys
-sys.path.append("../src/server")
+sys.path.append("../src/synthesis")
 
 import lib_cloudlet as lib_cloudlet
 import os
