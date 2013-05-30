@@ -420,13 +420,19 @@ def _test_dma_accuracy(dma_dict, disk_deltalist, mem_deltalist, Log=sys.stdout):
 
 def _convert_xml(xml, conn, vm_name=None, disk_path=None, uuid=None, \
         logfile=None, qemu_args=None):
-    if vm_name:
+
+    # delete padding
+    padding_element = xml.find("description")
+    if padding_element != None:
+        xml.remove(padding_element)
+
+    if vm_name != None:
         name_element = xml.find('name')
         if not name_element:
             raise CloudletGenerationError("Malfomed XML input: %s", Const.TEMPLATE_XML)
         name_element.text = vm_name
 
-    if uuid:
+    if uuid != None:
         uuid_element = xml.find('uuid')
         uuid_element.text = str(uuid)
 
@@ -438,7 +444,7 @@ def _convert_xml(xml, conn, vm_name=None, disk_path=None, uuid=None, \
     qemu_emulator.text = Const.QEMU_BIN_PATH
 
     # disk path is required
-    if not disk_path:
+    if disk_path == None:
         raise CloudletGenerationError("Need disk_path to run new VM")
 
     # find all disk element(hdd, cdrom)
@@ -462,7 +468,7 @@ def _convert_xml(xml, conn, vm_name=None, disk_path=None, uuid=None, \
         cdrom_source.set("file", os.path.abspath(Const.TEMPLATE_OVF))
 
     # append QEMU-argument
-    if logfile:
+    if logfile != None:
         qemu_xmlns="http://libvirt.org/schemas/domain/qemu/1.0"
         qemu_element = xml.find("{%s}commandline" % qemu_xmlns)
         if qemu_element == None:
@@ -838,8 +844,27 @@ def save_mem_snapshot(machine, fout_path, **kwargs):
     print "[INFO] (This could take up to minute depend on VM's memory size)"
     print "[INFO] (Check file at %s)" % fout_path
     try:
-        ret = machine.save(fout_path)
+        tmp_outpath = fout_path + ".tmp"
+        ret = machine.save(tmp_outpath)
         machine = None
+
+        # generate new memory snapshot with 4KB aligned header
+        # TODO: fix this more efficiently
+        xml_string = vmnetx._QemuMemoryHeader(open(tmp_outpath, "r")).xml
+        insert_key = "</uuid>\n"
+        seperate_loc = xml_string.find(insert_key) + len(insert_key)
+        left = xml_string[:seperate_loc]
+        right = xml_string[seperate_loc:]
+        current_size = (len(xml_string)+vmnetx._QemuMemoryHeader.HEADER_LENGTH)
+        padding_size = Memory.Memory.RAM_PAGE_SIZE - (current_size % Memory.Memory.RAM_PAGE_SIZE)
+        if padding_size == 0:
+            shutil.copy2(tmp_outpath, fout_path)
+        else:
+            padding = "  <description>%s</description>\n" % \
+                    ("p" * (padding_size-len("  <description></description>\n")-1))
+            new_xml = left + padding + right + "\0"
+            vmnetx.copy_memory(tmp_outpath, fout_path, new_xml)
+        os.remove(tmp_outpath)
     except libvirt.libvirtError, e:
         raise CloudletGenerationError("libvirt memory save : " + str(e))
     if ret != 0:

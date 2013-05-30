@@ -16,6 +16,7 @@
 #
 
 from __future__ import division
+import os
 import struct
 import subprocess
 
@@ -69,10 +70,6 @@ class _QemuMemoryHeader(object):
 
     def write(self, f):
         # Calculate header
-        if len(self.xml) > self._xml_len - 1:
-            # If this becomes a problem, we could write out a larger xml_len,
-            # though this must be page-aligned.
-            raise MachineGenerationError('self.xml is too large')
         header = [self.HEADER_MAGIC,
                 self.HEADER_VERSION,
                 self._xml_len,
@@ -106,30 +103,28 @@ class _QemuMemoryHeader(object):
 # pylint: enable=C0103
 
 
-def copy_memory(in_path, out_path, xml=None):
+def copy_memory(in_path, out_path, xml):
     # Recompress if possible
     fin = open(in_path)
     fout = open(out_path, 'w')
-    hdr = _QemuMemoryHeader(fin)
 
-    # Write header
-    hdr.compressed = hdr.COMPRESS_CLOUDLET
-    if xml is not None:
-        hdr.xml = xml
+    # Write header to output
+    hdr = _QemuMemoryHeader(fin)
+    hdr._xml_len = len(xml)
+    hdr.xml = xml
     hdr.write(fout)
 
-    # Print size of uncompressed image
-    fin.seek(0, 2)
-    total = fin.tell()
+    # move fin position to data
+    hdr = _QemuMemoryHeader(fin)
     hdr.seek_body(fin)
-    print 'Copying and compressing memory image (%d MB)...' % (
-            (total - fin.tell()) >> 20)
 
     # Write body
+    while True:
+        data = fin.read(1000*1000*10)
+        if len(data) == 0:
+            break
+        fout.write(data)
     fout.flush()
-    ret = subprocess.call(['xz', '-9cv'], stdin=fin, stdout=fout)
-    if ret:
-        raise IOError('XZ compressor failed')
 
 
 def copy_disk(in_path, out_path):
