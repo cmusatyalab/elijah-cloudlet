@@ -643,6 +643,7 @@ class SynthesisServer(SocketServer.TCPServer):
                 Log.write("[Warning] Cannot register Cloudlet to central server\n")
 
         # cloudlet REST Server
+        '''
         try:
             self.rest_server = RESTServer()
             self.rest_server.start()
@@ -651,14 +652,17 @@ class SynthesisServer(SocketServer.TCPServer):
             Log.write("[Warning] Cannot start REST API Server\n")
             self.rest_server = None
         Log.write("[INFO] Start RESTful API Server\n")
+        '''
 
         # cloudlet machine monitor
+        '''
         try:
             self.resource_monitor = ResourceMonitorThread(log=Log) 
             self.resource_monitor.start()
         except ResourceMonitorError as e:
             Log.write(str(e))
             Log.write("[Warning] Cannot register Cloudlet to central server\n")
+        '''
 
         Log.flush()
 
