@@ -25,10 +25,10 @@ from hashlib import sha1
 from hashlib import sha256
 import mmap
 import struct
-import msgpack 
 from lzma import LZMACompressor
 from lzma import LZMADecompressor
 
+from synthesis import msgpack 
 from synthesis.Configuration import Const
 
 

@@ -31,6 +31,5 @@
 		<acpi/>
 	</features>
 	<qemu:commandline>
-		<qemu:arg value='-usb'/>
 	</qemu:commandline>
 </domain>

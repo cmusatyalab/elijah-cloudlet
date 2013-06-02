@@ -59,17 +59,15 @@ class Const(object):
     META_OVERLAY_FILE_MEMORY_CHUNKS     = "memory_chunk"
 
     MODULE_DIR = os.path.dirname(os.path.abspath(__file__))
-    VMNETFS_PATH            = os.path.abspath(os.path.join(MODULE_DIR, "../../lib/bin/x86_64/vmnetfs"))
-    VMNETFS_PATH            = os.path.abspath(os.path.join(MODULE_DIR, "../../lib/bin/x86_64/vmnetfs"))
-    #QEMU_BIN_PATH           = os.path.abspath(os.path.join(MODULE_DIR, "../../lib/bin/x86_64/qemu-system-x86_64"))
-    QEMU_BIN_PATH           = os.path.abspath(os.path.join(MODULE_DIR, "/usr/bin/qemu-system-x86_64"))
-    FREE_MEMORY_BIN_PATH    = os.path.abspath(os.path.join(MODULE_DIR, "../../lib/bin/x86_64/free_page_scan"))
-    XRAY_BIN_PATH           = os.path.abspath(os.path.join(MODULE_DIR, "../../lib/x86_64/disk_analyzer"))
+    VMNETFS_PATH            = os.path.abspath(os.path.join(MODULE_DIR, "lib/bin/x86_64/vmnetfs"))
+    QEMU_BIN_PATH           = os.path.abspath(os.path.join(MODULE_DIR, "lib/bin/x86_64/qemu-system-x86_64"))
+    FREE_MEMORY_BIN_PATH    = os.path.abspath(os.path.join(MODULE_DIR, "lib/bin/x86_64/free_page_scan"))
+    XRAY_BIN_PATH           = os.path.abspath(os.path.join(MODULE_DIR, "lib/x86_64/disk_analyzer"))
 
-    CLOUDLET_DB             = os.path.abspath(os.path.join(MODULE_DIR, "./config/cloudlet.db"))
-    CLOUDLET_DB_SCHEMA      = os.path.abspath(os.path.join(MODULE_DIR, "./config/schema.sql"))
-    TEMPLATE_XML            = os.path.abspath(os.path.join(MODULE_DIR, "./config/VM_TEMPLATE.xml"))
-    TEMPLATE_OVF            = os.path.abspath(os.path.join(MODULE_DIR, "./config/ovftransport.iso"))
+    CLOUDLET_DB             = os.path.abspath(os.path.join(MODULE_DIR, "config/cloudlet.db"))
+    CLOUDLET_DB_SCHEMA      = os.path.abspath(os.path.join(MODULE_DIR, "config/schema.sql"))
+    TEMPLATE_XML            = os.path.abspath(os.path.join(MODULE_DIR, "config/VM_TEMPLATE.xml"))
+    TEMPLATE_OVF            = os.path.abspath(os.path.join(MODULE_DIR, "config/ovftransport.iso"))
     UPnP_SERVER             = os.path.abspath(os.path.join(MODULE_DIR, "../../lib/bin/upnp_server.jar"))
     REST_SERVER_BIN         = os.path.abspath(os.path.join(MODULE_DIR, "./RESTServer"))
     CHUNK_SIZE=4096

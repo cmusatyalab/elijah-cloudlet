@@ -25,7 +25,6 @@ import vmnetx
 import stat
 import delta
 import xray
-import msgpack
 import hashlib
 import libvirt
 import shutil
@@ -37,6 +36,7 @@ from synthesis.Configuration import Options
 from synthesis.Configuration import Discovery_Const
 from synthesis.delta import DeltaList
 from synthesis.delta import DeltaItem
+from synthesis import msgpack
 #from synthesis.caching import CloudletCache as cache
 
 from xml.etree import ElementTree
@@ -49,9 +49,9 @@ import threading
 from optparse import OptionParser
 from multiprocessing import Pipe
 
-from tool import comp_lzma
-from tool import diff_files
-from tool import decomp_overlay
+from synthesis.tool import comp_lzma
+from synthesis.tool import diff_files
+from synthesis.tool import decomp_overlay
 
 
 class CloudletGenerationError(Exception):
@@ -79,7 +79,7 @@ class CloudletLog(object):
 
 
 class VM_Overlay(threading.Thread):
-    def __init__(self, base_disk, options, qemu_args=None):
+    def __init__(self, base_disk, options, qemu_args=None, **kwargs):
         # create user customized overlay.
         # First resume VM, then let user edit its VM
         # Finally, return disk/memory binary as an overlay
@@ -87,155 +87,169 @@ class VM_Overlay(threading.Thread):
         self.base_disk = base_disk
         self.options = options
         self.qemu_args = qemu_args
+        (self.base_diskmeta, self.base_mem, self.base_memmeta) = \
+                Const.get_basepath(self.base_disk, check_exist=True)
+        self.base_mem = kwargs.get("base_mem", None) or self.base_mem
+        self.base_diskmeta = kwargs.get("base_diskmeta", None) or self.base_diskmeta
+        self.base_memmeta = kwargs.get("base_memmeta", None) or self.base_memmeta
+
+        # find base vm's hashvalue from DB
+        self.base_hashvalue = kwargs.get("base_hashvalue", None)
+        if self.base_hashvalue == None:
+            dbconn = db_api.DBConnector()
+            basevm_list = dbconn.list_item(db_table.BaseVM)
+            for basevm_row in basevm_list:
+                if basevm_row.disk_path == self.base_disk:
+                    self.base_hashvalue = basevm_row.hash_value
+            if self.base_hashvalue == None:
+                msg = "Cannot find hashvalue for %s" % self.base_disk
+                raise CloudletGenerationError(msg)
+
+        self.log_path = os.path.join(os.path.dirname(self.base_disk), \
+                                os.path.basename(self.base_disk) + Const.OVERLAY_LOG)
+        self.print_out = CloudletLog(self.log_path)
         threading.Thread.__init__(self, target=self.create_overlay)
 
-    def create_overlay(self):
-        start_time = time()
-        log_path = os.path.join(os.path.dirname(self.base_disk), \
-                                os.path.basename(self.base_disk) + Const.OVERLAY_LOG)
-        Log = CloudletLog(log_path)
+    def resume_basevm(self):
+        self.start_time = time()
 
         if (self.options == None) or (isinstance(self.options, Options) == False):
             raise CloudletGenerationError("Given option class is invalid: %s" % str(self.options))
-        (base_diskmeta, base_mem, base_memmeta) = \
-                Const.get_basepath(self.base_disk, check_exist=True)
-
-        # find base vm from DB
-        base_hashvalue = None
-        dbconn = db_api.DBConnector()
-        basevm_list = dbconn.list_item(db_table.BaseVM)
-        for basevm_row in basevm_list:
-            if basevm_row.disk_path == self.base_disk:
-                base_hashvalue = basevm_row.hash_value
-        if base_hashvalue == None:
-            msg = "Cannot find hashvalue for %s" % self.base_disk
-            raise CloudletGenerationError(msg)
 
         # filename for overlay VM
-        qemu_logfile = NamedTemporaryFile(prefix="cloudlet-qemu-log-", delete=False)
+        self.qemu_logfile = NamedTemporaryFile(prefix="cloudlet-qemu-log-", delete=False)
 
         # option for data-intensive application
-        cache_manager = None
-        mount_point = None
+        self.cache_manager = None
+        self.mount_point = None
         if self.options.DATA_SOURCE_URI != None:
-            # check samba
-            if os.path.exists(Discovery_Const.HOST_SAMBA_DIR) == False:
-                msg = "Cloudlet does not have samba directory at %s\n" % \
-                        Discovery_Const.HOST_SAMBA_DIR
-                msg += "You can change samba path at Configuration.py\n"
-                raise CloudletGenerationError(msg)
-            # fetch URI to cache
-            try:
-                cache_manager = cache.CacheManager(Discovery_Const.CACHE_ROOT, \
-                        Discovery_Const.REDIS_ADDR, Discovery_Const.CACHE_FUSE_BINPATH,
-                        print_out=sys.stdout)
-                cache_manager.start()
-                compiled_list = cache.Util.get_compiled_URIs( \
-                        cache_manager.cache_dir, self.options.DATA_SOURCE_URI)
-                #cache_manager.fetch_compiled_URIs(compiled_list)
-                cache_fuse = cache_manager.launch_fuse(compiled_list)
-                Log.write("[INFO] cache fuse mount : %s, %s\n" % \
-                        (cache_fuse.url_root, cache_fuse.mountpoint))
-            except cache.CachingError, e:
-                msg = "Cannot retrieve data from URI: %s" % str(e)
-                raise CloudletGenerationError(msg)
-            # create symbolic link to samba dir
-            mount_point = os.path.join(Discovery_Const.HOST_SAMBA_DIR, cache_fuse.url_root)
-            if os.path.lexists(mount_point) == True:
-                os.unlink(mount_point)
-            os.symlink(cache_fuse.mountpoint, mount_point)
-            Log.write("[INFO] create symbolic link to %s\n" % mount_point)
+            cache_manager, mount_point = self._start_emulate_cache_fs()
 
         # make FUSE disk & memory
-        fuse = run_fuse(Const.VMNETFS_PATH, Const.CHUNK_SIZE,
+        self.fuse = run_fuse(Const.VMNETFS_PATH, Const.CHUNK_SIZE,
                 self.base_disk, os.path.getsize(self.base_disk),
-                base_mem, os.path.getsize(base_mem), print_out=Log)
-        modified_disk = os.path.join(fuse.mountpoint, 'disk', 'image')
-        base_mem_fuse = os.path.join(fuse.mountpoint, 'memory', 'image')
-        modified_mem = NamedTemporaryFile(prefix="cloudlet-mem-", delete=False)
+                self.base_mem, os.path.getsize(self.base_mem), print_out=self.print_out)
+        self.modified_disk = os.path.join(self.fuse.mountpoint, 'disk', 'image')
+        self.base_mem_fuse = os.path.join(self.fuse.mountpoint, 'memory', 'image')
+        self.modified_mem = NamedTemporaryFile(prefix="cloudlet-mem-", delete=False)
         # monitor modified chunks
-        stream_modified = os.path.join(fuse.mountpoint, 'disk', 'streams', 'chunks_modified')
-        stream_access = os.path.join(fuse.mountpoint, 'disk', 'streams', 'chunks_accessed')
-        memory_access = os.path.join(fuse.mountpoint, 'memory', 'streams', 'chunks_accessed')
-        fuse_stream_monitor = vmnetfs.StreamMonitor()
-        fuse_stream_monitor.add_path(stream_modified, vmnetfs.StreamMonitor.DISK_MODIFY)
-        fuse_stream_monitor.add_path(stream_access, vmnetfs.StreamMonitor.DISK_ACCESS)
-        fuse_stream_monitor.add_path(memory_access, vmnetfs.StreamMonitor.MEMORY_ACCESS)
-        fuse_stream_monitor.start()
-        qemu_monitor = vmnetfs.FileMonitor(qemu_logfile.name, vmnetfs.FileMonitor.QEMU_LOG)
-        qemu_monitor.start()
+        stream_modified = os.path.join(self.fuse.mountpoint, 'disk', 'streams', 'chunks_modified')
+        stream_access = os.path.join(self.fuse.mountpoint, 'disk', 'streams', 'chunks_accessed')
+        memory_access = os.path.join(self.fuse.mountpoint, 'memory', 'streams', 'chunks_accessed')
+        self.fuse_stream_monitor = vmnetfs.StreamMonitor()
+        self.fuse_stream_monitor.add_path(stream_modified, vmnetfs.StreamMonitor.DISK_MODIFY)
+        self.fuse_stream_monitor.add_path(stream_access, vmnetfs.StreamMonitor.DISK_ACCESS)
+        self.fuse_stream_monitor.add_path(memory_access, vmnetfs.StreamMonitor.MEMORY_ACCESS)
+        self.fuse_stream_monitor.start()
+        self.qemu_monitor = vmnetfs.FileMonitor(self.qemu_logfile.name, vmnetfs.FileMonitor.QEMU_LOG)
+        self.qemu_monitor.start()
 
         # 1. resume & get modified disk
-        Log.write("[INFO] * Overlay creation configuration\n")
-        Log.write("[INFO]  - %s\n" % str(self.options))
+        self.print_out.write("[INFO] * Overlay creation configuration\n")
+        self.print_out.write("[INFO]  - %s\n" % str(self.options))
         conn = get_libvirt_connection()
-        machine = run_snapshot(conn, modified_disk, base_mem_fuse, qemu_logfile=qemu_logfile.name, qemu_args=self.qemu_args)
-        connect_vnc(machine)
-        Log.write("[TIME] user interaction time for creating overlay: %f\n" % (time()-start_time))
+        self.machine = run_snapshot(conn, self.modified_disk, self.base_mem_fuse, qemu_logfile=self.qemu_logfile.name, qemu_args=self.qemu_args)
+        return self.machine
+
+    def create_overlay(self):
+        self.print_out.write("[TIME] user interaction time for creating overlay: %f\n" % (time()-self.start_time))
 
         # 2. get montoring info
-        monitoring_info = _get_monitoring_info(machine, self.options,
-                base_memmeta, base_diskmeta,
-                fuse_stream_monitor,
-                self.base_disk, base_mem,
-                modified_disk, modified_mem.name,
-                qemu_logfile, Log)
+        monitoring_info = _get_monitoring_info(self.machine, self.options,
+                self.base_memmeta, self.base_diskmeta,
+                self.fuse_stream_monitor,
+                self.base_disk, self.base_mem,
+                self.modified_disk, self.modified_mem.name,
+                self.qemu_logfile, self.print_out)
 
         # 3. get overlay VM
         overlay_deltalist = get_overlay_deltalist(monitoring_info, self.options,
-                self.base_disk, base_mem, base_memmeta, 
-                modified_disk, modified_mem.name,
-                Log)
+                self.base_disk, self.base_mem, self.base_memmeta, 
+                self.modified_disk, self.modified_mem.name,
+                self.print_out)
 
         # 4. create_overlayfile
         image_name = os.path.basename(self.base_disk).split(".")[0]
-        dir_path = os.path.dirname(base_mem)
+        dir_path = os.path.dirname(self.base_mem)
         overlay_prefix = os.path.join(dir_path, image_name+Const.OVERLAY_FILE_PREFIX)
         overlay_metapath = os.path.join(dir_path, image_name+Const.OVERLAY_META)
 
         self.overlay_metafile, self.overlay_files = \
                 generate_overlayfile(overlay_deltalist, self.options, 
-                base_hashvalue, os.path.getsize(modified_disk), 
-                os.path.getsize(modified_mem.name),
-                overlay_metapath, overlay_prefix, Log)
+                self.base_hashvalue, os.path.getsize(self.modified_disk), 
+                os.path.getsize(self.modified_mem.name),
+                overlay_metapath, overlay_prefix, self.print_out)
 
         # option for data-intensive application
         if self.options.DATA_SOURCE_URI != None:
-            uri_list = []
-            for each_info in compiled_list:
-                uri_list.append(each_info.get_uri())
-            uri_data = {
-                    'source_URI' : self.options.DATA_SOURCE_URI,
-                    'compiled_URIs' : uri_list,
-                    }
-
             overlay_uri_meta = os.path.join(dir_path, image_name+Const.OVERLAY_URIs)
-            with open(overlay_uri_meta, "w+b") as f:
-                import json
-                f.write(json.dumps(uri_data))
-            self.overlay_uri_meta = overlay_uri_meta
+            self.overlay_uri_meta =  self._terminate_emulate_cache_fs(overlay_uri_meta)
 
         # 5. terminting
-        fuse.terminate()
-        fuse_stream_monitor.terminate()
-        qemu_monitor.terminate()
-        fuse_stream_monitor.join()
-        qemu_monitor.join()
-        fuse.join()
-        if cache_manager != None:
-            cache_manager.terminate()
-            cache_manager.join()
-        if mount_point != None and os.path.lexists(mount_point):
-            os.unlink(mount_point)
+        self.fuse.terminate()
+        self.fuse_stream_monitor.terminate()
+        self.qemu_monitor.terminate()
+        self.fuse_stream_monitor.join()
+        self.qemu_monitor.join()
+        self.fuse.join()
+        if hasattr(self, "cache_manager") and self.cache_manager != None:
+            self.cache_manager.terminate()
+            self.cache_manager.join()
+        if hasattr(self, "mount_point") and self.mount_point != None and os.path.lexists(self.mount_point):
+            os.unlink(self.mount_point)
 
         if self.options.MEMORY_SAVE_PATH:
-            Log.write("[INFO] moving memory sansphost to %s\n" % self.options.MEMORY_SAVE_PATH)
-            shutil.move(modified_mem.name, self.options.MEMORY_SAVE_PATH)
+            self.print_out.write("[INFO] moving memory sansphost to %s\n" % self.options.MEMORY_SAVE_PATH)
+            shutil.move(self.modified_mem.name, self.options.MEMORY_SAVE_PATH)
         else:
-            os.unlink(modified_mem.name)
+            os.unlink(self.modified_mem.name)
 
-        if os.path.exists(qemu_logfile.name):
-            os.remove(qemu_logfile.name)
+        if os.path.exists(self.qemu_logfile.name):
+            os.remove(self.qemu_logfile.name)
+
+    def _start_emulate_cache_fs(self):
+        # check samba
+        if os.path.exists(Discovery_Const.HOST_SAMBA_DIR) == False:
+            msg = "Cloudlet does not have samba directory at %s\n" % \
+                    Discovery_Const.HOST_SAMBA_DIR
+            msg += "You can change samba path at Configuration.py\n"
+            raise CloudletGenerationError(msg)
+        # fetch URI to cache
+        try:
+            cache_manager = cache.CacheManager(Discovery_Const.CACHE_ROOT, \
+                    Discovery_Const.REDIS_ADDR, Discovery_Const.CACHE_FUSE_BINPATH,
+                    print_out=sys.stdout)
+            cache_manager.start()
+            self.compiled_list = cache.Util.get_compiled_URIs( \
+                    cache_manager.cache_dir, self.options.DATA_SOURCE_URI)
+            #cache_manager.fetch_compiled_URIs(compiled_list)
+            cache_fuse = cache_manager.launch_fuse(self.compiled_list)
+            self.print_out.write("[INFO] cache fuse mount : %s, %s\n" % \
+                    (cache_fuse.url_root, cache_fuse.mountpoint))
+        except cache.CachingError, e:
+            msg = "Cannot retrieve data from URI: %s" % str(e)
+            raise CloudletGenerationError(msg)
+        # create symbolic link to samba dir
+        mount_point = os.path.join(Discovery_Const.HOST_SAMBA_DIR, cache_fuse.url_root)
+        if os.path.lexists(mount_point) == True:
+            os.unlink(mount_point)
+        os.symlink(cache_fuse.mountpoint, mount_point)
+        self.print_out.write("[INFO] create symbolic link to %s\n" % mount_point)
+
+        return cache_manager, cache_fuse.mountpoint
+
+    def _terminate_emulate_cache_fs(self, overlay_uri_meta):
+        uri_list = []
+        for each_info in self.compiled_list:
+            uri_list.append(each_info.get_uri())
+        uri_data = {
+                'source_URI' : self.options.DATA_SOURCE_URI,
+                'compiled_URIs' : uri_list,
+                }
+        with open(overlay_uri_meta, "w+b") as f:
+            import json
+            f.write(json.dumps(uri_data))
+        return overlay_uri_meta
 
 
 class _MonitoringInfo(object):
@@ -338,8 +352,8 @@ def _create_overlay_meta(base_hash, overlay_metafile, modified_disksize, modifie
 
     meta_dict = dict()
     meta_dict[Const.META_BASE_VM_SHA256] = base_hash
-    meta_dict[Const.META_RESUME_VM_DISK_SIZE] = modified_disksize,
-    meta_dict[Const.META_RESUME_VM_MEMORY_SIZE] = modified_memsize,
+    meta_dict[Const.META_RESUME_VM_DISK_SIZE] = long(modified_disksize)
+    meta_dict[Const.META_RESUME_VM_MEMORY_SIZE] = long(modified_memsize)
     meta_dict[Const.META_OVERLAY_FILES] = blob_info
 
     serialized = msgpack.packb(meta_dict)
@@ -821,23 +835,13 @@ def run_vm(conn, domain_xml, **kwargs):
 
 
 def save_mem_snapshot(machine, fout_path, **kwargs):
-    #kwargs
-    #LOG = log object for nova
-    #nova_util = nova_util is executioin wrapper for nova framework
-    #           You should use nova_util in OpenStack, or subprocess
-    #           will be returned without finishing their work
-    log = kwargs.get('log', )
-    nova_util = kwargs.get('nova_util', None)
-
     #Set migration speed
     ret = machine.migrateSetMaxSpeed(1000000, 0)   # 1000 Gbps, unlimited
     if ret != 0:
         raise CloudletGenerationError("Cannot set migration speed : %s", machine.name())
 
     #Pause VM
-    ret = machine.suspend()
-    if ret != 0:
-        raise CloudletGenerationError("Cannot pause VM : %s", machine.name())
+    machine.suspend()
 
     #Save memory state
     print "[INFO] save VM memory state at %s" % fout_path
@@ -1207,23 +1211,35 @@ def synthesis_statistics(meta_info, decomp_overlay_file,
 '''External API Start
 '''
 def validate_congifuration():
+    if os.path.exists(Const.QEMU_BIN_PATH) == False:
+        sys.stderr.write("KVM/QEMU does not exist at %s\n" % Const.QEMU_BIN_PATH)
+        return False
+
     cmd = ["%s" % Const.QEMU_BIN_PATH, "--version"]
     proc = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, 
             close_fds=True)
     out, err = proc.communicate()
     if len(err) > 0:
-        print "KVM validation Error: %s" % (err)
+        sys.stderr.write("KVM validation Error: %s\n" % (err))
         return False
     if out.find("Cloudlet") < 0:
-        print "KVM validation Error, Incorrect Version:\n%s" % (out)
+        sys.stderr.write("KVM validation Error, Incorrect Version:\n%s\n" % (out))
         return False
     return True
 
 
-def _create_baseVM(machine, base_mempath, base_memmeta, base_diskpath, base_diskmeta, print_out=None):
+def _create_baseVM(domain, base_diskpath, base_mempath, base_diskmeta, base_memmeta, print_out=None):
+    """ generate base vm given base_diskpath
+    Args:
+        base_diskpath: path to disk image exists
+        base_mempath : target path to generate base mem
+        base_diskmeta : target path to generate basedisk hashlist
+        base_memmeta : target path to generate basemem hashlist
+
+    """
     # make memory snapshot
     # VM has to be paused first to perform stable disk hashing
-    save_mem_snapshot(machine, base_mempath)
+    save_mem_snapshot(domain, base_mempath)
     base_mem = Memory.hashing(base_mempath)
     base_mem.export_to_file(base_memmeta)
 
@@ -1274,8 +1290,8 @@ def create_baseVM(disk_image_path):
     machine = None
     try:
         machine = run_vm(conn, new_xml_string, wait_vnc=True)
-        base_hashvalue = _create_baseVM(machine, base_mempath, base_memmeta, \
-                disk_image_path, base_diskmeta, print_out=None)
+        base_hashvalue = _create_baseVM(machine, disk_image_path, base_mempath,
+                base_diskmeta, base_memmeta, print_out=None)
     except Exception as e:
         sys.stderr.write(str(e) + "\n")
         if machine != None:
@@ -1603,11 +1619,13 @@ def main(argv):
         # start application & VM
         options = Options()
         options.DISK_ONLY = False
-        overlay = VM_Overlay(disk_path, options)
-        overlay.start()
-        overlay.join()
-        print "[INFO] overlay metafile : %s" % overlay.overlay_metafile
-        print "[INFO] overlay : %s" % str(overlay.overlay_files[0])
+        vm_overlay = VM_Overlay(disk_path, options)
+        machine = vm_overlay.resume_basevm()
+        connect_vnc(machine)
+        vm_overlay.create_overlay()
+        
+        print "[INFO] overlay metafile : %s" % vm_overlay.overlay_metafile
+        print "[INFO] overlay : %s" % str(vm_overlay.overlay_files[0])
         print "[INFO] overlay creation time: %f" % (time()-start_time())
 
     elif mode == 'dedup_source':

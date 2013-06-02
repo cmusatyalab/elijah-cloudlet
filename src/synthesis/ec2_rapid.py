@@ -28,12 +28,12 @@ import subprocess
 import shutil
 import sys
 import tempfile
-from tempfile import NamedTemporaryFile
-import msgpack
-import lib_cloudlet as cloudlet
-import lib_synthesis as synthesis
-from Configuration import Const
 from multiprocessing import JoinableQueue, Queue, Manager
+
+from synthesis import lib_cloudlet as cloudlet
+from synthesis import lib_synthesis as synthesis
+from synthesis.Configuration import Const
+from synthesis import msgpack
 
 CHUNK_SIZE = 1024*16
 

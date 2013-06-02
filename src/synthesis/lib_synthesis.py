@@ -20,7 +20,6 @@ import sys
 import time
 import SocketServer
 import socket
-import msgpack
 import tempfile
 import struct
 import shutil
@@ -37,6 +36,7 @@ from synthesis.discovery.monitor.resource import ResourceMonitorThread
 from synthesis.discovery.monitor.resource import ResourceMonitorError
 from synthesis.Configuration import Const as Cloudlet_Const
 from synthesis.Configuration import Synthesis_Const as Synthesis_Const
+from synthesis import msgpack
 
 from pprint import pformat
 from optparse import OptionParser

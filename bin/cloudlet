@@ -141,21 +141,23 @@ def main(argv):
         options.DISK_ONLY = settings.disk_only
         options.DATA_SOURCE_URI = settings.source_uri
 
-        overlay = lib_cloudlet.VM_Overlay(disk_image_path, options, qemu_args)
-        overlay.start()
-        overlay.join()
-        if hasattr(overlay, "overlay_metafile") and hasattr(overlay, "overlay_files"):
+        vm_overlay = lib_cloudlet.VM_Overlay(disk_image_path, options, \
+                qemu_args=qemu_args)
+        machine = vm_overlay.resume_basevm()
+        lib_cloudlet.connect_vnc(machine)
+        vm_overlay.create_overlay()
+        if hasattr(vm_overlay, "overlay_metafile") and hasattr(vm_overlay, "overlay_files"):
             sys.stdout.write("[INFO] overlay metafile (%ld) : %s\n" % \
-                    (os.path.getsize(overlay.overlay_metafile), \
-                    overlay.overlay_metafile))
-            for overlay_file in overlay.overlay_files:
+                    (os.path.getsize(vm_overlay.overlay_metafile), \
+                    vm_overlay.overlay_metafile))
+            for overlay_file in vm_overlay.overlay_files:
                 sys.stdout.write("[INFO] overlay (%ld) : %s\n" % \
                         (os.path.getsize(overlay_file), overlay_file))
 
             # option for data-intensive application
-            if options.DATA_SOURCE_URI != None and hasattr(overlay, "overlay_uri_meta"):
+            if options.DATA_SOURCE_URI != None and hasattr(vm_overlay, "overlay_uri_meta"):
                 sys.stdout.write("[INFO] overlay URIs : %s\n" % \
-                        overlay.overlay_uri_meta)
+                        vm_overlay.overlay_uri_meta)
         else:
             sys.stderr.write("Failed to create overlay\n")
             sys.exit(1)
