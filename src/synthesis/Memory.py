@@ -60,6 +60,7 @@ class Memory(object):
     def __init__(self):
         self.hash_list = []
         self.raw_file = ''
+        self.raw_filesize = 0
         self.raw_mmap = None
 
     @staticmethod
@@ -80,7 +81,7 @@ class Memory(object):
                     return position
             start_index += len(memdata)
 
-    def _get_mem_hash(self, fin, start_offset, end_offset, hash_list, **kwargs):
+    def _get_mem_hash(self, fin, end_offset, hash_list, **kwargs):
         # kwargs
         #  diff: compare hash_list with self object
         #  print_out: log/process output 
@@ -92,17 +93,21 @@ class Memory(object):
         print_out.write("[INFO] Get hash list of memory page\n")
         prog_bar = AnimatedProgressBar(end=100, width=80, stdout=print_out)
 
-        fin.seek(start_offset)
-        total_size = end_offset-start_offset
+        total_size = end_offset
         ram_offset = 0
         freed_page_counter = 0
+        base_hashlist_length = len(self.hash_list)
         while total_size != ram_offset:
             data = fin.read(Memory.RAM_PAGE_SIZE)
             if not diff:
                 hash_list.append((ram_offset, len(data), sha256(data).digest()))
             else:
                 # compare input with hash or corresponding base memory, save only when it is different
-                self_hash_value = self.hash_list[ram_offset/Memory.RAM_PAGE_SIZE][2]
+                hash_list_index = ram_offset/Memory.RAM_PAGE_SIZE
+                if hash_list_index < base_hashlist_length:
+                    self_hash_value = self.hash_list[hash_list_index][2]
+                else:
+                    self_hash_value = None
 
                 if self_hash_value != sha256(data).digest():
                     is_free_memory = False
@@ -118,6 +123,8 @@ class Memory(object):
                         source_data = self.get_raw_data(ram_offset, len(data))
                         #save xdelta as DeltaItem only when it gives smaller
                         try:
+                            if source_data == None:
+                                raise IOError("launch memory snapshot is bigger than base vm")
                             patch = tool.diff_data(source_data, data, 2*len(source_data))
                             if len(patch) < len(data):
                                 delta_item = DeltaItem(DeltaItem.DELTA_MEMORY,
@@ -216,7 +223,7 @@ class Memory(object):
         libvirt_mem_hdr = vmnetx._QemuMemoryHeader(fin)
         libvirt_mem_hdr.seek_body(fin)
         libvirt_header_len = fin.tell()
-        if (libvirt_header_len != Memory.RAM_PAGE_SIZE):
+        if ((libvirt_header_len %  Memory.RAM_PAGE_SIZE) != 0):
             # TODO: need to modify libvirt migration file header 
             # in case it is not aligned with memory page size
             msg = "Error description:\n"
@@ -235,24 +242,25 @@ class Memory(object):
             print "end offset: %ld" % (ram_end_offset)
             raise MemoryError("ram header+data is not aligned with page size")
 
-        #import pdb;pdb.set_trace()
         if diff:
             # case for getting modified memory list
             if apply_free_memory == True:
                 # get free memory list
                 mem_size_mb = ram_info.get('pc.ram').get('length')/1024/1024
-                mem_offset = ram_info.get('pc.ram').get('offset')
+                mem_abs_offset = ram_info.get('pc.ram').get('offset')
                 self.free_pfn_dict = get_free_pfn_dict(filepath, mem_size_mb, \
-                        mem_offset)
+                        mem_abs_offset)
             else:
                 self.free_pfn_dict = None
 
-            freed_counter = self._get_mem_hash(fin, 0, file_size, hash_list, \
+            fin.seek(0)
+            freed_counter = self._get_mem_hash(fin, file_size, hash_list, \
                     diff=diff, free_pfn_dict=self.free_pfn_dict, \
                     apply_free_memory=apply_free_memory, print_out=print_out)
         else:
             # case for generating base memory hash list
-            freed_counter = self._get_mem_hash(fin, 0, file_size, hash_list, \
+            fin.seek(0)
+            freed_counter = self._get_mem_hash(fin, file_size, hash_list, \
                     diff=diff, free_pfn_dict=None, print_out=print_out)
 
         # get hash of memory area
@@ -271,6 +279,7 @@ class Memory(object):
 
         memory = Memory()
         memory.raw_file = open(raw_path, "rb")
+        memory.raw_filesize = os.path.getsize(raw_path)
         hashlist = Memory.import_hashlist(meta_path)
         memory.hash_list = hashlist
         return memory
@@ -313,7 +322,10 @@ class Memory(object):
         # retrieve page data from raw memory
         if not self.raw_mmap:
             self.raw_mmap = mmap.mmap(self.raw_file.fileno(), 0, prot=mmap.PROT_READ)
-        return self.raw_mmap[offset:offset+length]
+        if offset+length < self.raw_filesize:
+            return self.raw_mmap[offset:offset+length]
+        else:
+            return None
 
     def get_modified(self, new_kvm_file, apply_free_memory=True, free_memory_info=None):
         # get modified pages 
@@ -463,9 +475,9 @@ def get_free_pfn_dict(snapshot_path, mem_size, mem_offset):
     free_pfn_list = _get_free_pfn_list(snapshot_path, pglist_addr, pgn0_addr, \
             mem_size, mem_offset)
     if free_pfn_list:
-        # shift 4096*2 for libvirt header and KVM header
+        # free_pfn_list starts from the pc.ram so add offset of of pc.ram
         offset = (mem_offset)/Memory.RAM_PAGE_SIZE
-        free_pfn_aligned = dict([(long(page)+offset,1) for page in free_pfn_list])
+        free_pfn_aligned = dict([(long(page)+offset, True) for page in free_pfn_list])
         return free_pfn_aligned
     else:
         return None

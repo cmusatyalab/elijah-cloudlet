@@ -28,6 +28,7 @@ You will need:
 * liblzma-dev (for pyliblzma)
 * Java JRE (for UPnP server)
 * apparmor-utils (for disable apparmor for libvirt)
+* libc6-i386 (for extracting free memory of 32 bit vm)
 * python library
     - msgpack-python
     - bson
@@ -40,7 +41,7 @@ To install:
 1. install library dependency
    Example at ubuntu 12 LTS x86.
 
-		> $ sudo apt-get install qemu-kvm libvirt-bin gvncviewer python-libvirt python-xdelta3 python-dev openjdk-6-jre liblzma-dev apparmor-utils python-pip
+		> $ sudo apt-get install qemu-kvm libvirt-bin gvncviewer python-libvirt python-xdelta3 python-dev openjdk-6-jre liblzma-dev apparmor-utils libc6-i386 python-pip
 		> $ sudo pip install msgpack-python bson pyliblzma psutil sqlalchemy
 
 2. Disable security module.

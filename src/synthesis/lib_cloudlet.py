@@ -79,22 +79,23 @@ class CloudletLog(object):
 
 
 class VM_Overlay(threading.Thread):
-    def __init__(self, base_disk, options, qemu_args=None, **kwargs):
+    def __init__(self, base_disk, options, qemu_args=None,
+            base_mem=None, base_diskmeta=None, base_memmeta=None, base_hashvalue=None):
         # create user customized overlay.
         # First resume VM, then let user edit its VM
         # Finally, return disk/memory binary as an overlay
         # base_disk: path to base disk
         self.base_disk = base_disk
         self.options = options
-        self.qemu_args = qemu_args
+        self.qemu_args = qemu_args or None
         (self.base_diskmeta, self.base_mem, self.base_memmeta) = \
-                Const.get_basepath(self.base_disk, check_exist=True)
-        self.base_mem = kwargs.get("base_mem", None) or self.base_mem
-        self.base_diskmeta = kwargs.get("base_diskmeta", None) or self.base_diskmeta
-        self.base_memmeta = kwargs.get("base_memmeta", None) or self.base_memmeta
+                Const.get_basepath(self.base_disk, check_exist=False)
+        self.base_mem = base_mem or self.base_mem
+        self.base_diskmeta = base_diskmeta or self.base_diskmeta
+        self.base_memmeta = base_memmeta or self.base_memmeta
 
         # find base vm's hashvalue from DB
-        self.base_hashvalue = kwargs.get("base_hashvalue", None)
+        self.base_hashvalue = base_hashvalue or None
         if self.base_hashvalue == None:
             dbconn = db_api.DBConnector()
             basevm_list = dbconn.list_item(db_table.BaseVM)
@@ -111,8 +112,6 @@ class VM_Overlay(threading.Thread):
         threading.Thread.__init__(self, target=self.create_overlay)
 
     def resume_basevm(self):
-        self.start_time = time()
-
         if (self.options == None) or (isinstance(self.options, Options) == False):
             raise CloudletGenerationError("Given option class is invalid: %s" % str(self.options))
 
@@ -152,8 +151,6 @@ class VM_Overlay(threading.Thread):
         return self.machine
 
     def create_overlay(self):
-        self.print_out.write("[TIME] user interaction time for creating overlay: %f\n" % (time()-self.start_time))
-
         # 2. get montoring info
         monitoring_info = _get_monitoring_info(self.machine, self.options,
                 self.base_memmeta, self.base_diskmeta,
@@ -855,19 +852,21 @@ def save_mem_snapshot(machine, fout_path, **kwargs):
         # generate new memory snapshot with 4KB aligned header
         # TODO: fix this more efficiently
         xml_string = vmnetx._QemuMemoryHeader(open(tmp_outpath, "r")).xml
-        insert_key = "</uuid>\n"
-        seperate_loc = xml_string.find(insert_key) + len(insert_key)
-        left = xml_string[:seperate_loc]
-        right = xml_string[seperate_loc:]
         current_size = (len(xml_string)+vmnetx._QemuMemoryHeader.HEADER_LENGTH)
-        padding_size = Memory.Memory.RAM_PAGE_SIZE - (current_size % Memory.Memory.RAM_PAGE_SIZE)
-        if padding_size == 0:
-            shutil.copy2(tmp_outpath, fout_path)
+
+        # have enough padding size to protect xml size overflow
+        padding_size = (2*Memory.Memory.RAM_PAGE_SIZE) - \
+                (current_size % Memory.Memory.RAM_PAGE_SIZE)
+        if padding_size < 0:
+            msg = "WE FIXED LIBVIRT HEADER SIZE TO 2*4096\n" + \
+                    "But given xml size is bigger than 2*4096"
+            raise CloudletGenerationError(msg)
+        elif padding_size == 0:
+            os.link(tmp_outpath, fout_path)
         else:
-            padding = "  <description>%s</description>\n" % \
-                    ("p" * (padding_size-len("  <description></description>\n")-1))
-            new_xml = left + padding + right + "\0"
+            new_xml = xml_string + ("\0" * padding_size)
             vmnetx.copy_memory(tmp_outpath, fout_path, new_xml)
+                
         os.remove(tmp_outpath)
     except libvirt.libvirtError, e:
         raise CloudletGenerationError("libvirt memory save : " + str(e))
@@ -1290,7 +1289,7 @@ def create_baseVM(disk_image_path):
     machine = None
     try:
         machine = run_vm(conn, new_xml_string, wait_vnc=True)
-        base_hashvalue = _create_baseVM(machine, disk_image_path, base_mempath,
+        base_hashvalue = _create_baseVM(machine, disk_image_path, base_mempath, 
                 base_diskmeta, base_memmeta, print_out=None)
     except Exception as e:
         sys.stderr.write(str(e) + "\n")
@@ -1300,6 +1299,11 @@ def create_baseVM(disk_image_path):
 
     # save the result to DB
     dbconn = db_api.DBConnector()
+    basevm_list = dbconn.list_item(db_table.BaseVM)
+    for item in basevm_list:
+        if disk_image_path == item.disk_path: 
+            dbconn.del_item(item)
+            break
     new_basevm = db_table.BaseVM(disk_image_path, base_hashvalue)
     dbconn.add_item(new_basevm)
 
