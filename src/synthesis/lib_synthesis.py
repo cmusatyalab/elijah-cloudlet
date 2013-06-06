@@ -347,7 +347,7 @@ class SynthesisHandler(SocketServer.StreamRequestHandler):
 
         if self.synthesis_option.get(Protocol.SYNTHESIS_OPTION_EARLY_START, False):
             # 1. resume VM
-            self.resumed_VM = cloudlet.ResumedVM(modified_img, modified_mem, self.fuse)
+            self.resumed_VM = cloudlet.SynthesizedVM(modified_img, modified_mem, self.fuse)
             time_start_resume = time.time()
             self.resumed_VM.start()
             time_end_resume = time.time()
@@ -373,7 +373,7 @@ class SynthesisHandler(SocketServer.StreamRequestHandler):
             self.fuse_thread.start()
 
             # 2. resume VM
-            self.resumed_VM = cloudlet.ResumedVM(modified_img, modified_mem, self.fuse)
+            self.resumed_VM = cloudlet.SynthesizedVM(modified_img, modified_mem, self.fuse)
             self.resumed_VM.start()
 
             # 3. wait for fuse end

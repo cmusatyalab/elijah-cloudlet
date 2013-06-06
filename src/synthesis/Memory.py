@@ -231,7 +231,6 @@ class Memory(object):
             msg += "This happends when resiude generated multiple times\n"
             msg += "It's not easy to fix since header length change will make VM's memory snapshot size\n"
             msg += "different from base VM"
-            import pdb;pdb.set_trace()
             raise MemoryError(msg)
 
         # get memory meta data from snapshot
