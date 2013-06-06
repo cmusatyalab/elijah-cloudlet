@@ -438,12 +438,12 @@ def diff_with_hashlist(base_hashlist, delta_list, ref_id):
 class Recovered_delta(multiprocessing.Process):
     FUSE_INDEX_DISK = 1
     FUSE_INDEX_MEMORY = 2
-    END_OF_PIPE = -133421
+    END_OF_PIPE = "end_of_pipe"
 
     def __init__(self, base_disk, base_mem, overlay_path, 
             output_mem_path, output_mem_size, 
             output_disk_path, output_disk_size, chunk_size,
-            out_pipe=None, time_queue=None, print_out=None,
+            out_pipename=None, time_queue=None, print_out=None,
             deltalist_savepath=None):
         ''' recover delta list using base disk/memory
         Args:
@@ -461,7 +461,7 @@ class Recovered_delta(multiprocessing.Process):
         self.output_mem_size = output_mem_size
         self.output_disk_path = output_disk_path
         self.output_disk_size = output_disk_size
-        self.out_pipe = out_pipe
+        self.out_pipename = out_pipename
         self.time_queue = time_queue
         self.base_disk = base_disk
         self.base_mem = base_mem
@@ -488,6 +488,7 @@ class Recovered_delta(multiprocessing.Process):
 
     def run(self):
         start_time = time.time()
+        self.out_pipe = open(self.out_pipename, "w")
         count = 0
         self.recover_mem_fd = open(self.output_mem_path, "wrb")
         self.recover_disk_fd = open(self.output_disk_path, "wrb")
@@ -522,7 +523,7 @@ class Recovered_delta(multiprocessing.Process):
                 self.recover_mem_fd.flush()
                 self.recover_disk_fd.flush()
 
-                self.out_pipe.send(overlay_chunk_ids)
+                self.out_pipe.write(",".join(overlay_chunk_ids) + '\n')
                 count += len(overlay_chunk_ids)
                 overlay_chunk_ids[:] = []
 
@@ -530,7 +531,7 @@ class Recovered_delta(multiprocessing.Process):
             self.out_pipe.send(overlay_chunk_ids)
             count += len(overlay_chunk_ids)
 
-        self.out_pipe.send(Recovered_delta.END_OF_PIPE)
+        self.out_pipe.write(str(Recovered_delta.END_OF_PIPE) + "\n")
         self.out_pipe.close()
         self.recover_mem_fd.close()
         self.recover_disk_fd.close()

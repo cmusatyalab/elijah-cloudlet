@@ -16,20 +16,23 @@
 #
 
 import os
-import msgpack
-import struct
 import sys
+sys.path.append("../src/")
+
+from synthesis import lib_cloudlet as lib_cloudlet
+from synthesis import msgpack
+import struct
 import socket
 import time
 import threading
 import select
-from synthesis_protocol import Protocol as protocol
 from optparse import OptionParser
 from pprint import pprint
-from discovery.discovery_api import API
-from discovery.discovery_api import Cloudlet
-from discovery.discovery_api import Util
-from discovery import discovery_api
+from synthesis.synthesis_protocol import Protocol as protocol
+from synthesis.discovery.client.discovery_api import API
+from synthesis.discovery.client.discovery_api import Cloudlet
+from synthesis.discovery.client.discovery_api import Util
+from synthesis.discovery.client import discovery_api
 
 
 class RapidClientError(Exception):

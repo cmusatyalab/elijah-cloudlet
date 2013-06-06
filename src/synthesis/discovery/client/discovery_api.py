@@ -19,9 +19,9 @@ import sys
 import struct
 import socket
 import pprint
-import msgpack
-from protocol import Protocol as protocol
-import ResourceConst as Const
+from synthesis import msgpack
+from synthesis.synthesis_protocol import Protocol as protocol
+from synthesis.discovery.monitor import ResourceConst as Const
 
 
 CLOUDLET_DOMAIN = "search.findcloudlet.org"

@@ -16,13 +16,11 @@
 #
 
 import sys
-import time
 from optparse import OptionParser
 
 import urllib
 import httplib
 import json
-import socket
 from urlparse import urlparse
 
 

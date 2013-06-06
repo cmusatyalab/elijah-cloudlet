@@ -119,7 +119,8 @@ class VM_Overlay(threading.Thread):
 
         # filename for overlay VM
         self.qemu_logfile = NamedTemporaryFile(prefix="cloudlet-qemu-log-", delete=False)
-        os.chmod(self.qemu_logfile.name, stat.S_IROTH | stat.S_IWOTH | stat.S_IRUSR | stat.S_IWUSR | stat.S_IRGRP | stat.S_IWGRP)
+        os.chmod(self.qemu_logfile.name, stat.S_IROTH | stat.S_IWOTH | \
+                stat.S_IRUSR | stat.S_IWUSR | stat.S_IRGRP | stat.S_IWGRP)
 
         # option for data-intensive application
         self.cache_manager = None
@@ -280,6 +281,7 @@ class SynthesizedVM(threading.Thread):
     def __init__(self, launch_disk, launch_mem, fuse, disk_only=False, qemu_args=None, **kwargs):
         # kwargs
         # param Log: log out
+        self.vm_xml = kwargs.get("vm_xml", None)
         self.LOG = kwargs.get("log", None)
         if self.LOG == None:
             self.LOG = open("/dev/null", "w+b")
@@ -292,6 +294,8 @@ class SynthesizedVM(threading.Thread):
         self.launch_disk = launch_disk
         self.launch_mem = launch_mem
         self.qemu_logfile = NamedTemporaryFile(prefix="cloudlet-qemu-log-", delete=False)
+        os.chmod(self.qemu_logfile.name, stat.S_IROTH | stat.S_IWOTH | \
+                stat.S_IRUSR | stat.S_IWUSR | stat.S_IRGRP | stat.S_IWGRP)
         self.resumed_disk = os.path.join(fuse.mountpoint, 'disk', 'image')
         self.resumed_mem = os.path.join(fuse.mountpoint, 'memory', 'image')
         self.stream_modified = os.path.join(fuse.mountpoint, 'disk', 'streams', 'chunks_modified')
@@ -321,7 +325,7 @@ class SynthesizedVM(threading.Thread):
             else:
                 self.machine = run_snapshot(conn, self.resumed_disk, self.resumed_mem,
                         qemu_logfile=self.qemu_logfile.name, resume_time=self.resume_time,
-                        qemu_args=self.qemu_args)
+                        qemu_args=self.qemu_args, new_xml=self.vm_xml)
         except Exception as e:
             sys.stdout.write(str(e)+"\n")
 
@@ -497,7 +501,6 @@ def _convert_xml(xml, conn, vm_name=None, disk_path=None, uuid=None, \
         cdrom_source.set("file", os.path.abspath(Const.TEMPLATE_OVF))
 
     # append QEMU-argument
-    '''
     if logfile != None:
         qemu_xmlns="http://libvirt.org/schemas/domain/qemu/1.0"
         qemu_element = xml.find("{%s}commandline" % qemu_xmlns)
@@ -509,7 +512,6 @@ def _convert_xml(xml, conn, vm_name=None, disk_path=None, uuid=None, \
             #raise CloudletGenerationError(msg)
         qemu_element.append(Element("{%s}arg" % qemu_xmlns, {'value':'-cloudlet'}))
         qemu_element.append(Element("{%s}arg" % qemu_xmlns, {'value':"logfile=%s" % logfile}))
-    '''
 
     # append user qemu argument
     if qemu_args:
@@ -746,10 +748,13 @@ def recover_launchVM(base_image, meta_info, overlay_file, **kwargs):
     #           You should use nova_util in OpenStack, or subprocess
     #           will be returned without finishing their work
     log = kwargs.get('log', open("/dev/null", "w+b"))
-    nova_util = kwargs.get('nova_util', None)
+    base_mem = kwargs.get('base_mem', None)
+    base_diskmeta = kwargs.get('base_diskmeta', None)
+    base_memmeta = kwargs.get('base_memmeta', None)
 
-    (base_diskmeta, base_mem, base_memmeta) = \
-            Const.get_basepath(base_image, check_exist=True)
+    if (not base_mem) or (not base_diskmeta) or (not base_memmeta):
+        (base_diskmeta, base_mem, base_memmeta) = \
+                Const.get_basepath(base_image, check_exist=True)
     launch_mem = NamedTemporaryFile(prefix="cloudlet-launch-mem-", delete=False)
     launch_disk = NamedTemporaryFile(prefix="cloudlet-launch-disk-", delete=False)
 
@@ -777,13 +782,15 @@ def recover_launchVM(base_image, meta_info, overlay_file, **kwargs):
     log.write("[INFO] Start FUSE\n")
 
     # Recover Modified Memory
-    pipe_parent, pipe_child = Pipe()
+    named_pipename = overlay_file+".fifo"
+    os.mkfifo(named_pipename)
+
     delta_proc = delta.Recovered_delta(base_image, base_mem, overlay_file, \
             launch_mem.name, vm_memory_size,
             launch_disk.name, vm_disk_size, Const.CHUNK_SIZE,
-            out_pipe=pipe_child)
+            out_pipename=named_pipename)
     fuse_thread = vmnetfs.FuseFeedingThread(fuse,
-            pipe_parent, delta.Recovered_delta.END_OF_PIPE, print_out=log)
+            named_pipename, delta.Recovered_delta.END_OF_PIPE, print_out=log)
     return [launch_disk.name, launch_mem.name, fuse, delta_proc, fuse_thread]
 
 
@@ -942,11 +949,9 @@ def run_snapshot(conn, disk_image, mem_snapshot, **kwargs):
                 qemu_args=qemu_args)
 
     overwrite_xml(mem_snapshot, new_xml_string)
-    import pdb;pdb.set_trace()
 
     # resume
     restore_with_config(conn, mem_snapshot, new_xml_string)
-    import pdb;pdb.set_trace()
     if resume_time != None:
         resume_time['start_time'] = start_resume_time
         resume_time['end_time'] = time()
@@ -1440,13 +1445,21 @@ def _reconstruct_mem_deltalist(base_disk, base_mem, overlay_filepath):
     return ret_deltalist
 
 
-def synthesis(base_disk, meta, disk_only=False, return_residue=False, qemu_args=None):
+def synthesis(base_disk, meta, **kwargs):
     # VM Synthesis and run recoverd VM
     # param base_disk : path to base disk
     # param meta : path to meta file for overlay
     # param disk_only: synthesis size VM with only disk image
     # param return_residue: return residue of changed portion
     Log = CloudletLog()
+    disk_only = kwargs.get('disk_only', False)
+    return_residue = kwargs.get('return_residue', False)
+    qemu_args = kwargs.get('qemu_args', False)
+
+    vm_xml = kwargs.get('vm_xml', None)
+    base_mem = kwargs.get('base_mem', None)
+    base_diskmeta = kwargs.get('base_diskmeta', None)
+    base_memmeta = kwargs.get('base_memmeta', None)
 
     # decomp
     overlay_filename = NamedTemporaryFile(prefix="cloudlet-overlay-file-")
@@ -1456,13 +1469,21 @@ def synthesis(base_disk, meta, disk_only=False, return_residue=False, qemu_args=
     Log.write("[Debug] recover launch VM\n")
     launch_disk, launch_mem, fuse, delta_proc, fuse_thread = \
             recover_launchVM(base_disk, meta_info, overlay_filename.name, \
-            log=Log)
+            log=Log, **kwargs)
 
     # resume VM
     resumed_VM = SynthesizedVM(launch_disk, launch_mem, fuse,
-            disk_only=disk_only, qemu_args=qemu_args, log=Log)
-    resumed_VM.start()
+            disk_only=disk_only, qemu_args=qemu_args, log=Log,
+            vm_xml=vm_xml)
+    # testing non-thread resume
+    delta_proc.start()
+    fuse_thread.start()
+    delta_proc.join()
+    fuse_thread.join()
 
+    resumed_VM.resume()
+    '''
+    resumed_VM.start()
     delta_proc.start()
     fuse_thread.start()
 
@@ -1482,6 +1503,7 @@ def synthesis(base_disk, meta, disk_only=False, return_residue=False, qemu_args=
     print "[INFO] VM Memory is Fully recoverd at %s" % launch_mem
 
     resumed_VM.join()
+    '''
     connect_vnc(resumed_VM.machine)
 
     # statistics

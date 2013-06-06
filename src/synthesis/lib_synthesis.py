@@ -423,12 +423,14 @@ class SynthesisHandler(SocketServer.StreamRequestHandler):
         new_overlayvm.terminate()
 
     def _handle_get_resource_info(self, message):
-        resource = self.server.resource_monitor.get_static_resource()
-        resource.update(self.server.resource_monitor.get_dynamic_resource())
-        
-        # send response
-        pay_load = {Protocol.KEY_PAYLOAD: resource}
-        self.ret_success(Protocol.MESSAGE_COMMAND_GET_RESOURCE_INFO, pay_load)
+        if hasattr(self.server, 'resource_monitor'):
+            resource = self.server.resource_monitor.get_static_resource()
+            resource.update(self.server.resource_monitor.get_dynamic_resource())
+            # send response
+            pay_load = {Protocol.KEY_PAYLOAD: resource}
+            self.ret_success(Protocol.MESSAGE_COMMAND_GET_RESOURCE_INFO, pay_load)
+        else:
+            self.ret_fail("resource function is not implemented")
 
     def _handle_session_create(self, message):
         new_session = Session()

@@ -494,14 +494,15 @@ def _get_free_pfn_list(snapshot_path, pglist_addr, pgn0_addr, mem_size_gb, mem_o
             "%d" % mem_offset,
         ]
     _PIPE = subprocess.PIPE
+    print "[INFO] Start getting free memory pages"
     proc = subprocess.Popen(cmd, close_fds=True, stdin=_PIPE, stdout=_PIPE, stderr=_PIPE)
     out, err = proc.communicate()
     if err:
-        print "Error: " + err
         return list()
     free_pfn_list = out.split("\n")
     if len(free_pfn_list[-1].strip()) == 0:
         free_pfn_list = free_pfn_list[:-1]
+    print "[INFO] Finish getting free memory pages"
     return free_pfn_list
 
 

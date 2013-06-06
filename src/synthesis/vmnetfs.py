@@ -18,6 +18,7 @@ import os
 import subprocess
 import select
 import threading
+import multiprocessing
 import time
 import sys
 
@@ -288,36 +289,36 @@ class FileMonitor(threading.Thread):
         self.stop.set()
 
 
-class FuseFeedingThread(threading.Thread):
-    def __init__(self, fuse, input_pipe, END_OF_PIPE, **kwargs):
+class FuseFeedingThread(multiprocessing.Process):
+    def __init__(self, fuse, input_pipename, END_OF_PIPE, **kwargs):
         self.print_out = kwargs.get("print_out", open("/dev/null", "w+b"))
         self.fuse = fuse
-        self.input_pipe = input_pipe
+        self.input_pipename = input_pipename
         self.END_OF_PIPE = END_OF_PIPE
         self.time_queue = None
         self.stop = threading.Event()
-        threading.Thread.__init__(self, target=self.feeding_thread)
+        #threading.Thread.__init__(self, target=self.feeding_thread)
+        multiprocessing.Process.__init__(self, target=self.feeding_thread)
 
     def feeding_thread(self):
-        count = 0
+        self.input_pipe = open(self.input_pipename, "r")
         start_time = time.time()
         while(not self.stop.wait(0.0000001)):
             self._running = True
             try:
-                chunks = self.input_pipe.recv()
+                #chunks = self.input_pipe.recv()
+                chunks_str = self.input_pipe.readline().strip()
+                if chunks_str == self.END_OF_PIPE:
+                    break
             except EOFError:
                 break
-            if chunks == self.END_OF_PIPE:
-                break
-            count += len(chunks)
-            msg = ','.join(chunks)
-            self.fuse.fuse_write(msg)
+            self.fuse.fuse_write(chunks_str)
 
         end_time = time.time()
         if self.time_queue != None: 
             self.time_queue.put({'start_time':start_time, 'end_time':end_time})
-        self.print_out.write("[FUSE] : (%s)-(%s)=(%s), send total (%ld) chunks\n" % \
-                (start_time, end_time, (end_time-start_time), count))
+        self.print_out.write("[FUSE] : (%s)-(%s)=(%s)\n" % \
+                (start_time, end_time, (end_time-start_time)))
         self.fuse.fuse_write("END_OF_TRANSMISSION")
 
 
