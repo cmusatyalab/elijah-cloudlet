@@ -57,7 +57,6 @@ def http_get(end_point):
     conn = httplib.HTTPConnection(end_point[1])
     conn.request("GET", end_string, params, headers)
     data = conn.getresponse().read()
-    import pdb; pdb.set_trace()
     response_list = json.loads(data).get('cloudlet', list())
     conn.close()
     return response_list

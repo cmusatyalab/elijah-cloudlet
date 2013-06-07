@@ -329,6 +329,8 @@ class SynthesizedVM(threading.Thread):
         except Exception as e:
             sys.stdout.write(str(e)+"\n")
 
+        return self.machine
+
     def terminate(self):
         try:
             if self.machine:
@@ -507,13 +509,23 @@ def _convert_xml(xml, conn, vm_name=None, disk_path=None, uuid=None, \
         if qemu_element == None:
             qemu_element = Element("{%s}commandline" % qemu_xmlns)
             xml.append(qemu_element)
-            #msg = "qemu_xmlns is NULL, Malfomed XML input: %s\n%s" % \
-            #        (Const.TEMPLATE_XML, ElementTree.tostring(xml))
-            #raise CloudletGenerationError(msg)
+
+        # remove previsou cloudlet argument if it is
+        argument_list = qemu_element.findall("{%s}arg" % qemu_xmlns)
+        remove_list = list()
+        for argument_item in argument_list:
+            arg_value = argument_item.get('value').strip() 
+            print arg_value
+            if (arg_value== '-cloudlet') or (arg_value.startswith('logfile=')):
+                remove_list.append(argument_item)
+        for item in remove_list:
+            qemu_element.remove(item)
+
+        # append new cloudlet logpath
         qemu_element.append(Element("{%s}arg" % qemu_xmlns, {'value':'-cloudlet'}))
         qemu_element.append(Element("{%s}arg" % qemu_xmlns, {'value':"logfile=%s" % logfile}))
 
-    # append user qemu argument
+    # append qemu argument give from user
     if qemu_args:
         qemu_xmlns="http://libvirt.org/schemas/domain/qemu/1.0"
         qemu_element = xml.find("{%s}commandline" % qemu_xmlns)
@@ -523,18 +535,20 @@ def _convert_xml(xml, conn, vm_name=None, disk_path=None, uuid=None, \
         for each_argument in qemu_args:
             qemu_element.append(Element("{%s}arg" % qemu_xmlns, {'value':each_argument}))
 
-    # drop original security label
-    sec_element = xml.find("seclabel")
-    if sec_element != None:
-        xml.remove(sec_element)
-
     device_element = xml.find("devices")
     console_element = device_element.find("console")
     if console_element != None:
         device_element.remove(console_element)
-    #serial_element = device_element.find("serial")
-    #if serial_element != None:
-    #    device_element.remove(serial_element)
+
+    # drop original security label
+    # TODO: cope with appropriate security model
+    sec_element = xml.find("seclabel")
+    if sec_element != None:
+        xml.remove(sec_element)
+    network_element = device_element.find("interface")
+    network_filter = network_element.find("filterref")
+    if network_filter != None:
+        network_element.remove(network_filter)
 
     new_xml_str = ElementTree.tostring(xml)
     if old_uuid != None and uuid != None:
@@ -931,8 +945,8 @@ def run_snapshot(conn, disk_image, mem_snapshot, **kwargs):
     if received_xml == None:
         # read embedded XML at memory snapshot to change disk path
         hdr = vmnetx._QemuMemoryHeader(open(mem_snapshot))
-        xml = ElementTree.fromstring(hdr.xml)
-        new_xml_string = _convert_xml(xml, conn, disk_path=disk_image,
+        old_xml = ElementTree.fromstring(hdr.xml)
+        new_xml_string = _convert_xml(old_xml, conn, disk_path=disk_image,
                 uuid=new_uuid, logfile=logfile, qemu_args=qemu_args)
     else:
         # get uuid and network information from new_xml
@@ -964,6 +978,7 @@ def run_snapshot(conn, disk_image, mem_snapshot, **kwargs):
     uuid_element = domxml.find('uuid')
     uuid = str(uuid_element.text)
     machine = conn.lookupByUUIDString(uuid)
+    machine.old_xml = hdr.xml
 
     return machine
 
@@ -994,48 +1009,34 @@ def connect_vnc(machine, no_wait=False):
         vnc_process.terminate()
 
 
-def rettach_nic(conn, xml, **kwargs):
+def rettach_nic(machine, old_xml, new_xml, **kwargs):
     #kwargs
     #LOG = log object for nova
     #nova_util = nova_util is executioin wrapper for nova framework
     #           You should use nova_util in OpenStack, or subprocess
     #           will be returned without finishing their work
-    log = kwargs.get('log', None)
-
-    # get machine
-    domxml = ElementTree.fromstring(xml)
-    uuid = domxml.find('uuid').text
-    machine = conn.lookupByUUIDString(uuid)
-
     # get xml info of running xml
-    running_xml = machine.XMLDesc(libvirt.VIR_DOMAIN_XML_SECURE)
-    machinexml = ElementTree.fromstring(running_xml)
-    nic = machinexml.find('devices/interface')
-    nic_xml = ElementTree.tostring(nic)
-
-    if log:
-        log.debug(_("Rettaching device : %s" % str(nic_xml)))
-        log.debug(_("memory xml"))
-        log.debug(_("%s" % xml))
-        log.debug(_("running xml"))
-        log.debug(_("%s" % running_xml))
-    else:
-        print "[Debug] Rettaching device : %s" % str(nic_xml)
-
-    #detach
-    machine.detachDevice(nic_xml)
-    sleep(3)
-    if log:
-        log.debug(_("dettached xml"))
-        dettached_xml = machine.XMLDesc(libvirt.VIR_DOMAIN_XML_SECURE)
-        log.debug(_("%s" % str(dettached_xml)))
-
+    old_xml = ElementTree.fromstring(old_xml)
+    old_nic = old_xml.find('devices/interface')
+    filter_element = old_nic.find("filterref")
+    if filter_element != None:
+        old_nic.remove(filter_element)
+    old_nic_xml = ElementTree.tostring(old_nic)
+    ret = machine.detachDevice(old_nic_xml)
+    if ret != 0:
+        print "[debug] failed to detach device"
+    
+    sleep(1)
     #attach
-    machine.attachDevice(nic_xml)
-    if log:
-        log.debug(_("rettached xml"))
-        rettached_xml = machine.XMLDesc(libvirt.VIR_DOMAIN_XML_SECURE)
-        log.debug(_("%s" % str(rettached_xml)))
+    new_xml = ElementTree.fromstring(new_xml)
+    new_nic = new_xml.find('devices/interface')
+    filter_element = new_nic.find("filterref")
+    if filter_element != None:
+        new_nic.remove(filter_element)
+    new_nic_xml = ElementTree.tostring(new_nic)
+    machine.attachDevice(new_nic_xml)
+    if ret != 0:
+        print "[debug] failed to attach device"
 
 
 def restore_with_config(conn, mem_snapshot, xml):
