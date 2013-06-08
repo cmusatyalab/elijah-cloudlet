@@ -46,7 +46,6 @@ from time import time
 from time import sleep
 import threading
 from optparse import OptionParser
-from multiprocessing import Pipe
 
 from synthesis.tool import comp_lzma
 from synthesis.tool import diff_files
@@ -81,7 +80,7 @@ class VM_Overlay(threading.Thread):
     def __init__(self, base_disk, options, qemu_args=None,
             base_mem=None, base_diskmeta=None, 
             base_memmeta=None, base_hashvalue=None,
-            vm_xml=None):
+            vm_xml=None, nova_util=None):
         # create user customized overlay.
         # First resume VM, then let user edit its VM
         # Finally, return disk/memory binary as an overlay
@@ -95,6 +94,7 @@ class VM_Overlay(threading.Thread):
         self.base_mem = base_mem or self.base_mem
         self.base_diskmeta = base_diskmeta or self.base_diskmeta
         self.base_memmeta = base_memmeta or self.base_memmeta
+        self.nova_util = nova_util
 
         # find base vm's hashvalue from DB
         self.base_hashvalue = base_hashvalue or None
@@ -163,7 +163,8 @@ class VM_Overlay(threading.Thread):
                 self.fuse_stream_monitor,
                 self.base_disk, self.base_mem,
                 self.modified_disk, self.modified_mem.name,
-                self.qemu_logfile, self.print_out)
+                self.qemu_logfile, 
+                print_out=self.print_out, nova_util=self.nova_util)
 
         # 3. get overlay VM
         overlay_deltalist = get_overlay_deltalist(monitoring_info, self.options,
@@ -515,7 +516,6 @@ def _convert_xml(xml, conn, vm_name=None, disk_path=None, uuid=None, \
         remove_list = list()
         for argument_item in argument_list:
             arg_value = argument_item.get('value').strip() 
-            print arg_value
             if (arg_value== '-cloudlet') or (arg_value.startswith('logfile=')):
                 remove_list.append(argument_item)
         for item in remove_list:
@@ -561,7 +561,8 @@ def _get_monitoring_info(machine, options,
         fuse_stream_monitor,
         base_disk, base_mem,
         modified_disk, modified_mem,
-        qemu_logfile, print_out):
+        qemu_logfile, print_out=None,
+        nova_util=None):
     ''' return montioring information including
         1) base vm hash list
         2) used/freed disk block list
@@ -572,7 +573,7 @@ def _get_monitoring_info(machine, options,
     fuse_stream_monitor.del_path(vmnetfs.StreamMonitor.MEMORY_ACCESS)
     # TODO: support stream of modified memory rather than tmp file
     if not options.DISK_ONLY:
-        save_mem_snapshot(machine, modified_mem)
+        save_mem_snapshot(machine, modified_mem, nova_util=nova_util)
 
     # 1-3. get hashlist of base memory and disk
     basemem_hashlist = Memory.base_hashlist(base_memmeta)
@@ -889,6 +890,7 @@ def run_vm(conn, domain_xml, **kwargs):
 
 def save_mem_snapshot(machine, fout_path, **kwargs):
     #Set migration speed
+    nova_util = kwargs.get('nova_util', None)
     ret = machine.migrateSetMaxSpeed(1000000, 0)   # 1000 Gbps, unlimited
     if ret != 0:
         raise CloudletGenerationError("Cannot set migration speed : %s", machine.name())
@@ -903,6 +905,11 @@ def save_mem_snapshot(machine, fout_path, **kwargs):
     try:
         tmp_outpath = fout_path + ".tmp"
         ret = machine.save(tmp_outpath)
+        if nova_util != None:
+            # OpenStack runs VM with nova account and snapshot 
+            # is generated from system connection
+            nova_util.chown(tmp_outpath, os.getuid())
+
         machine = None
 
         # generate new memory snapshot with 4KB aligned header
@@ -924,6 +931,8 @@ def save_mem_snapshot(machine, fout_path, **kwargs):
             vmnetx.copy_memory(tmp_outpath, fout_path, new_xml)
                 
         os.remove(tmp_outpath)
+        if nova_util != None:
+            nova_util.chown(fout_path, os.getuid())
     except libvirt.libvirtError, e:
         raise CloudletGenerationError("libvirt memory save : " + str(e))
     if ret != 0:
@@ -1030,9 +1039,9 @@ def rettach_nic(machine, old_xml, new_xml, **kwargs):
     #attach
     new_xml = ElementTree.fromstring(new_xml)
     new_nic = new_xml.find('devices/interface')
-    filter_element = new_nic.find("filterref")
-    if filter_element != None:
-        new_nic.remove(filter_element)
+    #filter_element = new_nic.find("filterref")
+    #if filter_element != None:
+    #    new_nic.remove(filter_element)
     new_nic_xml = ElementTree.tostring(new_nic)
     machine.attachDevice(new_nic_xml)
     if ret != 0:
@@ -1281,24 +1290,24 @@ def validate_congifuration():
     return True
 
 
-def _create_baseVM(domain, base_diskpath, base_mempath, base_diskmeta, base_memmeta, print_out=None):
+def _create_baseVM(domain, base_diskpath, base_mempath, base_diskmeta, base_memmeta, **kwargs):
     """ generate base vm given base_diskpath
     Args:
         base_diskpath: path to disk image exists
         base_mempath : target path to generate base mem
         base_diskmeta : target path to generate basedisk hashlist
         base_memmeta : target path to generate basemem hashlist
-
     """
+    print_out = kwargs.get('print_out', sys.stdout)
     # make memory snapshot
     # VM has to be paused first to perform stable disk hashing
-    save_mem_snapshot(domain, base_mempath)
+    save_mem_snapshot(domain, base_mempath, **kwargs)
     base_mem = Memory.hashing(base_mempath)
     base_mem.export_to_file(base_memmeta)
 
     # generate disk hashing
     # TODO: need more efficient implementation, e.g. bisect
-    base_hashvalue = Disk.hashing(base_diskpath, base_diskmeta, print_out = sys.stdout)
+    base_hashvalue = Disk.hashing(base_diskpath, base_diskmeta, print_out=print_out)
     return base_hashvalue
 
 
