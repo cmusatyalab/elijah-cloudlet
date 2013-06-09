@@ -25,7 +25,8 @@ public final class R {
         public static final int login_status_message=0x7f060003;
         public static final int relativeLayout1=0x7f060006;
         public static final int sendButton=0x7f060001;
-        public static final int startBatchTest=0x7f060014;
+        public static final int startBatchTest=0x7f060015;
+        public static final int synthesisFromOpenStack=0x7f060014;
         public static final int testAsia=0x7f060012;
         public static final int testCloudlet=0x7f06000e;
         public static final int testEU=0x7f060011;

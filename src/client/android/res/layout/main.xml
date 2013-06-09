@@ -17,6 +17,22 @@
         android:layout_height="wrap_content"
         android:layout_gravity="bottom"
         android:text="@string/synthesis_button_title" >
+    </Button>    
+    
+    <TextView
+        android:layout_width="fill_parent"
+        android:layout_height="wrap_content"
+        android:paddingTop="30sp"
+        android:textSize = "30sp"
+        android:gravity="center_vertical"
+        android:text="OpenStack" />
+ 
+    <Button
+        android:id="@+id/synthesisFromOpenStack"
+        android:layout_width="fill_parent"
+        android:layout_height="wrap_content"
+        android:layout_gravity="bottom"
+        android:text="Start" >
     </Button>
 
 </LinearLayout>

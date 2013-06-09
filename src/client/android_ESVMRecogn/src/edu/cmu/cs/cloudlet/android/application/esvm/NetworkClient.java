@@ -91,7 +91,7 @@ public class NetworkClient extends Thread {
 
 			//  test
 			long processStartTime = System.currentTimeMillis();		
-			while(mFileList.size() > 0){
+			if(mFileList.size() > 0){
 				File testFile = mFileList.remove(0);
 				byte[] testImageData = new byte[(int) testFile.length()];
 				try {
@@ -101,8 +101,7 @@ public class NetworkClient extends Thread {
 					e.printStackTrace();
 				} catch (IOException e) {
 					e.printStackTrace();
-				}
-				
+				}				
 				requestServer(testImageData, testFile.getName());
 			}
 			
@@ -111,6 +110,8 @@ public class NetworkClient extends Thread {
 				requestServer(mCapturedImage, "camera");
 				mCapturedImage = null;
 			}
+			long processEndTime = System.currentTimeMillis();
+			Log.d("krha", "response time : " + (processEndTime-processStartTime));
 		}
 	}
 
@@ -136,8 +137,7 @@ public class NetworkClient extends Thread {
 			Log.d("krha_app", message);
 
 			// callback
-			this.handleSuccess(message);			
-			
+			this.handleSuccess(message);
 		} catch (IOException e) {
 		}
 		

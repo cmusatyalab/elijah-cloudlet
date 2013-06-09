@@ -16,14 +16,18 @@ package edu.cmu.cs.cloudlet.android;
 import java.io.File;
 import java.text.NumberFormat;
 import java.util.ArrayList;
+import java.util.HashMap;
+
+import org.json.JSONException;
+import org.json.JSONObject;
 
 import edu.cmu.cs.cloudlet.android.application.CloudletCameraActivity;
 import edu.cmu.cs.cloudlet.android.application.graphics.GraphicsClientActivity;
 import edu.cmu.cs.cloudlet.android.data.VMInfo;
 import edu.cmu.cs.cloudlet.android.discovery.CloudletDiscovery;
 import edu.cmu.cs.cloudlet.android.network.CloudletConnector;
+import edu.cmu.cs.cloudlet.android.network.OpenStackClient;
 import edu.cmu.cs.cloudlet.android.discovery.CloudletDevice;
-import edu.cmu.cs.cloudlet.android.test.BatchSynthesisTest;
 import edu.cmu.cs.cloudlet.android.util.CloudletEnv;
 
 import android.app.Activity;
@@ -57,6 +61,9 @@ public class CloudletActivity extends Activity {
 	protected int selectedOveralyIndex;
 	private CloudletDiscovery cloudletDiscovery;
 	private ProgressDialog progDialog;
+	
+	//openstack variable
+	protected OpenStackClient openStackClient;
 
 	@Override
 	public void onCreate(Bundle savedInstanceState) {
@@ -71,6 +78,7 @@ public class CloudletActivity extends Activity {
 
 		// Performance Button
 		findViewById(R.id.testSynthesis).setOnClickListener(clickListener);
+		findViewById(R.id.synthesisFromOpenStack).setOnClickListener(clickListener);
 	}
 
 	private void showDialogSelectOverlay(final ArrayList<VMInfo> vmList) {
@@ -116,8 +124,8 @@ public class CloudletActivity extends Activity {
 		if (this.progDialog == null) {
 			this.progDialog = new ProgressDialog(this);
 			this.progDialog.setMessage("Connecting to " + address);
-            this.progDialog.setProgressStyle(ProgressDialog.STYLE_HORIZONTAL);
-            this.progDialog.setCancelable(false);
+			this.progDialog.setProgressStyle(ProgressDialog.STYLE_HORIZONTAL);
+			this.progDialog.setCancelable(true);
 			this.progDialog.setIcon(R.drawable.ic_launcher);
 		} else {
 			this.progDialog.setMessage("Connecting to " + address);
@@ -157,17 +165,21 @@ public class CloudletActivity extends Activity {
 
 	public boolean runStandAlone(String application) {
 		application = application.trim();
+		return runStandAloneIP(application, CLOUDLET_SYNTHESIS_IP, TEST_CLOUDLET_APP_MOPED_PORT);
+	}
+	
+	public boolean runStandAloneIP(String application, String ip, int port){
 
 		if (application.equalsIgnoreCase("moped") || application.equalsIgnoreCase("object")) {
 			Intent intent = new Intent(CloudletActivity.this, CloudletCameraActivity.class);
-			intent.putExtra("address", CLOUDLET_SYNTHESIS_IP);
-			intent.putExtra("port", TEST_CLOUDLET_APP_MOPED_PORT);
+			intent.putExtra("address", ip);
+			intent.putExtra("port", port);
 			startActivityForResult(intent, 0);
 			return true;
 		} else if (application.equalsIgnoreCase("graphics") || application.equalsIgnoreCase("fluid")) {
 			Intent intent = new Intent(CloudletActivity.this, GraphicsClientActivity.class);
-			intent.putExtra("address", CLOUDLET_SYNTHESIS_IP);
-			intent.putExtra("port", TEST_CLOUDLET_APP_GRAPHICS_PORT);
+			intent.putExtra("address", ip);
+			intent.putExtra("port", port);
 			startActivityForResult(intent, 0);
 			return true;
 		} else {
@@ -190,6 +202,37 @@ public class CloudletActivity extends Activity {
 							+ ovelray_root.getAbsolutePath() + "\"";
 					showAlert("Error", errMsg);
 				}
+			} else if (v.getId() == R.id.synthesisFromOpenStack) {
+				String OPENSTACK_RELAY_IP = "rain.elijah.cs.cmu.edu";
+				int OPENSTACK_RELAY_PORT = 8081;
+				String applicationName = "moped";
+				String overly_meta_url = "http://scarlet.aura.cs.cmu.edu:8000/overlay.meta";
+				String overly_blob_url = "http://scarlet.aura.cs.cmu.edu:8000/overlay.blob";
+
+				HashMap<String, String> requestMap = new HashMap<String, String>();
+				requestMap.put("overlay_meta_url", overly_meta_url);
+				requestMap.put("overlay_blob_url", overly_blob_url);
+				requestMap.put("application_name", applicationName);
+				JSONObject requestJson = new JSONObject(requestMap);
+
+				// network request
+				if (openStackClient == null){
+					openStackClient = new OpenStackClient(CloudletActivity.this, openStackClientHandler,
+							OPENSTACK_RELAY_IP, OPENSTACK_RELAY_PORT);
+					openStackClient.start();					
+				}
+				openStackClient.queueRequest(requestJson);
+
+				// start progress Dialog
+				if (progDialog == null) {
+					progDialog = new ProgressDialog(CloudletActivity.this);
+					progDialog.setMessage("Request VM Synthesis to " + OPENSTACK_RELAY_IP + ":" + OPENSTACK_RELAY_PORT);
+					progDialog.setCancelable(true);
+					progDialog.setIcon(R.drawable.ic_launcher);
+				} else {
+					progDialog.setMessage("Request VM Synthesis to " + OPENSTACK_RELAY_IP + ":" + OPENSTACK_RELAY_PORT);
+				}
+				progDialog.show();
 			}
 		}
 	};
@@ -209,7 +252,9 @@ public class CloudletActivity extends Activity {
 		}
 
 		// send close VM message
-		this.connector.closeRequest();
+		if (this.connector != null){
+			this.connector.closeRequest();
+		}
 	}
 
 	public boolean onKeyDown(int keyCode, KeyEvent event) {
@@ -244,6 +289,8 @@ public class CloudletActivity extends Activity {
 		}
 		if (this.connector != null)
 			this.connector.close();
+		if (this.openStackClient != null)
+			this.openStackClient.close();
 
 		super.onDestroy();
 	}
@@ -284,15 +331,16 @@ public class CloudletActivity extends Activity {
 	Handler synthesisHandler = new Handler() {
 		private int PROGRESS_NONE = -1;
 		private int PROGRESS_FINISH = 100;
-		
+
 		protected void updateMessage(String msg) {
 			if ((progDialog != null) && (progDialog.isShowing())) {
 				progDialog.setMessage(msg);
 			}
 		}
-		protected void updatePercent(int percent){
+
+		protected void updatePercent(int percent) {
 			if ((progDialog != null) && (progDialog.isShowing())) {
-				progDialog.setProgress(percent);		
+				progDialog.setProgress(percent);
 			}
 		}
 
@@ -305,8 +353,10 @@ public class CloudletActivity extends Activity {
 				if (isSuccess == false) {
 					// If we cannot find matching application,
 					// then ask user to close VM
-					String message = "VM synthesis is successfully finished, but cannot find Android application matched with " +
-							"directory name (" + appName + ").\nPlease read README file for details.\n\nClose VM at Cloudlet?";
+					String message = "VM synthesis is successfully finished, but cannot find Android application matched with "
+							+ "directory name ("
+							+ appName
+							+ ").\nPlease read README file for details.\n\nClose VM at Cloudlet?";
 					new AlertDialog.Builder(CloudletActivity.this).setTitle("Info").setMessage(message)
 							.setPositiveButton("Yes", new DialogInterface.OnClickListener() {
 								public void onClick(DialogInterface dialog, int which) {
@@ -334,6 +384,50 @@ public class CloudletActivity extends Activity {
 			} else if (msg.what == CloudletConnector.SYNTHESIS_PROGRESS_PERCENT) {
 				int percent = (Integer) msg.obj;
 				this.updatePercent(percent);
+			}
+		}
+	};
+
+	/*
+	 * OpenStack communication handler (for testing purpose)
+	 */
+	Handler openStackClientHandler = new Handler() {
+		public void handleMessage(Message msg) {
+			if (msg.what == OpenStackClient.CALLBACK_SUCCESS) {
+				JSONObject recvJson = (JSONObject) msg.obj;
+				String serverID = null;
+				String serverIP = null;
+				String appName = null;
+				try {
+					serverID = recvJson.getString("vm-id");
+					serverIP = recvJson.getString("vm-ip");
+					appName = recvJson.getString("application_name");
+					if ((appName == null) || (appName.trim().length() == 0)){
+						throw new JSONException("no application name is received");
+					}					
+				} catch (JSONException e) {
+					String errmsg = "Server does not return valid json format";
+					new AlertDialog.Builder(CloudletActivity.this).setTitle("Error").setMessage(errmsg)
+							.setIcon(R.drawable.ic_launcher).setNegativeButton("Confirm", null).show();
+				}
+
+				if ((progDialog != null) && (progDialog.isShowing())) {
+					progDialog.dismiss();
+				}
+				runStandAloneIP(appName, serverIP, TEST_CLOUDLET_APP_MOPED_PORT);
+			} else {
+				String errString = (String) msg.obj;
+				// Ask IP Address
+				AlertDialog.Builder ab = new AlertDialog.Builder(CloudletActivity.this);
+				ab.setTitle("Cloudlet Conection");
+				ab.setMessage("Failed to synthesize new VM.\n" + errString);
+				ab.setIcon(R.drawable.ic_launcher);
+				ab.setPositiveButton("Ok", null);
+				ab.show();
+
+				if ((progDialog != null) && (progDialog.isShowing())) {
+					progDialog.dismiss();
+				}
 			}
 		}
 	};

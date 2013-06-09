@@ -83,6 +83,7 @@ public class ESVMNetworkClient extends Thread {
 		}
 
 		// TCP request and response
+		long processStartTime = System.currentTimeMillis();
 		JSONObject retJson = null;
 		try {
 			retJson = this.sendRequest(this.header, this.outputFile);			
@@ -97,7 +98,8 @@ public class ESVMNetworkClient extends Thread {
 			this.handleFailure("Not valid JSON return : " + e.getMessage());
 			return;
 		}
-
+		long processEndTime = System.currentTimeMillis();
+		Log.d("krha", "response time : " + (processEndTime-processStartTime));
 		
 		// handle return message
 		this.close();
