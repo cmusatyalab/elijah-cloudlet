@@ -28,9 +28,15 @@ from hashlib import sha256
 from lzma import LZMACompressor
 
 from synthesis.Configuration import Const
+from synthesis import log as logging
+
+
+LOG = logging.getLogger(__name__)
+
 
 class DeltaError(Exception):
     pass
+
 
 class DeltaItem(object):
     # Don't change order or memory and disk
@@ -87,7 +93,7 @@ class DeltaItem(object):
             data += struct.pack("!Q", self.data)
 
         if with_hashvalue:
-            print "hash size is %d" % len(self.hash_value)
+            LOG.debug("hash size is %d" % len(self.hash_value))
             if self.hash_value and (len(self.hash_value) > 0):
                 data += struct.pack("!%ds" % len(self.hash_value), self.hashvalue)
 
@@ -188,7 +194,7 @@ class DeltaList(object):
     @staticmethod
     def get_self_delta(delta_list):
         if len(delta_list) == 0:
-            print "[Debug] Nothing to compare. Length is 0"
+            LOG.debug("Nothing to compare. Length is 0")
             delta_list.sort(key=itemgetter('offset'))
             return
         if type(delta_list[0]) != DeltaItem:
@@ -210,20 +216,20 @@ class DeltaList(object):
                     delta_item.data = long(pivot.index)
                     matching += 1
                     '''
-                    print "type:%ld, offset:%ld, index:%ld <- %ld, %ld, %ld" % \
+                    LOG.debug("type:%ld, offset:%ld, index:%ld <- %ld, %ld, %ld" % \
                             (pivot.delta_type, pivot.offset, pivot.index,
-                            delta_item.delta_type, delta_item.offset, delta_item.index)
+                            delta_item.delta_type, delta_item.offset, delta_item.index))
                     '''
             else:
                 # change pivot only when no duplicated hash value
                 pivot=delta_item
 
-        print "[Debug] self delta : %ld/%ld" % (matching, len(delta_list))
+        LOG.debug("self delta : %ld/%ld" % (matching, len(delta_list)))
 
     @staticmethod
-    def statistics(delta_list, print_out=sys.stdout, mem_discarded=0, disk_discarded=0):
+    def statistics(delta_list, mem_discarded=0, disk_discarded=0):
         if len(delta_list) == 0:
-            print_out.write("[Debug] Nothing to compare. Length is 0\n")
+            LOG.debug("Nothing to compare. Length is 0")
             delta_list.sort(key=itemgetter('offset'))
             return
         if type(delta_list[0]) != DeltaItem:
@@ -311,55 +317,55 @@ class DeltaList(object):
         total_disk_count = (disk_count + disk_discarded)
 
         try:
-            print_out.write("-"*50 + "\n")
-            print_out.write("[INFO] Total Modified Disk #     : %ld\t( 100 %%, %f MB )\n" % 
+            LOG.info("-"*50)
+            LOG.info(" Total Modified Disk #     : %ld\t( 100 %%, %f MB )" % 
                     (total_disk_count, disk_overlay_size/1024.0/1024))
-            print_out.write("[INFO] TRIM discard              : %ld\t( %f %% )\n" % 
+            LOG.info("TRIM discard              : %ld\t( %f %% )" % 
                     (disk_discarded, disk_discarded*100.0/total_disk_count))
-            print_out.write("[INFO] Zero pages                : %ld\t( %f %% )\n" % 
+            LOG.info("Zero pages                : %ld\t( %f %% )" % 
                     (disk_from_zeros, disk_from_zeros*100.0/total_disk_count))
-            print_out.write("[INFO] Shared with Base Disk     : %ld\t( %f %% )\n" % 
+            LOG.info("Shared with Base Disk     : %ld\t( %f %% )" % 
                     (disk_from_base_disk, disk_from_base_disk*100.0/total_disk_count))
-            print_out.write("[INFO] Shared with Base Mem      : %ld\t( %f %% )\n" % 
+            LOG.info("Shared with Base Mem      : %ld\t( %f %% )" % 
                     (disk_from_base_mem, disk_from_base_mem*100.0/total_disk_count))
-            print_out.write("[INFO] Shared within Self        : %ld\t( %f %% )\n" % 
+            LOG.info("Shared within Self        : %ld\t( %f %% )" % 
                     (disk_from_self, disk_from_self*100.0/total_disk_count))
-            print_out.write("[INFO] Shared with Overlay Disk  : %ld\t( %f %% )\n" % 
+            LOG.info("Shared with Overlay Disk  : %ld\t( %f %% )" % 
                     (disk_from_overlay_disk, disk_from_overlay_disk*100.0/total_disk_count))
-            print_out.write("[INFO] Shared with Overlay Mem   : %ld\t( %f %% )\n" % 
+            LOG.info("Shared with Overlay Mem   : %ld\t( %f %% )" % 
                     (disk_from_overlay_mem, disk_from_overlay_mem*100.0/total_disk_count))
-            print_out.write("[INFO] xdelta                    : %ld\t( %f %%, real_size: %.0f KB )\n" %
+            LOG.info("xdelta                    : %ld\t( %f %%, real_size: %.0f KB )" %
                     (disk_from_xdelta, disk_from_xdelta*100.0/total_disk_count, xdelta_size))
-            print_out.write("[INFO] raw                       : %ld\t( %f %%, real_size: %.0f KB )\n" % 
+            LOG.info("raw                       : %ld\t( %f %%, real_size: %.0f KB )" % 
                     (disk_from_raw, disk_from_raw*100.0/total_disk_count, raw_size))
-            print_out.write("-"*50 + "\n")
+            LOG.info("-"*50 + "")
         except ZeroDivisionError as e:
-            print_out.write("[INFO] No disk modification\n")
+            LOG.info("No disk modification")
 
         try:
-            print_out.write("[INFO] Total Modified Memory #  : %ld\t( 100 %%, %f MB)\n" % 
+            LOG.info("Total Modified Memory #  : %ld\t( 100 %%, %f MB)" % 
                     (total_memory_count, mem_overlay_size/1024.0/1024))
-            print_out.write("[INFO] FREE discard             : %ld\t( %f %% )\n" % 
+            LOG.info("FREE discard             : %ld\t( %f %% )" % 
                     (mem_discarded, mem_discarded*100.0/total_memory_count))
-            print_out.write("[INFO] Zero pages               : %ld\t( %f %% )\n" % 
+            LOG.info("Zero pages               : %ld\t( %f %% )" % 
                     (memory_from_zeros, memory_from_zeros*100.0/total_memory_count))
-            print_out.write("[INFO] Shared with Base Disk    : %ld\t( %f %% )\n" % 
+            LOG.info("Shared with Base Disk    : %ld\t( %f %% )" % 
                     (memory_from_base_disk, memory_from_base_disk*100.0/total_memory_count))
-            print_out.write("[INFO] Shared with Base Mem     : %ld\t( %f %% )\n" % 
+            LOG.info("Shared with Base Mem     : %ld\t( %f %% )" % 
                     (memory_from_base_mem, memory_from_base_mem*100.0/total_memory_count))
-            print_out.write("[INFO] Shared within Self       : %ld\t( %f %% )\n" % 
+            LOG.info("Shared within Self       : %ld\t( %f %% )" % 
                     (memory_from_self, memory_from_self*100.0/total_memory_count))
-            print_out.write("[INFO] Shared with Overlay Disk : %ld\t( %f %% )\n" % 
+            LOG.info("Shared with Overlay Disk : %ld\t( %f %% )" % 
                     (memory_from_overlay_disk, memory_from_overlay_disk*100.0/total_memory_count))
-            print_out.write("[INFO] Shared with Overlay Mem  : %ld\t( %f %% )\n" % 
+            LOG.info("Shared with Overlay Mem  : %ld\t( %f %% )" % 
                     (memory_from_overlay_mem, memory_from_overlay_mem*100.0/total_memory_count))
-            print_out.write("[INFO] xdelta                   : %ld\t( %f %%, real_size: %.0f KB )\n" %
+            LOG.info("xdelta                   : %ld\t( %f %%, real_size: %.0f KB )" %
                     (memory_from_xdelta, memory_from_xdelta*100.0/total_memory_count, xdelta_size))
-            print_out.write("[INFO] raw                      : %ld\t( %f %%, real_size: %.0f KB )\n" % 
+            LOG.info("raw                      : %ld\t( %f %%, real_size: %.0f KB )" % 
                     (memory_from_raw, memory_from_raw*100.0/total_memory_count, raw_size))
-            print_out.write("-"*50 + "\n")
+            LOG.info("-"*50 + "")
         except ZeroDivisionError as e:
-            print_out.write("[INFO] No memory modification\n")
+            LOG.info("No memory modification")
 
 
 def diff_with_deltalist(delta_list, const_deltalist, ref_id):
@@ -425,13 +431,13 @@ def diff_with_hashlist(base_hashlist, delta_list, ref_id):
         if delta.hash_value == hash_value and \
                 ((delta.ref_id == DeltaItem.REF_XDELTA) or (delta.ref_id == DeltaItem.REF_RAW)):
             matching_count += 1
-            #print "[Debug] page %ld is matching base %ld" % (s_start, start)
+            #LOG.debug("page %ld is matching base %ld" % (s_start, start))
             delta.ref_id = ref_id
             delta.data_len = 8
             delta.data = long(start)
         s_index += 1
 
-    print "[Debug] matching (%d/%d) with base" % (matching_count, len(delta_list))
+    LOG.debug("matching (%d/%d) with base" % (matching_count, len(delta_list)))
     return delta_list
 
 
@@ -443,15 +449,10 @@ class Recovered_delta(multiprocessing.Process):
     def __init__(self, base_disk, base_mem, overlay_path, 
             output_mem_path, output_mem_size, 
             output_disk_path, output_disk_size, chunk_size,
-            out_pipename=None, time_queue=None, print_out=None,
-            deltalist_savepath=None):
+            out_pipename=None, time_queue=None, deltalist_savepath=None):
         ''' recover delta list using base disk/memory
         Args:
         '''
-
-        self.print_out = print_out
-        if self.print_out == None:
-            self.print_out = open("/dev/null", "w+b")
 
         if base_disk == None and base_mem == None:
             raise MemoryError("Need either base_disk or base_memory")
@@ -539,7 +540,7 @@ class Recovered_delta(multiprocessing.Process):
 
         if self.time_queue != None: 
             self.time_queue.put({'start_time':start_time, 'end_time':end_time})
-        self.print_out.write("[Delta] : (%s)-(%s)=(%s), delta %ld chunks\n" % \
+        LOG.info("[Delta] : (%s)-(%s)=(%s), delta %ld chunks" % \
                 (start_time, end_time, (end_time-start_time), count))
 
         if self.deltalist_savepath:
@@ -549,7 +550,7 @@ class Recovered_delta(multiprocessing.Process):
         if type(delta_item) != DeltaItem:
             raise MemoryError("Need list of DeltaItem")
 
-        #print "recovering %ld/%ld" % (index, len(delta_list))
+        #LOG.debug("recovering %ld/%ld" % (index, len(delta_list)))
         if (delta_item.ref_id == DeltaItem.REF_RAW):
             recover_data = delta_item.data
         elif (delta_item.ref_id == DeltaItem.REF_ZEROS):
@@ -604,13 +605,12 @@ class Recovered_delta(multiprocessing.Process):
             self.raw_mem.close()
         if self.raw_mem_overlay:
             self.raw_mem_overlay.close()
-        self.print_out.write("[DEBUG] Recover finishes\n")
+        LOG.debug("Recover finishes")
 
 
 def create_overlay(memory_deltalist, memory_chunk_size,
         disk_deltalist, disk_chunk_size,
-        basedisk_hashlist=None, basemem_hashlist=None, 
-        print_out=sys.stdout):
+        basedisk_hashlist=None, basemem_hashlist=None):
 
     if memory_chunk_size != disk_chunk_size:
         raise DeltaError("Expect same chunk size for Disk and Memory")
@@ -619,18 +619,18 @@ def create_overlay(memory_deltalist, memory_chunk_size,
 
     #Memory
     # Create Base Memory from meta file
-    print_out.write("[Debug] 2-1.Find zero page\n")
+    LOG.debug("2-1.Find zero page")
     zero_hash = sha256(struct.pack("!s", chr(0x00))*chunk_size).digest()
     zero_hash_list = [(-1, chunk_size, zero_hash)]
     diff_with_hashlist(zero_hash_list, delta_list, ref_id=DeltaItem.REF_ZEROS)
 
-    print_out.write("[Debug] 2-2.get delta from base Memory\n")
+    LOG.debug("2-2.get delta from base Memory")
     diff_with_hashlist(basemem_hashlist, delta_list, ref_id=DeltaItem.REF_BASE_MEM)
-    print_out.write("[Debug] 2-3.get delta from base Disk\n")
+    LOG.debug("2-3.get delta from base Disk")
     diff_with_hashlist(basedisk_hashlist, delta_list, ref_id=DeltaItem.REF_BASE_DISK)
 
     # 3.find shared within self
-    print_out.write("[Debug] 3.get delta from itself\n")
+    LOG.debug("3.get delta from itself")
     DeltaList.get_self_delta(delta_list)
 
     return delta_list
@@ -651,10 +651,10 @@ def reorder_deltalist_linear(chunk_size, delta_list):
             ref_item = delta_dict.get(ref_index, None)
             ref_pos = delta_list.index(ref_item)
             if ref_pos > index:
-                print "[Debug][REORDER] move reference from %d to %d" % (ref_pos, (index-1))
+                LOG.debug("REORDER] move reference from %d to %d" % (ref_pos, (index-1)))
                 delta_list.remove(ref_item)
                 delta_list.insert(index, ref_item)
-    print "[Debug][REORDER] reordering takes : %f" % (time.time()-start_time)
+    LOG.debug("[Debug][REORDER] reordering takes : %f" % (time.time()-start_time))
 
 
 def reorder_deltalist_file(mem_access_file, chunk_size, delta_list):
@@ -689,9 +689,9 @@ def reorder_deltalist(access_list, chunk_size, delta_list):
     for chunk_number in access_list:
         chunk_index = DeltaItem.get_index(DeltaItem.DELTA_MEMORY, long(chunk_number)*chunk_size)
         delta_item = delta_dict.get(chunk_index, None)
-        #print "%ld in access list" % (long(chunk_number))
+        #LOG.debug("%ld in access list" % (long(chunk_number)))
         if delta_item:
-            #print "chunk(%ld) moved from %d --> 0" % (delta_item.offset/chunk_size, delta_list.index(delta_item))
+            #LOG.debug("chunk(%ld) moved from %d --> 0" % (delta_item.offset/chunk_size, delta_list.index(delta_item)))
             delta_list.remove(delta_item)
             delta_list.insert(0, delta_item)
             count += 1
@@ -702,8 +702,8 @@ def reorder_deltalist(access_list, chunk_size, delta_list):
                 ref_delta = delta_dict[ref_index]
                 delta_list.remove(ref_delta)
                 delta_list.insert(0, ref_delta)
-                #print "chunk(%ld) moving because its reference of chunk(%ld)" % \
-                #        (ref_delta.offset/chunk_size, delta_item.offset/chunk_size)
+                #LOG.debug("chunk(%ld) moving because its reference of chunk(%ld)" % \
+                #        (ref_delta.offset/chunk_size, delta_item.offset/chunk_size))
     after_length = len(delta_list)
     if before_length != after_length:
         raise DeltaError("DeltaList size shouldn't be changed after reordering")
@@ -715,12 +715,12 @@ def reorder_deltalist(access_list, chunk_size, delta_list):
     prev_indexes = delta_dict.keys().sort()
     new_indexes = delta_dict_new.keys().sort()
     if prev_indexes != new_indexes:
-        print "Reordered delta list is not same as previous"
+        LOG.info("Reordered delta list is not same as previous")
         sys.exit(1)
 
     end_time = time.time()
-    print "[DEBUG][REORDER] time %f" % (end_time-start_time)
-    print "[DEBUG][REORDER] changed %d deltaitem (total access pattern: %d)" % (count, len(access_list))
+    LOG.info("[DEBUG][REORDER] time %f" % (end_time-start_time))
+    LOG.info("[DEBUG][REORDER] changed %d deltaitem (total access pattern: %d)" % (count, len(access_list)))
 
 
 def _save_blob(start_index, delta_list, self_ref_dict, blob_name, blob_size, statistics=None):
@@ -760,7 +760,7 @@ def _save_blob(start_index, delta_list, self_ref_dict, blob_name, blob_size, sta
             # remove dependece getting required index by finding reference
             deduped_list = self_ref_dict.get(delta_item.index, None)
             if deduped_list != None:
-                #print "moving %d deduped delta item" % (len(deduped_list))
+                #LOG.debug("moving %d deduped delta item" % (len(deduped_list)))
                 for deduped_item in deduped_list:
                     deduped_bytes = deduped_item.get_serialized()
                     original_length += len(deduped_bytes)
@@ -777,8 +777,8 @@ def _save_blob(start_index, delta_list, self_ref_dict, blob_name, blob_size, sta
                         raise DeltaError("Delta should be either memory or disk")
             
         if len(comp_data) >= blob_size:
-            print "[DEBUG] savefile for %s(%ld delta item) %ld --> %ld" % \
-                    (blob_name, item_count, original_length, len(comp_data))
+            LOG.debug("savefile for %s(%ld delta item) %ld --> %ld" % \
+                    (blob_name, item_count, original_length, len(comp_data)))
             comp_data += comp.flush()
             blob_file = open(blob_name, "w+b")
             blob_file.write(comp_data)
@@ -801,8 +801,7 @@ def _save_blob(start_index, delta_list, self_ref_dict, blob_name, blob_size, sta
 
 
 def divide_blobs(delta_list, overlay_path, blob_size_kb, 
-        disk_chunk_size, memory_chunk_size,
-        print_out=sys.stdout):
+        disk_chunk_size, memory_chunk_size):
     # save delta list into multiple files with LZMA compression
     start_time = time.time()
 
@@ -845,14 +844,13 @@ def divide_blobs(delta_list, overlay_path, blob_size_kb,
         overlay_list.append(blob_dict)
         blob_output_size += file_size
     end_time = time.time()
-    print_out.write("[Debug] Overlay Compression time: %f, delta_item: %ld\n" % 
+    LOG.debug("Overlay Compression time: %f, delta_item: %ld" % 
             ((end_time-start_time), comp_counter))
-    print_out.write("[Debug] Total OVerlay Size : %ld\n" % blob_output_size)
+    LOG.debug("Total OVerlay Size : %ld" % blob_output_size)
     return overlay_list 
 
 
-def discard_free_chunks(merged_modified_list, chunk_size, disk_discard, memory_discard, 
-        print_out=sys.stdout):
+def discard_free_chunks(merged_modified_list, chunk_size, disk_discard, memory_discard):
     removing_item = list()
     if disk_discard == None:
         disk_discard = dict()
@@ -872,7 +870,7 @@ def discard_free_chunks(merged_modified_list, chunk_size, disk_discard, memory_d
         merged_modified_list.remove(item)
 
 
-def residue_merge_deltalist(old_deltalist, new_deltalist, print_out):
+def residue_merge_deltalist(old_deltalist, new_deltalist):
     '''return new_detlalist = old_deltalist+new_deltalist
     '''
     ret_deltalist = list()
@@ -956,16 +954,16 @@ def residue_merge_deltalist(old_deltalist, new_deltalist, print_out):
             else:
                 count_overwrite_mem += 1
         
-    print_out.write("[INFO] merge residue with previous : \n")
-    print_out.write("[INFO]     add new disk   : %d \n" % (count_new_disk))
-    print_out.write("[INFO]     add new mem    : %d \n" % (count_new_mem))
-    print_out.write("[INFO]     overwrite disk : %d \n" % (count_overwrite_disk))
-    print_out.write("[INFO]     overwrite mem  : %d \n" % (count_overwrite_mem))
+    LOG.debug("merge residue with previous :")
+    LOG.debug("    add new disk   : %d" % (count_new_disk))
+    LOG.debug("    add new mem    : %d" % (count_new_mem))
+    LOG.debug("    overwrite disk : %d" % (count_overwrite_disk))
+    LOG.debug("    overwrite mem  : %d" % (count_overwrite_mem))
     
     return ret_deltalist
 
 
-def residue_diff_deltalists(old_deltalist, new_deltalist, base_mem, print_out):
+def residue_diff_deltalists(old_deltalist, new_deltalist, base_mem):
     '''return new_detlalist = deltalist1 - deltalist2
 
     At this point, all delta items should be either 1) RAW of 2) XDELTA.
@@ -1042,10 +1040,10 @@ def residue_diff_deltalists(old_deltalist, new_deltalist, base_mem, print_out):
         ret_deltalist.append(delta_item)
         statics_reverted += 1
 
-    print_out.write("[INFO] residue_diff_statistics\n")
-    print_out.write("[INFO]   newly create chunks   : %d\n" % (statics_new_item))
-    print_out.write("[INFO]   overwrite to previous : %d\n" % (statics_overwrite_item))
-    print_out.write("[INFO]   identical to previous : %d\n" % (statics_duplicated_item))
-    print_out.write("[INFO]   reverted back         : %d\n" % (statics_reverted))
+    LOG.debug("residue_diff_statistics")
+    LOG.debug("  newly create chunks   : %d" % (statics_new_item))
+    LOG.debug("  overwrite to previous : %d" % (statics_overwrite_item))
+    LOG.debug("  identical to previous : %d" % (statics_duplicated_item))
+    LOG.debug("  reverted back         : %d" % (statics_reverted))
 
     return ret_deltalist

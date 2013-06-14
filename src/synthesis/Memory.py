@@ -31,10 +31,10 @@ from synthesis.progressbar import AnimatedProgressBar
 from synthesis.delta import DeltaItem
 from synthesis.delta import DeltaList
 from synthesis.delta import Recovered_delta
+from synthesis import log as logging
 
-#GLOBAL
-EXT_RAW = ".raw"
-EXT_META = "-meta"
+LOG = logging.getLogger(__name__)
+
 
 class MemoryError(Exception):
     pass
@@ -84,14 +84,12 @@ class Memory(object):
     def _get_mem_hash(self, fin, end_offset, hash_list, **kwargs):
         # kwargs
         #  diff: compare hash_list with self object
-        #  print_out: log/process output 
         #  free_pfn_dict: free memory physical frame number as a dictionary {'#':1, ... }
         diff = kwargs.get("diff", None)
         apply_free_memory = kwargs.get("apply_free_memory", True)
         free_pfn_dict = kwargs.get("free_pfn_dict", None)
-        print_out = kwargs.get("print_out", open("/dev/null", "w+b"))
-        print_out.write("[INFO] Get hash list of memory page\n")
-        prog_bar = AnimatedProgressBar(end=100, width=80, stdout=print_out)
+        LOG.info("Get hash list of memory page")
+        prog_bar = AnimatedProgressBar(end=100, width=80, stdout=sys.stdout)
 
         total_size = end_offset
         ram_offset = 0
@@ -136,7 +134,7 @@ class Memory(object):
                             else:
                                 raise IOError("xdelta3 patch is bigger than origianl")
                         except IOError as e:
-                            #print "[INFO] xdelta failed, so save it as raw (%s)" % str(e)
+                            #LOG.info("xdelta failed, so save it as raw (%s)" % str(e))
                             delta_item = DeltaItem(DeltaItem.DELTA_MEMORY,
                                     ram_offset, len(data),
                                     hash_value=sha256(data).digest(),
@@ -209,11 +207,9 @@ class Memory(object):
         # filepath = file path of the loading file
         # kwargs
         #  diff_file: compare filepath(modified ram) with self hash
-        #  print_out: log/process output 
         ####
         diff = kwargs.get("diff", None)
         apply_free_memory = kwargs.get("apply_free_memory", True)
-        print_out = kwargs.get("print_out", open("/dev/null", "w+b"))
         if diff and len(self.hash_list) == 0:
             raise MemoryError("Cannot compare give file this self.hashlist")
 
@@ -238,7 +234,7 @@ class Memory(object):
         hash_list = []
         ram_end_offset, ram_info = Memory._seek_to_end_of_ram(fin)
         if ram_end_offset == Memory.RAM_PAGE_SIZE:
-            print "end offset: %ld" % (ram_end_offset)
+            LOG.debug("end offset: %ld" % (ram_end_offset))
             raise MemoryError("ram header+data is not aligned with page size")
 
         if diff:
@@ -255,16 +251,16 @@ class Memory(object):
             fin.seek(0)
             freed_counter = self._get_mem_hash(fin, file_size, hash_list, \
                     diff=diff, free_pfn_dict=self.free_pfn_dict, \
-                    apply_free_memory=apply_free_memory, print_out=print_out)
+                    apply_free_memory=apply_free_memory)
         else:
             # case for generating base memory hash list
             fin.seek(0)
             freed_counter = self._get_mem_hash(fin, file_size, hash_list, \
-                    diff=diff, free_pfn_dict=None, print_out=print_out)
+                    diff=diff, free_pfn_dict=None)
 
         # get hash of memory area
         self.freed_counter = freed_counter
-        print_out.write("[DEBUG] FREED Memory Counter: %ld(%ld)\n" % \
+        LOG.debug("FREE Memory Counter: %ld(%ld)" % \
                 (freed_counter, freed_counter*Memory.RAM_PAGE_SIZE))
         
         return hash_list
@@ -305,8 +301,8 @@ class Memory(object):
         # pack hash list
         original_length = len(hash_list)
         hash_list = dict((x[2], x) for x in hash_list).values()
-        print "[Debug] hashlist is packed: from %d to %d : %lf" % \
-                (original_length, len(hash_list), 1.0*len(hash_list)/original_length)
+        LOG.debug("hashlist is packed: from %d to %d : %lf" % \
+                (original_length, len(hash_list), 1.0*len(hash_list)/original_length))
         
     def export_to_file(self, f_path):
         fd = open(f_path, "wb")
@@ -329,7 +325,7 @@ class Memory(object):
     def get_modified(self, new_kvm_file, apply_free_memory=True, free_memory_info=None):
         # get modified pages 
         hash_list = self._load_file(new_kvm_file, diff=True, \
-                print_out=sys.stdout, apply_free_memory=apply_free_memory)
+                apply_free_memory=apply_free_memory)
         if free_memory_info != None:
             free_memory_info['free_pfn_dict'] = self.free_pfn_dict
             free_memory_info['freed_counter'] = self.freed_counter
@@ -341,7 +337,7 @@ def hashing(filepath):
     # Contstuct KVM Base Memory DS from KVM migrated memory
     # filepath  : input KVM Memory Snapshot file path
     memory = Memory()
-    hash_list =  memory._load_file(filepath, print_out=sys.stdout)
+    hash_list =  memory._load_file(filepath)
     memory.hash_list = hash_list
     return memory
 
@@ -375,20 +371,18 @@ def _process_cmd(argv):
 def create_memory_deltalist(modified_mempath,
             basemem_meta=None, basemem_path=None,
             apply_free_memory=True,
-            free_memory_info=None,
-            print_out=None):
+            free_memory_info=None):
     # get memory delta
     # modified_mempath : file path for modified memory
     # basemem_meta : hashlist file for base mem
     # basemem_path : raw base memory path
     # freed_counter_ret : return pointer for freed counter
-    # print_out : log stream
 
     # Create Base Memory from meta file
     base = Memory.import_from_metafile(basemem_meta, basemem_path)
 
     # 1.get modified page
-    print_out.write("[Debug] 1.get modified page list\n")
+    LOG.debug("1.get modified page list")
     delta_list = base.get_modified(modified_mempath, 
             apply_free_memory=apply_free_memory,
             free_memory_info=free_memory_info)
@@ -425,7 +419,7 @@ def recover_memory(base_disk, base_mem, delta_path, out_path, verify_with_origin
             base_data = base_file.read(Memory.RAM_PAGE_SIZE)
             
             if offset != delta_list[delta_list_index].offset:
-                #print "from base data: %d" % len(base_data)
+                #LOG.debug("from base data: %d" % len(base_data))
                 modi_mem.seek(offset)
                 modi_data = modi_mem.read(len(base_data))
                 if modi_data != base_data:
@@ -435,7 +429,7 @@ def recover_memory(base_disk, base_mem, delta_path, out_path, verify_with_origin
                 modi_mem.seek(offset)
                 recover_data = delta_list[delta_list_index].data
                 origin_data = modi_mem.read(len(recover_data))
-                #print "from recovered data: %d at %ld" % (len(recover_data), delta_list[delta_list_index].offset)
+                #LOG.debug("from recovered data: %d at %ld" % (len(recover_data), delta_list[delta_list_index].offset))
                 delta_list_index += 1
                 if recover_data != origin_data:
                     msg = "orignal data is not same at %ld" % offset
@@ -449,7 +443,7 @@ def recover_memory(base_disk, base_mem, delta_path, out_path, verify_with_origin
             if data != origin_data:
                 msg = "orignal data is not same at %ld" % offset
                 raise MemoryError(msg)
-        print "Pass all varification - Successfully recovered"
+        LOG.debug("Pass all varification - Successfully recovered")
 
     return ','.join(chunk_list)
 
@@ -468,7 +462,7 @@ def get_free_pfn_dict(snapshot_path, mem_size, mem_offset):
         pglist_addr = 'c1840a80'
         pgn0_addr = 'f553c000'
     else:
-        print "Error, memory size %ld KB is not valid" % (mem_size)
+        LOG.error("Error, memory size %ld KB is not valid" % (mem_size))
         return None
 
     free_pfn_list = _get_free_pfn_list(snapshot_path, pglist_addr, pgn0_addr, \
@@ -494,7 +488,7 @@ def _get_free_pfn_list(snapshot_path, pglist_addr, pgn0_addr, mem_size_gb, mem_o
             "%d" % mem_offset,
         ]
     _PIPE = subprocess.PIPE
-    print "[INFO] Start getting free memory pages"
+    LOG.info("Start getting free memory pages")
     proc = subprocess.Popen(cmd, close_fds=True, stdin=_PIPE, stdout=_PIPE, stderr=_PIPE)
     out, err = proc.communicate()
     if err:
@@ -502,12 +496,14 @@ def _get_free_pfn_list(snapshot_path, pglist_addr, pgn0_addr, mem_size_gb, mem_o
     free_pfn_list = out.split("\n")
     if len(free_pfn_list[-1].strip()) == 0:
         free_pfn_list = free_pfn_list[:-1]
-    print "[INFO] Finish getting free memory pages"
+    LOG.info("Finish getting free memory pages")
     return free_pfn_list
 
 
 if __name__ == "__main__":
+    EXT_META = "-meta"
     settings, command = _process_cmd(sys.argv)
+
     if command == "hashing":
         if not settings.base_file:
             sys.stderr.write("Error, Cannot find migrated file. See help\n")
@@ -521,7 +517,7 @@ if __name__ == "__main__":
         for index, hashitem in enumerate(re_base.hash_list):
             if base.hash_list[index] != hashitem:
                 raise MemoryError("footer data is different")
-        print "[SUCCESS] meta file information is matched with original"
+        LOG.info("meta file information is matched with original")
     elif command == "delta":
         if (not settings.mig_file) or (not settings.base_file):
             sys.stderr.write("Error, Cannot find modified memory file. See help\n")
@@ -530,12 +526,12 @@ if __name__ == "__main__":
         meta_path = settings.base_file + EXT_META
         modi_mem_path = settings.mig_file
         out_path = settings.mig_file + ".delta"
-        #delta_list = create_memory_overlay(modi_mem_path, raw_path, modi_mem_path, out_path, print_out=sys.stdout)
+        #delta_list = create_memory_overlay(modi_mem_path, raw_path, \
+        #        modi_mem_path, out_path)
 
         mem_deltalist= create_memory_deltalist(modi_mem_path,
-                basemem_meta=meta_path, basemem_path=raw_path,
-                print_out=sys.stdout)
-        DeltaList.statistics(mem_deltalist, print_out=sys.stdout)
+                basemem_meta=meta_path, basemem_path=raw_path)
+        DeltaList.statistics(mem_deltalist)
         DeltaList.tofile(mem_deltalist, modi_mem_path + ".delta")
 
     elif command == "recover":

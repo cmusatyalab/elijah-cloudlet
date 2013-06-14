@@ -30,6 +30,9 @@ from lzma import LZMADecompressor
 
 from synthesis import msgpack 
 from synthesis.Configuration import Const
+from synthesis import log as logging
+
+LOG = logging.getLogger(__name__)
 
 
 #global
@@ -60,7 +63,8 @@ def diff_files(source_file, target_file, output_file, **kwargs):
         nova_util.execute("xdelta3", "-f", "-s", str(source_file), str(target_file), str(output_file))
         return 0
     else:
-        print '[INFO] %s(base) - %s  =  %s' % (os.path.basename(source_file), os.path.basename(target_file), os.path.basename(output_file))
+        LOG.info('%s(base) - %s  =  %s' % (os.path.basename(source_file), \
+                os.path.basename(target_file), os.path.basename(output_file)))
         command_delta = ['xdelta3', '-f', '-s', source_file, target_file, output_file]
         ret = xdelta3.xd3_main_cmdline(command_delta)
         if ret != 0:
@@ -163,13 +167,13 @@ def merge_data(source_data, overlay_data, buf_len):
 
 
 def compare_same(filename1, filename2):
-    print '[INFO] checking validity of generated file'
+    LOG.info('checking validity of generated file')
     compare = filecmp.cmp(filename1, filename2)
     if compare == False:
         print >> sys.stderr, '[ERROR] %s != %s' % (os.path.basename(filename1), os.path.basename(filename2))
         return False
     else:
-        print '[INFO] SUCCESS to recover'
+        LOG.info('SUCCESS to recover')
         return True
 
 
@@ -228,7 +232,7 @@ def decomp_lzma(inputname, outputname, **kwargs):
     return outputname, str(time_diff)
 
 
-def decomp_overlay(meta, output_path, print_out=sys.stdout):
+def decomp_overlay(meta, output_path):
     meta_dict = msgpack.unpackb(open(meta, "r").read())
     decomp_start_time = time()
     comp_overlay_files = meta_dict[Const.META_OVERLAY_FILES]
@@ -241,7 +245,7 @@ def decomp_overlay(meta, output_path, print_out=sys.stdout):
         decomp_data = decompressor.decompress(comp_data)
         decomp_data += decompressor.flush()
         overlay_file.write(decomp_data)
-    print_out.write("[Debug] Overlay decomp time for %d files: %f at %s\n" % \
+    LOG.debug("Overlay decomp time for %d files: %f at %s\n" % \
             (len(comp_overlay_files), (time()-decomp_start_time), output_path))
     overlay_file.close()
 
@@ -264,7 +268,6 @@ def _chunking_fixed_size(in_stream, size):
         data_len = len(data)
         if data_len <= 0:
             break
-        #print "%d %d %d" % (s_index, s_index+data_len, data_len)
         yield (s_index, s_index+data_len, data)
         s_index += data_len
 
@@ -298,14 +301,14 @@ def hashlist_statistics(hash_list):
         else:
             duplicated += 1
 
-    print "total : %d, unique: %d, compress: %lf" % (total_size, unique_size, (1.0*unique_size/total_size))
+    LOG.debug("total : %d, unique: %d, compress: %lf" % (total_size, unique_size, (1.0*unique_size/total_size)))
 
 
 def _search_matching(hash_value, hash_list, search_start_index):
     # search from the previous search point
     # good for search performance if list is already sorted
     for index, (value, s_offset, e_offset) in enumerate(hash_list[search_start_index:]):
-        print "Search start at : %d(%s), %d(%s)" % (index, search_start_index)
+        LOG.debug("Search start at : %d(%s), %d(%s)" % (index, search_start_index))
         if hash_value == value:
             return (search_start_index+index, s_offset, e_offset)
         if hash_value > value:
@@ -330,7 +333,7 @@ def get_delta(in_stream, hash_lists):
 
         if total_count%1000 == 0:
             done_size = total_count*HASH_CHUNKING_SIZE
-            print "%d/%d , %lf percent" % (matching_count, total_count, 100.0*done_size/400000000)
+            LOG.debug("%d/%d , %lf percent" % (matching_count, total_count, 100.0*done_size/400000000))
 
         #find matching hash for each hash_list
         for ref_hashlist_id, path, hash_list in hash_lists:
@@ -344,11 +347,11 @@ def get_delta(in_stream, hash_lists):
             delta_result.append((start, end, ref_hashlist_id, hash_value))
             latest_found[ref_hashlist_id] = found_index
             matching_count += 1
-            #print "found from hast_list %d, at the %d" % (ref_hashlist_id, latest_found[ref_hashlist_id])
+            #LOG.debug("found from hast_list %d, at the %d" % (ref_hashlist_id, latest_found[ref_hashlist_id]))
         else:
             delta_result.append((start, end, 0, data))
 
-    print "matching %d/%d = %lf" % (matching_count, total_count, 1.0*matching_count/total_count)
+    LOG.debug("matching %d/%d = %lf" % (matching_count, total_count, 1.0*matching_count/total_count))
     return delta_result 
 
 
@@ -369,10 +372,10 @@ def merge_delta(delta_list, hash_lists):
                     break
             index, s_offset, e_offset = _search_matching(data, hash_list, 0)
             ref_data = ref_mmap[ref_id][s_offset:e_offset]
-            #print "from hash[%d]\t%d ~ %d : %d" % (ref_id, start_offset, end_offset, len(ref_data))
+            #LOG.debug("from hash[%d]\t%d ~ %d : %d" % (ref_id, start_offset, end_offset, len(ref_data)))
         else:
             ref_data = data
-            #print "from data\t%d ~ %d : %d" % (start_offset, end_offset, len(ref_data))
+            #LOG.debug("from data\t%d ~ %d : %d" % (start_offset, end_offset, len(ref_data)))
         recover_data += ref_data
     return recover_data
 
@@ -447,11 +450,11 @@ def deltalist_from_file(in_path):
         if ref_hashlist_id:
             # get hash value, which is size of SHA256(==256 bit)
             data = fd.read(256/8)
-            #print "hash, recovering : %d %d" % (start_offset, end_offset)
+            #LOG.debug("hash, recovering : %d %d" % (start_offset, end_offset))
         else:
             # get real data, which is HASH_CHUNKING_SIZE
             data = fd.read(HASH_CHUNKING_SIZE)
-            #print "data, recovering : %d %d" % (start_offset, end_offset)
+            #LOG.debug("data, recovering : %d %d" % (start_offset, end_offset))
         delta_list.append((start_offset, end_offset, ref_hashlist_id, data))
 
     fd.close()

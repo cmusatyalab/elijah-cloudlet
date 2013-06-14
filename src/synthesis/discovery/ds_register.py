@@ -25,6 +25,10 @@ import httplib
 import json
 import socket
 from urlparse import urlparse
+from synthesis import log as logging
+
+
+LOG = logging.getLogger(__name__)
 
 
 class RegisterError(Exception):
@@ -34,14 +38,10 @@ class RegisterError(Exception):
 class RegisterThread(threading.Thread):
     API_URL             =   "/api/v1/Cloudlet/"
 
-    def __init__(self, server_dns, log=None, update_period=60):
+    def __init__(self, server_dns, update_period=60):
         self.server_dns = server_dns
         if self.server_dns.find("http://") != 0:
             self.server_dns = "http://" + self.server_dns
-        if log:
-            self.log = log
-        else:
-            self.log = open("/dev/null", "w+b")
         self.REGISTER_PERIOD_SEC = update_period
         self.local_ipaddress = get_local_ipaddress()
         self.stop = threading.Event()
@@ -50,7 +50,7 @@ class RegisterThread(threading.Thread):
 
     def register(self):
         
-        self.log.write("[REGISTER] start register to %s\n" % (self.server_dns))
+        LOG.info("[REGISTER] start register to %s" % (self.server_dns))
         while (self.resource_uri == None):
             if self.stop.wait(0.001):
                 # finish thread without deregister since it hasn't done register
@@ -61,7 +61,7 @@ class RegisterThread(threading.Thread):
                 self.resource_uri = self._initial_register(self.server_dns)
             except (socket.error, ValueError) as e:
                 pass
-                self.log.write("[REGISTER] waiting for directory server ready\n")
+                LOG.info("[REGISTER] waiting for directory server ready")
             finally:
                 self.stop.wait(self.REGISTER_PERIOD_SEC)
 
@@ -69,19 +69,19 @@ class RegisterThread(threading.Thread):
         while(not self.stop.wait(0.001)):
             try:
                 self._update_status(self.server_dns)
-                self.log.write("[REGISTER] updating status\n")
+                LOG.info("[REGISTER] updating status")
             except (socket.error, ValueError) as e:
                 pass
-                self.log.write("[REGISTER] waiting for directory server ready\n")
+                LOG.info("[REGISTER] waiting for directory server ready")
             finally:
                 self.stop.wait(self.REGISTER_PERIOD_SEC)
 
         # send termination message
         try:
             self._deregister(self.server_dns)
-            self.log.write("[REGISTER] Deregister\n")
+            LOG.info("[REGISTER] Deregister")
         except (socket.error, ValueError) as e:
-            self.log.write("[REGISTER] Failed to deregister due to server error\n")
+            LOG.info("[REGISTER] Failed to deregister due to server error")
 
     def terminate(self):
         self.stop.set()
@@ -191,12 +191,12 @@ def process_command_line(argv):
 
 def main(argv):
     settings, args = process_command_line(sys.argv[1:])
-    registerThread = RegisterThread(settings.server_dns, log=sys.stdout, update_period=60)
+    registerThread = RegisterThread(settings.server_dns, update_period=60)
     try:
         registerThread.start()
         time.sleep(60*60*60*60)
     except KeyboardInterrupt as e:
-        sys.stdout.write("User interrupt\n")
+        LOG.info("User interrupt")
     finally:
         registerThread.terminate()
     return 0

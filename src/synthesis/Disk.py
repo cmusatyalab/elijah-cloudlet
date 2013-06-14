@@ -30,25 +30,27 @@ from synthesis.delta import DeltaItem
 from synthesis.delta import DeltaList
 from synthesis.delta import Recovered_delta
 from synthesis.progressbar import AnimatedProgressBar
+from synthesis import log as logging
+
+LOG = logging.getLogger(__name__)
+
 
 class DiskError(Exception):
     pass
 
 
-def hashing(disk_path, meta_path, chunk_size=4096, window_size=512, print_out=None):
+def hashing(disk_path, meta_path, chunk_size=4096, window_size=512):
     # TODO: need more efficient implementation, e.g. bisect
     # generate hash of base disk
     # disk_path : raw disk path
     # chunk_size : hash chunk size
     # window_size : slicing window size
-    # print_out : progress bar
 
-    if print_out:
-        print_out.write("[INFO] Start VM Disk hashing\n")
-        prog_bar = AnimatedProgressBar(end=100, width=80, stdout=print_out)
-        total_iteration = os.path.getsize(disk_path)/window_size
-        iter_count = 0
-        prog_interval = 100
+    LOG.info("Start VM Disk hashing")
+    prog_bar = AnimatedProgressBar(end=100, width=80, stdout=sys.stdout)
+    total_iteration = os.path.getsize(disk_path)/window_size
+    iter_count = 0
+    prog_interval = 100
 
     disk_file = open(disk_path, "rb")
     out_file = open(meta_path, "w+b")
@@ -63,11 +65,10 @@ def hashing(disk_path, meta_path, chunk_size=4096, window_size=512, print_out=No
     data_len = len(data)
     hash_dic = dict()
     while True:
-        if print_out:
-            if (iter_count)%prog_interval == 0:
-                prog_bar.process(100.0*prog_interval/total_iteration)
-                prog_bar.show_progress()
-            iter_count += 1
+        if (iter_count)%prog_interval == 0:
+            prog_bar.process(100.0*prog_interval/total_iteration)
+            prog_bar.show_progress()
+        iter_count += 1
 
         hashed_data = sha256(data).digest()
         if hash_dic.get(hashed_data) == None:
@@ -75,7 +76,6 @@ def hashing(disk_path, meta_path, chunk_size=4096, window_size=512, print_out=No
 
         added_data = disk_file.read(window_size)
         if (not added_data) or len(added_data) != window_size:
-            print ""
             break
         s_offset += window_size
         data = data[window_size:] + added_data
@@ -94,11 +94,11 @@ def _pack_hashlist(hash_list):
     # pack hash list
     original_length = len(hash_list)
     hash_list = dict((x[0], x) for x in hash_list).values()
-    print "[Debug] hashlist is packed: from %d to %d : %lf" % \
-            (original_length, len(hash_list), 1.0*len(hash_list)/original_length)
+    LOG.info("hashlist is packed: from %d to %d : %lf" % \
+            (original_length, len(hash_list), 1.0*len(hash_list)/original_length))
 
 
-def parse_qemu_log(qemu_logfile, chunk_size, print_out=sys.stdout):
+def parse_qemu_log(qemu_logfile, chunk_size):
     # return dma_dict, discard_dict
     # element of dictionary has (chunk_%:discarded_time) format
     # CAVEAT: DMA Memory Address should be sift 4096*2 bytes because 
@@ -145,7 +145,7 @@ def parse_qemu_log(qemu_logfile, chunk_size, print_out=sys.stdout):
             end_chunk_num = (start_sec_num*512 + total_sec_len*512)/chunk_size
             if (start_sec_num*512)%chunk_size != 0:
                 mal_aligned_sector += total_sec_len
-                #print "Warning, disk sector is not aligned with chunksize"
+                #LOG.warning("Warning, disk sector is not aligned with chunksize")
             total_founded_discard += (total_sec_len*512)
 
             start_chunk_num = int(ceil(start_chunk_num))
@@ -154,18 +154,18 @@ def parse_qemu_log(qemu_logfile, chunk_size, print_out=sys.stdout):
                 discard_counter += 1
 
     if mal_aligned_sector != 0:
-        print_out.write("[Warning] Lost %d bytes from mal-alignment\n" % (mal_aligned_sector*512))
+        LOG.warning("Lost %d bytes from mal-alignment" % (mal_aligned_sector*512))
     if total_founded_discard != 0:
-        print_out.write("[DEBUG] Total founded TRIM: %d B, effective TRIM: %d B\n" % \
+        LOG.debug("Total founded TRIM: %d B, effective TRIM: %d B" % \
                 (total_founded_discard, len(discard_dict)*chunk_size))
     if dma_counter != 0 :
-        print_out.write("[DEBUG] net DMA ratio : %ld/%ld = %f %%\n" % \
+        LOG.debug("net DMA ratio : %ld/%ld = %f %%" % \
                 (len(dma_dict), dma_counter, 100.0*len(dma_dict)/dma_counter))
     if discard_counter != 0:
-        print_out.write("[DEBUG] net discard ratio : %ld/%ld = %f %%\n" % \
+        LOG.debug("net discard ratio : %ld/%ld = %f %%" % \
                 (len(discard_dict), discard_counter, 100.0*len(discard_dict)/discard_counter))
     if mal_aligned_sector != 0:
-        print_out.write("Warning, mal-alignedsector count: %d\n" % (mal_aligned_sector))
+        LOG.warning("Warning, mal-alignedsector count: %d" % (mal_aligned_sector))
     return dma_dict, discard_dict
 
 
@@ -175,8 +175,7 @@ def create_disk_deltalist(modified_disk,
             trim_dict=None, dma_dict=None,
             apply_discard=True,
             used_blocks_dict=None,
-            ret_statistics=None,
-            print_out=None):
+            ret_statistics=None):
     # get disk delta
     # base_diskmeta : hash list of base disk
     # base_disk: path to base VM disk
@@ -201,7 +200,7 @@ def create_disk_deltalist(modified_disk,
 
 
     # 1. get modified page
-    print_out.write("[Debug] 1.get modified disk page\n")
+    LOG.debug("1.get modified disk page")
     delta_list = list()
     for index, chunk in enumerate(modified_chunk_dict.keys()):
         offset = chunk * chunk_size
@@ -248,7 +247,7 @@ def create_disk_deltalist(modified_disk,
             else:
                 raise IOError("xdelta3 patch is bigger than origianl")
         except IOError as e:
-            #print "[INFO] xdelta failed, so save it as raw (%s)" % str(e)
+            LOG.info("xdelta failed, so save it as raw (%s)" % str(e))
             delta_item = DeltaItem(DeltaItem.DELTA_DISK,
                     offset, len(data),
                     hash_value=sha256(data).digest(),
@@ -261,7 +260,7 @@ def create_disk_deltalist(modified_disk,
         ret_statistics['xrayed'] = xray_counter
         ret_statistics['trimed_list'] = trimed_list
         ret_statistics['xrayed_list'] = xrayed_list
-    print_out.write("[Debug] 1-1. Trim(%d, overwritten after trim(%d)), Xray(%d)\n" % \
+    LOG.debug("1-1. Trim(%d, overwritten after trim(%d)), Xray(%d)" % \
             (trim_counter, overwritten_after_trim, xray_counter))
 
     return delta_list

@@ -97,12 +97,12 @@ def main(argv):
     CMD_BASE_CREATION       = "base"
     CMD_OVERLAY_CREATION    = "overlay"
     CMD_SYNTEHSIS           = "synthesis"
-    CMD_LIST_BASE           = "list_base"
-    CMD_DEL_BASE            = "del_base"
-    CMD_ADD_BASE            = "add_base"
-    CMD_LIST_SESSION        = "list_session"
-    CMD_CLEAR_SESSION       = "clear_session"
-    CMD_LIST_OVERLAY        = "list_overlay"
+    CMD_LIST_BASE           = "list-base"
+    CMD_DEL_BASE            = "del-base"
+    CMD_ADD_BASE            = "add-base"
+    CMD_LIST_SESSION        = "list-session"
+    CMD_CLEAR_SESSION       = "clear-session"
+    CMD_LIST_OVERLAY        = "list-overlay"
 
     commands = {
             CMD_BASE_CREATION: "create new base VM",

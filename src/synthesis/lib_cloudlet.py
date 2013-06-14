@@ -50,30 +50,13 @@ from optparse import OptionParser
 from synthesis.tool import comp_lzma
 from synthesis.tool import diff_files
 from synthesis.tool import decomp_overlay
+from synthesis import log as logging
+
+LOG = logging.getLogger(__name__)
 
 
 class CloudletGenerationError(Exception):
     pass
-
-
-class CloudletLog(object):
-    def __init__(self, filename=None):
-        if filename != None:
-            self.logdir = os.path.dirname(filename)
-            if os.path.exists(self.logdir) == False:
-                os.makedirs(self.logdir)
-            self.logfile = open(filename, "w+")
-        else:
-            self.logfile = open(Const.OVERLAY_LOG, "w+")
-        self.mute = open("/dev/null", "w+b")
-
-    def write(self, log):
-        self.logfile.write(log)
-        sys.stdout.write(log)
-
-    def flush(self):
-        self.logfile.flush()
-        sys.stdout.flush()
 
 
 class VM_Overlay(threading.Thread):
@@ -110,7 +93,6 @@ class VM_Overlay(threading.Thread):
 
         self.log_path = os.path.join(os.path.dirname(self.base_disk), \
                                 os.path.basename(self.base_disk) + Const.OVERLAY_LOG)
-        self.print_out = CloudletLog(self.log_path)
         threading.Thread.__init__(self, target=self.create_overlay)
 
     def resume_basevm(self):
@@ -131,7 +113,7 @@ class VM_Overlay(threading.Thread):
         # make FUSE disk & memory
         self.fuse = run_fuse(Const.VMNETFS_PATH, Const.CHUNK_SIZE,
                 self.base_disk, os.path.getsize(self.base_disk),
-                self.base_mem, os.path.getsize(self.base_mem), print_out=self.print_out)
+                self.base_mem, os.path.getsize(self.base_mem))
         self.modified_disk = os.path.join(self.fuse.mountpoint, 'disk', 'image')
         self.base_mem_fuse = os.path.join(self.fuse.mountpoint, 'memory', 'image')
         self.modified_mem = NamedTemporaryFile(prefix="cloudlet-mem-", delete=False)
@@ -148,8 +130,8 @@ class VM_Overlay(threading.Thread):
         self.qemu_monitor.start()
 
         # 1. resume & get modified disk
-        self.print_out.write("[INFO] * Overlay creation configuration\n")
-        self.print_out.write("[INFO]  - %s\n" % str(self.options))
+        LOG.info("[INFO] * Overlay creation configuration")
+        LOG.info("[INFO]  - %s" % str(self.options))
         conn = get_libvirt_connection()
         self.machine = run_snapshot(conn, self.modified_disk, self.base_mem_fuse, \
                 qemu_logfile=self.qemu_logfile.name, qemu_args=self.qemu_args,
@@ -164,13 +146,12 @@ class VM_Overlay(threading.Thread):
                 self.base_disk, self.base_mem,
                 self.modified_disk, self.modified_mem.name,
                 self.qemu_logfile, 
-                print_out=self.print_out, nova_util=self.nova_util)
+                nova_util=self.nova_util)
 
         # 3. get overlay VM
         overlay_deltalist = get_overlay_deltalist(monitoring_info, self.options,
                 self.base_disk, self.base_mem, self.base_memmeta, 
-                self.modified_disk, self.modified_mem.name,
-                self.print_out)
+                self.modified_disk, self.modified_mem.name)
 
         # 4. create_overlayfile
         image_name = os.path.basename(self.base_disk).split(".")[0]
@@ -182,7 +163,7 @@ class VM_Overlay(threading.Thread):
                 generate_overlayfile(overlay_deltalist, self.options, 
                 self.base_hashvalue, os.path.getsize(self.modified_disk), 
                 os.path.getsize(self.modified_mem.name),
-                overlay_metapath, overlay_prefix, self.print_out)
+                overlay_metapath, overlay_prefix)
 
         # option for data-intensive application
         if self.options.DATA_SOURCE_URI != None:
@@ -203,7 +184,7 @@ class VM_Overlay(threading.Thread):
             os.unlink(self.mount_point)
 
         if self.options.MEMORY_SAVE_PATH:
-            self.print_out.write("[INFO] moving memory sansphost to %s\n" % self.options.MEMORY_SAVE_PATH)
+            LOG.debug("[INFO] moving memory sansphost to %s" % self.options.MEMORY_SAVE_PATH)
             shutil.move(self.modified_mem.name, self.options.MEMORY_SAVE_PATH)
         else:
             os.unlink(self.modified_mem.name)
@@ -221,14 +202,14 @@ class VM_Overlay(threading.Thread):
         # fetch URI to cache
         try:
             cache_manager = cache.CacheManager(Discovery_Const.CACHE_ROOT, \
-                    Discovery_Const.REDIS_ADDR, Discovery_Const.CACHE_FUSE_BINPATH,
-                    print_out=sys.stdout)
+                    Discovery_Const.REDIS_ADDR, Discovery_Const.CACHE_FUSE_BINPATH)
+                    
             cache_manager.start()
             self.compiled_list = cache.Util.get_compiled_URIs( \
                     cache_manager.cache_dir, self.options.DATA_SOURCE_URI)
             #cache_manager.fetch_compiled_URIs(compiled_list)
             cache_fuse = cache_manager.launch_fuse(self.compiled_list)
-            self.print_out.write("[INFO] cache fuse mount : %s, %s\n" % \
+            LOG.debug("[INFO] cache fuse mount : %s, %s\n" % \
                     (cache_fuse.url_root, cache_fuse.mountpoint))
         except cache.CachingError, e:
             msg = "Cannot retrieve data from URI: %s" % str(e)
@@ -238,7 +219,7 @@ class VM_Overlay(threading.Thread):
         if os.path.lexists(mount_point) == True:
             os.unlink(mount_point)
         os.symlink(cache_fuse.mountpoint, mount_point)
-        self.print_out.write("[INFO] create symbolic link to %s\n" % mount_point)
+        LOG.debug("[INFO] create symbolic link to %s" % mount_point)
 
         return cache_manager, cache_fuse.mountpoint
 
@@ -281,7 +262,6 @@ class _MonitoringInfo(object):
 class SynthesizedVM(threading.Thread):
     def __init__(self, launch_disk, launch_mem, fuse, disk_only=False, qemu_args=None, **kwargs):
         # kwargs
-        # param Log: log out
         self.vm_xml = kwargs.get("vm_xml", None)
         self.LOG = kwargs.get("log", None)
         if self.LOG == None:
@@ -380,7 +360,7 @@ def _update_overlay_meta(original_meta, new_path, blob_info=None):
     fout.close()
 
 
-def _test_dma_accuracy(dma_dict, disk_deltalist, mem_deltalist, Log=sys.stdout):
+def _test_dma_accuracy(dma_dict, disk_deltalist, mem_deltalist):
     dma_start_time = time()
     dma_read_counter = 0
     dma_write_counter = 0
@@ -403,8 +383,8 @@ def _test_dma_accuracy(dma_dict, disk_deltalist, mem_deltalist, Log=sys.stdout):
         if disk_delta:
             # first search at overlay disk
             if disk_delta.ref_id != DeltaItem.REF_OVERLAY_MEM:
-#                print "dma disk chunk is same, but is it not deduped with overlay mem(%d)" \
-#                        % (disk_delta.ref_id)
+#                LOG.info("dma disk chunk is same, but is it not deduped with overlay mem(%d)" \
+#                        % (disk_delta.ref_id))
                 continue
             delta_mem_chunk = disk_delta.data/Const.CHUNK_SIZE
             if delta_mem_chunk == dma_mem_chunk:
@@ -417,8 +397,8 @@ def _test_dma_accuracy(dma_dict, disk_deltalist, mem_deltalist, Log=sys.stdout):
             mem_delta = mem_delta_dict.get(dma_mem_chunk, None)
             if mem_delta:
                 if mem_delta.ref_id != DeltaItem.REF_BASE_DISK:
-#                    print "dma memory chunk is same, but is it not deduped with base disk(%d)" \
-#                            % (mem_delta.ref_id)
+#                    LOG.info("dma memory chunk is same, but is it not deduped with base disk(%d)" \
+#                            % (mem_delta.ref_id))
                     continue
                 delta_disk_chunk = mem_delta.data/Const.CHUNK_SIZE
                 if delta_disk_chunk == dma_disk_chunk:
@@ -428,16 +408,16 @@ def _test_dma_accuracy(dma_dict, disk_deltalist, mem_deltalist, Log=sys.stdout):
                         dma_write_base_dedup += 1
 
     dma_end_time = time()
-    Log.write("[DEBUG][DMA] Total DMA: %ld\n " % (len(dma_dict)))
-    Log.write("[DEBUG][DMA] Total DMA READ: %ld, WRITE: %ld\n " % (dma_read_counter, dma_write_counter))
-    Log.write("[DEBUG][DMA] WASTED TIME: %f\n " % (dma_end_time-dma_start_time))
-    Log.write("[DEBUG][DMA] 1) DMA READ Overlay Deduplication: %ld(%f %%)\n " % \
+    LOG.debug("[DMA] Total DMA: %ld\n " % (len(dma_dict)))
+    LOG.debug("[DMA] Total DMA READ: %ld, WRITE: %ld\n " % (dma_read_counter, dma_write_counter))
+    LOG.debug("[DMA] WASTED TIME: %f\n " % (dma_end_time-dma_start_time))
+    LOG.debug("[DMA] 1) DMA READ Overlay Deduplication: %ld(%f %%)\n " % \
             (dma_read_overlay_dedup, 100.0*dma_read_overlay_dedup/dma_read_counter))
-    Log.write("[DEBUG][DMA]    DMA READ Base Deduplication: %ld(%f %%)\n " % \
+    LOG.debug("[DMA]    DMA READ Base Deduplication: %ld(%f %%)\n " % \
             (dma_read_base_dedup, 100.0*dma_read_base_dedup/dma_read_counter))
-    Log.write("[DEBUG][DMA] 2) DMA WRITE Overlay Deduplication: %ld(%f %%)\n " % \
+    LOG.debug("[DMA] 2) DMA WRITE Overlay Deduplication: %ld(%f %%)\n " % \
             (dma_write_overlay_dedup, 100.0*dma_write_overlay_dedup/dma_write_counter))
-    Log.write("[DEBUG][DMA]    DMA WRITE Base Deduplication: %ld(%f %%)\n " % \
+    LOG.debug("[DMA]    DMA WRITE Base Deduplication: %ld(%f %%)\n " % \
             (dma_write_base_dedup, 100.0*dma_write_base_dedup/dma_write_counter))
 
 
@@ -561,8 +541,7 @@ def _get_monitoring_info(machine, options,
         fuse_stream_monitor,
         base_disk, base_mem,
         modified_disk, modified_mem,
-        qemu_logfile, print_out=None,
-        nova_util=None):
+        qemu_logfile, nova_util=None):
     ''' return montioring information including
         1) base vm hash list
         2) used/freed disk block list
@@ -581,9 +560,9 @@ def _get_monitoring_info(machine, options,
 
     # 1-4. get dma & discard information
     if options.TRIM_SUPPORT:
-        dma_dict, trim_dict = Disk.parse_qemu_log(qemu_logfile.name, Const.CHUNK_SIZE, print_out=print_out)
+        dma_dict, trim_dict = Disk.parse_qemu_log(qemu_logfile.name, Const.CHUNK_SIZE)
         if len(trim_dict) == 0:
-            print_out.write("[WARNING] No TRIM Discard, Check /etc/fstab configuration\n")
+            LOG.warning("No TRIM Discard, Check /etc/fstab configuration")
     else:
         trim_dict = dict()
     free_memory_dict = dict()
@@ -607,7 +586,7 @@ def _get_monitoring_info(machine, options,
 
 
 def copy_disk(in_path, out_path):
-    print "[INFO] Copying disk image to %s" % out_path
+    LOG.info("Copying disk image to %s" % out_path)
     cmd = ["cp",  "%s" % (in_path), "%s" % (out_path)]
     cp_proc = subprocess.Popen(cmd, close_fds=True)
     cp_proc.wait()
@@ -623,7 +602,7 @@ def get_libvirt_connection():
 def get_overlay_deltalist(monitoring_info, options,
         base_image, base_mem, base_memmeta, 
         modified_disk, modified_mem,
-        print_out, old_deltalist=None):
+        old_deltalist=None):
     '''return overlay deltalist
     Get difference between base vm (base_image, base_mem) and 
     launch vm (modified_disk, modified_mem) using monitoring information
@@ -651,11 +630,10 @@ def get_overlay_deltalist(monitoring_info, options,
         mem_deltalist= Memory.create_memory_deltalist(modified_mem,
                 basemem_meta=base_memmeta, basemem_path=base_mem,
                 apply_free_memory=options.FREE_SUPPORT,
-                free_memory_info=free_memory_dict,
-                print_out=print_out)
+                free_memory_info=free_memory_dict)
         if old_deltalist and len(old_deltalist) > 0:
             diff_deltalist = delta.residue_diff_deltalists(old_deltalist,
-                    mem_deltalist, base_mem, print_out)
+                    mem_deltalist, base_mem)
             mem_deltalist = diff_deltalist
 
     # 2-2. get disk overlay
@@ -667,8 +645,8 @@ def get_overlay_deltalist(monitoring_info, options,
         apply_discard = True,
         dma_dict=dma_dict,
         used_blocks_dict=used_blocks_dict,
-        ret_statistics=disk_statistics,
-        print_out=print_out)
+        ret_statistics=disk_statistics)
+        
 
 
     # 2-3. Merge disk & memory delta_list to generate overlay file
@@ -677,13 +655,13 @@ def get_overlay_deltalist(monitoring_info, options,
             mem_deltalist, Memory.Memory.RAM_PAGE_SIZE,
             disk_deltalist, Const.CHUNK_SIZE,
             basedisk_hashlist=basedisk_hashlist,
-            basemem_hashlist=basemem_hashlist,
-            print_out=print_out)
+            basemem_hashlist=basemem_hashlist)
+            
 
     free_memory_dict = getattr(monitoring_info, _MonitoringInfo.MEMORY_FREE_BLOCKS, None)
     free_pfn_counter = long(free_memory_dict.get("freed_counter", 0))
     disk_discarded_count = disk_statistics.get('trimed', 0)
-    DeltaList.statistics(merged_deltalist, print_out=print_out,
+    DeltaList.statistics(merged_deltalist, 
             mem_discarded=free_pfn_counter,
             disk_discarded=disk_discarded_count)
 
@@ -692,17 +670,17 @@ def get_overlay_deltalist(monitoring_info, options,
 
 def generate_overlayfile(overlay_deltalist, options, 
         base_hashvalue, launchdisk_size, launchmem_size,
-        overlay_metapath, overlayfile_prefix, print_out):
+        overlay_metapath, overlayfile_prefix):
     ''' generate overlay metafile and file
     Return:
         [overlay_metapath, [overlayfilepath1, overlayfilepath2]]
     '''
 
     # Compression
-    print_out.write("[DEBUG][LZMA] Compressing overlay blobs\n")
+    LOG.debug("[LZMA] Compressing overlay blobs")
     blob_list = delta.divide_blobs(overlay_deltalist, overlayfile_prefix,
             Const.OVERLAY_BLOB_SIZE_KB, Const.CHUNK_SIZE,
-            Memory.Memory.RAM_PAGE_SIZE, print_out=print_out)
+            Memory.Memory.RAM_PAGE_SIZE)
 
     # create metadata
     if not options.DISK_ONLY:
@@ -740,8 +718,8 @@ def run_delta_compression(output_list, **kwargs):
             diff_files(base, modified, overlay, nova_util=nova_util)
         else:
             diff_files(base, modified, overlay, nova_util=nova_util)
-        print '[TIME] time for creating overlay : ', str(time()-start_time)
-        print '[INFO] (%d)-(%d)=(%d): ' % (os.path.getsize(base), os.path.getsize(modified), os.path.getsize(overlay))
+        LOG.info('[TIME] time for creating overlay : ', str(time()-start_time))
+        LOG.info('[TIME](%d)-(%d)=(%d): ' % (os.path.getsize(base), os.path.getsize(modified), os.path.getsize(overlay)))
 
         # compression
         comp = overlay + '.lzma'
@@ -762,7 +740,6 @@ def recover_launchVM(base_image, meta_info, overlay_file, **kwargs):
     # nova_util = nova_util is executioin wrapper for nova framework
     #           You should use nova_util in OpenStack, or subprocess
     #           will be returned without finishing their work
-    log = kwargs.get('log', open("/dev/null", "w+b"))
     base_mem = kwargs.get('base_mem', None)
     base_diskmeta = kwargs.get('base_diskmeta', None)
     base_memmeta = kwargs.get('base_memmeta', None)
@@ -788,13 +765,12 @@ def recover_launchVM(base_image, meta_info, overlay_file, **kwargs):
 
     # make FUSE disk & memory
     kwargs['meta_info'] = meta_info
-    kwargs['print_out'] = log
     fuse = run_fuse(Const.VMNETFS_PATH, Const.CHUNK_SIZE,
             base_image, vm_disk_size, base_mem, vm_memory_size,
             resumed_disk=launch_disk.name,  disk_overlay_map=disk_overlay_map,
             resumed_memory=launch_mem.name, memory_overlay_map=memory_overlay_map,
             **kwargs)
-    log.write("[INFO] Start FUSE\n")
+    LOG.info("Start FUSE")
 
     # Recover Modified Memory
     named_pipename = overlay_file+".fifo"
@@ -805,7 +781,7 @@ def recover_launchVM(base_image, meta_info, overlay_file, **kwargs):
             launch_disk.name, vm_disk_size, Const.CHUNK_SIZE,
             out_pipename=named_pipename)
     fuse_thread = vmnetfs.FuseFeedingThread(fuse,
-            named_pipename, delta.Recovered_delta.END_OF_PIPE, print_out=log)
+            named_pipename, delta.Recovered_delta.END_OF_PIPE)
     return [launch_disk.name, launch_mem.name, fuse, delta_proc, fuse_thread]
 
 
@@ -872,7 +848,7 @@ def run_vm(conn, domain_xml, **kwargs):
         vnc_port = running_xml.find("devices/graphics").get("port")
         vnc_port = int(vnc_port)-5900
     except AttributeError as e:
-        sys.stderr.write("Warning, Possible VNC port error:%s\n" % str(e))
+        LOG.error("Warning, Possible VNC port error:%s" % str(e))
 
     _PIPE = subprocess.PIPE
     vnc_process = subprocess.Popen(["gvncviewer", "localhost:%d" % vnc_port],
@@ -882,7 +858,7 @@ def run_vm(conn, domain_xml, **kwargs):
         try:
             vnc_process.wait()
         except KeyboardInterrupt as e:
-            print "[INFO] keyboard interrupt while waiting VNC"
+            LOG.info("keyboard interrupt while waiting VNC")
             if machine:
                 machine.destroy()
     return machine
@@ -899,9 +875,9 @@ def save_mem_snapshot(machine, fout_path, **kwargs):
     machine.suspend()
 
     #Save memory state
-    print "[INFO] save VM memory state at %s" % fout_path
-    print "[INFO] (This could take up to minute depend on VM's memory size)"
-    print "[INFO] (Check file at %s)" % fout_path
+    LOG.info("save VM memory state at %s" % fout_path)
+    LOG.info("This could take up to minute depend on VM's memory size")
+    LOG.info("(Check file at %s)" % fout_path)
     try:
         tmp_outpath = fout_path + ".tmp"
         ret = machine.save(tmp_outpath)
@@ -978,9 +954,9 @@ def run_snapshot(conn, disk_image, mem_snapshot, **kwargs):
     if resume_time != None:
         resume_time['start_time'] = start_resume_time
         resume_time['end_time'] = time()
-        print "[RESUME] : QEMU resume time (%f)~(%f)=(%f)" % \
+        LOG.info("[RESUME] : QEMU resume time (%f)~(%f)=(%f)" % \
                 (resume_time['start_time'], resume_time['end_time'], \
-                resume_time['end_time']-resume_time['start_time'])
+                resume_time['end_time']-resume_time['start_time']))
 
     # get machine
     domxml = ElementTree.fromstring(new_xml_string)
@@ -1001,7 +977,7 @@ def connect_vnc(machine, no_wait=False):
         vnc_port = running_xml.find("devices/graphics").get("port")
         vnc_port = int(vnc_port)-5900
     except AttributeError as e:
-        sys.stderr.write("Warning, Possible VNC port error:%s\n" % str(e))
+        LOG.error("Warning, Possible VNC port error:%s" % str(e))
 
     # Run VNC
     vnc_process = subprocess.Popen(["gvncviewer", "localhost:%d" % vnc_port],
@@ -1010,11 +986,11 @@ def connect_vnc(machine, no_wait=False):
     if no_wait == True:
         return
 
-    print "[INFO] waiting for finishing VNC interaction"
+    LOG.info("waiting for finishing VNC interaction")
     try:
         vnc_process.wait()
     except KeyboardInterrupt as e:
-        print "keyboard interrupt while waiting VNC"
+        LOG.info("keyboard interrupt while waiting VNC")
         vnc_process.terminate()
 
 
@@ -1033,7 +1009,7 @@ def rettach_nic(machine, old_xml, new_xml, **kwargs):
     old_nic_xml = ElementTree.tostring(old_nic)
     ret = machine.detachDevice(old_nic_xml)
     if ret != 0:
-        print "[debug] failed to detach device"
+        LOG.warning("failed to detach device")
     
     sleep(1)
     #attach
@@ -1045,14 +1021,14 @@ def rettach_nic(machine, old_xml, new_xml, **kwargs):
     new_nic_xml = ElementTree.tostring(new_nic)
     machine.attachDevice(new_nic_xml)
     if ret != 0:
-        print "[debug] failed to attach device"
+        LOG.warning("failed to attach device")
 
 
 def restore_with_config(conn, mem_snapshot, xml):
     try:
-        print "[INFO] restoring VM..."
+        LOG.info("restoring VM...")
         conn.restoreFlags(mem_snapshot, xml, libvirt.VIR_DOMAIN_SAVE_RUNNING)
-        print "[INFO] VM is restored..."
+        LOG.info("VM is restored...")
     except libvirt.libvirtError, e:
         message = "%s\nXML: %s\nError, Check you QEMU_ARGUMENT" % (xml, str(e))
         raise CloudletGenerationError(message)
@@ -1085,8 +1061,7 @@ def copy_with_xml(in_path, out_path, xml):
 
 
 def create_residue(base_disk, base_hashvalue, 
-        resumed_vm, options, 
-        original_deltalist, print_out):
+        resumed_vm, options, original_deltalist):
     '''Get residue
     Return : residue_metafile_path, residue_filelist
     '''
@@ -1104,13 +1079,13 @@ def create_residue(base_disk, base_hashvalue,
             resumed_vm.monitor,
             base_disk, base_mem,
             resumed_vm.resumed_disk, residue_mem.name,
-            qemu_logfile, print_out)
+            qemu_logfile)
 
     # 3. get overlay VM
     residue_deltalist = get_overlay_deltalist(monitoring_info, options,
             base_disk, base_mem, base_memmeta, 
             resumed_vm.resumed_disk, residue_mem.name,
-            print_out, old_deltalist=original_deltalist)
+            old_deltalist=original_deltalist)
 
     # 3-1. save residue overlay only for measurement
     # Free to delete
@@ -1122,11 +1097,11 @@ def create_residue(base_disk, base_hashvalue,
             generate_overlayfile(residue_deltalist, options, 
             base_hashvalue, os.path.getsize(resumed_vm.resumed_disk), 
             os.path.getsize(residue_mem.name),
-            residue_metapath, residue_prefix, print_out)
+            residue_metapath, residue_prefix)
 
     # 4. merge with previous deltalist
     merged_list = delta.residue_merge_deltalist(original_deltalist, \
-            residue_deltalist, print_out)
+            residue_deltalist)
 
     # 5. create_overlayfile
     image_name = os.path.basename(base_disk).split(".")[0]
@@ -1138,7 +1113,7 @@ def create_residue(base_disk, base_hashvalue,
             generate_overlayfile(merged_list, options, 
             base_hashvalue, os.path.getsize(resumed_vm.resumed_disk), 
             os.path.getsize(residue_mem.name),
-            overlay_metapath, overlay_prefix, print_out)
+            overlay_metapath, overlay_prefix)
 
     # 6. terminting
     resumed_vm.machine = None   # protecting malaccess to machine 
@@ -1149,7 +1124,7 @@ def create_residue(base_disk, base_hashvalue,
     
 
 def synthesis_statistics(meta_info, decomp_overlay_file,
-        mem_access_list, disk_access_list, print_out=sys.stdout):
+        mem_access_list, disk_access_list):
     start_time = time()
 
     delta_list = DeltaList.fromfile(decomp_overlay_file)
@@ -1211,33 +1186,33 @@ def synthesis_statistics(meta_info, decomp_overlay_file,
             overlay_disk_access_count += 1
             overlay_disk_access_size += chunk_size
 
-    print_out.write("-------------------------------------------------\n")
-    print_out.write("## Synthesis Statistics (took %f seconds) ##\n" % (time()-start_time))
-    print_out.write("Overlay acccess count / total overlay count\t: %d / %d = %05.2f %%\n" % \
+    LOG.debug("-------------------------------------------------")
+    LOG.debug("## Synthesis Statistics (took %f seconds) ##" % (time()-start_time))
+    LOG.debug("Overlay acccess count / total overlay count\t: %d / %d = %05.2f %%" % \
             (overlay_mem_access_count+overlay_disk_access_count,\
             total_overlay_mem_chunks+total_overlay_disk_chunks, \
             100.0 * (overlay_mem_access_count+overlay_disk_access_count)/ (total_overlay_mem_chunks+total_overlay_disk_chunks)))
-    print_out.write("Overlay acccess size / total overlay size\t: %10.3d MB/ %10.3f MB= %05.2f %%\n" % \
+    LOG.debug("Overlay acccess size / total overlay size\t: %10.3d MB/ %10.3f MB= %05.2f %%" % \
             ((overlay_mem_access_size+overlay_disk_access_size)/1024.0/1024, \
             (total_overlay_size/1024.0/1024),\
             100.0 * (overlay_mem_access_size+overlay_disk_access_size)/total_overlay_size))
     try:
-        print_out.write("  Memory Count: Overlay memory acccess / total memory overlay\t: %d / %d = %05.2f %%\n" % \
+        LOG.debug("  Memory Count: Overlay memory acccess / total memory overlay\t: %d / %d = %05.2f %%" % \
                 (overlay_mem_access_count, total_overlay_mem_chunks,\
                 100.0 * overlay_mem_access_count/total_overlay_mem_chunks))
-        print_out.write("  Memory Size: Overlay memory acccess / total overlay\t: %d / %d = %05.2f %%\n" % \
+        LOG.debug("  Memory Size: Overlay memory acccess / total overlay\t: %d / %d = %05.2f %%" % \
                 (overlay_mem_access_size, total_overlay_size,\
                 100.0 * overlay_mem_access_size/total_overlay_size))
-        print_out.write("  Disk Count: Overlay acccess / total disk overlay\t: %d / %d = %05.2f %%\n" % \
+        LOG.debug("  Disk Count: Overlay acccess / total disk overlay\t: %d / %d = %05.2f %%" % \
                 (overlay_disk_access_count, total_overlay_disk_chunks, \
                 100.0 * overlay_disk_access_count/total_overlay_disk_chunks))
-        print_out.write("  Disk Size: Overlay acccess / total overlay\t: %d / %d = %05.2f %%\n" % \
+        LOG.debug("  Disk Size: Overlay acccess / total overlay\t: %d / %d = %05.2f %%" % \
                 (overlay_disk_access_size, total_overlay_size, \
                 100.0 * overlay_disk_access_size/total_overlay_size))
-        print_out.write("  EXTRA (count): Overlay memory acccess / VM memory access\t: %d / %d = %05.2f %%\n" % \
+        LOG.debug("  EXTRA (count): Overlay memory acccess / VM memory access\t: %d / %d = %05.2f %%" % \
                 (overlay_mem_access_count, len(mem_access_list), \
                 100.0 * overlay_mem_access_count/len(mem_access_list)))
-        print_out.write("  EXTRA (count): Overlay disk acccess / VM disk access\t: %d / %d = %05.2f %%\n" % \
+        LOG.debug("  EXTRA (count): Overlay disk acccess / VM disk access\t: %d / %d = %05.2f %%" % \
                 (overlay_disk_access_count, len(disk_access_list), \
                 100.0 * overlay_disk_access_count/len(disk_access_list)))
     except ZeroDivisionError as e:
@@ -1257,16 +1232,16 @@ def synthesis_statistics(meta_info, decomp_overlay_file,
         if total_mem_chunks != 0:
             pass
         '''
-            print_out.write("    %s\t:\t%d/%d\t=\t%5.2f is used (%d bytes uncompressed)\n" % \
+            LOG.debug("    %s\t:\t%d/%d\t=\t%5.2f is used (%d bytes uncompressed)" % \
                     (blob_name, mem_access+disk_access, \
                     total_mem_chunks+total_disk_chunks, \
                     (mem_access+disk_access)*100.0/(total_mem_chunks+total_disk_chunks),
                     (mem_access_size+disk_access_size)))
                     '''
-    print_out.write("%d blobs (%f MB) are required out of %d (%05.2f %%)\n" % \
+    LOG.debug("%d blobs (%f MB) are required out of %d (%05.2f %%)" % \
             (used_blob_count, used_blob_size/1024.0/1024, len(access_per_blobs.keys()), \
             used_blob_count*100.0/len(access_per_blobs.keys())))
-    print_out.write("-------------------------------------------------\n")
+    LOG.debug("-------------------------------------------------")
 
 
 
@@ -1274,7 +1249,7 @@ def synthesis_statistics(meta_info, decomp_overlay_file,
 '''
 def validate_congifuration():
     if os.path.exists(Const.QEMU_BIN_PATH) == False:
-        sys.stderr.write("KVM/QEMU does not exist at %s\n" % Const.QEMU_BIN_PATH)
+        LOG.error("KVM/QEMU does not exist at %s" % Const.QEMU_BIN_PATH)
         return False
 
     cmd = ["%s" % Const.QEMU_BIN_PATH, "--version"]
@@ -1282,10 +1257,10 @@ def validate_congifuration():
             close_fds=True)
     out, err = proc.communicate()
     if len(err) > 0:
-        sys.stderr.write("KVM validation Error: %s\n" % (err))
+        LOG.error("KVM validation Error: %s" % (err))
         return False
     if out.find("Cloudlet") < 0:
-        sys.stderr.write("KVM validation Error, Incorrect Version:\n%s\n" % (out))
+        LOG.error("KVM validation Error, Incorrect Version:\n%s" % (out))
         return False
     return True
 
@@ -1298,7 +1273,6 @@ def _create_baseVM(domain, base_diskpath, base_mempath, base_diskmeta, base_memm
         base_diskmeta : target path to generate basedisk hashlist
         base_memmeta : target path to generate basemem hashlist
     """
-    print_out = kwargs.get('print_out', sys.stdout)
     # make memory snapshot
     # VM has to be paused first to perform stable disk hashing
     save_mem_snapshot(domain, base_mempath, **kwargs)
@@ -1307,7 +1281,7 @@ def _create_baseVM(domain, base_diskpath, base_mempath, base_diskmeta, base_memm
 
     # generate disk hashing
     # TODO: need more efficient implementation, e.g. bisect
-    base_hashvalue = Disk.hashing(base_diskpath, base_diskmeta, print_out=print_out)
+    base_hashvalue = Disk.hashing(base_diskpath, base_diskmeta)
     return base_hashvalue
 
 
@@ -1353,9 +1327,9 @@ def create_baseVM(disk_image_path):
     try:
         machine = run_vm(conn, new_xml_string, wait_vnc=True)
         base_hashvalue = _create_baseVM(machine, disk_image_path, base_mempath, 
-                base_diskmeta, base_memmeta, print_out=None)
+                base_diskmeta, base_memmeta)
     except Exception as e:
-        sys.stderr.write(str(e) + "\n")
+        LOG.error(str(e))
         if machine != None:
             machine.destroy()
         sys.exit(1)
@@ -1400,7 +1374,7 @@ def _reconstruct_mem_deltalist(base_disk, base_mem, overlay_filepath):
         if type(delta_item) != DeltaItem:
             raise CloudletGenerationError("Failed to reconstruct deltalist")
 
-        #print "recovering %ld/%ld" % (index, len(delta_list))
+        #LOG.info("recovering %ld/%ld" % (index, len(delta_list)))
         if (delta_item.ref_id == DeltaItem.REF_RAW):
             recover_data = delta_item.data
         elif (delta_item.ref_id == DeltaItem.REF_ZEROS):
@@ -1461,7 +1435,6 @@ def synthesis(base_disk, meta, **kwargs):
     # param meta : path to meta file for overlay
     # param disk_only: synthesis size VM with only disk image
     # param return_residue: return residue of changed portion
-    Log = CloudletLog()
     disk_only = kwargs.get('disk_only', False)
     return_residue = kwargs.get('return_residue', False)
     qemu_args = kwargs.get('qemu_args', False)
@@ -1473,54 +1446,32 @@ def synthesis(base_disk, meta, **kwargs):
 
     # decomp
     overlay_filename = NamedTemporaryFile(prefix="cloudlet-overlay-file-")
-    meta_info = decomp_overlay(meta, overlay_filename.name, print_out=Log)
+    meta_info = decomp_overlay(meta, overlay_filename.name)
 
     # recover VM
-    Log.write("[Debug] recover launch VM\n")
+    LOG.debug("recover launch VM")
     launch_disk, launch_mem, fuse, delta_proc, fuse_thread = \
             recover_launchVM(base_disk, meta_info, overlay_filename.name, \
-            log=Log, **kwargs)
+            **kwargs)
 
     # resume VM
     resumed_VM = SynthesizedVM(launch_disk, launch_mem, fuse,
-            disk_only=disk_only, qemu_args=qemu_args, log=Log,
-            vm_xml=vm_xml)
-    # testing non-thread resume
+            disk_only=disk_only, qemu_args=qemu_args, vm_xml=vm_xml)
+
+    # no-pipelining
     delta_proc.start()
     fuse_thread.start()
     delta_proc.join()
     fuse_thread.join()
 
     resumed_VM.resume()
-    '''
-    resumed_VM.start()
-    delta_proc.start()
-    fuse_thread.start()
-
-    delta_proc.join()
-    fuse_thread.join()
-
-    # prevent resume VM when modified_mem is not exist
-    if os.path.getsize(launch_mem) == 0 and disk_only == False:
-        # terminate
-        resumed_VM.join()
-        resumed_VM.terminate()
-        fuse.terminate()
-        print "[Error] NO memory overlay file exist. Check disk_only parameter"
-        return
-
-    print "[INFO] VM Disk is Fully recovered at %s" % launch_disk
-    print "[INFO] VM Memory is Fully recoverd at %s" % launch_mem
-
-    resumed_VM.join()
-    '''
     connect_vnc(resumed_VM.machine)
 
     # statistics
     mem_access_list = resumed_VM.monitor.mem_access_chunk_list
     disk_access_list = resumed_VM.monitor.disk_access_chunk_list
     synthesis_statistics(meta_info, overlay_filename.name, \
-            mem_access_list, disk_access_list, print_out=Log)
+            mem_access_list, disk_access_list)
 
     if return_residue == True:        
         options = Options()
@@ -1538,11 +1489,11 @@ def synthesis(base_disk, meta, **kwargs):
             residue_meta, residue_files = create_residue(base_disk, \
                     meta_info[Const.META_BASE_VM_SHA256],
                     resumed_VM, options, 
-                    prev_mem_deltalist, Log)
-            Log.write("[RESULT] Residue\n")
-            Log.write("[RESULT]   Metafile : %s\n" % \
+                    prev_mem_deltalist)
+            LOG.write("[RESULT] Residue")
+            LOG.write("[RESULT]   Metafile : %s" % \
                     (os.path.abspath(residue_meta)))
-            Log.write("[RESULT]   Files : %s\n" % str(residue_files))
+            LOG.write("[RESULT]   Files : %s" % str(residue_files))
         except CloudletGenerationError, e:
             sys.stderr.write("Cannot create residue : %s" % (str(e)))
 
@@ -1581,9 +1532,9 @@ def main(argv):
         # creat base VM
         disk_image_path = args[1]
         disk_path, mem_path = create_baseVM(disk_image_path)
-        print "Base VM is created from %s" % disk_image_path
-        print "Disk: %s" % disk_path
-        print "Mem: %s" % mem_path
+        LOG.info("Base VM is created from %s" % disk_image_path)
+        LOG.info("Disk: %s" % disk_path)
+        LOG.info("Mem: %s" % mem_path)
     elif mode == MODE[2]:   #synthesis
         if len(args) < 3:
             parser.error("Synthesis requires 2 arguments\n \
@@ -1639,16 +1590,16 @@ def main(argv):
 
         total_size = len(disk_delta_list)+len(memory_delta_list)
 
-        print "Delta Item #\tDisk: %d / %d = %f, Memory: %d / %d = %f" % \
+        LOG.info("Delta Item #\tDisk: %d / %d = %f, Memory: %d / %d = %f" % \
                 (len(disk_delta_list), total_size, 100.0*len(disk_delta_list)/total_size, \
-                len(memory_delta_list), total_size, 100.0*len(memory_delta_list)/total_size)
+                len(memory_delta_list), total_size, 100.0*len(memory_delta_list)/total_size))
 
         disk_uncomp_size = len(disk_uncomp_data)
         memory_uncomp_size = len(memory_uncomp_data)
         total_size = disk_uncomp_size+memory_uncomp_size
-        print "Uncomp Size\tDisk: %d / %d = %f, Memory: %d / %d = %f" % \
+        LOG.info("Uncomp Size\tDisk: %d / %d = %f, Memory: %d / %d = %f" % \
                 (disk_uncomp_size, total_size, 100.0*disk_uncomp_size/total_size, \
-                memory_uncomp_size, total_size, 100.0*memory_uncomp_size/total_size)
+                memory_uncomp_size, total_size, 100.0*memory_uncomp_size/total_size))
 
         from lzma import LZMACompressor
         disk_comp_option = {'format':'xz', 'level':9}
@@ -1663,18 +1614,18 @@ def main(argv):
         disk_comp_size = len(disk_comp_data)
         memory_comp_size = len(mem_comp_data)
         total_size = disk_comp_size+memory_comp_size
-        print "Comp Size\tDisk: %d / %d = %f, Memory: %d / %d = %f" % \
+        LOG.info("Comp Size\tDisk: %d / %d = %f, Memory: %d / %d = %f" % \
                 (disk_comp_size, total_size, 100.0*disk_comp_size/total_size, \
-                memory_comp_size, total_size, 100.0*memory_comp_size/total_size)
+                memory_comp_size, total_size, 100.0*memory_comp_size/total_size))
         '''
         disk_overlay_path = os.path.join(output_dir, "disk_overlay")
         memory_overlay_path = os.path.join(output_dir, "memory_overlay")
         disk_blob_list = delta.divide_blobs(disk_delta_list, disk_overlay_path,
                 Const.OVERLAY_BLOB_SIZE_KB, Const.CHUNK_SIZE,
-                Memory.Memory.RAM_PAGE_SIZE, print_out=sys.stdout)
+                Memory.Memory.RAM_PAGE_SIZE)
         memory_blob_list = delta.divide_blobs(memory_delta_list, memory_overlay_path,
                 Const.OVERLAY_BLOB_SIZE_KB, Const.CHUNK_SIZE,
-                Memory.Memory.RAM_PAGE_SIZE, print_out=sys.stdout)
+                Memory.Memory.RAM_PAGE_SIZE)
         '''
     elif mode == "first_run":   #overlay VM creation
         import socket
@@ -1694,12 +1645,12 @@ def main(argv):
         serversock.bind(("0.0.0.0", port))
         serversock.listen(1)
         serversock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
-        print "Waiting for client connection at %d.." % (port)
+        LOG.info("Waiting for client connection at %d.." % (port))
         (client_socket, address) = serversock.accept()
         app_name_size = struct.unpack("!I", client_socket.recv(4))[0]
         app_name = struct.unpack("!%ds" % app_name_size, client_socket.recv(app_name_size))[0]
 
-        print "start VM resume for application: %s" % app_name
+        LOG.info("start VM resume for application: %s" % app_name)
         # start application & VM
         options = Options()
         options.DISK_ONLY = False
@@ -1708,9 +1659,9 @@ def main(argv):
         connect_vnc(machine)
         vm_overlay.create_overlay()
         
-        print "[INFO] overlay metafile : %s" % vm_overlay.overlay_metafile
-        print "[INFO] overlay : %s" % str(vm_overlay.overlay_files[0])
-        print "[INFO] overlay creation time: %f" % (time()-start_time())
+        LOG.info("overlay metafile : %s" % vm_overlay.overlay_metafile)
+        LOG.info("[INFO] overlay : %s" % str(vm_overlay.overlay_files[0]))
+        LOG.info("[INFO] overlay creation time: %f" % (time()-start_time()))
 
     elif mode == 'dedup_source':
         if len(args) != 4:
@@ -1748,7 +1699,6 @@ def main(argv):
         pprint(sec_file_overlay_disk.keys(), output_log)
 
     elif mode == 'compress':
-        Log = CloudletLog()
         if len(args) != 3:
             parser.error("recompress requires 2 arguments\n \
                     1)meta file\n \
@@ -1778,16 +1728,14 @@ def main(argv):
                     os.makedirs(sub_dir)
                 meta_path = os.path.join(sub_dir, "overlay-meta")
                 overlay_prefix = os.path.join(sub_dir, "overlay-blob")
-                print "Creating %d KB overlays" % blob_size
+                LOG.info("Creating %d KB overlays" % blob_size)
                 blob_list = delta.divide_blobs(delta_list, overlay_prefix,
                         blob_size, Const.CHUNK_SIZE,
-                        Memory.Memory.RAM_PAGE_SIZE, print_out=Log)
+                        Memory.Memory.RAM_PAGE_SIZE)
                 _update_overlay_meta(meta_info, meta_path, blob_info=blob_list)
-                DeltaList.statistics(delta_list, print_out=sys.stdout)
+                DeltaList.statistics(delta_list)
     elif mode == 'reorder':
-        Log = CloudletLog()
         if len(args) != 5:
-            print args
             parser.error("Reordering requires 4 arguments\n \
                     1)[linear | access-pattern file path]\n \
                     2)meta file\n \
@@ -1813,10 +1761,10 @@ def main(argv):
         else:
             delta.reorder_deltalist_file(access_pattern_file,
                     Memory.Memory.RAM_PAGE_SIZE, delta_list)
-        DeltaList.statistics(delta_list, print_out=sys.stdout)
+        DeltaList.statistics(delta_list)
         blob_list = delta.divide_blobs(delta_list, overlay_path,
                 blob_size_kb, Const.CHUNK_SIZE,
-                Memory.Memory.RAM_PAGE_SIZE, print_out=Log)
+                Memory.Memory.RAM_PAGE_SIZE)
         _update_overlay_meta(meta_info, new_meta_path, blob_info=blob_list)
 
     elif mode == 'test_overlay_download':    # To be delete
@@ -1840,14 +1788,14 @@ def main(argv):
 
         hdr = vmnetx._QemuMemoryHeader(open(out_path))
         domxml = ElementTree.fromstring(hdr.xml)
-        print "new xml is changed uuid to " + domxml.find('uuid').text
+        LOG.info("new xml is changed uuid to " + domxml.find('uuid').text)
     elif mode == 'nic':
         mem_path = args[1]
         conn = get_libvirt_connection()
         hdr = vmnetx._QemuMemoryHeader(open(mem_path))
         rettach_nic(conn, hdr.xml)
     else:
-        print "Invalid command"
+        LOG.warning("Invalid command")
         parser.print_help()
         sys.exit(1)
 

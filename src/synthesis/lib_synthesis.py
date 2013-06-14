@@ -43,9 +43,10 @@ from pprint import pformat
 from optparse import OptionParser
 from multiprocessing import Process, JoinableQueue, Queue, Manager
 from lzma import LZMADecompressor
-from datetime import datetime
+from synthesis import log as logging
 
-Log = cloudlet.CloudletLog("./log_synthesis/log_synthesis-%s" % str(datetime.now()).split(" ")[1])
+
+LOG = logging.getLogger(__name__)
 
 
 class RapidSynthesisError(Exception):
@@ -95,7 +96,6 @@ def network_worker(handler, overlay_urls, overlay_urls_size, demanding_queue, ou
                 demanding_url = demanding_queue.get()
                 if (finished_url.get(demanding_url, False) == False) and \
                         (demanding_url not in requesting_list):
-                    #print "getting from demading queue %s" % demanding_url
                     urgent_overlay_url = demanding_url
                     break
 
@@ -118,7 +118,6 @@ def network_worker(handler, overlay_urls, overlay_urls_size, demanding_queue, ou
             handler.wfile.write(message)
             handler.wfile.flush()
             requesting_list.append(requesting_overlay)
-            #print "requesting %s" % (requesting_overlay)
 
         # read header
         blob_header_size = struct.unpack("!I", read_stream.read(4))[0]
@@ -149,7 +148,6 @@ def network_worker(handler, overlay_urls, overlay_urls_size, demanding_queue, ou
             read_count += read_size
         total_read_size += read_count
         index += 1
-        #print "received %s(%d)" % (blob_url, blob_size)
 
     out_queue.put(Synthesis_Const.END_OF_FILE)
     end_time = time.time()
@@ -161,18 +159,18 @@ def network_worker(handler, overlay_urls, overlay_urls_size, demanding_queue, ou
         bw = 1
 
     time_queue.put({'start_time':start_time, 'end_time':end_time, "bw_mbps":bw})
-    print "[Transfer] out-of-order fetching : %d / %d == %5.2f %%" % \
+    LOG.info("[Transfer] out-of-order fetching : %d / %d == %5.2f %%" % \
             (out_of_order_count, total_urls_count, \
-            100.0*out_of_order_count/total_urls_count)
+            100.0*out_of_order_count/total_urls_count))
     try:
-        print "[Transfer] : (%s)~(%s)=(%s) (%d loop, %d bytes, %lf Mbps)" % \
+        LOG.info("[Transfer] : (%s)~(%s)=(%s) (%d loop, %d bytes, %lf Mbps)" % \
                 (start_time, end_time, (time_delta),\
                 counter, total_read_size, \
-                total_read_size*8.0/time_delta/1024/1024)
+                total_read_size*8.0/time_delta/1024/1024))
     except ZeroDivisionError:
-        print "[Transfer] : (%s)~(%s)=(%s) (%d, %d)" % \
+        LOG.info("[Transfer] : (%s)~(%s)=(%s) (%d, %d)" % \
                 (start_time, end_time, (time_delta),\
-                counter, total_read_size)
+                counter, total_read_size))
 
 
 def decomp_worker(in_queue, pipe_filepath, time_queue, temp_overlay_file=None):
@@ -204,9 +202,9 @@ def decomp_worker(in_queue, pipe_filepath, time_queue, temp_overlay_file=None):
 
     end_time = time.time()
     time_queue.put({'start_time':start_time, 'end_time':end_time})
-    print "[Decomp] : (%s)-(%s)=(%s) (%d loop, %d bytes)" % \
+    LOG.info("[Decomp] : (%s)-(%s)=(%s) (%d loop, %d bytes)" % \
             (start_time, end_time, (end_time-start_time), 
-            counter, data_size)
+            counter, data_size))
 
 
 
@@ -218,7 +216,7 @@ class SynthesisHandler(SocketServer.StreamRequestHandler):
             }
 
     def ret_fail(self, message):
-        Log.write("[Error] %s\n" % str(message))
+        LOG.error("%s" % str(message))
         message = NetworkUtil.encoding({
             Protocol.KEY_COMMAND : Protocol.MESSAGE_COMMAND_FAIELD,
             Protocol.KEY_FAILED_REASON : message
@@ -244,7 +242,7 @@ class SynthesisHandler(SocketServer.StreamRequestHandler):
         message = NetworkUtil.encoding({
             Protocol.KEY_COMMAND : Protocol.MESSAGE_COMMAND_SYNTHESIS_DONE,
             })
-        print "SUCCESS to launch VM"
+        LOG.info("SUCCESS to launch VM")
         message_size = struct.pack("!I", len(message))
         self.request.send(message_size)
         self.wfile.write(message)
@@ -270,14 +268,14 @@ class SynthesisHandler(SocketServer.StreamRequestHandler):
             # check base VM
             for each_basevm in self.server.basevm_list:
                 if base_hashvalue == each_basevm.hash_value:
-                    print "[INFO] New client request %s VM" \
-                            % (each_basevm.disk_path)
+                    LOG.info("New client request %s VM" \
+                            % (each_basevm.disk_path))
                     requested_base = each_basevm.disk_path
                     header_info = header
         return [requested_base, header_info]
 
     def _handle_synthesis(self, message):
-        Log.write("\n\n----------------------- New Connection --------------\n")
+        LOG.info("\n\n----------------------- New Connection --------------")
         # check overlay meta info
         start_time = time.time()
         header_start_time = time.time()
@@ -302,16 +300,16 @@ class SynthesisHandler(SocketServer.StreamRequestHandler):
             size = blob[Cloudlet_Const.META_OVERLAY_FILE_SIZE]
             overlay_urls.append(url)
             overlay_urls_size[url] = size
-        Log.write("  - %s\n" % str(pformat(self.synthesis_option)))
-        Log.write("  - Base VM     : %s\n" % base_path)
-        Log.write("  - Blob count  : %d\n" % len(overlay_urls))
+        LOG.info("  - %s" % str(pformat(self.synthesis_option)))
+        LOG.info("  - Base VM     : %s" % base_path)
+        LOG.info("  - Blob count  : %d" % len(overlay_urls))
         if overlay_urls == None:
             self.ret_fail("No overlay info listed")
             return
         (base_diskmeta, base_mem, base_memmeta) = \
                 Cloudlet_Const.get_basepath(base_path, check_exist=True)
         header_end_time = time.time()
-        Log.write("Meta header processing time: %f\n" % (header_end_time-header_start_time))
+        LOG.info("Meta header processing time: %f" % (header_end_time-header_start_time))
 
         # read overlay files
         # create named pipe to convert queue to stream
@@ -391,13 +389,13 @@ class SynthesisHandler(SocketServer.StreamRequestHandler):
         # printout result
         SynthesisHandler.print_statistics(start_time, end_time, \
                 time_transfer, time_decomp, time_delta, time_fuse, \
-                print_out=Log, resume_time=(time_end_resume-time_start_resume))
+                resume_time=(time_end_resume-time_start_resume))
 
         if self.synthesis_option.get(Protocol.SYNTHESIS_OPTION_DISPLAY_VNC, False):
             cloudlet.connect_vnc(self.resumed_VM.machine, no_wait=True)
 
         # wait for finish message from client
-        Log.write("[SOCKET] waiting for client exit message\n")
+        LOG.info("[SOCKET] waiting for client exit message")
         data = self.request.recv(4)
         msgpack_size = struct.unpack("!I", data)[0]
         msgpack_data = self.request.recv(msgpack_size)
@@ -409,16 +407,15 @@ class SynthesisHandler(SocketServer.StreamRequestHandler):
             msg = "Unexpected command while streaming overlay VM: %d" % command
             raise RapidSynthesisError(msg)
         self.ret_success(Protocol.MESSAGE_COMMAND_FINISH)
-        Log.write("  - %s" % str(pformat(finish_message)))
-        Log.write("\n")
+        LOG.info("  - %s" % str(pformat(finish_message)))
 
         # printout synthesis statistics
         if self.synthesis_option.get(Protocol.SYNTHESIS_OPTION_SHOW_STATISTICS):
             mem_access_list = self.resumed_VM.monitor.mem_access_chunk_list
             disk_access_list = self.resumed_VM.monitor.disk_access_chunk_list
             cloudlet.synthesis_statistics(meta_info, temp_overlay_filepath, \
-                    mem_access_list, disk_access_list, \
-                    print_out=Log)
+                    mem_access_list, disk_access_list)
+                    
 
         # update DB
         new_overlayvm.terminate()
@@ -504,7 +501,7 @@ class SynthesisHandler(SocketServer.StreamRequestHandler):
                 if self._check_session(message):
                     self._handle_session_close(message)
             else:
-                Log.write("Invalid command number : %d\n" % command)
+                LOG.info("Invalid command number : %d" % command)
         except Exception as e:
             # close session if synthesis failed
             if command == Protocol.MESSAGE_COMMAND_SEND_META:
@@ -528,7 +525,6 @@ class SynthesisHandler(SocketServer.StreamRequestHandler):
             os.unlink(self.overlay_pipe)
         if hasattr(self, 'tmp_overlay_dir') and os.path.exists(self.tmp_overlay_dir):
             shutil.rmtree(self.tmp_overlay_dir)
-        Log.flush()
 
     def terminate(self):
         # force terminate when something wrong in handling request
@@ -548,13 +544,12 @@ class SynthesisHandler(SocketServer.StreamRequestHandler):
             os.unlink(self.overlay_pipe)
         if hasattr(self, 'tmp_overlay_dir') and os.path.exists(self.tmp_overlay_dir):
             shutil.rmtree(self.tmp_overlay_dir)
-        Log.flush()
 
 
     @staticmethod
     def print_statistics(start_time, end_time, \
             time_transfer, time_decomp, time_delta, time_fuse,
-            print_out=sys.stdout, resume_time=0):
+            resume_time=0):
         # Print out Time Measurement
         transfer_time = time_transfer.get()
         decomp_time = time_decomp.get()
@@ -584,8 +579,7 @@ class SynthesisHandler(SocketServer.StreamRequestHandler):
         message += "%011.06f\t" % (end_time-start_time)
         message += "\n"
         message += "Transmission BW : %f" % transfer_bw
-        message += "\n"
-        print_out.write(message)
+        LOG.debug(message)
 
 
 def get_local_ipaddress():
@@ -615,35 +609,33 @@ class SynthesisServer(SocketServer.TCPServer):
             sys.exit(1)
         self.socket.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
         self.socket.setsockopt(socket.IPPROTO_TCP, socket.TCP_NODELAY, 1)
-        Log.write("* Server configuration\n")
-        Log.write(" - Open TCP Server at %s\n" % (str(server_address)))
-        Log.write(" - Disable Nagle(No TCP delay)  : %s\n" \
+        LOG.info("* Server configuration")
+        LOG.info(" - Open TCP Server at %s" % (str(server_address)))
+        LOG.info(" - Disable Nagle(No TCP delay)  : %s" \
                 % str(self.socket.getsockopt(socket.IPPROTO_TCP, socket.TCP_NODELAY)))
-        Log.write("-"*50)
-        Log.write("\n")
+        LOG.info("-"*50)
 
         # Start UPnP Server
         try:
             self.upnp_server = UPnPServer()
             self.upnp_server.start()
         except UPnPError as e:
-            Log.write(str(e))
-            Log.write("[Warning] Cannot start UPnP Server\n")
+            LOG.info(str(e))
+            LOG.info("[Warning] Cannot start UPnP Server")
             self.upnp_server = None
-        Log.write("[INFO] Start UPnP Server\n")
+        LOG.info("[INFO] Start UPnP Server")
 
         # Start registration client
         if settings.register_server:
             try:
                 self.register_client = RegisterThread(
                         settings.register_server,
-                        log=Log,
                         update_period=Synthesis_Const.DIRECTORY_UPDATE_PERIOD)
                 self.register_client.start()
-                Log.write("[INFO] Register to Cloudlet direcory service\n")
+                LOG.info("[INFO] Register to Cloudlet direcory service")
             except RegisterError as e:
-                Log.write(str(e))
-                Log.write("[Warning] Cannot register Cloudlet to central server\n")
+                LOG.info(str(e))
+                LOG.info("[Warning] Cannot register Cloudlet to central server")
 
         # cloudlet REST Server
         '''
@@ -651,23 +643,21 @@ class SynthesisServer(SocketServer.TCPServer):
             self.rest_server = RESTServer()
             self.rest_server.start()
         except RESTServerError as e:
-            Log.write(str(e))
-            Log.write("[Warning] Cannot start REST API Server\n")
+            LOG.info(str(e))
+            LOG.info("[Warning] Cannot start REST API Server")
             self.rest_server = None
-        Log.write("[INFO] Start RESTful API Server\n")
+        LOG.info("[INFO] Start RESTful API Server")
         '''
 
         # cloudlet machine monitor
         '''
         try:
-            self.resource_monitor = ResourceMonitorThread(log=Log) 
+            self.resource_monitor = ResourceMonitorThread()
             self.resource_monitor.start()
         except ResourceMonitorError as e:
-            Log.write(str(e))
-            Log.write("[Warning] Cannot register Cloudlet to central server\n")
+            LOG.info(str(e))
+            LOG.info("[Warning] Cannot register Cloudlet to central server\n")
         '''
-
-        Log.flush()
 
     def handle_error(self, request, client_address):
         #SocketServer.TCPServer.handle_error(self, request, client_address)
@@ -677,7 +667,7 @@ class SynthesisServer(SocketServer.TCPServer):
     def expire_all_sessions(self):
         from db.table_def import Session
 
-        Log.write("[TERMINATE] Close all running sessions\n")
+        LOG.info("Close all running sessions")
         session_list = self.dbconn.list_item(Session)
         for item in session_list:
             if item.status == Session.STATUS_RUNNING:
@@ -693,22 +683,22 @@ class SynthesisServer(SocketServer.TCPServer):
         if self.socket != -1:
             self.socket.close()
         if hasattr(self, 'upnp_server') and self.upnp_server != None:
-            Log.write("[TERMINATE] Terminate UPnP Server\n")
+            LOG.info("[TERMINATE] Terminate UPnP Server")
             self.upnp_server.terminate()
             self.upnp_server.join()
         if hasattr(self, 'register_client') and self.register_client != None:
-            Log.write("[TERMINATE] Deregister from directory service\n")
+            LOG.info("[TERMINATE] Deregister from directory service")
             self.register_client.terminate()
             self.register_client.join()
         if hasattr(self, 'rest_server') and self.rest_server != None:
-            Log.write("[TERMINATE] Terminate REST API monitor\n")
+            LOG.info("[TERMINATE] Terminate REST API monitor")
             self.rest_server.terminate()
             self.rest_server.join()
         if hasattr(self, 'resource_monitor') and self.resource_monitor != None:
-            Log.write("[TERMINATE] Terminate resource monitor\n")
+            LOG.info("[TERMINATE] Terminate resource monitor")
             self.resource_monitor.terminate()
             self.resource_monitor.join()
-        Log.write("[TERMINATE] Finish synthesis server connection\n")
+        LOG.info("[TERMINATE] Finish synthesis server connection")
 
     @staticmethod
     def process_command_line(argv):
@@ -727,28 +717,28 @@ class SynthesisServer(SocketServer.TCPServer):
     def check_basevm(self):
         basevm_list = self.dbconn.list_item(BaseVM)
         ret_list = list()
-        print "-"*50
-        print "* Base VM Configuration"
+        LOG.info("-"*50)
+        LOG.info("* Base VM Configuration")
         for index, item in enumerate(basevm_list):
             # check file location
             (base_diskmeta, base_mempath, base_memmeta) = \
                     Cloudlet_Const.get_basepath(item.disk_path)
             if not os.path.exists(item.disk_path):
-                Log.write("[Warning] disk image (%s) is not exist\n" % (item.disk_path))
+                LOG.warning("disk image (%s) is not exist" % (item.disk_path))
                 continue
             if not os.path.exists(base_mempath):
-                Log.write("[Warning] memory snapshot (%s) is not exist\n" % (base_mempath))
+                LOG.warning("memory snapshot (%s) is not exist" % (base_mempath))
                 continue
 
             # add to list
             ret_list.append(item)
-            print " %d : %s (Disk %d MB, Memory %d MB)" % \
+            LOG.info(" %d : %s (Disk %d MB, Memory %d MB)" % \
                     (index, item.disk_path, os.path.getsize(item.disk_path)/1024/1024, \
-                    os.path.getsize(base_mempath)/1024/1024)
-        print "-"*50
+                    os.path.getsize(base_mempath)/1024/1024))
+        LOG.info("-"*50)
 
         if len(ret_list) == 0:
-            Log.write("[Error] NO valid Base VM\n")
+            LOG.error("[Error] NO valid Base VM")
             sys.exit(2)
         return ret_list
 

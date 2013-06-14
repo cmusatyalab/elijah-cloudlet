@@ -21,6 +21,9 @@ import threading
 import multiprocessing
 import time
 import sys
+from synthesis import log as logging
+
+LOG = logging.getLogger(__name__)
 
 
 # system.py is built at install time, so pylint may fail to import it.
@@ -37,7 +40,6 @@ class VMNetFS(threading.Thread):
     FUSE_TYPE_MEMORY    =   "memory"
 
     def __init__(self, bin_path, args, **kwargs):
-        self.print_out = kwargs.get("print_out", open("/dev/null", "w+b"))
         self.vmnetfs_path = bin_path
         self._args = '%d\n%s\n' % (len(args),
                 '\n'.join(a.replace('\n', '') for a in args))
@@ -87,26 +89,25 @@ class VMNetFS(threading.Thread):
                     if url == None:
                         msg = "Cannot find matching blob with chunk(%ld)" % chunk
                         raise VMNetFSError(msg)
-                    #print "requesting chunk(%ld) at %s" % (chunk, url)
+                    #LOG.debug("requesting chunk(%ld) at %s" % (chunk, url))
                     self.demanding_queue.put(url)
                 elif (len(request_split) > 0) and (request_split[0].find("STATISTICS-WAIT") > 0):
                     type_name, overlay_type = request_split[1].split(":")
                     chunk_name, chunk = request_split[2].split(":")
                     wait_name, wait_time = request_split[3].split(":")
                     data = {type_name:overlay_type, chunk_name:long(chunk.strip()), wait_name:float(wait_time.strip())}
-                    #print oneline
                     wait_statistics.append(data)
 
         if len(wait_statistics) > 0:
             total_wait_time = 0.0
             for item in wait_statistics:
                 total_wait_time += item['time']
-            self.print_out.write("[INFO] %d chunks waited for synthesizing for avg %f s, total: %f s\n" % \
+            LOG.info("%d chunks waited for synthesizing for avg %f s, total: %f s\n" % \
                     (len(wait_statistics), total_wait_time/len(wait_statistics), total_wait_time))
         else:
-            self.print_out.write("[INFO] NO chunks has been waited at FUSE\n")
+            LOG.info("NO chunks has been waited at FUSE\n")
         self._running = False
-        self.print_out.write("[INFO] close Fuse Exec thread\n")
+        LOG.info("close Fuse Exec thread\n")
 
     def fuse_write(self, data):
         self._pipe.write(data + "\n")
@@ -139,7 +140,7 @@ class VMNetFS(threading.Thread):
     def terminate(self):
         self.stop.set()
         if self._pipe is not None:
-            self.print_out.write("[INFO] Fuse close pipe\n")
+            LOG.info("Fuse close pipe")
             # invalid formated string will shutdown fuse
             #self.fuse_write("terminate")
             self._pipe.close()
@@ -164,7 +165,7 @@ class StreamMonitor(threading.Thread):
     def add_path(self, path, name):
         # We need to set O_NONBLOCK in open() because FUSE doesn't pass
         # through fcntl()
-        print "[INFO] start monitoring at %s" % path
+        LOG.info("start monitoring at %s" % path)
         fd = os.open(path, os.O_RDONLY | os.O_NONBLOCK)
         self.stream_dict[fd] = {'name':name, 'buf':'', 'path':path}
         self.epoll.register(fd, select.EPOLLIN | select.EPOLLOUT | select.EPOLLPRI)
@@ -176,7 +177,7 @@ class StreamMonitor(threading.Thread):
             monitor_path = item['path']
             monitor_name = item['name']
             if name == monitor_name:
-                print "[INFO] stop monitoring at %s" % monitor_path
+                LOG.info("stop monitoring at %s" % monitor_path)
                 self.epoll.unregister(fileno)
                 os.close(fileno)
                 del self.stream_dict[fileno]
@@ -192,11 +193,11 @@ class StreamMonitor(threading.Thread):
             self.epoll.unregister(fileno)
             os.close(fileno)
         self._running = False
-        print "[INFO] close Stream monitoring thread"
+        LOG.info("close Stream monitoring thread")
 
     def _handle(self, fd, event):
         if event & select.EPOLLIN:
-            #print "%d, %s" % (fd, self.stream_dict[fd]['name'])
+            #LOG.debug("%d, %s" % (fd, self.stream_dict[fd]['name']))
             try:
                 buf = os.read(fd, 1024)
             except OSError as e:
@@ -221,14 +222,14 @@ class StreamMonitor(threading.Thread):
         elif event & select.EPOLLOUT:
             pass
         elif event & select.EPOLLPRI:
-            print "error?"
+            LOG.debug("error?")
 
     def _handle_chunks_modification(self, line):
         ctime, chunk = line.split("\t")
         ctime = float(ctime)
         chunk = int(chunk)
         self.modified_chunk_dict[chunk] = ctime
-        #print "%s: %f, %d" % ("modification", ctime, chunk)
+        #LOG.debug("%s: %f, %d" % ("modification", ctime, chunk))
 
     def _handle_disk_access(self, line):
         ctime, chunk = line.split("\t")
@@ -256,7 +257,7 @@ class FileMonitor(threading.Thread):
         self.fd = os.open(path, os.O_RDONLY | os.O_NONBLOCK)
         self.buf = ''
         threading.Thread.__init__(self, target=self.io_watch)
-        print "[INFO] start monitoring at %s" % path
+        LOG.info("start monitoring at %s" % path)
 
     def io_watch(self):
         while(not self.stop.wait(0.0001)):
@@ -269,7 +270,7 @@ class FileMonitor(threading.Thread):
             else:
                 time.sleep(0.001)
         self._running = False
-        print "[INFO] close File monitoring thread"
+        LOG.info("close File monitoring thread")
 
     def _handle_qemu_log(self, line):
         splits = line.split(",", 2)
@@ -291,7 +292,6 @@ class FileMonitor(threading.Thread):
 
 class FuseFeedingThread(multiprocessing.Process):
     def __init__(self, fuse, input_pipename, END_OF_PIPE, **kwargs):
-        self.print_out = kwargs.get("print_out", open("/dev/null", "w+b"))
         self.fuse = fuse
         self.input_pipename = input_pipename
         self.END_OF_PIPE = END_OF_PIPE
@@ -317,7 +317,7 @@ class FuseFeedingThread(multiprocessing.Process):
         end_time = time.time()
         if self.time_queue != None: 
             self.time_queue.put({'start_time':start_time, 'end_time':end_time})
-        self.print_out.write("[FUSE] : (%s)-(%s)=(%s)\n" % \
+        LOG.info("[FUSE] : (%s)-(%s)=(%s)\n" % \
                 (start_time, end_time, (end_time-start_time)))
         self.fuse.fuse_write("END_OF_TRANSMISSION")
 
