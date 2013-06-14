@@ -29,14 +29,15 @@ from synthesis.db.api import DBConnector
 from synthesis.db.table_def import BaseVM, Session, OverlayVM
 from synthesis.synthesis_protocol import Protocol as Protocol
 from synthesis.upnp_server import UPnPServer, UPnPError
-from synthesis.RESTServer_binder import RESTServer, RESTServerError
 from synthesis.discovery.ds_register import RegisterError
 from synthesis.discovery.ds_register import RegisterThread
-from synthesis.discovery.monitor.resource import ResourceMonitorThread
-from synthesis.discovery.monitor.resource import ResourceMonitorError
 from synthesis.Configuration import Const as Cloudlet_Const
 from synthesis.Configuration import Synthesis_Const as Synthesis_Const
 from synthesis import msgpack
+# this is for REST API at stand-alone version of synthesis server
+#from synthesis.RESTServer_binder import RESTServer, RESTServerError
+#from synthesis.discovery.monitor.resource import ResourceMonitorThread
+#from synthesis.discovery.monitor.resource import ResourceMonitorError
 
 from pprint import pformat
 from optparse import OptionParser

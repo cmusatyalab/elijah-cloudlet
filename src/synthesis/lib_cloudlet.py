@@ -616,7 +616,7 @@ def copy_disk(in_path, out_path):
 
 
 def get_libvirt_connection():
-    conn = libvirt.open("qemu:///system")
+    conn = libvirt.open("qemu:///session")
     return conn
 
 
