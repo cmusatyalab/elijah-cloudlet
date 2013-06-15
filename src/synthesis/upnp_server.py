@@ -22,7 +22,10 @@ import subprocess
 import threading
 import os
 import sys
-from Configuration import Const as Const
+from synthesis.Configuration import Const as Const
+from synthesis import log as logging
+
+LOG = logging.getLogger(__name__)
 
 
 class UPnPError(Exception):
@@ -43,21 +46,6 @@ class UPnPServer(threading.Thread):
         cmd = ["java", "-jar", "%s" % (self.upnp_bin)]
         _PIPE = subprocess.PIPE
         self.proc = subprocess.Popen(cmd, close_fds=True, stdin=_PIPE, stdout=_PIPE, stderr=_PIPE)
-        try:
-            while(not self.stop.wait(10)):
-                self.proc.poll()
-                return_code = self.proc.returncode
-                if return_code != None:
-                    if return_code == 0:
-                        self.proc = None
-                        break
-                    if return_code != 0:
-                        msg = "[Error] UPnP is closed unexpectedly: %d\n" % \
-                                return_code
-                        sys.stderr.write(msg)
-                        break
-        except KeyboardInterrupt, e:
-            self.terminate()
 
     def terminate(self):
         self.stop.set()
@@ -65,13 +53,9 @@ class UPnPServer(threading.Thread):
             import signal
             self.proc.send_signal(signal.SIGINT) 
             return_code = self.proc.poll()
-            if return_code == None:
-                self.proc.terminate()
-            elif return_code != 0:
-                msg = "[Error] UPnP is closed unexpectedly: %d\n" % \
+            if return_code != None and return_code != 0:
+                msg = "UPnP is closed unexpectedly: %d\n" % \
                         return_code
-                sys.stderr.write(msg)
-            else:
-                print "terminate success!"
+                LOG.warning(msg)
 
 
