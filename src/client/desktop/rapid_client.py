@@ -30,6 +30,7 @@ from optparse import OptionParser
 from pprint import pprint
 
 sys.path.append("../../")
+sys.path.append("../src/")
 from synthesis.synthesis_protocol import Protocol as protocol
 from synthesis.discovery.client.discovery_api import API
 from synthesis.discovery.client.discovery_api import Cloudlet

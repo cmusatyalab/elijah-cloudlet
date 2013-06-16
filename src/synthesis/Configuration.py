@@ -102,12 +102,10 @@ class Const(object):
 
 
 class Synthesis_Const(object):
-    # PIPLINING
+    # PIPLINING CONSTANT
     TRANSFER_SIZE           = 1024*16
     END_OF_FILE             = "!!Overlay Transfer End Marker"
-    SHOW_VNC                = False
-    IS_EARLY_START          = False
-    IS_PRINT_STATISTICS     = False
+    ERROR_OCCURED           = "!!Overlay Transfer Error Marker"
 
     # Discovery
     DIRECTORY_UPDATE_PERIOD = 60*10 # 10 min

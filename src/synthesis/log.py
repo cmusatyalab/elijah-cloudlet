@@ -28,7 +28,7 @@ DEFAULT_FORMATTER = '%(asctime)s %(name)s %(levelname)s %(message)s'
 def getLogger(name='unknown'):
     if loggers.get(name, None) == None:
         # default file logging
-        log_filepath = "synthesis-log"
+        log_filepath = "log-synthesis"
         if hasattr(Const, "LOG_PATH") == True:
             log_filepath = Const.LOG_PATH
         logging.basicConfig(level=logging.DEBUG,

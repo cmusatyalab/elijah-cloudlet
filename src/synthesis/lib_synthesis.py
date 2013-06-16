@@ -19,6 +19,7 @@
 #
 
 import os
+import functools
 import traceback
 import sys
 import time
@@ -58,6 +59,26 @@ class RapidSynthesisError(Exception):
     pass
 
 
+def wrap_process_fault(function):
+    """Wraps a method to catch exceptions related to instances.
+    This decorator wraps a method to catch any exceptions and
+    terminate the request gracefully.
+    """
+
+    @functools.wraps(function)
+    def decorated_function(self, *args, **kwargs):
+        try:
+            return function(self, *args, **kwargs)
+        except Exception, e:
+            if hasattr(self, 'exception_handler'):
+                self.exception_handler()
+            kwargs.update(dict(zip(function.func_code.co_varnames[2:], args)))
+            LOG.error("failed with : %s" % str(kwargs))
+
+
+    return decorated_function
+
+
 class NetworkUtil(object):
     @staticmethod
     def recvall(sock, size):
@@ -89,6 +110,11 @@ class NetworkStepThread(threading.Thread):
         self.chunk_size = chunk_size
         threading.Thread.__init__(self, target=self.receive_overlay_blobs)
 
+    def exception_handler(self):
+        self.out_queue.put(Synthesis_Const.ERROR_OCCURED)
+        self.time_queue.put({'start_time':-1, 'end_time':-1, "bw_mbps":0})
+
+    @wrap_process_fault
     def receive_overlay_blobs(self):
         total_read_size = 0
         counter = 0
@@ -200,6 +226,10 @@ class DecompStepProc(Process):
         self.temp_overlay_file = temp_overlay_file
         Process.__init__(self, target=self.decompress_blobs)
 
+    def exception_handler(self):
+        LOG.error("decompress step error")
+
+    @wrap_process_fault
     def decompress_blobs(self):
         self.output_queue = open(self.output_path, "w")
         start_time = time.time()
@@ -210,6 +240,8 @@ class DecompStepProc(Process):
             chunk = self.input_queue.get()
             if chunk == Synthesis_Const.END_OF_FILE:
                 break
+            if chunk == Synthesis_Const.ERROR_OCCURED:
+                break;
             data_size = data_size + len(chunk)
             decomp_chunk = self.decompressor.decompress(chunk)
 
@@ -231,7 +263,6 @@ class DecompStepProc(Process):
         LOG.info("[Decomp] : (%s)-(%s)=(%s) (%d loop, %d bytes)" % \
                 (start_time, end_time, (end_time-start_time), 
                 counter, data_size))
-
 
 
 class SynthesisHandler(SocketServer.StreamRequestHandler):
