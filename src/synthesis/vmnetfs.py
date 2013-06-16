@@ -106,12 +106,12 @@ class VMNetFS(threading.Thread):
             total_wait_time = 0.0
             for item in wait_statistics:
                 total_wait_time += item['time']
-            LOG.info("%d chunks waited for synthesizing for avg %f s, total: %f s\n" % \
+            LOG.info("%d chunks waited for synthesizing for avg %f s, total: %f s" % \
                     (len(wait_statistics), total_wait_time/len(wait_statistics), total_wait_time))
         else:
-            LOG.info("NO chunks has been waited at FUSE\n")
+            LOG.info("NO chunks has been waited at FUSE")
         self._running = False
-        LOG.info("close Fuse Exec thread\n")
+        LOG.info("close Fuse Exec thread")
 
     def fuse_write(self, data):
         self._pipe.write(data + "\n")

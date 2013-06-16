@@ -26,6 +26,8 @@ from optparse import OptionParser
 import cloudlet_client
 from synthesis_protocol import Protocol as protocol
 
+sys.path.append("../src/")
+
 application_names = ['moped', 'face', 'mar', 'speech', 'graphics']
 
 def process_command_line(argv):

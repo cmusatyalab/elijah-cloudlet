@@ -27,6 +27,7 @@ import socket
 import tempfile
 import struct
 import shutil
+import threading
 
 from synthesis import lib_cloudlet as cloudlet
 from synthesis.db.api import DBConnector
@@ -74,141 +75,162 @@ class NetworkUtil(object):
         return msgpack.unpackb(data)
 
 
-def network_worker(handler, overlay_urls, overlay_urls_size, demanding_queue, out_queue, time_queue, chunk_size):
-    read_stream = handler.rfile
-    start_time= time.time()
-    total_read_size = 0
-    counter = 0
-    index = 0 
-    finished_url = dict()
-    requesting_list = list()
+class NetworkStepThread(threading.Thread):
     MAX_REQUEST_SIZE = 1024*512 # 512 KB
-    out_of_order_count = 0
-    total_urls_count = len(overlay_urls)
-    while len(finished_url) < total_urls_count:
-        #request to client until it becomes more than MAX_REQUEST_SIZE
-        while True:
-            requesting_size = sum([overlay_urls_size[item] for item in requesting_list])
-            if requesting_size > MAX_REQUEST_SIZE or len(overlay_urls) == 0:
-                # Enough requesting list or nothing left to request
-                break;
 
-            # find overlay to request
-            urgent_overlay_url = None
-            while not demanding_queue.empty():
-                # demanding_queue can have multiple same request
-                demanding_url = demanding_queue.get()
-                if (finished_url.get(demanding_url, False) == False) and \
-                        (demanding_url not in requesting_list):
-                    urgent_overlay_url = demanding_url
+    def __init__(self, network_handler, overlay_urls, overlay_urls_size, demanding_queue, out_queue, time_queue, chunk_size):
+        self.network_handler = network_handler
+        self.read_stream = network_handler.rfile
+        self.overlay_urls = overlay_urls
+        self.overlay_urls_size = overlay_urls_size
+        self.demanding_queue = demanding_queue
+        self.out_queue = out_queue
+        self.time_queue = time_queue
+        self.chunk_size = chunk_size
+        threading.Thread.__init__(self, target=self.receive_overlay_blobs)
+
+    def receive_overlay_blobs(self):
+        total_read_size = 0
+        counter = 0
+        index = 0 
+        finished_url = dict()
+        requesting_list = list()
+        out_of_order_count = 0
+        total_urls_count = len(self.overlay_urls)
+        start_time = time.time()
+
+        while len(finished_url) < total_urls_count:
+            #request to client until it becomes more than MAX_REQUEST_SIZE
+            while True:
+                requesting_size = sum([self.overlay_urls_size[item] for item in requesting_list])
+                if requesting_size > self.MAX_REQUEST_SIZE or len(self.overlay_urls) == 0:
+                    # Enough requesting list or nothing left to request
+                    break;
+
+                # find overlay to request
+                urgent_overlay_url = None
+                while not self.demanding_queue.empty():
+                    # demanding_queue can have multiple same request
+                    demanding_url = self.demanding_queue.get()
+                    if (finished_url.get(demanding_url, False) == False) and \
+                            (demanding_url not in requesting_list):
+                        urgent_overlay_url = demanding_url
+                        break
+
+                requesting_overlay = None
+                if urgent_overlay_url != None:
+                    requesting_overlay = urgent_overlay_url
+                    out_of_order_count += 1
+                    if requesting_overlay in self.overlay_urls:
+                        self.overlay_urls.remove(requesting_overlay)
+                else:
+                    requesting_overlay = self.overlay_urls.pop(0)
+
+                # request overlay blob to client
+                message = NetworkUtil.encoding({
+                    Protocol.KEY_COMMAND : Protocol.MESSAGE_COMMAND_ON_DEMAND,
+                    Protocol.KEY_REQUEST_SEGMENT:requesting_overlay
+                    })
+                message_size = struct.pack("!I", len(message))
+                self.network_handler.request.send(message_size)
+                self.network_handler.wfile.write(message)
+                self.network_handler.wfile.flush()
+                requesting_list.append(requesting_overlay)
+
+            # read header
+            blob_header_size = struct.unpack("!I", self.read_stream.read(4))[0]
+            blob_header_data = self.read_stream.read(blob_header_size)
+            blob_header = NetworkUtil.decoding(blob_header_data)
+            command = blob_header.get(Protocol.KEY_COMMAND, None)
+            if command != Protocol.MESSAGE_COMMAND_SEND_OVERLAY:
+                msg = "Unexpected command while streaming overlay VM: %d" % command
+                raise RapidSynthesisError(msg)
+            blob_size = blob_header.get(Protocol.KEY_REQUEST_SEGMENT_SIZE, 0)
+            blob_url = blob_header.get(Protocol.KEY_REQUEST_SEGMENT, None)
+            if blob_size == 0 or blob_url == None:
+                raise RapidSynthesisError("Invalid header for overlay segment")
+
+            finished_url[blob_url] = True
+            requesting_list.remove(blob_url)
+            read_count = 0
+            while read_count < blob_size:
+                read_min_size = min(self.chunk_size, blob_size-read_count)
+                chunk = self.read_stream.read(read_min_size)
+                read_size = len(chunk)
+                if chunk:
+                    self.out_queue.put(chunk)
+                else:
                     break
 
-            requesting_overlay = None
-            if urgent_overlay_url != None:
-                requesting_overlay = urgent_overlay_url
-                out_of_order_count += 1
-                if requesting_overlay in overlay_urls:
-                    overlay_urls.remove(requesting_overlay)
-            else:
-                requesting_overlay = overlay_urls.pop(0)
+                counter += 1
+                read_count += read_size
+            total_read_size += read_count
+            index += 1
 
-            # request overlay blob to client
-            message = NetworkUtil.encoding({
-                Protocol.KEY_COMMAND : Protocol.MESSAGE_COMMAND_ON_DEMAND,
-                Protocol.KEY_REQUEST_SEGMENT:requesting_overlay
-                })
-            message_size = struct.pack("!I", len(message))
-            handler.request.send(message_size)
-            handler.wfile.write(message)
-            handler.wfile.flush()
-            requesting_list.append(requesting_overlay)
+        self.out_queue.put(Synthesis_Const.END_OF_FILE)
+        end_time = time.time()
+        time_delta= end_time-start_time
 
-        # read header
-        blob_header_size = struct.unpack("!I", read_stream.read(4))[0]
-        blob_header_data = read_stream.read(blob_header_size)
-        blob_header = NetworkUtil.decoding(blob_header_data)
-        command = blob_header.get(Protocol.KEY_COMMAND, None)
-        if command != Protocol.MESSAGE_COMMAND_SEND_OVERLAY:
-            msg = "Unexpected command while streaming overlay VM: %d" % command
-            raise RapidSynthesisError(msg)
-        blob_size = blob_header.get(Protocol.KEY_REQUEST_SEGMENT_SIZE, 0)
-        blob_url = blob_header.get(Protocol.KEY_REQUEST_SEGMENT, None)
-        if blob_size == 0 or blob_url == None:
-            raise RapidSynthesisError("Invalid header for overlay segment")
+        if time_delta > 0:
+            bw = total_read_size*8.0/time_delta/1024/1024
+        else:
+            bw = 1
 
-        finished_url[blob_url] = True
-        requesting_list.remove(blob_url)
-        read_count = 0
-        while read_count < blob_size:
-            read_min_size = min(chunk_size, blob_size-read_count)
-            chunk = read_stream.read(read_min_size)
-            read_size = len(chunk)
-            if chunk:
-                out_queue.put(chunk)
-            else:
+        self.time_queue.put({'start_time':start_time, 'end_time':end_time, "bw_mbps":bw})
+        LOG.info("[Transfer] out-of-order fetching : %d / %d == %5.2f %%" % \
+                (out_of_order_count, total_urls_count, \
+                100.0*out_of_order_count/total_urls_count))
+        try:
+            LOG.info("[Transfer] : (%s)~(%s)=(%s) (%d loop, %d bytes, %lf Mbps)" % \
+                    (start_time, end_time, (time_delta),\
+                    counter, total_read_size, \
+                    total_read_size*8.0/time_delta/1024/1024))
+        except ZeroDivisionError:
+            LOG.info("[Transfer] : (%s)~(%s)=(%s) (%d, %d)" % \
+                    (start_time, end_time, (time_delta),\
+                    counter, total_read_size))
+
+
+class DecompStepProc(Process):
+    def __init__(self, input_queue, output_path, time_queue, temp_overlay_file=None):
+        self.input_queue = input_queue
+        self.time_queue = time_queue
+        self.output_path = output_path
+        self.decompressor = LZMADecompressor()
+        self.temp_overlay_file = temp_overlay_file
+        Process.__init__(self, target=self.decompress_blobs)
+
+    def decompress_blobs(self):
+        self.output_queue = open(self.output_path, "w")
+        start_time = time.time()
+        data_size = 0
+        counter = 0
+
+        while True:
+            chunk = self.input_queue.get()
+            if chunk == Synthesis_Const.END_OF_FILE:
                 break
+            data_size = data_size + len(chunk)
+            decomp_chunk = self.decompressor.decompress(chunk)
 
-            counter += 1
-            read_count += read_size
-        total_read_size += read_count
-        index += 1
+            self.input_queue.task_done()
+            self.output_queue.write(decomp_chunk)
+            counter = counter + 1
+            if self.temp_overlay_file:
+                self.temp_overlay_file.write(decomp_chunk)
 
-    out_queue.put(Synthesis_Const.END_OF_FILE)
-    end_time = time.time()
-    time_delta= end_time-start_time
+        decomp_chunk = self.decompressor.flush()
+        self.output_queue.write(decomp_chunk)
+        self.output_queue.close()
+        if self.temp_overlay_file:
+            self.temp_overlay_file.write(decomp_chunk)
+            self.temp_overlay_file.close()
 
-    if time_delta > 0:
-        bw = total_read_size*8.0/time_delta/1024/1024
-    else:
-        bw = 1
-
-    time_queue.put({'start_time':start_time, 'end_time':end_time, "bw_mbps":bw})
-    LOG.info("[Transfer] out-of-order fetching : %d / %d == %5.2f %%" % \
-            (out_of_order_count, total_urls_count, \
-            100.0*out_of_order_count/total_urls_count))
-    try:
-        LOG.info("[Transfer] : (%s)~(%s)=(%s) (%d loop, %d bytes, %lf Mbps)" % \
-                (start_time, end_time, (time_delta),\
-                counter, total_read_size, \
-                total_read_size*8.0/time_delta/1024/1024))
-    except ZeroDivisionError:
-        LOG.info("[Transfer] : (%s)~(%s)=(%s) (%d, %d)" % \
-                (start_time, end_time, (time_delta),\
-                counter, total_read_size))
-
-
-def decomp_worker(in_queue, pipe_filepath, time_queue, temp_overlay_file=None):
-    start_time = time.time()
-    data_size = 0
-    counter = 0
-    decompressor = LZMADecompressor()
-    pipe = open(pipe_filepath, "w")
-
-    while True:
-        chunk = in_queue.get()
-        if chunk == Synthesis_Const.END_OF_FILE:
-            break
-        data_size = data_size + len(chunk)
-        decomp_chunk = decompressor.decompress(chunk)
-
-        in_queue.task_done()
-        pipe.write(decomp_chunk)
-        if temp_overlay_file:
-            temp_overlay_file.write(decomp_chunk)
-        counter = counter + 1
-
-    decomp_chunk = decompressor.flush()
-    pipe.write(decomp_chunk)
-    pipe.close()
-    if temp_overlay_file:
-        temp_overlay_file.write(decomp_chunk)
-        temp_overlay_file.close()
-
-    end_time = time.time()
-    time_queue.put({'start_time':start_time, 'end_time':end_time})
-    LOG.info("[Decomp] : (%s)-(%s)=(%s) (%d loop, %d bytes)" % \
-            (start_time, end_time, (end_time-start_time), 
-            counter, data_size))
+        end_time = time.time()
+        self.time_queue.put({'start_time':start_time, 'end_time':end_time})
+        LOG.info("[Decomp] : (%s)-(%s)=(%s) (%d loop, %d bytes)" % \
+                (start_time, end_time, (end_time-start_time), 
+                counter, data_size))
 
 
 
@@ -320,33 +342,30 @@ class SynthesisHandler(SocketServer.StreamRequestHandler):
         time_transfer = Queue(); time_decomp = Queue();
         time_delta = Queue(); time_fuse = Queue();
         self.tmp_overlay_dir = tempfile.mkdtemp()
-        temp_overlay_filepath = os.path.join(self.tmp_overlay_dir, "overlay_file")
-        temp_overlay_file = open(temp_overlay_filepath, "w+b")
         self.overlay_pipe = os.path.join(self.tmp_overlay_dir, 'overlay_pipe')
         os.mkfifo(self.overlay_pipe)
+
+        # save overlay decomp result for measurement
+        temp_overlay_file = None
+        if self.synthesis_option.get(Protocol.SYNTHESIS_OPTION_SHOW_STATISTICS):
+            temp_overlay_filepath = os.path.join(self.tmp_overlay_dir, "overlay_file")
+            temp_overlay_file = open(temp_overlay_filepath, "w+b")
 
         # overlay
         demanding_queue = Queue()
         download_queue = JoinableQueue()
-        import threading
-        download_process = threading.Thread(target=network_worker, 
-                args=(
-                    self,
+        download_process = NetworkStepThread(self, 
                     overlay_urls, overlay_urls_size, demanding_queue, 
                     download_queue, time_transfer, Synthesis_Const.TRANSFER_SIZE, 
                     )
-                )
-        decomp_process = Process(target=decomp_worker,
-                args=(
-                    download_queue, self.overlay_pipe, time_decomp, temp_overlay_file,
-                    )
+        decomp_process = DecompStepProc(
+                download_queue, self.overlay_pipe, time_decomp, temp_overlay_file,
                 )
         modified_img, modified_mem, self.fuse, self.delta_proc, self.fuse_thread = \
                 cloudlet.recover_launchVM(base_path, meta_info, self.overlay_pipe, 
                         log=sys.stdout, demanding_queue=demanding_queue)
-        self.delta_proc.time_queue = time_delta
-        self.fuse_thread.time_queue = time_fuse
-
+        self.delta_proc.time_queue = time_delta # for measurement
+        self.fuse_thread.time_queue = time_fuse # for measurement
 
         if self.synthesis_option.get(Protocol.SYNTHESIS_OPTION_EARLY_START, False):
             # 1. resume VM
@@ -419,7 +438,6 @@ class SynthesisHandler(SocketServer.StreamRequestHandler):
             disk_access_list = self.resumed_VM.monitor.disk_access_chunk_list
             cloudlet.synthesis_statistics(meta_info, temp_overlay_filepath, \
                     mem_access_list, disk_access_list)
-                    
 
         # update DB
         new_overlayvm.terminate()

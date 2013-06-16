@@ -20,10 +20,7 @@
 
 import os
 import sys
-sys.path.append("../src/")
 
-from synthesis import lib_cloudlet as lib_cloudlet
-from synthesis import msgpack
 import struct
 import socket
 import time
@@ -31,6 +28,8 @@ import threading
 import select
 from optparse import OptionParser
 from pprint import pprint
+
+sys.path.append("../../")
 from synthesis.synthesis_protocol import Protocol as protocol
 from synthesis.discovery.client.discovery_api import API
 from synthesis.discovery.client.discovery_api import Cloudlet
