@@ -39,7 +39,6 @@ You will need:
 * apparmor-utils (for disable apparmor for libvirt)
 * libc6-i386 (for extracting free memory of 32 bit vm)
 * python library
-    - msgpack-python
     - bson
 	- pyliblzma
 	- psutil
@@ -51,9 +50,9 @@ To install:
    Example at ubuntu 12 LTS x86.
 
 		> $ sudo apt-get install qemu-kvm libvirt-bin gvncviewer python-libvirt python-xdelta3 python-dev openjdk-6-jre liblzma-dev apparmor-utils libc6-i386 python-pip
-		> $ sudo pip install msgpack-python bson pyliblzma psutil sqlalchemy
+		> $ sudo pip install bson pyliblzma psutil sqlalchemy
 
-2. Disable security module.
+2. Disable security module. This is for allowing custom KVM.
    Example at Ubuntu 12
 
 		> $ sudo aa-complain /usr/sbin/libvirtd
@@ -124,10 +123,12 @@ How to use
 
 	### Note
 
-	If you have kernel related issue like
+	If you have experience kernel panic error like
 	[this](https://github.com/cmusatyalab/elijah-cloudlet/issues/1), You should
-	follow workaround for this problem. It happens at low-end machine with EPT
-	support, and you can avoid it by disabling EPT support.
+	follow workaround of this link. It happens at a machine that does not have
+	enough memory with EPT support, and you can avoid this problem by disabling
+	EPT support. We're current suspicious about kernel bug, and we'll report
+	this soon.
 
 
 3. Synthesizing ``overlay vm``  

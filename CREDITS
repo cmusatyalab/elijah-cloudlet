@@ -1,5 +1,10 @@
-Kiryong Ha (Carnegie Mellon University) is the primary implementor of
-Elijah.  Other contributors include: (none currently).
+Primary implementor of Cloudlet:
+	Kiryong Ha (Carnegie Mellon University, krha@cs.cmu.edu) 
+
+Other contributors include: 
+	Wolfgang Ritcher (Carnegie Mellon University)
+	Yoshihisa Abe (Carnegie Mellon University)
+	Padmanabhan Pillai (Intel)
 
 Contributors to pre-Elijah versions of code to support cloudlets
 include: Grace Lewis (Software Engineering Institute), Soumya Simanta
