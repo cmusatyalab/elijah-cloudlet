@@ -31,6 +31,7 @@ import xray
 import hashlib
 import libvirt
 import shutil
+import multiprocessing
 
 from synthesis.db import api as db_api
 from synthesis.db import table_def as db_table
@@ -867,6 +868,60 @@ def run_vm(conn, domain_xml, **kwargs):
     return machine
 
 
+class MemoryReadProcess(multiprocessing.Process):
+    #class MemoryReadProcess(threading.Thread):
+    RET_SUCCESS = 1
+    RET_ERRROR = 2
+
+    def __init__(self, input_path, output_path, output_queue):
+        self.input_path = input_path
+        self.output_path = output_path
+        self.output_queue = output_queue
+        multiprocessing.Process.__init__(self, target=self.read_mem_snapshot)
+        #threading.Thread.__init__(self, target=self.read_mem_snapshot)
+
+    def read_mem_snapshot(self):
+        if os.path.isfile(self.input_path) != False:
+            self.output_queue.put(self.RET_ERRROR)
+            self.output_queue.put("Cannot open named pipe")
+
+        # create memory snapshot aligned with 4KB
+        try:
+            self.in_fd = open(self.input_path, 'rb')
+            self.out_fd = open(self.output_path, 'wb')
+
+            total_read_size = 0
+            # read first 40KB and aligen header with 4KB
+            data = self.in_fd.read(Memory.Memory.RAM_PAGE_SIZE*10)
+            libvirt_header = vmnetx._QemuMemoryHeaderData(data)
+            original_header = libvirt_header.get_header()
+            align_size = Memory.Memory.RAM_PAGE_SIZE*2
+            new_header = libvirt_header.get_aligned_header(align_size)
+            self.out_fd.write(new_header)
+            total_read_size += len(new_header)
+            self.out_fd.write(data[len(original_header):])
+            total_read_size += len(data[len(original_header):])
+
+            # write rest of the memory data
+            start_time = time()
+            while True:
+                data = self.in_fd.read(1024*8)
+                if data == None or len(data) <= 0:
+                    break
+                self.out_fd.write(data)
+                total_read_size += len(data)
+            LOG.info("snapshotting time : %s" % (str(time()-start_time)))
+            self.out_fd.flush()
+            if total_read_size != self.out_fd.tell():
+                raise Exception("output file size is different from stream size")
+        except Exception, e:
+            LOG.error(str(e))
+            self.output_queue.put(self.RET_ERRROR)
+            self.output_queue.put(str(e))
+        else:
+            self.output_queue.put(self.RET_SUCCESS)
+
+
 def save_mem_snapshot(machine, fout_path, **kwargs):
     #Set migration speed
     nova_util = kwargs.get('nova_util', None)
@@ -882,38 +937,33 @@ def save_mem_snapshot(machine, fout_path, **kwargs):
     LOG.info("This could take up to minute depend on VM's memory size")
     LOG.info("(Check file at %s)" % fout_path)
     try:
-        tmp_outpath = fout_path + ".tmp"
-        ret = machine.save(tmp_outpath)
+        named_pipe_output = fout_path + ".fifo"
+        output_queue = multiprocessing.Queue()
+        os.mkfifo(named_pipe_output)
+        memory_read_proc = MemoryReadProcess(named_pipe_output, fout_path, output_queue)
+        memory_read_proc.start()
+        ret = machine.save(named_pipe_output)
+        memory_read_proc.join()
+        os.remove(named_pipe_output)
+        proc_ret = output_queue.get()
+        if proc_ret != MemoryReadProcess.RET_SUCCESS:
+            error_reason = output_queue.get()
+            msg = "Failed to create memory snapshot : %s" % str(error_reason)
+            LOG.error(msg)
+            raise CloudletGenerationError(msg)
+
         if nova_util != None:
             # OpenStack runs VM with nova account and snapshot 
             # is generated from system connection
-            nova_util.chown(tmp_outpath, os.getuid())
-
-        machine = None
-
-        # generate new memory snapshot with 4KB aligned header
-        # TODO: fix this more efficiently
-        xml_string = vmnetx._QemuMemoryHeader(open(tmp_outpath, "r")).xml
-        current_size = (len(xml_string)+vmnetx._QemuMemoryHeader.HEADER_LENGTH)
-
-        # have enough padding size to protect xml size overflow
-        padding_size = (2*Memory.Memory.RAM_PAGE_SIZE) - \
-                (current_size % Memory.Memory.RAM_PAGE_SIZE)
-        if padding_size < 0:
-            msg = "WE FIXED LIBVIRT HEADER SIZE TO 2*4096\n" + \
-                    "But given xml size is bigger than 2*4096"
-            raise CloudletGenerationError(msg)
-        elif padding_size == 0:
-            os.link(tmp_outpath, fout_path)
-        else:
-            new_xml = xml_string + ("\0" * padding_size)
-            vmnetx.copy_memory(tmp_outpath, fout_path, new_xml)
-                
-        os.remove(tmp_outpath)
-        if nova_util != None:
             nova_util.chown(fout_path, os.getuid())
+        machine = None
     except libvirt.libvirtError, e:
         raise CloudletGenerationError("libvirt memory save : " + str(e))
+    except CloudletGenerationError, e:
+        raise CloudletGenerationError("Cloudlet Generation Error: " + str(e))
+    except vmnetx.MachineGenerationError, e:
+        raise CloudletGenerationError("Machine Generation Error: " + str(e))
+
     if ret != 0:
         raise CloudletGenerationError("libvirt: Cannot save memory state")
 
