@@ -214,6 +214,7 @@ class VM_Overlay(threading.Thread):
             self.overlay_uri_meta =  self._terminate_emulate_cache_fs(overlay_uri_meta)
 
         # 5. terminting
+        self._terminate_vm()
         self.fuse.terminate()
         self.fuse_stream_monitor.terminate()
         self.qemu_monitor.terminate()
@@ -235,20 +236,23 @@ class VM_Overlay(threading.Thread):
         if os.path.exists(self.qemu_logfile.name):
             os.remove(self.qemu_logfile.name)
 
-    def exception_handler(self):
-        import pdb;pdb.set_trace()
+    def _terminate_vm(self):
+        if self.machine != None:
+            machine_uuid = self.machine.UUIDString()
+            conn = get_libvirt_connection()
+            try:
+                for each_machine in conn.listAllDomains(0):
+                    if each_machine.UUIDString() == machine_uuid:
+                        state, reason = each_machine.state()
+                        if state != libvirt.VIR_DOMAIN_SHUTOFF:
+                            each_machine.destroy()
+            except libvirt.libvirtError, e:
+                pass
+            machine = None
 
+    def exception_handler(self):
         # make sure to destory the VM
-        conn = get_libvirt_connection()
-        try:
-            for each_machine in conn.listAllDomains(0):
-                if each_machine.UUIDString() == machine_uuid:
-                    state, reason = each_machine.state()
-                    if state != libvirt.VIR_DOMAIN_SHUTOFF:
-                        each_machine.destroy()
-        except libvirt.libvirtError, e:
-            pass
-        machine = None
+        self._terminate_vm()
 
     def _start_emulate_cache_fs(self):
         # check samba
