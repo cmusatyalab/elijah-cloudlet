@@ -64,12 +64,11 @@ class CloudletGenerationError(Exception):
 
 
 def libvirt_err_callback(ctxt, err):
-    import pdb;pdb.set_trace()
     # we intentionally ignore seek error from libvirt since we have cause
     # that by using named pipe
-    if err == libvirt.VIR_ERR_ERROR and \
-            err == libvirt.VIR_FROM_STREAMS and \
-            err == libvirt.VIR_FROM_QEMU: 
+    if err[3] == libvirt.VIR_ERR_ERROR and \
+            err[0] == libvirt.VIR_FROM_STREAMS and \
+            err[1] == libvirt.VIR_FROM_QEMU:
         pass
     elif err[3] == libvirt.VIR_ERR_WARNING:
         LOG.warning(err[2])
