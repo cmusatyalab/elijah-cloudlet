@@ -79,7 +79,7 @@ libvirt.registerErrorHandler(f=libvirt_err_callback, ctx=None)
 
 class VM_Overlay(threading.Thread):
     def __init__(self, base_disk, options, qemu_args=None,
-            base_mem=None, base_diskmeta=None, 
+            base_mem=None, base_diskmeta=None,
             base_memmeta=None, base_hashvalue=None,
             vm_xml=None, nova_util=None):
         # create user customized overlay.
@@ -92,9 +92,13 @@ class VM_Overlay(threading.Thread):
         self.qemu_args = qemu_args or None
         (self.base_diskmeta, self.base_mem, self.base_memmeta) = \
                 Const.get_basepath(self.base_disk, check_exist=False)
-        self.base_mem = os.path.abspath(base_mem) or self.base_mem
-        self.base_diskmeta = os.path.abspath(base_diskmeta) or self.base_diskmeta
-        self.base_memmeta = os.path.abspath(base_memmeta) or self.base_memmeta
+        self.base_mem = base_mem or self.base_mem
+        self.base_diskmeta = base_diskmeta or self.base_diskmeta
+        self.base_memmeta = base_memmeta or self.base_memmeta
+        # use abs path
+        self.base_mem = os.path.abspath(self.base_mem)
+        self.base_diskmeta = os.path.abspath(self.base_diskmeta)
+        self.base_memmeta = os.path.abspath(self.base_memmeta)
         self.nova_util = nova_util
 
         # find base vm's hashvalue from DB
