@@ -10,8 +10,17 @@ Copyright (C) 2011-2012 Carnegie Mellon University
 This is a developing project and some features might not be stable yet.
 Please visit our website at [Elijah page](http://elijah.cs.cmu.edu/).
 
-Cloudlet is licensed under the GNU General Public License, version 2.
 
+License
+----------
+
+All source code, documentation, and related artifacts associated with the
+cloudlet open source project are licensed under the [Apache License, Version
+2.0](http://www.apache.org/licenses/LICENSE-2.0.html).
+
+A copy of this license is reproduced in the [LICENSE](LICENSE) file, and the
+licenses of dependencies and included code are enumerated in the
+[NOTICE](NOTICE) file.
 
 
 Installing
@@ -28,30 +37,42 @@ You will need:
 * liblzma-dev (for pyliblzma)
 * Java JRE (for UPnP server)
 * apparmor-utils (for disable apparmor for libvirt)
+* libc6-i386 (for extracting free memory of 32 bit vm)
 * python library
-    - msgpack-python
     - bson
 	- pyliblzma
 	- psutil
 	- SQLAlchemy
+	- fabric
 
-To install:
+To run install script:
 
-1. install library dependency
-   Example at ubuntu 12 LTS x86.
+		> $ sudo apt-get install fabric openssh-server
+		> $ fab localhost install
 
-		> $ sudo apt-get install qemu-kvm libvirt-bin gvncviewer python-libvirt python-xdelta3 python-dev openjdk-6-jre liblzma-dev apparmor-utils python-pip
-		> $ sudo pip install msgpack-python bson pyliblzma psutil sqlalchemy
+To install manually:
 
-2. Disable security module.
-   Example at Ubuntu 12
+	1. install required package
+			> $ sudo apt-get install qemu-kvm libvirt-bin gvncviewer python-libvirt python-xdelta3 python-dev openjdk-6-jre liblzma-dev apparmor-utils libc6-i386 python-pip
+			> $ sudo pip install bson pyliblzma psutil sqlalchemy
 
-		> $ sudo aa-complain /usr/sbin/libvirtd
+	2. Disable security module. This is for allowing custom KVM.
+	Example at Ubuntu 12
 
-3. add current user to kvm, libvirtd group.
+			> $ sudo aa-complain /usr/sbin/libvirtd
 
-		> $ sudo adduser [your_account_name] kvm
-		> $ sudo adduser [your_account_name] libvirtd
+	3. add current user to kvm, libvirtd group.
+
+			> $ sudo adduser [your_account_name] kvm
+			> $ sudo adduser [your_account_name] libvirtd
+	
+	4. change permission of the fuse access (The qemu-kvm library changes fuse
+	   access permission while it's being installed, and the permission is
+	   recovered if you reboot the host.  We believe this is a bug in qemu-kvm
+	   installation script, so you can either reboot the machine to have valid
+	   permission of just revert the permission manually as bellow).
+
+		   > $ sudo chmod 1666 /dev/fuse
 
 
 
@@ -114,10 +135,12 @@ How to use
 
 	### Note
 
-	If you have kernel related issue like
+	If you have experience kernel panic error like
 	[this](https://github.com/cmusatyalab/elijah-cloudlet/issues/1), You should
-	follow workaround for this problem. It happens at low-end machine with EPT
-	support, and you can avoid it by disabling EPT support.
+	follow workaround of this link. It happens at a machine that does not have
+	enough memory with EPT support, and you can avoid this problem by disabling
+	EPT support. We're current suspicious about kernel bug, and we'll report
+	this soon.
 
 
 3. Synthesizing ``overlay vm``  
@@ -138,7 +161,7 @@ How to use
 	mobile client and you can start the server as below.
   
         > $ cd ./bin
-        > $ ./synthesis
+        > $ ./server
     
 	You can test this server using the client. You also need to copy the
 	overlay that you like to reconstruct to the other machine when you execute

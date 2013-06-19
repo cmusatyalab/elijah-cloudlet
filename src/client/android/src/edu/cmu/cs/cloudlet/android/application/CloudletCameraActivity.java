@@ -101,17 +101,20 @@ public class CloudletCameraActivity extends Activity implements TextToSpeech.OnI
 		
 		// For OSDI Test, just start sending data
 		File testFile = new File(TEST_IMAGE_PATH);
-		if(testFile.exists() == false){
+		if(testFile.exists() == true){
+			testImageList = new ArrayList();
+			for(File testfile : new File(TEST_IMAGE_PATH).listFiles()){
+				if (testfile.exists() == true)
+					testImageList.add(testfile);
+			}
+		}else{
 			new AlertDialog.Builder(CloudletCameraActivity.this).setTitle("Error")
 			.setMessage("No test image at " + TEST_IMAGE_PATH)
 			.setIcon(R.drawable.ic_launcher)
 			.setNegativeButton("Confirm", null)
 			.show();
-		}		
-		testImageList = new ArrayList();
-		for(File testfile : new File(TEST_IMAGE_PATH).listFiles()){
-			testImageList.add(testfile);
 		}
+		
 		TimerTask autoStart = new TimerTask(){
 			@Override
 			public void run() {	
@@ -186,21 +189,24 @@ public class CloudletCameraActivity extends Activity implements TextToSpeech.OnI
 	private static final String FEEDBACK_PREFIX = "Found items are ";
 	private void TTSFeedback(String ttsString) {
 		// Show Application Runtime
+		/*
 		String message = "Time for app run\n start: " + startApp + "\nend: " + endApp + "\ndiff: " + (endApp-startApp);		
 		new AlertDialog.Builder(CloudletCameraActivity.this).setTitle("Info")
 		.setMessage(message)
 		.setIcon(R.drawable.ic_launcher)
 		.setNegativeButton("Confirm", null)
 		.show();
+		*/
 		
 		// Select a random hello.
 		Log.d("krha", "tts string origin: " + ttsString);
 		String[] objects = ttsString.split(" ");
 		if(ttsString == null || objects == null || objects.length == 0 || ttsString.trim().length() == 0){
-			mTTS.speak("We found nothing", TextToSpeech.QUEUE_FLUSH, null);			
+			mTTS.speak("Found nothing", TextToSpeech.QUEUE_FLUSH, null);			
 		}else if(objects.length == 1){
-			objects[0].replace("_", " ");
-			mTTS.speak("We found a " + objects[0], TextToSpeech.QUEUE_FLUSH, null);			
+			StringBuffer sb = new StringBuffer();
+			sb.append(objects[0].replace("_", " "));
+			mTTS.speak(sb.toString(), TextToSpeech.QUEUE_FLUSH, null);			
 		}else{
 			StringBuffer sb = new StringBuffer();
 			for(int i = 0; i < objects.length; i++){
@@ -211,7 +217,7 @@ public class CloudletCameraActivity extends Activity implements TextToSpeech.OnI
 			}
 			Log.d("krha", "tts string : " + sb.toString());
 			mTTS.setSpeechRate(1f);
-			mTTS.speak("We found " + sb.toString(), TextToSpeech.QUEUE_FLUSH, null);
+			mTTS.speak(sb.toString(), TextToSpeech.QUEUE_FLUSH, null);
 		}
 		
 		
@@ -265,6 +271,7 @@ public class CloudletCameraActivity extends Activity implements TextToSpeech.OnI
 				Utilities.showError(CloudletCameraActivity.this, "Error", "Cannot connect to Server " + server_ipaddress + ":" + server_port);
 				client = null;
 				mDialog.dismiss();
+				return;
 			}
 		}
 		client.uploadImage(data);

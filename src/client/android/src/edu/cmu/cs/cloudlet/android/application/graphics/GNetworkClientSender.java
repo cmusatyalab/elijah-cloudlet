@@ -1,18 +1,3 @@
-//
-// Elijah: Cloudlet Infrastructure for Mobile Computing
-// Copyright (C) 2011-2012 Carnegie Mellon University
-//
-// This program is free software; you can redistribute it and/or modify it
-// under the terms of version 2 of the GNU General Public License as published
-// by the Free Software Foundation.  A copy of the GNU General Public License
-// should have been distributed along with this program in the file
-// LICENSE.GPL.
-
-// This program is distributed in the hope that it will be useful, but
-// WITHOUT ANY WARRANTY; without even the implied warranty of MERCHANTABILITY
-// or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU General Public License
-// for more details.
-//
 package edu.cmu.cs.cloudlet.android.application.graphics;
 
 import java.io.BufferedInputStream;
@@ -82,7 +67,7 @@ public class GNetworkClientSender extends Thread {
 			Message msg = Message.obtain();
 			msg.what = GNetworkClient.CONNECTION_ERROR;
 			Bundle data = new Bundle();
-			data.putString("message", "Cannot Connect to " + this.Server_ipAddress + ":" + this.Server_port);
+			data.putString("message", "Cannot connect to " + this.Server_ipAddress + ":" + this.Server_port);
 			msg.setData(data);
 			mHandler.sendMessage(msg);
 			return false;
@@ -91,7 +76,7 @@ public class GNetworkClientSender extends Thread {
 			Message msg = Message.obtain();
 			msg.what = GNetworkClient.CONNECTION_ERROR;
 			Bundle data = new Bundle();
-			data.putString("message", "Cannot Connect to " + this.Server_ipAddress + ":" + this.Server_port);
+			data.putString("message", "Error in connecting to " + this.Server_ipAddress + ":" + this.Server_port);
 			msg.setData(data);
 			mHandler.sendMessage(msg);
 			return false;
@@ -168,12 +153,18 @@ public class GNetworkClientSender extends Thread {
 		try {
 			this.isThreadRun = false;
 			
-			if(this.receiver != null)
+			if(this.receiver != null){
 				this.receiver.close();
-			if(this.networkWriter != null)
+				this.receiver = null;
+			}
+			if(this.networkWriter != null){
 				this.networkWriter.close();
-			if(this.mClientSocket != null)
+				this.networkWriter = null;
+			}
+			if(this.mClientSocket != null){
 				this.mClientSocket.close();
+				this.mClientSocket = null;
+			}
 		} catch (IOException e) {
 			Log.e("krha", e.toString());
 		}

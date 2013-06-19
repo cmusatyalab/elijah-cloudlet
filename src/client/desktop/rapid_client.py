@@ -1,35 +1,41 @@
-#!/usr/bin/env python
+#!/usr/bin/env python 
 #
-# Elijah: Cloudlet Infrastructure for Mobile Computing
-# Copyright (C) 2011-2012 Carnegie Mellon University
+# Cloudlet Infrastructure for Mobile Computing
 #
-# This program is free software; you can redistribute it and/or modify it
-# under the terms of version 2 of the GNU General Public License as published
-# by the Free Software Foundation.  A copy of the GNU General Public License
-# should have been distributed along with this program in the file
-# LICENSE.GPL.
+#   Author: Kiryong Ha <krha@cmu.edu>
 #
-# This program is distributed in the hope that it will be useful, but
-# WITHOUT ANY WARRANTY; without even the implied warranty of MERCHANTABILITY
-# or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU General Public License
-# for more details.
+#   Copyright (C) 2011-2013 Carnegie Mellon University
+#   Licensed under the Apache License, Version 2.0 (the "License");
+#   you may not use this file except in compliance with the License.
+#   You may obtain a copy of the License at
+#
+#       http://www.apache.org/licenses/LICENSE-2.0
+#
+#   Unless required by applicable law or agreed to in writing, software
+#   distributed under the License is distributed on an "AS IS" BASIS,
+#   WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+#   See the License for the specific language governing permissions and
+#   limitations under the License.
 #
 
 import os
-import msgpack
-import struct
 import sys
+
+import struct
 import socket
 import time
 import threading
 import select
-from synthesis_protocol import Protocol as protocol
 from optparse import OptionParser
 from pprint import pprint
-from discovery.discovery_api import API
-from discovery.discovery_api import Cloudlet
-from discovery.discovery_api import Util
-from discovery import discovery_api
+
+sys.path.append("../../")
+sys.path.append("../src/")
+from synthesis.synthesis_protocol import Protocol as protocol
+from synthesis.discovery.client.discovery_api import API
+from synthesis.discovery.client.discovery_api import Cloudlet
+from synthesis.discovery.client.discovery_api import Util
+from synthesis.discovery.client import discovery_api
 
 
 class RapidClientError(Exception):
@@ -115,7 +121,7 @@ def start_cloudlet(cloudlet, session_id, overlay_meta_path, app_function, synthe
     header_dict = {
         protocol.KEY_COMMAND : protocol.MESSAGE_COMMAND_SEND_META,
         protocol.KEY_META_SIZE : os.path.getsize(overlay_meta_path),
-        protocol.KEY_SESSIOIN_ID: session_id,
+        protocol.KEY_SESSION_ID: session_id,
         }
     if len(synthesis_options) > 0:
         header_dict[protocol.KEY_SYNTHESIS_OPTION] = synthesis_options
@@ -187,7 +193,7 @@ def start_cloudlet(cloudlet, session_id, overlay_meta_path, app_function, synthe
                         protocol.KEY_COMMAND : protocol.MESSAGE_COMMAND_SEND_OVERLAY,
                         protocol.KEY_REQUEST_SEGMENT : requested_uri,
                         protocol.KEY_REQUEST_SEGMENT_SIZE : os.path.getsize(blob_path),
-                        protocol.KEY_SESSIOIN_ID: session_id,
+                        protocol.KEY_SESSION_ID: session_id,
                         }
 
                 # send close signal to cloudlet server
@@ -214,7 +220,7 @@ def start_cloudlet(cloudlet, session_id, overlay_meta_path, app_function, synthe
     app_end = time_dict['app_end']
     client_info = {
             protocol.KEY_COMMAND : protocol.MESSAGE_COMMAND_FINISH,
-            protocol.KEY_SESSIOIN_ID : session_id,
+            protocol.KEY_SESSION_ID : session_id,
             'Transfer End':(send_end-start_time), 
             'Synthesis Success': (recv_end-start_time),
             'App Start': (app_start-start_time),
@@ -271,7 +277,7 @@ def main(argv=None):
     cloudlet_ip = None
     if settings.server_ip:
         cloudlet_ip = settings.server_ip
-    elif settings.discovery:
+    elif settings.discovery_server:
         cloudlet_list = list()
         if discovery_api.RET_FAILED == API.find_nearby_cloudlets(cloudlet_list):
             sys.stderr.write(API.discovery_err_str)

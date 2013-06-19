@@ -1,0 +1,14 @@
+log_synthesis/
+.rope/
+.overlay-log
+synthesis_log
+free_mem_scan/.cproject
+free_mem_scan/.project
+free_mem_scan/free_page_scan
+vmnetfs/.cproject
+vmnetfs/.dirstamp
+vmnetfs/.gdbinit
+vmnetfs/.project
+xray/bson_printer
+tmp/
+ret/
