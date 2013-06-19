@@ -117,7 +117,7 @@ def parse_qemu_log(qemu_logfile, chunk_size):
     mal_aligned_sector = 0
     total_founded_discard = 0
     effective_discard = 0
-    for line in lines:
+    for line in lines[:-1]: # last line might not be perfect
         if not line:
             break
         splits = line.split(",")

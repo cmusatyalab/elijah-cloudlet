@@ -69,7 +69,8 @@ class _QemuMemoryHeader(object):
         if header != [0] * self.HEADER_UNUSED_VALUES:
             raise MachineGenerationError('Unused header values not 0')
 
-        if self._xml_len != self.EXPECTED_HEADER_LENGTH:
+        libvirt_header_len = self._xml_len + self.HEADER_LENGTH
+        if libvirt_header_len != self.EXPECTED_HEADER_LENGTH:
             LOG.warning("libvirt header length is not aligned with 8KB")
 
         # Read XML, drop trailing NUL padding
