@@ -241,7 +241,7 @@ class VM_Overlay(threading.Thread):
             machine_uuid = self.machine.UUIDString()
             conn = get_libvirt_connection()
             try:
-                for each_machine in conn.listAllDomains(0):
+                for each_machine in conn.listDomainsID():
                     if each_machine.UUIDString() == machine_uuid:
                         state, reason = each_machine.state()
                         if state != libvirt.VIR_DOMAIN_SHUTOFF:
