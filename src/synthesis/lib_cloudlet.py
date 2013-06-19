@@ -87,15 +87,15 @@ class VM_Overlay(threading.Thread):
         # First resume VM, then let user edit its VM
         # Finally, return disk/memory binary as an overlay
         # base_disk: path to base disk
-        self.base_disk = base_disk
+        self.base_disk = os.path.abspath(base_disk)
         self.options = options
         self.vm_xml = vm_xml or None
         self.qemu_args = qemu_args or None
         (self.base_diskmeta, self.base_mem, self.base_memmeta) = \
                 Const.get_basepath(self.base_disk, check_exist=False)
-        self.base_mem = base_mem or self.base_mem
-        self.base_diskmeta = base_diskmeta or self.base_diskmeta
-        self.base_memmeta = base_memmeta or self.base_memmeta
+        self.base_mem = os.path.abspath(base_mem) or self.base_mem
+        self.base_diskmeta = os.path.abspath(base_diskmeta) or self.base_diskmeta
+        self.base_memmeta = os.path.abspath(base_memmeta) or self.base_memmeta
         self.nova_util = nova_util
 
         # find base vm's hashvalue from DB
@@ -104,7 +104,8 @@ class VM_Overlay(threading.Thread):
             dbconn = db_api.DBConnector()
             basevm_list = dbconn.list_item(db_table.BaseVM)
             for basevm_row in basevm_list:
-                if basevm_row.disk_path == self.base_disk:
+                basevm_row_disk = os.path.abspath(basevm_row.disk_path)
+                if basevm_row_disk == self.base_disk:
                     self.base_hashvalue = basevm_row.hash_value
             if self.base_hashvalue == None:
                 msg = "Cannot find hashvalue for %s" % self.base_disk
@@ -1362,6 +1363,7 @@ def create_baseVM(disk_image_path):
     # :returns: (generated base VM disk path, generated base VM memory path)
 
     # Check DB
+    disk_image_path = os.path.abspath(disk_image_path)
     (base_diskmeta, base_mempath, base_memmeta) = \
             Const.get_basepath(disk_image_path)
 

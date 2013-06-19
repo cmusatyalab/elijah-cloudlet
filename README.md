@@ -47,7 +47,7 @@ You will need:
 
 To run install script:
 
-		> $ sudo apt-get install fabric
+		> $ sudo apt-get install fabric openssh-server
 		> $ fab localhost install
 
 To install manually:
