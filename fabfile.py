@@ -1,25 +1,30 @@
 from __future__ import with_statement
 
+import sys
 from fabric.api import env
 from fabric.api import run
 from fabric.api import local
 from fabric.api import sudo
 from fabric.api import task
+from fabric.api import abort
 
 
 @task
 def localhost():
     env.run = local
+    env.warn_only = True
     env.hosts = ['localhost']
 
 @task
 def remote():
     env.run = run
+    env.warn_only = True
     env.hosts  = ['some.remote.host']
 
 
 def check_support():
-    run("egrep '^flags.*(vmx|svm)' /proc/cpuinfo > /dev/null")
+    if run("egrep '^flags.*(vmx|svm)' /proc/cpuinfo > /dev/null").failed:
+        abort("Need hardware VM support (vmx)")
 
 
 @task
@@ -27,18 +32,29 @@ def install():
     check_support()
     # install dependent package
     sudo("apt-get update")
-    sudo("apt-get install -y qemu-kvm libvirt-bin gvncviewer python-libvirt python-xdelta3 python-dev openjdk-6-jre liblzma-dev apparmor-utils libc6-i386 python-pip")
-    sudo("pip install bson pyliblzma psutil sqlalchemy")
+    if sudo("apt-get install -y qemu-kvm libvirt-bin gvncviewer python-libvirt " + 
+            "python-xdelta3 python-dev openjdk-6-jre liblzma-dev apparmor-utils " + 
+            "libc6-i386 python-pip").failed:
+        abort("Failed to install libraries")
+    if sudo("pip install bson pyliblzma psutil sqlalchemy").failed:
+        abort("Failed to install python libraries")
 
     # disable libvirtd from appArmor to enable custom KVM
-    sudo("aa-complain /usr/sbin/libvirtd")
+    if sudo("aa-complain /usr/sbin/libvirtd").failed:
+        abort("Failed to disable AppArmor for custom KVM")
 
     # add current user to groups (optional)
     username = env.get('user')
-    sudo("adduser %s kvm" % username)
-    sudo("adduser %s libvirtd" % username)
+    if sudo("adduser %s kvm" % username).failed:
+        abort("Cannot add user to kvm group")
+    if sudo("adduser %s libvirtd" % username).failed:
+        abort("Cannot add user to libvirtd group")
 
     # make sure to have fuse support
-    sudo("chmod 1666 /dev/fuse")
-    sudo("chmod 644 /etc/fuse.conf")
+    if sudo("chmod 1666 /dev/fuse").failed:
+        abort("Failed to enable fuse for the user")
+    if sudo("chmod 644 /etc/fuse.conf").failed:
+        abort("failed to enable fuse for the user")
+
+    sys.stdout.write("[SUCCESS] VM synthesis code is installed\n")
 
