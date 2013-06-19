@@ -63,6 +63,21 @@ class CloudletGenerationError(Exception):
     pass
 
 
+def libvirt_err_callback(ctxt, err):
+    import pdb;pdb.set_trace()
+    # we intentionally ignore seek error from libvirt since we have cause
+    # that by using named pipe
+    if err == libvirt.VIR_ERR_ERROR and \
+            err == libvirt.VIR_FROM_STREAMS and \
+            err == libvirt.VIR_FROM_QEMU: 
+        pass
+    elif err[3] == libvirt.VIR_ERR_WARNING:
+        LOG.warning(err[2])
+    elif err[3] == libvirt.VIR_ERR_ERROR:
+        LOG.error(err[2])
+libvirt.registerErrorHandler(f=libvirt_err_callback, ctx=None)
+
+
 class VM_Overlay(threading.Thread):
     def __init__(self, base_disk, options, qemu_args=None,
             base_mem=None, base_diskmeta=None, 
@@ -681,7 +696,7 @@ def generate_overlayfile(overlay_deltalist, options,
     '''
 
     # Compression
-    LOG.debug("[LZMA] Compressing overlay blobs")
+    LOG.info("[LZMA] Compressing overlay blobs")
     blob_list = delta.divide_blobs(overlay_deltalist, overlayfile_prefix,
             Const.OVERLAY_BLOB_SIZE_KB, Const.CHUNK_SIZE,
             Memory.Memory.RAM_PAGE_SIZE)
@@ -905,7 +920,7 @@ class MemoryReadProcess(multiprocessing.Process):
             # write rest of the memory data
             start_time = time()
             while True:
-                data = self.in_fd.read(1024*8)
+                data = self.in_fd.read(1024*1024)
                 if data == None or len(data) <= 0:
                     break
                 self.out_fd.write(data)
@@ -958,7 +973,10 @@ def save_mem_snapshot(machine, fout_path, **kwargs):
             nova_util.chown(fout_path, os.getuid())
         machine = None
     except libvirt.libvirtError, e:
-        raise CloudletGenerationError("libvirt memory save : " + str(e))
+        # we intentionally ignore seek error from libvirt since we have cause
+        # that by using named pipe
+        if str(e).startswith('unable to seek') == False:
+            raise CloudletGenerationError("libvirt memory save : " + str(e))
     except CloudletGenerationError, e:
         raise CloudletGenerationError("Cloudlet Generation Error: " + str(e))
     except vmnetx.MachineGenerationError, e:

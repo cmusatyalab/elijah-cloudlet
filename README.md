@@ -43,24 +43,36 @@ You will need:
 	- pyliblzma
 	- psutil
 	- SQLAlchemy
+	- fabric
 
-To install:
+To run install script:
 
-1. install library dependency
-   Example at ubuntu 12 LTS x86.
+		> $ sudo apt-get install fabric
+		> $ fab localhost install
 
-		> $ sudo apt-get install qemu-kvm libvirt-bin gvncviewer python-libvirt python-xdelta3 python-dev openjdk-6-jre liblzma-dev apparmor-utils libc6-i386 python-pip
-		> $ sudo pip install bson pyliblzma psutil sqlalchemy
+To install manually:
 
-2. Disable security module. This is for allowing custom KVM.
-   Example at Ubuntu 12
+	1. install required package
+			> $ sudo apt-get install qemu-kvm libvirt-bin gvncviewer python-libvirt python-xdelta3 python-dev openjdk-6-jre liblzma-dev apparmor-utils libc6-i386 python-pip
+			> $ sudo pip install bson pyliblzma psutil sqlalchemy
 
-		> $ sudo aa-complain /usr/sbin/libvirtd
+	2. Disable security module. This is for allowing custom KVM.
+	Example at Ubuntu 12
 
-3. add current user to kvm, libvirtd group.
+			> $ sudo aa-complain /usr/sbin/libvirtd
 
-		> $ sudo adduser [your_account_name] kvm
-		> $ sudo adduser [your_account_name] libvirtd
+	3. add current user to kvm, libvirtd group.
+
+			> $ sudo adduser [your_account_name] kvm
+			> $ sudo adduser [your_account_name] libvirtd
+	
+	4. change permission of the fuse access (The qemu-kvm library changes fuse
+	   access permission while it's being installed, and the permission is
+	   recovered if you reboot the host.  We believe this is a bug in qemu-kvm
+	   installation script, so you can either reboot the machine to have valid
+	   permission of just revert the permission manually as bellow).
+
+		   > $ sudo chmod 1666 /dev/fuse
 
 
 

@@ -249,7 +249,7 @@ def create_disk_deltalist(modified_disk,
             else:
                 raise IOError("xdelta3 patch is bigger than origianl")
         except IOError as e:
-            LOG.info("xdelta failed, so save it as raw (%s)" % str(e))
+            #LOG.info("xdelta failed, so save it as raw (%s)" % str(e))
             delta_item = DeltaItem(DeltaItem.DELTA_DISK,
                     offset, len(data),
                     hash_value=sha256(data).digest(),
