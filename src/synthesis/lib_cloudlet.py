@@ -20,6 +20,7 @@
 
 import sys
 import os
+import functools
 import subprocess
 import Memory
 import Disk
@@ -62,6 +63,23 @@ LOG = logging.getLogger(__name__)
 class CloudletGenerationError(Exception):
     pass
 
+
+def wrap_vm_fault(function):
+    """Wraps a method to catch exceptions related to instances.
+    This decorator wraps a method to catch any exceptions and
+    terminate the request gracefully.
+    """
+    @functools.wraps(function)
+    def decorated_function(self, *args, **kwargs):
+        try:
+            return function(self, *args, **kwargs)
+        except Exception, e:
+            if hasattr(self, 'exception_handler'):
+                self.exception_handler()
+            kwargs.update(dict(zip(function.func_code.co_varnames[2:], args)))
+            LOG.error("failed with : %s" % str(kwargs))
+
+    return decorated_function
 
 def libvirt_err_callback(ctxt, err):
     # we intentionally ignore seek error from libvirt since we have cause
@@ -161,6 +179,7 @@ class VM_Overlay(threading.Thread):
                 new_xml=self.vm_xml)
         return self.machine
 
+    @wrap_vm_fault
     def create_overlay(self):
         # 2. get montoring info
         monitoring_info = _get_monitoring_info(self.machine, self.options,
@@ -179,7 +198,8 @@ class VM_Overlay(threading.Thread):
         # 4. create_overlayfile
         image_name = os.path.basename(self.base_disk).split(".")[0]
         dir_path = os.path.dirname(self.base_mem)
-        overlay_prefix = os.path.join(dir_path, image_name+Const.OVERLAY_FILE_PREFIX)
+        overlay_prefix = os.path.join(dir_path,
+                image_name+Const.OVERLAY_FILE_PREFIX)
         overlay_metapath = os.path.join(dir_path, image_name+Const.OVERLAY_META)
 
         self.overlay_metafile, self.overlay_files = \
@@ -214,6 +234,21 @@ class VM_Overlay(threading.Thread):
 
         if os.path.exists(self.qemu_logfile.name):
             os.remove(self.qemu_logfile.name)
+
+    def exception_handler(self):
+        import pdb;pdb.set_trace()
+
+        # make sure to destory the VM
+        conn = get_libvirt_connection()
+        try:
+            for each_machine in conn.listAllDomains(0):
+                if each_machine.UUIDString() == machine_uuid:
+                    state, reason = each_machine.state()
+                    if state != libvirt.VIR_DOMAIN_SHUTOFF:
+                        each_machine.destroy()
+        except libvirt.libvirtError, e:
+            pass
+        machine = None
 
     def _start_emulate_cache_fs(self):
         # check samba
@@ -950,6 +985,7 @@ def save_mem_snapshot(machine, fout_path, **kwargs):
 
     #Pause VM
     machine.suspend()
+    machine_uuid = machine.UUIDString()
 
     #Save memory state
     LOG.info("save VM memory state at %s" % fout_path)
@@ -975,7 +1011,7 @@ def save_mem_snapshot(machine, fout_path, **kwargs):
             # OpenStack runs VM with nova account and snapshot 
             # is generated from system connection
             nova_util.chown(fout_path, os.getuid())
-        machine = None
+
     except libvirt.libvirtError, e:
         # we intentionally ignore seek error from libvirt since we have cause
         # that by using named pipe

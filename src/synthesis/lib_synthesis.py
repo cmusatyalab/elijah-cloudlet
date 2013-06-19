@@ -64,7 +64,6 @@ def wrap_process_fault(function):
     This decorator wraps a method to catch any exceptions and
     terminate the request gracefully.
     """
-
     @functools.wraps(function)
     def decorated_function(self, *args, **kwargs):
         try:
@@ -74,7 +73,6 @@ def wrap_process_fault(function):
                 self.exception_handler()
             kwargs.update(dict(zip(function.func_code.co_varnames[2:], args)))
             LOG.error("failed with : %s" % str(kwargs))
-
 
     return decorated_function
 
