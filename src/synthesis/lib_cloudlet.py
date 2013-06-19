@@ -237,18 +237,19 @@ class VM_Overlay(threading.Thread):
             os.remove(self.qemu_logfile.name)
 
     def _terminate_vm(self):
-        if self.machine != None:
-            machine_uuid = self.machine.UUIDString()
+        if self.machine is not None:
+            machine_id = self.machine.ID()
             conn = get_libvirt_connection()
             try:
-                for each_machine in conn.listDomainsID():
-                    if each_machine.UUIDString() == machine_uuid:
+                for each_id in conn.listDomainsID():
+                    if each_id == machine_id:
+                        each_machine = conn.lookupByID(machine_id)
                         state, reason = each_machine.state()
                         if state != libvirt.VIR_DOMAIN_SHUTOFF:
                             each_machine.destroy()
             except libvirt.libvirtError, e:
                 pass
-            machine = None
+            self.machine = None
 
     def exception_handler(self):
         # make sure to destory the VM
