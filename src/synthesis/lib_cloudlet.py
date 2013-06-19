@@ -1105,7 +1105,9 @@ def restore_with_config(conn, mem_snapshot, xml):
         conn.restoreFlags(mem_snapshot, xml, libvirt.VIR_DOMAIN_SAVE_RUNNING)
         LOG.info("VM is restored...")
     except libvirt.libvirtError, e:
-        message = "%s\nXML: %s\nError, Check you QEMU_ARGUMENT" % (xml, str(e))
+        msg = "Error, make sure previous VM is closed and check QEMU_ARGUMENT"
+        message = "%s\nXML: %s\n%s" % \
+                (xml, str(e), msg)
         raise CloudletGenerationError(message)
 
 
