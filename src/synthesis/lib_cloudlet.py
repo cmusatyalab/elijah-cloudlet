@@ -1658,7 +1658,7 @@ def main(argv):
         # creat base VM
         disk_image_path = args[1]
         disk_path, mem_path = create_baseVM(disk_image_path)
-        LOG.info("Base VM is created from %s" % disk_image_path)
+        LOG.info("\nBase VM is created from %s" % disk_image_path)
         LOG.info("Disk: %s" % disk_path)
         LOG.info("Mem: %s" % mem_path)
     elif mode == MODE[2]:   #synthesis
