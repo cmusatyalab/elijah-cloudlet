@@ -42,6 +42,7 @@ from synthesis.Configuration import Discovery_Const
 from synthesis.delta import DeltaList
 from synthesis.delta import DeltaItem
 from synthesis import msgpack
+from synthesis.progressbar import AnimatedProgressBar
 
 from xml.etree import ElementTree
 from xml.etree.ElementTree import Element
@@ -244,7 +245,7 @@ class VM_Overlay(threading.Thread):
                 for each_id in conn.listDomainsID():
                     if each_id == machine_id:
                         each_machine = conn.lookupByID(machine_id)
-                        state, reason = each_machine.state()
+                        state, reason = each_machine.state(0)
                         if state != libvirt.VIR_DOMAIN_SHUTOFF:
                             each_machine.destroy()
             except libvirt.libvirtError, e:
@@ -932,10 +933,12 @@ class MemoryReadProcess(multiprocessing.Process):
     RET_SUCCESS = 1
     RET_ERRROR = 2
 
-    def __init__(self, input_path, output_path, output_queue):
+    def __init__(self, input_path, output_path, 
+            machine_memory_size, output_queue):
         self.input_path = input_path
         self.output_path = output_path
         self.output_queue = output_queue
+        self.machine_memory_size = machine_memory_size*1024
         multiprocessing.Process.__init__(self, target=self.read_mem_snapshot)
         #threading.Thread.__init__(self, target=self.read_mem_snapshot)
 
@@ -962,15 +965,17 @@ class MemoryReadProcess(multiprocessing.Process):
             total_read_size += len(data[len(original_header):])
 
             # write rest of the memory data
-            start_time = time()
+            prog_bar = AnimatedProgressBar(end=100, width=80, stdout=sys.stdout)
             while True:
-                data = self.in_fd.read(1024*1024)
+                data = self.in_fd.read(1024 * 1024)
                 if data == None or len(data) <= 0:
                     break
                 self.out_fd.write(data)
                 total_read_size += len(data)
-            LOG.info("snapshotting time : %s" % (str(time()-start_time)))
+                prog_bar.set_percent(100.0*total_read_size/self.machine_memory_size)
+                prog_bar.show_progress()
             self.out_fd.flush()
+            prog_bar.finish()
             if total_read_size != self.out_fd.tell():
                 raise Exception("output file size is different from stream size")
         except Exception, e:
@@ -991,6 +996,7 @@ def save_mem_snapshot(machine, fout_path, **kwargs):
     #Pause VM
     machine.suspend()
     machine_uuid = machine.UUIDString()
+    machine_memory_size = machine.memoryStats().get('actual', None)
 
     #Save memory state
     LOG.info("save VM memory state at %s" % fout_path)
@@ -1000,7 +1006,8 @@ def save_mem_snapshot(machine, fout_path, **kwargs):
         named_pipe_output = fout_path + ".fifo"
         output_queue = multiprocessing.Queue()
         os.mkfifo(named_pipe_output)
-        memory_read_proc = MemoryReadProcess(named_pipe_output, fout_path, output_queue)
+        memory_read_proc = MemoryReadProcess(named_pipe_output, fout_path, 
+                machine_memory_size, output_queue)
         memory_read_proc.start()
         ret = machine.save(named_pipe_output)
         memory_read_proc.join()
