@@ -993,10 +993,18 @@ def save_mem_snapshot(machine, fout_path, **kwargs):
     if ret != 0:
         raise CloudletGenerationError("Cannot set migration speed : %s", machine.name())
 
-    #Pause VM
+    # Pause VM
     machine.suspend()
-    machine_uuid = machine.UUIDString()
+
+    # get VM information
     machine_memory_size = machine.memoryStats().get('actual', None)
+    if machine_memory_size is None:
+        # libvirt <= 0.9.3
+        xml = ElementTree.fromstring(machine.XMLDesc(libvirt.VIR_DOMAIN_XML_SECURE))
+        memory_element = xml.find('memory')
+        if memory_element is not None:
+            machine_memory_size = long(memory_element.text)
+    
 
     #Save memory state
     LOG.info("save VM memory state at %s" % fout_path)
