@@ -1646,7 +1646,7 @@ def synthesis(base_disk, meta, **kwargs):
 def main(argv):
     MODE = ('base', 'overlay', 'synthesis', "test")
     USAGE = 'Usage: %prog ' + ("[%s]" % "|".join(MODE)) + " [paths..]"
-    VERSION = '%prog 0.1'
+    VERSION = 'lib_cloudlet: %s' % Const.VERSION
     DESCRIPTION = 'Cloudlet Overlay Generation & Synthesis'
     if not validate_congifuration():
         sys.stderr.write("failed to validate configuration\n")

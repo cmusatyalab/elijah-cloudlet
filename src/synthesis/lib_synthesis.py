@@ -754,9 +754,10 @@ class SynthesisServer(SocketServer.TCPServer):
     @staticmethod
     def process_command_line(argv):
         global operation_mode
+        VERSION = 'VM Synthesis Server: %s' % Cloudlet_Const.VERSION
 
         parser = OptionParser(usage="usage: %prog " + " [option]",
-                version="Rapid VM Synthesis(piping) 0.1")
+                version=VERSION)
         parser.add_option(
                 '-r', '--register-server', action='store', dest='register_server',
                 default=None, help= 'Domain address for registration server.\n \

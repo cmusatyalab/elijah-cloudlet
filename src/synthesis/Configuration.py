@@ -42,6 +42,8 @@ class Options(object):
 
 
 class Const(object):
+    VERSION = 0.8
+
     BASE_DISK               = ".base-img"
     BASE_MEM                = ".base-mem"
     BASE_DISK_META          = ".base-img-meta"

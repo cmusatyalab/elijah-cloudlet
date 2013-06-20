@@ -22,6 +22,7 @@ import sys
 sys.path.append("../src/")
 
 from synthesis import lib_cloudlet as lib_cloudlet
+from synthesis.Configuration import Const as Const
 import os
 from synthesis.Configuration import Options
 from optparse import OptionParser
@@ -46,7 +47,7 @@ def get_database():
 
 
 def process_command_line(argv, commands):
-    VERSION = '%prog 0.8'
+    VERSION = 'cloudlet tool: %s' % Const.VERSION
     DESCRIPTION = 'Cloudlet Overlay Generation & Synthesis'
 
     parser = OptionParser(usage=print_usage(commands), version=VERSION, description=DESCRIPTION)
