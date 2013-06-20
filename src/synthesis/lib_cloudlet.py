@@ -1580,17 +1580,17 @@ def synthesis(base_disk, meta, **kwargs):
     base_diskmeta = kwargs.get('base_diskmeta', None)
     base_memmeta = kwargs.get('base_memmeta', None)
 
-    # decomp
+    LOG.info("Decompressing VM overlay")
     overlay_filename = NamedTemporaryFile(prefix="cloudlet-overlay-file-")
     meta_info = decomp_overlay(meta, overlay_filename.name)
 
-    # recover VM
-    LOG.debug("recover launch VM")
+    LOG.info("Recovering launch VM")
     launch_disk, launch_mem, fuse, delta_proc, fuse_thread = \
             recover_launchVM(base_disk, meta_info, overlay_filename.name, \
             **kwargs)
 
     # resume VM
+    LOG.info("Resume the launch VM")
     resumed_VM = SynthesizedVM(launch_disk, launch_mem, fuse,
             disk_only=disk_only, qemu_args=qemu_args, vm_xml=vm_xml)
 
