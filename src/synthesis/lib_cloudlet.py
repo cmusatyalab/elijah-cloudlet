@@ -1019,26 +1019,25 @@ def save_mem_snapshot(machine, fout_path, **kwargs):
         memory_read_proc.start()
         ret = machine.save(named_pipe_output)
         memory_read_proc.join()
-        os.remove(named_pipe_output)
+    except libvirt.libvirtError, e:
+        # we intentionally ignore seek error from libvirt since we have cause
+        # that by using named pipe
+	if os.path.exists(named_pipe_output):
+            os.remove(named_pipe_output)
+        if str(e).startswith('unable to seek') == False:
+            raise CloudletGenerationError("libvirt memory save : " + str(e))
+
+    try:
         proc_ret = output_queue.get()
         if proc_ret != MemoryReadProcess.RET_SUCCESS:
             error_reason = output_queue.get()
             msg = "Failed to create memory snapshot : %s" % str(error_reason)
             LOG.error(msg)
             raise CloudletGenerationError(msg)
-
         if nova_util != None:
             # OpenStack runs VM with nova account and snapshot 
             # is generated from system connection
             nova_util.chown(fout_path, os.getuid())
-
-    except libvirt.libvirtError, e:
-        # we intentionally ignore seek error from libvirt since we have cause
-        # that by using named pipe
-        if str(e).startswith('unable to seek') == False:
-            raise CloudletGenerationError("libvirt memory save : " + str(e))
-    except CloudletGenerationError, e:
-        raise CloudletGenerationError("Cloudlet Generation Error: " + str(e))
     except vmnetx.MachineGenerationError, e:
         raise CloudletGenerationError("Machine Generation Error: " + str(e))
 
