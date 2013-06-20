@@ -190,7 +190,6 @@ class VM_Overlay(threading.Thread):
                 self.modified_disk, self.modified_mem.name,
                 self.qemu_logfile, 
                 nova_util=self.nova_util)
-        self._terminate_vm()
 
         # 3. get overlay VM
         overlay_deltalist = get_overlay_deltalist(monitoring_info, self.options,
@@ -237,24 +236,11 @@ class VM_Overlay(threading.Thread):
         if os.path.exists(self.qemu_logfile.name):
             os.remove(self.qemu_logfile.name)
 
-    def _terminate_vm(self):
-        if self.machine is not None:
-            machine_id = self.machine.ID()
-            conn = get_libvirt_connection()
-            try:
-                for each_id in conn.listDomainsID():
-                    if each_id == machine_id:
-                        each_machine = conn.lookupByID(machine_id)
-                        state, reason = each_machine.state(0)
-                        if state != libvirt.VIR_DOMAIN_SHUTOFF:
-                            each_machine.destroy()
-            except libvirt.libvirtError, e:
-                pass
-            self.machine = None
-
     def exception_handler(self):
         # make sure to destory the VM
-        self._terminate_vm()
+        if self.machine is not None:
+            _terminate_vm(self.machine)
+            self.machine = None
 
     def _start_emulate_cache_fs(self):
         # check samba
@@ -398,6 +384,18 @@ class SynthesizedVM(threading.Thread):
         if os.path.exists(self.qemu_logfile.name):
             os.unlink(self.qemu_logfile.name)
 
+def _terminate_vm(machine):
+    machine_id = machine.ID()
+    conn = get_libvirt_connection()
+    try:
+        for each_id in conn.listDomainsID():
+            if each_id == machine_id:
+                each_machine = conn.lookupByID(machine_id)
+                state, reason = each_machine.state(0)
+                if state != libvirt.VIR_DOMAIN_SHUTOFF:
+                    each_machine.destroy()
+    except libvirt.libvirtError, e:
+        pass
 
 def _create_overlay_meta(base_hash, overlay_metafile, modified_disksize, modified_memsize,
         blob_info):
@@ -1026,6 +1024,10 @@ def save_mem_snapshot(machine, fout_path, **kwargs):
             os.remove(named_pipe_output)
         if str(e).startswith('unable to seek') == False:
             raise CloudletGenerationError("libvirt memory save : " + str(e))
+    finally:
+        if machine is not None:
+            _terminate_vm(machine)
+            machine = None
 
     try:
         proc_ret = output_queue.get()
@@ -1040,6 +1042,10 @@ def save_mem_snapshot(machine, fout_path, **kwargs):
             nova_util.chown(fout_path, os.getuid())
     except vmnetx.MachineGenerationError, e:
         raise CloudletGenerationError("Machine Generation Error: " + str(e))
+    finally:
+        if machine is not None:
+            _terminate_vm(machine)
+            machine = None
 
     if ret != 0:
         raise CloudletGenerationError("libvirt: Cannot save memory state")
