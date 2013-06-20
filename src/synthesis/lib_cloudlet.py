@@ -685,7 +685,7 @@ def get_overlay_deltalist(monitoring_info, options,
     used_blocks_dict = getattr(monitoring_info, INFO.DISK_USED_BLOCKS, None)
     dma_dict = dict()
 
-    # 2-1. get memory overlay
+    LOG.info("Get memory delta")
     if options.DISK_ONLY:
         mem_deltalist = list()
     else:
@@ -698,7 +698,7 @@ def get_overlay_deltalist(monitoring_info, options,
                     mem_deltalist, base_mem)
             mem_deltalist = diff_deltalist
 
-    # 2-2. get disk overlay
+    LOG.info("Get disk delta")
     disk_statistics = dict()
     disk_deltalist = Disk.create_disk_deltalist(modified_disk,
         m_chunk_dict, Const.CHUNK_SIZE,
@@ -709,17 +709,14 @@ def get_overlay_deltalist(monitoring_info, options,
         used_blocks_dict=used_blocks_dict,
         ret_statistics=disk_statistics)
         
-
-
-    # 2-3. Merge disk & memory delta_list to generate overlay file
-    # deduplication
+    LOG.info("Generate VM overlay using deduplication")
     merged_deltalist = delta.create_overlay(
             mem_deltalist, Memory.Memory.RAM_PAGE_SIZE,
             disk_deltalist, Const.CHUNK_SIZE,
             basedisk_hashlist=basedisk_hashlist,
             basemem_hashlist=basemem_hashlist)
             
-
+    LOG.info("Print statistics")
     free_memory_dict = getattr(monitoring_info, _MonitoringInfo.MEMORY_FREE_BLOCKS, None)
     free_pfn_counter = long(free_memory_dict.get("freed_counter", 0))
     disk_discarded_count = disk_statistics.get('trimed', 0)
