@@ -18,10 +18,6 @@ All source code, documentation, and related artifacts associated with the
 cloudlet open source project are licensed under the [Apache License, Version
 2.0](http://www.apache.org/licenses/LICENSE-2.0.html).
 
-A copy of this license is reproduced in the [LICENSE](LICENSE) file, and the
-licenses of dependencies and included code are enumerated in the
-[NOTICE](NOTICE) file.
-
 
 Installing
 ----------
