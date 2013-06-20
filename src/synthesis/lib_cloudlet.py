@@ -190,6 +190,7 @@ class VM_Overlay(threading.Thread):
                 self.modified_disk, self.modified_mem.name,
                 self.qemu_logfile, 
                 nova_util=self.nova_util)
+        self._terminate_vm()
 
         # 3. get overlay VM
         overlay_deltalist = get_overlay_deltalist(monitoring_info, self.options,
@@ -215,7 +216,6 @@ class VM_Overlay(threading.Thread):
             self.overlay_uri_meta =  self._terminate_emulate_cache_fs(overlay_uri_meta)
 
         # 5. terminting
-        self._terminate_vm()
         self.fuse.terminate()
         self.fuse_stream_monitor.terminate()
         self.qemu_monitor.terminate()
@@ -1022,7 +1022,7 @@ def save_mem_snapshot(machine, fout_path, **kwargs):
     except libvirt.libvirtError, e:
         # we intentionally ignore seek error from libvirt since we have cause
         # that by using named pipe
-	if os.path.exists(named_pipe_output):
+        if os.path.exists(named_pipe_output):
             os.remove(named_pipe_output)
         if str(e).startswith('unable to seek') == False:
             raise CloudletGenerationError("libvirt memory save : " + str(e))
