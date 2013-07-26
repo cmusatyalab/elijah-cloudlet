@@ -96,7 +96,7 @@ def process_command_line(argv, commands):
 def main(argv):
     if not lib_cloudlet.validate_congifuration():
         sys.stderr.write("failed to validate configuration\n")
-        sys.exit(1)
+        return 1
 
     CMD_BASE_CREATION       = "base"
     CMD_OVERLAY_CREATION    = "overlay"
@@ -149,8 +149,8 @@ def main(argv):
                 qemu_args=qemu_args)
         machine = vm_overlay.resume_basevm()
         lib_cloudlet.connect_vnc(machine)
-        vm_overlay.create_overlay()
-        if hasattr(vm_overlay, "overlay_metafile") and hasattr(vm_overlay, "overlay_files"):
+        try:
+            vm_overlay.create_overlay()
             sys.stdout.write("[INFO] overlay metafile (%ld) : %s\n" % \
                     (os.path.getsize(vm_overlay.overlay_metafile), \
                     vm_overlay.overlay_metafile))
@@ -162,9 +162,10 @@ def main(argv):
             if options.DATA_SOURCE_URI != None and hasattr(vm_overlay, "overlay_uri_meta"):
                 sys.stdout.write("[INFO] overlay URIs : %s\n" % \
                         vm_overlay.overlay_uri_meta)
-        else:
+        except Exception, e:
             sys.stderr.write("Failed to create overlay\n")
-            sys.exit(1)
+            import pdb;pdb.set_trace()
+            return 1
 
     elif mode == CMD_SYNTEHSIS:
         if len(left_args) < 2:

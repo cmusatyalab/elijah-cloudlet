@@ -78,7 +78,8 @@ def wrap_vm_fault(function):
             if hasattr(self, 'exception_handler'):
                 self.exception_handler()
             kwargs.update(dict(zip(function.func_code.co_varnames[2:], args)))
-            LOG.error("failed with : %s" % str(kwargs))
+            LOG.error("failed : reasons - %s, args - %s" % (str(e), str(kwargs)))
+            raise e
 
     return decorated_function
 
@@ -100,7 +101,7 @@ class VM_Overlay(threading.Thread):
     def __init__(self, base_disk, options, qemu_args=None,
             base_mem=None, base_diskmeta=None,
             base_memmeta=None, base_hashvalue=None,
-            vm_xml=None, nova_util=None):
+            vm_xml=None, nova_util=None, nova_conn=None):
         # create user customized overlay.
         # First resume VM, then let user edit its VM
         # Finally, return disk/memory binary as an overlay
@@ -119,6 +120,7 @@ class VM_Overlay(threading.Thread):
         self.base_diskmeta = os.path.abspath(self.base_diskmeta)
         self.base_memmeta = os.path.abspath(self.base_memmeta)
         self.nova_util = nova_util
+        self.conn = nova_conn or get_libvirt_connection()
 
         # find base vm's hashvalue from DB
         self.base_hashvalue = base_hashvalue or None
@@ -174,8 +176,7 @@ class VM_Overlay(threading.Thread):
         # 1. resume & get modified disk
         LOG.info("[INFO] * Overlay creation configuration")
         LOG.info("[INFO]  - %s" % str(self.options))
-        conn = get_libvirt_connection()
-        self.machine = run_snapshot(conn, self.modified_disk, self.base_mem_fuse, \
+        self.machine = run_snapshot(self.conn, self.modified_disk, self.base_mem_fuse, \
                 qemu_logfile=self.qemu_logfile.name, qemu_args=self.qemu_args,
                 new_xml=self.vm_xml)
         return self.machine
@@ -183,13 +184,14 @@ class VM_Overlay(threading.Thread):
     @wrap_vm_fault
     def create_overlay(self):
         # 2. get montoring info
-        monitoring_info = _get_monitoring_info(self.machine, self.options,
+        monitoring_info = _get_monitoring_info(self.conn, self.machine, 
+                self.options,
                 self.base_memmeta, self.base_diskmeta,
                 self.fuse_stream_monitor,
                 self.base_disk, self.base_mem,
                 self.modified_disk, self.modified_mem.name,
                 self.qemu_logfile, 
-                nova_util=self.nova_util)
+                nova_util=self.nova_util, error=error)
 
         # 3. get overlay VM
         overlay_deltalist = get_overlay_deltalist(monitoring_info, self.options,
@@ -215,12 +217,22 @@ class VM_Overlay(threading.Thread):
             self.overlay_uri_meta =  self._terminate_emulate_cache_fs(overlay_uri_meta)
 
         # 5. terminting
-        self.fuse.terminate()
-        self.fuse_stream_monitor.terminate()
-        self.qemu_monitor.terminate()
-        self.fuse_stream_monitor.join()
-        self.qemu_monitor.join()
-        self.fuse.join()
+        self.terminate()
+
+    def terminate(self):
+        if hasattr(self, 'fuse'):
+            self.fuse.terminate()
+        if hasattr(self, 'fuse_stream_monitor'):
+            self.fuse_stream_monitor.terminate()
+        if hasattr(self, 'qemu_monitor'):
+            self.qemu_monitor.terminate()
+        if hasattr(self, 'fuse_stream_monitor'):
+            self.fuse_stream_monitor.join()
+        if hasattr(self, 'qemu_monitor'):
+            self.qemu_monitor.join()
+        if hasattr(self, 'fuse'):
+            self.fuse.join()
+
         if hasattr(self, "cache_manager") and self.cache_manager != None:
             self.cache_manager.terminate()
             self.cache_manager.join()
@@ -238,8 +250,9 @@ class VM_Overlay(threading.Thread):
 
     def exception_handler(self):
         # make sure to destory the VM
+        self.terminate()
         if self.machine is not None:
-            _terminate_vm(self.machine)
+            _terminate_vm(self.conn, self.machine)
             self.machine = None
 
     def _start_emulate_cache_fs(self):
@@ -314,6 +327,7 @@ class SynthesizedVM(threading.Thread):
         # kwargs
         self.vm_xml = kwargs.get("vm_xml", None)
         self.LOG = kwargs.get("log", None)
+        self.conn = kwargs.get("nova_conn", None) or get_libvirt_connection()
         if self.LOG == None:
             self.LOG = open("/dev/null", "w+b")
 
@@ -343,18 +357,16 @@ class SynthesizedVM(threading.Thread):
 
     def resume(self):
         #resume VM
-        conn = get_libvirt_connection()
         self.resume_time = {'time':-100}
         try:
             if self.disk_only:
                 # edit default XML to have new disk path
-                conn = get_libvirt_connection()
                 xml = ElementTree.fromstring(open(Const.TEMPLATE_XML, "r").read())
-                new_xml_string = _convert_xml(xml, conn, disk_path=self.resumed_disk, \
+                new_xml_string = _convert_xml(xml, self.conn, disk_path=self.resumed_disk, \
                         uuid=str(uuid4()), qemu_args=self.qemu_args)
-                self.machine = run_vm(conn, new_xml_string, vnc_disable=True)
+                self.machine = run_vm(self.conn, new_xml_string, vnc_disable=True)
             else:
-                self.machine = run_snapshot(conn, self.resumed_disk, self.resumed_mem,
+                self.machine = run_snapshot(self.conn, self.resumed_disk, self.resumed_mem,
                         qemu_logfile=self.qemu_logfile.name, resume_time=self.resume_time,
                         qemu_args=self.qemu_args, new_xml=self.vm_xml)
         except Exception as e:
@@ -384,9 +396,8 @@ class SynthesizedVM(threading.Thread):
         if os.path.exists(self.qemu_logfile.name):
             os.unlink(self.qemu_logfile.name)
 
-def _terminate_vm(machine):
+def _terminate_vm(conn, machine):
     machine_id = machine.ID()
-    conn = get_libvirt_connection()
     try:
         for each_id in conn.listDomainsID():
             if each_id == machine_id:
@@ -598,7 +609,7 @@ def _convert_xml(xml, conn, vm_name=None, disk_path=None, uuid=None, \
     return new_xml_str
 
 
-def _get_monitoring_info(machine, options,
+def _get_monitoring_info(conn, machine, options,
         base_memmeta, base_diskmeta,
         fuse_stream_monitor,
         base_disk, base_mem,
@@ -614,7 +625,7 @@ def _get_monitoring_info(machine, options,
     fuse_stream_monitor.del_path(vmnetfs.StreamMonitor.MEMORY_ACCESS)
     # TODO: support stream of modified memory rather than tmp file
     if not options.DISK_ONLY:
-        save_mem_snapshot(machine, modified_mem, nova_util=nova_util)
+        save_mem_snapshot(conn, machine, modified_mem, nova_util=nova_util)
 
     # 1-3. get hashlist of base memory and disk
     basemem_hashlist = Memory.base_hashlist(base_memmeta)
@@ -981,7 +992,7 @@ class MemoryReadProcess(multiprocessing.Process):
             self.output_queue.put(self.RET_SUCCESS)
 
 
-def save_mem_snapshot(machine, fout_path, **kwargs):
+def save_mem_snapshot(conn, machine, fout_path, **kwargs):
     #Set migration speed
     nova_util = kwargs.get('nova_util', None)
     ret = machine.migrateSetMaxSpeed(1000000, 0)   # 1000 Gbps, unlimited
@@ -1023,7 +1034,7 @@ def save_mem_snapshot(machine, fout_path, **kwargs):
             raise CloudletGenerationError("libvirt memory save : " + str(e))
     finally:
         if machine is not None:
-            _terminate_vm(machine)
+            _terminate_vm(conn, machine)
             machine = None
 
     try:
@@ -1041,7 +1052,7 @@ def save_mem_snapshot(machine, fout_path, **kwargs):
         raise CloudletGenerationError("Machine Generation Error: " + str(e))
     finally:
         if machine is not None:
-            _terminate_vm(machine)
+            _terminate_vm(conn, machine)
             machine = None
 
     if ret != 0:
@@ -1209,7 +1220,7 @@ def create_residue(base_disk, base_hashvalue,
     residue_mem = NamedTemporaryFile(prefix="cloudlet-residue-mem-", delete=False)
 
     # 2. suspend VM and get monitoring information
-    monitoring_info = _get_monitoring_info(resumed_vm.machine, options,
+    monitoring_info = _get_monitoring_info(resumed_vm.conn, resumed_vm.machine, options,
             base_memmeta, base_diskmeta,
             resumed_vm.monitor,
             base_disk, base_mem,
@@ -1400,7 +1411,7 @@ def validate_congifuration():
     return True
 
 
-def _create_baseVM(domain, base_diskpath, base_mempath, base_diskmeta, base_memmeta, **kwargs):
+def _create_baseVM(conn, domain, base_diskpath, base_mempath, base_diskmeta, base_memmeta, **kwargs):
     """ generate base vm given base_diskpath
     Args:
         base_diskpath: path to disk image exists
@@ -1410,7 +1421,7 @@ def _create_baseVM(domain, base_diskpath, base_mempath, base_diskmeta, base_memm
     """
     # make memory snapshot
     # VM has to be paused first to perform stable disk hashing
-    save_mem_snapshot(domain, base_mempath, **kwargs)
+    save_mem_snapshot(conn, domain, base_mempath, **kwargs)
     base_mem = Memory.hashing(base_mempath)
     base_mem.export_to_file(base_memmeta)
 
@@ -1462,7 +1473,7 @@ def create_baseVM(disk_image_path):
     machine = None
     try:
         machine = run_vm(conn, new_xml_string, wait_vnc=True)
-        base_hashvalue = _create_baseVM(machine, disk_image_path, base_mempath, 
+        base_hashvalue = _create_baseVM(conn, machine, disk_image_path, base_mempath, 
                 base_diskmeta, base_memmeta)
     except Exception as e:
         LOG.error(str(e))

@@ -52,7 +52,7 @@ class Const(object):
     OVERLAY_URIs            = ".overlay-URIs"
     OVERLAY_FILE_PREFIX     = ".overlay"
     OVERLAY_LOG             = ".overlay-log"
-    LOG_PATH                = "log-synthesis"
+    LOG_PATH                = "/var/tmp/cloudlet/log-synthesis"
     OVERLAY_BLOB_SIZE_KB    = 1024*1024 # 1G
 
     META_BASE_VM_SHA256                 = "base_vm_sha256"
