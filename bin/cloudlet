@@ -124,7 +124,7 @@ def main(argv):
         # creat base VM
         if len(left_args) < 1:
             sys.stderr.write("Error, Need to path to VM disk\n")
-            sys.exit(1)
+            return 1
         if len(left_args) > 1 :
             sys.stderr("Warning, qemu argument won't be applied to creating base vm")
         disk_image_path = left_args[0] 
@@ -136,7 +136,7 @@ def main(argv):
         # create overlay
         if len(left_args) < 1:
             sys.stderr.write("Error, Need to path to VM disk\n")
-            sys.exit(1)
+            return 1
         disk_image_path = left_args[0] 
         qemu_args = left_args[1:]
         options = Options()
@@ -164,21 +164,23 @@ def main(argv):
                         vm_overlay.overlay_uri_meta)
         except Exception, e:
             sys.stderr.write("Failed to create overlay\n")
-            import pdb;pdb.set_trace()
             return 1
-
     elif mode == CMD_SYNTEHSIS:
         if len(left_args) < 2:
             sys.stderr.write("Synthesis requires path to VM disk and overlay-meta\n \
                     Ex) ./cloudlet synthesis [VM disk] /path/to/precise.overlay-meta [options]\n")
-            sys.exit(1)
+            return 1
         disk_image_path = left_args[0] 
         meta = left_args[1]
         qemu_args = left_args[2:]
-        lib_cloudlet.synthesis(disk_image_path, meta, \
-                               disk_only=settings.disk_only, \
-                               return_residue=settings.return_residue, \
-                               qemu_args=qemu_args)
+        try:
+            lib_cloudlet.synthesis(disk_image_path, meta, \
+                                disk_only=settings.disk_only, \
+                                return_residue=settings.return_residue, \
+                                qemu_args=qemu_args)
+        except Exception, e:
+            sys.stderr.write("Failed to synthesize VM\n")
+            return 1
     elif mode == CMD_LIST_BASE:
         from synthesis.db.table_def import BaseVM
         dbconn = get_database()
@@ -198,12 +200,12 @@ def main(argv):
                     1) base path\n \
                     2) hash value of the base\n \
                     Ex) ./cloudlet add_base /path/to/base_disk.img 4304c473a9f98480c7d6387f01158881d3440bb81c8a9452b1abdef794e51111\n")
-            sys.exit(1)
+            return 1
         basedisk_path = os.path.abspath(left_args[0])
         base_hashvalue = left_args[1]
         if not os.path.isfile(basedisk_path):
             sys.stderr.write("Not valid file: %s\n" % basedisk_path)
-            sys.exit(1)
+            return 1
 
         new_basevm = BaseVM(basedisk_path, base_hashvalue)
         dbconn.add_item(new_basevm)
@@ -214,7 +216,7 @@ def main(argv):
         if len(left_args) < 1:
             sys.stderr.write("delete base vm requires base path\n \
                     Ex) ./cloudlet del_base /path/to/base_disk.img \n")
-            sys.exit(1)
+            return 1
         basedisk_path = os.path.abspath(left_args[0])
         basevm_list = dbconn.list_item(BaseVM)
         deleting_base = None
@@ -227,7 +229,7 @@ def main(argv):
             dbconn.del_item(item)
         else: 
             sys.stderr.write("Cannot find matching base disk\n")
-            sys.exit(1)
+            return 1
     elif mode == CMD_LIST_SESSION:
         from synthesis.db.table_def import Session
         dbconn = get_database()
@@ -258,7 +260,7 @@ def main(argv):
         sys.stdout.write("-"*95 + "\n")
     else:
         sys.stdout.write("Invalid command: %s\n" % mode)
-        sys.exit(1)
+        return 1
 
     return 0
 

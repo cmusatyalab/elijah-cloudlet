@@ -191,7 +191,7 @@ class VM_Overlay(threading.Thread):
                 self.base_disk, self.base_mem,
                 self.modified_disk, self.modified_mem.name,
                 self.qemu_logfile, 
-                nova_util=self.nova_util, error=error)
+                nova_util=self.nova_util)
 
         # 3. get overlay VM
         overlay_deltalist = get_overlay_deltalist(monitoring_info, self.options,
