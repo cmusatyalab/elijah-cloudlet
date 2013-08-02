@@ -145,11 +145,14 @@ def main(argv):
         options.DISK_ONLY = settings.disk_only
         options.DATA_SOURCE_URI = settings.source_uri
 
-        vm_overlay = lib_cloudlet.VM_Overlay(disk_image_path, options, \
-                qemu_args=qemu_args)
-        machine = vm_overlay.resume_basevm()
-        lib_cloudlet.connect_vnc(machine)
         try:
+            # resume base vm for creating vm overlay
+            vm_overlay = lib_cloudlet.VM_Overlay(disk_image_path, options, \
+                    qemu_args=qemu_args)
+            machine = vm_overlay.resume_basevm()
+            lib_cloudlet.connect_vnc(machine)
+
+            # process optimizations
             vm_overlay.create_overlay()
             sys.stdout.write("[INFO] overlay metafile (%ld) : %s\n" % \
                     (os.path.getsize(vm_overlay.overlay_metafile), \

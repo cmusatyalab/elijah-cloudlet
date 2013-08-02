@@ -33,6 +33,8 @@ import hashlib
 import libvirt
 import shutil
 import multiprocessing
+import random
+import string
 
 from synthesis.db import api as db_api
 from synthesis.db import table_def as db_table
@@ -48,9 +50,11 @@ from xml.etree import ElementTree
 from xml.etree.ElementTree import Element
 from uuid import uuid4
 from tempfile import NamedTemporaryFile
+from tempfile import mkdtemp
 from time import time
 from time import sleep
 import threading
+import traceback
 from optparse import OptionParser
 
 from synthesis.tool import comp_lzma
@@ -75,10 +79,11 @@ def wrap_vm_fault(function):
         try:
             return function(self, *args, **kwargs)
         except Exception, e:
-            if hasattr(self, 'exception_handler'):
-                self.exception_handler()
             kwargs.update(dict(zip(function.func_code.co_varnames[2:], args)))
             LOG.error("failed : reasons - %s, args - %s" % (str(e), str(kwargs)))
+            LOG.error("failed at %s" % str(traceback.format_exc()))
+            if hasattr(self, 'exception_handler'):
+                self.exception_handler()
             raise e
 
     return decorated_function
@@ -101,14 +106,14 @@ class VM_Overlay(threading.Thread):
     def __init__(self, base_disk, options, qemu_args=None,
             base_mem=None, base_diskmeta=None,
             base_memmeta=None, base_hashvalue=None,
-            vm_xml=None, nova_util=None, nova_conn=None):
+            nova_xml=None, nova_util=None, nova_conn=None):
         # create user customized overlay.
         # First resume VM, then let user edit its VM
         # Finally, return disk/memory binary as an overlay
         # base_disk: path to base disk
         self.base_disk = os.path.abspath(base_disk)
         self.options = options
-        self.vm_xml = vm_xml or None
+        self.nova_xml = nova_xml or None
         self.qemu_args = qemu_args or None
         (self.base_diskmeta, self.base_mem, self.base_memmeta) = \
                 Const.get_basepath(self.base_disk, check_exist=False)
@@ -139,14 +144,17 @@ class VM_Overlay(threading.Thread):
                                 os.path.basename(self.base_disk) + Const.OVERLAY_LOG)
         threading.Thread.__init__(self, target=self.create_overlay)
 
+    @wrap_vm_fault
     def resume_basevm(self):
         if (self.options == None) or (isinstance(self.options, Options) == False):
             raise CloudletGenerationError("Given option class is invalid: %s" % str(self.options))
 
         # filename for overlay VM
-        self.qemu_logfile = NamedTemporaryFile(prefix="cloudlet-qemu-log-", delete=False)
-        os.chmod(self.qemu_logfile.name, stat.S_IROTH | stat.S_IWOTH | \
-                stat.S_IRUSR | stat.S_IWUSR | stat.S_IRGRP | stat.S_IWGRP)
+        temp_qemu_dir = mkdtemp(prefix="cloudlet-qemu-")
+        self.qemu_logfile = os.path.join(temp_qemu_dir, "qemu-trim-log")
+        open(self.qemu_logfile, "w+").close()
+        os.chmod(os.path.dirname(self.qemu_logfile), 0o771)
+        os.chmod(self.qemu_logfile, 0o666)
 
         # option for data-intensive application
         self.cache_manager = None
@@ -170,15 +178,19 @@ class VM_Overlay(threading.Thread):
         self.fuse_stream_monitor.add_path(stream_access, vmnetfs.StreamMonitor.DISK_ACCESS)
         self.fuse_stream_monitor.add_path(memory_access, vmnetfs.StreamMonitor.MEMORY_ACCESS)
         self.fuse_stream_monitor.start()
-        self.qemu_monitor = vmnetfs.FileMonitor(self.qemu_logfile.name, vmnetfs.FileMonitor.QEMU_LOG)
+        self.qemu_monitor = vmnetfs.FileMonitor(self.qemu_logfile, vmnetfs.FileMonitor.QEMU_LOG)
         self.qemu_monitor.start()
 
         # 1. resume & get modified disk
         LOG.info("[INFO] * Overlay creation configuration")
         LOG.info("[INFO]  - %s" % str(self.options))
-        self.machine = run_snapshot(self.conn, self.modified_disk, self.base_mem_fuse, \
-                qemu_logfile=self.qemu_logfile.name, qemu_args=self.qemu_args,
-                new_xml=self.vm_xml)
+        self.old_xml_str, self.new_xml_str = _convert_xml(self.modified_disk, \
+                mem_snapshot=self.base_mem_fuse, \
+                qemu_logfile=self.qemu_logfile, \
+                qemu_args=self.qemu_args, \
+                nova_xml=self.nova_xml)
+        self.machine = run_snapshot(self.conn, self.modified_disk, 
+                self.base_mem_fuse, self.new_xml_str)
         return self.machine
 
     @wrap_vm_fault
@@ -245,8 +257,9 @@ class VM_Overlay(threading.Thread):
         else:
             os.unlink(self.modified_mem.name)
 
-        if os.path.exists(self.qemu_logfile.name):
-            os.remove(self.qemu_logfile.name)
+        # delete cloudlet-qemu-log directory
+        if os.path.exists(os.path.dirname(self.qemu_logfile)):
+            shutil.rmtree(os.path.dirname(self.qemu_logfile))
 
     def exception_handler(self):
         # make sure to destory the VM
@@ -325,9 +338,9 @@ class _MonitoringInfo(object):
 class SynthesizedVM(threading.Thread):
     def __init__(self, launch_disk, launch_mem, fuse, disk_only=False, qemu_args=None, **kwargs):
         # kwargs
-        self.vm_xml = kwargs.get("vm_xml", None)
-        self.LOG = kwargs.get("log", None)
+        self.nova_xml= kwargs.get("nova_xml", None)
         self.conn = kwargs.get("nova_conn", None) or get_libvirt_connection()
+        self.LOG = kwargs.get("log", None)
         if self.LOG == None:
             self.LOG = open("/dev/null", "w+b")
 
@@ -338,9 +351,13 @@ class SynthesizedVM(threading.Thread):
         self.fuse = fuse
         self.launch_disk = launch_disk
         self.launch_mem = launch_mem
-        self.qemu_logfile = NamedTemporaryFile(prefix="cloudlet-qemu-log-", delete=False)
-        os.chmod(self.qemu_logfile.name, stat.S_IROTH | stat.S_IWOTH | \
-                stat.S_IRUSR | stat.S_IWUSR | stat.S_IRGRP | stat.S_IWGRP)
+
+        temp_qemu_dir = mkdtemp(prefix="cloudlet-qemu-")
+        self.qemu_logfile = os.path.join(temp_qemu_dir, "qemu-trim-log")
+        open(self.qemu_logfile, "w+").close()
+        os.chmod(os.path.dirname(self.qemu_logfile), 0o771)
+        os.chmod(self.qemu_logfile, 0o666)
+
         self.resumed_disk = os.path.join(fuse.mountpoint, 'disk', 'image')
         self.resumed_mem = os.path.join(fuse.mountpoint, 'memory', 'image')
         self.stream_modified = os.path.join(fuse.mountpoint, 'disk', 'streams', 'chunks_modified')
@@ -351,24 +368,38 @@ class SynthesizedVM(threading.Thread):
         self.monitor.add_path(self.stream_disk_access, vmnetfs.StreamMonitor.DISK_ACCESS)
         self.monitor.add_path(self.stream_memory_access, vmnetfs.StreamMonitor.MEMORY_ACCESS)
         self.monitor.start()
-        self.qemu_monitor = vmnetfs.FileMonitor(self.qemu_logfile.name, vmnetfs.FileMonitor.QEMU_LOG)
+        self.qemu_monitor = vmnetfs.FileMonitor(self.qemu_logfile, vmnetfs.FileMonitor.QEMU_LOG)
         self.qemu_monitor.start()
+
         threading.Thread.__init__(self, target=self.resume)
+
+    def convert_xml(self):
+        # convert xml
+        if self.disk_only:
+            xml = ElementTree.fromstring(open(Const.TEMPLATE_XML, "r").read())
+            self.old_xml_str, self.new_xml_str = _convert_xml(self.resumed_disk,
+                    xml=xml, qemu_logfile=self.qemu_logfile,
+                    qemu_args=self.qemu_args)
+        else:
+            self.old_xml_str, self.new_xml_str = _convert_xml(self.resumed_disk,
+                    mem_snapshot=self.resumed_mem,
+                    qemu_logfile=self.qemu_logfile,
+                    qemu_args=self.qemu_args,
+                    nova_xml=self.nova_xml)
 
     def resume(self):
         #resume VM
         self.resume_time = {'time':-100}
+        self.convert_xml()
         try:
             if self.disk_only:
                 # edit default XML to have new disk path
-                xml = ElementTree.fromstring(open(Const.TEMPLATE_XML, "r").read())
-                new_xml_string = _convert_xml(xml, self.conn, disk_path=self.resumed_disk, \
-                        uuid=str(uuid4()), qemu_args=self.qemu_args)
-                self.machine = run_vm(self.conn, new_xml_string, vnc_disable=True)
+                self.machine = run_vm(self.conn, self.new_xml_string, 
+                        vnc_disable=True)
             else:
-                self.machine = run_snapshot(self.conn, self.resumed_disk, self.resumed_mem,
-                        qemu_logfile=self.qemu_logfile.name, resume_time=self.resume_time,
-                        qemu_args=self.qemu_args, new_xml=self.vm_xml)
+                self.machine = run_snapshot(self.conn, self.resumed_disk, 
+                        self.resumed_mem, self.new_xml_str, 
+                        resume_time=self.resume_time)
         except Exception as e:
             sys.stdout.write(str(e)+"\n")
 
@@ -393,8 +424,8 @@ class SynthesizedVM(threading.Thread):
             os.unlink(self.launch_disk)
         if os.path.exists(self.launch_mem):
             os.unlink(self.launch_mem)
-        if os.path.exists(self.qemu_logfile.name):
-            os.unlink(self.qemu_logfile.name)
+        if os.path.exists(os.path.dirname(self.qemu_logfile)):
+            shutil.rmtree(os.path.dirname(self.qemu_logfile))
 
 def _terminate_vm(conn, machine):
     machine_id = machine.ID()
@@ -494,32 +525,51 @@ def _test_dma_accuracy(dma_dict, disk_deltalist, mem_deltalist):
             (dma_write_base_dedup, 100.0*dma_write_base_dedup/dma_write_counter))
 
 
-def _convert_xml(xml, conn, vm_name=None, disk_path=None, uuid=None, \
-        logfile=None, qemu_args=None):
+def _convert_xml(disk_path, xml=None, mem_snapshot=None, \
+        qemu_logfile=None, qemu_args=None, nova_xml=None):
+    # we need either input xml or memory snapshot path
+    # if we have mem_snapshot, we update new xml to the memory snapshot
+
+    if xml == None and mem_snapshot == None:
+        raise CloudletGenerationError("we need either input xml or memory snapshot path")
+
+    if mem_snapshot != None:
+        hdr = vmnetx._QemuMemoryHeader(open(mem_snapshot))
+        xml = ElementTree.fromstring(hdr.xml)
+
+    vm_name = None
+    uuid = None
+    if nova_xml != None:
+        new_xml = ElementTree.fromstring(nova_xml)
+        vm_name = str(new_xml.find('name').text)
+        uuid = str(new_xml.find('uuid').text)
+        #network_element = new_xml.find('devices/interface')
+        #network_xml_str = ElementTree.tostring(network_element)
 
     # delete padding
     padding_element = xml.find("description")
     if padding_element != None:
         xml.remove(padding_element)
+   
+    # update uuid
+    if uuid == None:
+        uuid = uuid4()
+    uuid_element = xml.find('uuid')
+    uuid_element.text = str(uuid)
+    # update sysinfo entry's uuid if it exist
+    # it has to match with uuid of the VM
+    sysinfo_entries = xml.findall('sysinfo/system/entry')
+    for entry in sysinfo_entries:
+        if(entry.attrib['name'] == 'uuid'):
+            entry.text = str(uuid)
 
-    if vm_name != None:
-        name_element = xml.find('name')
-        if name_element == None:
-            raise CloudletGenerationError("Malfomed XML input: %s", Const.TEMPLATE_XML)
-        name_element.text = vm_name
-
-    old_uuid = None
-    if uuid != None:
-        uuid_element = xml.find('uuid')
-        old_uuid = str(uuid_element.text)
-        uuid_element.text = str(uuid)
-
-        # update sysinfo entry's uuid if it exist
-        # it has to match with uuid of the VM
-        sysinfo_entries = xml.findall('sysinfo/system/entry')
-        for entry in sysinfo_entries:
-            if(entry.attrib['name'] == 'uuid'):
-                entry.text = str(uuid)
+    # update vm_name
+    if vm_name == None:
+        vm_name = 'cloudlet-' + str(uuid.hex)
+    name_element = xml.find('name')
+    if name_element == None:
+        raise CloudletGenerationError("Malfomed XML input: %s", Const.TEMPLATE_XML)
+    name_element.text = vm_name
 
     # Use custom QEMU
     qemu_emulator = xml.find('devices/emulator')
@@ -529,11 +579,7 @@ def _convert_xml(xml, conn, vm_name=None, disk_path=None, uuid=None, \
         device_element.append(qemu_emulator)
     qemu_emulator.text = Const.QEMU_BIN_PATH
 
-    # disk path is required
-    if disk_path == None:
-        raise CloudletGenerationError("Need disk_path to run new VM")
-
-    # find all disk element(hdd, cdrom)
+    # find all disk element(hdd, cdrom) and change them to new
     disk_elements = xml.findall('devices/disk')
     hdd_source = None
     cdrom_source = None
@@ -546,25 +592,22 @@ def _convert_xml(xml, conn, vm_name=None, disk_path=None, uuid=None, \
                 hdd_driver.set("type", "raw")
         if disk_type == 'cdrom':
             cdrom_source = disk_element.find('source')
-
     # hdd path setting
     if hdd_source == None:
         raise CloudletGenerationError("Malfomed XML input: %s", Const.TEMPLATE_XML)
     hdd_source.set("file", os.path.abspath(disk_path))
-
     # ovf path setting
     if cdrom_source != None:
         cdrom_source.set("file", os.path.abspath(Const.TEMPLATE_OVF))
 
     # append QEMU-argument
-    if logfile != None:
+    if qemu_logfile != None:
         qemu_xmlns="http://libvirt.org/schemas/domain/qemu/1.0"
         qemu_element = xml.find("{%s}commandline" % qemu_xmlns)
         if qemu_element == None:
             qemu_element = Element("{%s}commandline" % qemu_xmlns)
             xml.append(qemu_element)
-
-        # remove previsou cloudlet argument if it is
+        # remove previous cloudlet argument if it is
         argument_list = qemu_element.findall("{%s}arg" % qemu_xmlns)
         remove_list = list()
         for argument_item in argument_list:
@@ -573,10 +616,9 @@ def _convert_xml(xml, conn, vm_name=None, disk_path=None, uuid=None, \
                 remove_list.append(argument_item)
         for item in remove_list:
             qemu_element.remove(item)
-
         # append new cloudlet logpath
         qemu_element.append(Element("{%s}arg" % qemu_xmlns, {'value':'-cloudlet'}))
-        qemu_element.append(Element("{%s}arg" % qemu_xmlns, {'value':"logfile=%s" % logfile}))
+        qemu_element.append(Element("{%s}arg" % qemu_xmlns, {'value':"logfile=%s" % qemu_logfile}))
 
     # append qemu argument give from user
     if qemu_args:
@@ -604,9 +646,10 @@ def _convert_xml(xml, conn, vm_name=None, disk_path=None, uuid=None, \
         network_element.remove(network_filter)
 
     new_xml_str = ElementTree.tostring(xml)
-    if old_uuid != None and uuid != None:
-        new_xml_str = new_xml_str.replace(old_uuid, str(uuid))
-    return new_xml_str
+    if mem_snapshot != None:
+        overwrite_xml(mem_snapshot, new_xml_str)
+
+    return xml, new_xml_str
 
 
 def _get_monitoring_info(conn, machine, options,
@@ -633,7 +676,7 @@ def _get_monitoring_info(conn, machine, options,
 
     # 1-4. get dma & discard information
     if options.TRIM_SUPPORT:
-        dma_dict, trim_dict = Disk.parse_qemu_log(qemu_logfile.name, Const.CHUNK_SIZE)
+        dma_dict, trim_dict = Disk.parse_qemu_log(qemu_logfile, Const.CHUNK_SIZE)
         if len(trim_dict) == 0:
             LOG.warning("No TRIM Discard, Check /etc/fstab configuration")
     else:
@@ -1059,39 +1102,9 @@ def save_mem_snapshot(conn, machine, fout_path, **kwargs):
         raise CloudletGenerationError("libvirt: Cannot save memory state")
 
 
-def run_snapshot(conn, disk_image, mem_snapshot, **kwargs):
-    # kwargs
-    # qemu_logfile      :   log file for QEMU-KVM
-    # resume_time       :   write back the resumed_time
-    received_xml = kwargs.get('new_xml', None)
-    resume_time = kwargs.get('resume_time', None)
-    logfile = kwargs.get('qemu_logfile', None)
-    qemu_args = kwargs.get('qemu_args', None)
+def run_snapshot(conn, disk_image, mem_snapshot, new_xml_string, resume_time=None):
     if resume_time != None:
         start_resume_time = time()
-
-    new_uuid = uuid4()
-    if received_xml == None:
-        # read embedded XML at memory snapshot to change disk path
-        hdr = vmnetx._QemuMemoryHeader(open(mem_snapshot))
-        old_xml = ElementTree.fromstring(hdr.xml)
-        new_xml_string = _convert_xml(old_xml, conn, disk_path=disk_image,
-                uuid=new_uuid, logfile=logfile, qemu_args=qemu_args)
-    else:
-        # get uuid and network information from new_xml
-        hdr = vmnetx._QemuMemoryHeader(open(mem_snapshot))
-        old_xml = ElementTree.fromstring(hdr.xml)
-        new_xml = ElementTree.fromstring(received_xml)
-        uuid_element = new_xml.find('uuid')
-        vm_name = str(new_xml.find('name').text)
-        new_uuid = str(uuid_element.text)
-        network_element = new_xml.find('devices/interface')
-        network_xml_str = ElementTree.tostring(network_element)
-        new_xml_string = _convert_xml(old_xml, conn, disk_path=disk_image,
-                vm_name=vm_name, uuid=new_uuid, logfile=logfile, 
-                qemu_args=qemu_args)
-
-    overwrite_xml(mem_snapshot, new_xml_string)
 
     # resume
     restore_with_config(conn, mem_snapshot, new_xml_string)
@@ -1107,7 +1120,6 @@ def run_snapshot(conn, disk_image, mem_snapshot, **kwargs):
     uuid_element = domxml.find('uuid')
     uuid = str(uuid_element.text)
     machine = conn.lookupByUUIDString(uuid)
-    machine.old_xml = hdr.xml
 
     return machine
 
@@ -1467,7 +1479,7 @@ def create_baseVM(disk_image_path):
     # edit default XML to have new disk path
     conn = get_libvirt_connection()
     xml = ElementTree.fromstring(open(Const.TEMPLATE_XML, "r").read())
-    new_xml_string = _convert_xml(xml, conn, disk_path=disk_image_path, uuid=str(uuid4()))
+    xml, new_xml_string = _convert_xml(disk_path=disk_image_path, xml=xml)
 
     # launch VM & wait for end of vnc
     machine = None
@@ -1586,7 +1598,7 @@ def synthesis(base_disk, meta, **kwargs):
     return_residue = kwargs.get('return_residue', False)
     qemu_args = kwargs.get('qemu_args', False)
 
-    vm_xml = kwargs.get('vm_xml', None)
+    nova_xml = kwargs.get('nova_xml', None)
     base_mem = kwargs.get('base_mem', None)
     base_diskmeta = kwargs.get('base_diskmeta', None)
     base_memmeta = kwargs.get('base_memmeta', None)
@@ -1603,7 +1615,7 @@ def synthesis(base_disk, meta, **kwargs):
     # resume VM
     LOG.info("Resume the launch VM")
     resumed_VM = SynthesizedVM(launch_disk, launch_mem, fuse,
-            disk_only=disk_only, qemu_args=qemu_args, vm_xml=vm_xml)
+            disk_only=disk_only, qemu_args=qemu_args, nova_xml=nova_xml)
 
     # no-pipelining
     delta_proc.start()
@@ -1913,34 +1925,6 @@ def main(argv):
                 blob_size_kb, Const.CHUNK_SIZE,
                 Memory.Memory.RAM_PAGE_SIZE)
         _update_overlay_meta(meta_info, new_meta_path, blob_info=blob_list)
-
-    elif mode == 'test_overlay_download':    # To be delete
-        base_disk_path = "/home/krha/cloudlet/image/nova/base_disk"
-        base_mem_path = "/home/krha/cloudlet/image/nova/base_memory"
-        overlay_disk_url = "http://dagama.isr.cs.cmu.edu/overlay/nova_overlay_disk.lzma"
-        overlay_mem_url = "http://dagama.isr.cs.cmu.edu/overlay/nova_overlay_mem.lzma"
-        launch_disk, launch_mem = recover_launchVM_from_URL(base_disk_path, base_mem_path, overlay_disk_url, overlay_mem_url)
-        conn = get_libvirt_connection()
-        machine=run_snapshot(conn, launch_disk, launch_mem)
-        connect_vnc(machine)
-
-    elif mode == 'test_new_xml':    # To be delete
-        in_path = args[1]
-        out_path = in_path + ".new"
-        hdr = vmnetx._QemuMemoryHeader(open(in_path))
-        domxml = ElementTree.fromstring(hdr.xml)
-        domxml.find('uuid').text = "new-uuid"
-        new_xml = ElementTree.tostring(domxml)
-        copy_with_xml(in_path, out_path, new_xml)
-
-        hdr = vmnetx._QemuMemoryHeader(open(out_path))
-        domxml = ElementTree.fromstring(hdr.xml)
-        LOG.info("new xml is changed uuid to " + domxml.find('uuid').text)
-    elif mode == 'nic':
-        mem_path = args[1]
-        conn = get_libvirt_connection()
-        hdr = vmnetx._QemuMemoryHeader(open(mem_path))
-        rettach_nic(conn, hdr.xml)
     else:
         LOG.warning("Invalid command")
         parser.print_help()
