@@ -264,7 +264,7 @@ class VM_Overlay(threading.Thread):
     def exception_handler(self):
         # make sure to destory the VM
         self.terminate()
-        if self.machine is not None:
+        if hasattr(self, 'machine'):
             _terminate_vm(self.conn, self.machine)
             self.machine = None
 
@@ -373,7 +373,7 @@ class SynthesizedVM(threading.Thread):
 
         threading.Thread.__init__(self, target=self.resume)
 
-    def convert_xml(self):
+    def _generate_xml(self):
         # convert xml
         if self.disk_only:
             xml = ElementTree.fromstring(open(Const.TEMPLATE_XML, "r").read())
@@ -390,7 +390,7 @@ class SynthesizedVM(threading.Thread):
     def resume(self):
         #resume VM
         self.resume_time = {'time':-100}
-        self.convert_xml()
+        self._generate_xml()
         try:
             if self.disk_only:
                 # edit default XML to have new disk path
@@ -536,6 +536,7 @@ def _convert_xml(disk_path, xml=None, mem_snapshot=None, \
     if mem_snapshot != None:
         hdr = vmnetx._QemuMemoryHeader(open(mem_snapshot))
         xml = ElementTree.fromstring(hdr.xml)
+    old_xml_str = ElementTree.tostring(xml)
 
     vm_name = None
     uuid = None
@@ -555,6 +556,7 @@ def _convert_xml(disk_path, xml=None, mem_snapshot=None, \
     if uuid == None:
         uuid = uuid4()
     uuid_element = xml.find('uuid')
+    old_uuid = uuid_element.text
     uuid_element.text = str(uuid)
     # update sysinfo entry's uuid if it exist
     # it has to match with uuid of the VM
@@ -646,10 +648,11 @@ def _convert_xml(disk_path, xml=None, mem_snapshot=None, \
         network_element.remove(network_filter)
 
     new_xml_str = ElementTree.tostring(xml)
+    new_xml_str = new_xml_str.replace(old_uuid, str(uuid))
     if mem_snapshot != None:
         overwrite_xml(mem_snapshot, new_xml_str)
 
-    return xml, new_xml_str
+    return old_xml_str, new_xml_str
 
 
 def _get_monitoring_info(conn, machine, options,

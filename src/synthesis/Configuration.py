@@ -66,7 +66,8 @@ class Const(object):
 
     MODULE_DIR = os.path.dirname(os.path.abspath(__file__))
     VMNETFS_PATH            = os.path.abspath(os.path.join(MODULE_DIR, "lib/bin/x86_64/vmnetfs"))
-    QEMU_BIN_PATH           = os.path.abspath(os.path.join(MODULE_DIR, "lib/bin/x86_64/qemu-system-x86_64"))
+    #QEMU_BIN_PATH           = os.path.abspath(os.path.join(MODULE_DIR, "lib/bin/x86_64/qemu-system-x86_64"))
+    QEMU_BIN_PATH           = os.path.abspath(os.path.join(MODULE_DIR, "/usr/bin/qemu-system-x86_64"))
     FREE_MEMORY_BIN_PATH    = os.path.abspath(os.path.join(MODULE_DIR, "lib/bin/x86_64/free_page_scan"))
     XRAY_BIN_PATH           = os.path.abspath(os.path.join(MODULE_DIR, "lib/x86_64/disk_analyzer"))
     UPnP_SERVER             = os.path.abspath(os.path.join(MODULE_DIR, "lib/bin/upnp_server.jar"))
