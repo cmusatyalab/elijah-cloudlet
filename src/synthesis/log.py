@@ -35,7 +35,7 @@ def getLogger(name='unknown'):
             log_filepath = Const.LOG_PATH
         if os.path.exists(os.path.dirname(log_filepath)) == False:
             os.makedirs(os.path.dirname(log_filepath))
-            os.chmod(os.path.dirname(log_filepath, 0o777))
+            os.chmod(os.path.dirname(log_filepath), 0o777)
             os.chmod(log_filepath, 0o777)
         logging.basicConfig(level=logging.DEBUG,
                 format='%(asctime)s %(name)-12s %(levelname)-8s %(message)s',

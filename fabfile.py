@@ -1,12 +1,16 @@
 from __future__ import with_statement
 
-import sys
 from fabric.api import env
 from fabric.api import run
 from fabric.api import local
 from fabric.api import sudo
 from fabric.api import task
 from fabric.api import abort
+
+import os
+import sys
+sys.path.append("./src/")
+from synthesis.Configuration import Const as Const
 
 
 def check_support():
@@ -21,7 +25,15 @@ def disable_EPT():
         # disable EPT
         sudo('modprobe -r kvm_intel')
         sudo('modprobe kvm_intel "ept=0"')
-    pass
+
+
+def install_kvm():
+    custom_kvm_path = os.path.abspath("./src/synthesis/lib/bin/x86_64/qemu-system-x86_64")
+    dest_path = os.path.abspath(Const.QEMU_BIN_PATH)
+
+    if custom_kvm_path != dest_path:
+        sudo("cp %s %s.old" % (dest_path, dest_path))
+        sudo("cp %s %s" % (custom_kvm_path, dest_path))
 
 
 @task
@@ -67,9 +79,18 @@ def install():
     # Please see https://bugs.launchpad.net/ubuntu/+source/udev/+bug/1152718
     if sudo("chmod 1666 /dev/fuse").failed:
         abort("Failed to enable fuse for the user")
+    if sudo("chmod 644 /etc/fuse.conf").failed:
+        abort("Failed to change permission of fuse configuration")
+    if sudo("sed -i 's/#user_allow_other/user_allow_other/g' /etc/fuse.conf"):
+        abort("Failed to allow other user to access FUSE file")
 
     # (Optional) disable EPT support
     # When you use EPT support with FUSE+mmap, it randomly causes kernel panic.
     # We're investigating it whether it's Linux kernel bug or not.
     disable_EPT()
+
+    # install custom KVM
+    install_kvm()
+
     sys.stdout.write("[SUCCESS] VM synthesis code is installed\n")
+
