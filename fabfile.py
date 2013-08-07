@@ -9,9 +9,11 @@ from fabric.api import abort
 
 import os
 import sys
-sys.path.append("./src/")
-from synthesis.Configuration import Const as Const
 
+
+# Constant
+CUSTOM_KVM = os.path.abspath("./src/synthesis/lib/bin/x86_64/qemu-system-x86_64") 
+SCRIPT_FILES = ["./bin/cloudlet", "./bin/synthesis_server"]
 
 def check_support():
     if run("egrep '^flags.*(vmx|svm)' /proc/cpuinfo > /dev/null").failed:
@@ -28,12 +30,13 @@ def disable_EPT():
 
 
 def install_kvm():
-    custom_kvm_path = os.path.abspath("./src/synthesis/lib/bin/x86_64/qemu-system-x86_64")
-    dest_path = os.path.abspath(Const.QEMU_BIN_PATH)
+    global CUSTOM_KVM
 
-    if custom_kvm_path != dest_path:
+    dest_path = "/usr/bin/qemu-system-x86_64"
+
+    if CUSTOM_KVM != dest_path:
         sudo("cp %s %s.old" % (dest_path, dest_path))
-        sudo("cp %s %s" % (custom_kvm_path, dest_path))
+        sudo("cp %s %s" % (CUSTOM_KVM, dest_path))
 
 
 @task
@@ -44,13 +47,10 @@ def localhost():
 
 
 @task
-def remote():
-    env.run = run
-    env.warn_only = True
-    env.hosts = ['some.remote.host']
-
-@task
 def install():
+    global CUSTOM_KVM
+    global SCRIPT_FILES
+
     check_support()
 
     # install dependent package
@@ -72,6 +72,8 @@ def install():
         abort("Cannot add user to kvm group")
     if sudo("adduser %s libvirtd" % username).failed:
         abort("Cannot add user to libvirtd group")
+    if sudo("adduser %s fuse" % username).failed:
+        abort("Cannot add user to fuse group")
 
     # Make sure to have fuse support
     # qemu-kvm changes the permission of /dev/fuse, so we revert back the
@@ -91,6 +93,11 @@ def install():
 
     # install custom KVM
     install_kvm()
+
+    # install binary to /usr/local/bin
+    for each_file in SCRIPT_FILES:
+        sudo("cp %s /usr/bin/" % (os.path.abspath(each_file)))
+
 
     sys.stdout.write("[SUCCESS] VM synthesis code is installed\n")
 
