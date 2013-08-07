@@ -99,6 +99,7 @@ def libvirt_err_callback(ctxt, err):
         LOG.warning(err[2])
     elif err[3] == libvirt.VIR_ERR_ERROR:
         LOG.error(err[2])
+
 libvirt.registerErrorHandler(f=libvirt_err_callback, ctx=None)
 
 
@@ -407,7 +408,7 @@ class SynthesizedVM(threading.Thread):
 
     def terminate(self):
         try:
-            if self.machine:
+            if hasattr(self, 'machine') == True and self.machine != None:
                 self.machine.destroy()
         except libvirt.libvirtError as e:
             pass
@@ -637,11 +638,6 @@ def _convert_xml(disk_path, xml=None, mem_snapshot=None, \
     if console_element != None:
         device_element.remove(console_element)
 
-    # drop original security label
-    # TODO: cope with appropriate security model
-    sec_element = xml.find("seclabel")
-    if sec_element != None:
-        xml.remove(sec_element)
     network_element = device_element.find("interface")
     network_filter = network_element.find("filterref")
     if network_filter != None:
@@ -1617,7 +1613,7 @@ def synthesis(base_disk, meta, **kwargs):
 
     # resume VM
     LOG.info("Resume the launch VM")
-    resumed_VM = SynthesizedVM(launch_disk, launch_mem, fuse,
+    synthesized_VM = SynthesizedVM(launch_disk, launch_mem, fuse,
             disk_only=disk_only, qemu_args=qemu_args, nova_xml=nova_xml)
 
     # no-pipelining
@@ -1626,12 +1622,12 @@ def synthesis(base_disk, meta, **kwargs):
     delta_proc.join()
     fuse_thread.join()
 
-    resumed_VM.resume()
-    connect_vnc(resumed_VM.machine)
+    synthesized_VM.resume()
+    connect_vnc(synthesized_VM.machine)
 
     # statistics
-    mem_access_list = resumed_VM.monitor.mem_access_chunk_list
-    disk_access_list = resumed_VM.monitor.disk_access_chunk_list
+    mem_access_list = synthesized_VM.monitor.mem_access_chunk_list
+    disk_access_list = synthesized_VM.monitor.disk_access_chunk_list
     synthesis_statistics(meta_info, overlay_filename.name, \
             mem_access_list, disk_access_list)
 
@@ -1650,7 +1646,7 @@ def synthesis(base_disk, meta, **kwargs):
                     base_disk, base_mem, overlay_filename.name)
             residue_meta, residue_files = create_residue(base_disk, \
                     meta_info[Const.META_BASE_VM_SHA256],
-                    resumed_VM, options, 
+                    synthesized_VM, options, 
                     prev_mem_deltalist)
             LOG.write("[RESULT] Residue")
             LOG.write("[RESULT]   Metafile : %s" % \
@@ -1660,13 +1656,8 @@ def synthesis(base_disk, meta, **kwargs):
             sys.stderr.write("Cannot create residue : %s" % (str(e)))
 
     # terminate
-    resumed_VM.terminate()
-    fuse.terminate()
+    synthesized_VM.terminate()
 
-    if os.path.exists(launch_disk):
-        os.unlink(launch_disk)
-    if os.path.exists(launch_mem):
-        os.unlink(launch_mem)
 
 '''External API End
 '''
