@@ -123,7 +123,8 @@ def main(argv):
     if mode == CMD_BASE_CREATION:
         # creat base VM
         if len(left_args) < 1:
-            sys.stderr.write("Error, Need to path to VM disk\n")
+            sys.stderr.write("Need path to VM's virtual disk\n")
+            sys.stderr.write("Ex) ./cloudlet %s ../image/ubuntu/precise.raw\n" % (CMD_BASE_CREATION))
             return 1
         if len(left_args) > 1 :
             sys.stderr("Warning, qemu argument won't be applied to creating base vm")
@@ -135,7 +136,8 @@ def main(argv):
     elif mode == CMD_OVERLAY_CREATION:
         # create overlay
         if len(left_args) < 1:
-            sys.stderr.write("Error, Need to path to VM disk\n")
+            sys.stderr.write("Need path to base disk\n")
+            sys.stderr.write("Check your base VM list './cloudet %s'\n" % (CMD_LIST_BASE))
             return 1
         disk_image_path = left_args[0] 
         qemu_args = left_args[1:]

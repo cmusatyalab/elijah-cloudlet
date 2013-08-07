@@ -139,6 +139,12 @@ class VMNetFS(threading.Thread):
         finally:
             pass
             #os.close(read)
+        if os.path.exists(self.mountpoint) == False:
+            msg = "Failed to mount FUSE file system\n"
+            msg += "  1. Check FUSE permission of /dev/fuse to have '666'\n"
+            msg += "  2. Check FUSE configuration at /etc/fuse.conf to have 'allow_others' option\n"
+            msg += "     and permission of '422'\n"
+            raise VMNetFSError(msg)
     # pylint: enable=E1103
 
     def terminate(self):
