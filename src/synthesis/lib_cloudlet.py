@@ -530,7 +530,8 @@ def _convert_xml(disk_path, xml=None, mem_snapshot=None, \
         qemu_logfile=None, qemu_args=None, nova_xml=None):
     # we need either input xml or memory snapshot path
     # if we have mem_snapshot, we update new xml to the memory snapshot
-
+    
+    import pdb;pdb.set_trace()
     if xml == None and mem_snapshot == None:
         raise CloudletGenerationError("we need either input xml or memory snapshot path")
 

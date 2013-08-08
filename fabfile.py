@@ -14,6 +14,7 @@ import sys
 # Constant
 CUSTOM_KVM = os.path.abspath("./src/synthesis/lib/bin/x86_64/qemu-system-x86_64") 
 SCRIPT_FILES = ["./bin/cloudlet", "./bin/synthesis_server"]
+SOURCE_PATH = os.path.abspath("./src/synthesis")
 
 def check_support():
     if run("egrep '^flags.*(vmx|svm)' /proc/cpuinfo > /dev/null").failed:
@@ -33,7 +34,6 @@ def install_kvm():
     global CUSTOM_KVM
 
     dest_path = "/usr/bin/qemu-system-x86_64"
-
     if CUSTOM_KVM != dest_path:
         sudo("cp %s %s.old" % (dest_path, dest_path))
         sudo("cp %s %s" % (CUSTOM_KVM, dest_path))
@@ -50,6 +50,7 @@ def localhost():
 def install():
     global CUSTOM_KVM
     global SCRIPT_FILES
+    global SOURCE_PATH
 
     check_support()
 
@@ -86,18 +87,21 @@ def install():
     if sudo("sed -i 's/#user_allow_other/user_allow_other/g' /etc/fuse.conf"):
         abort("Failed to allow other user to access FUSE file")
 
+    # install custom KVM
+    install_kvm()
+
+    ## install source files
+    #if sudo("cp -r %s /usr/lib/python2.7/dist-packages/" % SOURCE_PATH).failed == True:
+    #    abort("Cannot copy source to python package directory")
+
+    ## install scripts to /usr/local/bin
+    #for each_file in SCRIPT_FILES:
+    #    sudo("cp %s /usr/bin/" % (os.path.abspath(each_file)))
+
     # (Optional) disable EPT support
     # When you use EPT support with FUSE+mmap, it randomly causes kernel panic.
     # We're investigating it whether it's Linux kernel bug or not.
     disable_EPT()
-
-    # install custom KVM
-    install_kvm()
-
-    # install binary to /usr/local/bin
-    for each_file in SCRIPT_FILES:
-        sudo("cp %s /usr/bin/" % (os.path.abspath(each_file)))
-
 
     sys.stdout.write("[SUCCESS] VM synthesis code is installed\n")
 
