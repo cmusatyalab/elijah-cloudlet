@@ -1423,6 +1423,7 @@ def validate_congifuration():
     return True
 
 
+# share with OpenStack
 def _create_baseVM(conn, domain, base_diskpath, base_mempath, base_diskmeta, base_memmeta, **kwargs):
     """ generate base vm given base_diskpath
     Args:
