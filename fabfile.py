@@ -1,6 +1,7 @@
 from __future__ import with_statement
 
 from fabric.api import env
+from fabric.api import hide
 from fabric.api import run
 from fabric.api import local
 from fabric.api import sudo
@@ -54,13 +55,14 @@ def install():
     check_support()
 
     # install dependent package
-    sudo("apt-get update")
-    if sudo("apt-get install -y qemu-kvm libvirt-bin gvncviewer " +
-            "python-libvirt python-xdelta3 python-dev openjdk-6-jre  " +
-            "liblzma-dev apparmor-utils libc6-i386 python-pip").failed:
-        abort("Failed to install libraries")
-    if sudo("pip install bson pyliblzma psutil sqlalchemy").failed:
-        abort("Failed to install python libraries")
+    with hide('stdout'):
+        sudo("apt-get update")
+        if sudo("apt-get install -y qemu-kvm libvirt-bin gvncviewer " +
+                "python-libvirt python-xdelta3 python-dev openjdk-6-jre  " +
+                "liblzma-dev apparmor-utils libc6-i386 python-pip").failed:
+            abort("Failed to install libraries")
+        if sudo("pip install bson pyliblzma psutil sqlalchemy").failed:
+            abort("Failed to install python libraries")
 
     # disable libvirtd from appArmor to enable custom KVM
     if sudo("aa-complain /usr/sbin/libvirtd").failed:
