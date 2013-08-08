@@ -531,7 +531,6 @@ def _convert_xml(disk_path, xml=None, mem_snapshot=None, \
     # we need either input xml or memory snapshot path
     # if we have mem_snapshot, we update new xml to the memory snapshot
     
-    import pdb;pdb.set_trace()
     if xml == None and mem_snapshot == None:
         raise CloudletGenerationError("we need either input xml or memory snapshot path")
 
@@ -639,6 +638,11 @@ def _convert_xml(disk_path, xml=None, mem_snapshot=None, \
     if console_element != None:
         device_element.remove(console_element)
 
+    # TO BE DELETE - temporal for test
+    serial_element = device_element.find("serial")
+    if serial_element != None:
+        device_element.remove(serial_element)
+
     network_element = device_element.find("interface")
     network_filter = network_element.find("filterref")
     if network_filter != None:
@@ -711,7 +715,7 @@ def copy_disk(in_path, out_path):
 
 
 def get_libvirt_connection():
-    conn = libvirt.open("qemu:///session")
+    conn = libvirt.open("qemu:///system")
     return conn
 
 
