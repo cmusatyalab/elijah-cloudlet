@@ -1131,16 +1131,18 @@ def run_snapshot(conn, disk_image, mem_snapshot, new_xml_string, resume_time=Non
 def connect_vnc(machine, no_wait=False):
     # Get VNC port
     vnc_port = 5900
+    vnc_ip = '127.0.0.1'
     try:
         running_xml_string = machine.XMLDesc(libvirt.VIR_DOMAIN_XML_SECURE)
         running_xml = ElementTree.fromstring(running_xml_string)
         vnc_port = running_xml.find("devices/graphics").get("port")
+        vnc_ip = running_xml.find("devices/graphics").get("listen")
         vnc_port = int(vnc_port)-5900
     except AttributeError as e:
         LOG.error("Warning, Possible VNC port error:%s" % str(e))
 
     # Run VNC
-    vnc_process = subprocess.Popen(["gvncviewer", "localhost:%d" % vnc_port],
+    vnc_process = subprocess.Popen(["gvncviewer", "%s:%d" % (vnc_ip, vnc_port)],
             stdout=subprocess.PIPE, stderr=subprocess.PIPE,
             close_fds=True)
     if no_wait == True:
