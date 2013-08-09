@@ -633,14 +633,13 @@ def _convert_xml(disk_path, xml=None, mem_snapshot=None, \
         for each_argument in qemu_args:
             qemu_element.append(Element("{%s}arg" % qemu_xmlns, {'value':each_argument}))
 
+    # TODO: Handle console/serial element properly
     device_element = xml.find("devices")
-    console_element = device_element.find("console")
-    if console_element != None:
+    console_elements = device_element.findall("console")
+    for console_element in console_elements:
         device_element.remove(console_element)
-
-    # TO BE DELETE - temporal for test
-    serial_element = device_element.find("serial")
-    if serial_element != None:
+    serial_elements = device_element.findall("serial")
+    for serial_element in serial_elements:
         device_element.remove(serial_element)
 
     network_element = device_element.find("interface")
@@ -1016,6 +1015,7 @@ class MemoryReadProcess(multiprocessing.Process):
             total_read_size += len(new_header)
             self.out_fd.write(data[len(original_header):])
             total_read_size += len(data[len(original_header):])
+            LOG.info("Header size of memory snapshot is %s" % len(new_header))
 
             # write rest of the memory data
             prog_bar = AnimatedProgressBar(end=100, width=80, stdout=sys.stdout)
