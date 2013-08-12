@@ -390,11 +390,11 @@ class SynthesisHandler(SocketServer.StreamRequestHandler):
         decomp_process = DecompStepProc(
                 download_queue, self.overlay_pipe, time_decomp, temp_overlay_file,
                 )
-        modified_img, modified_mem, self.fuse, self.delta_proc, self.fuse_thread = \
+        modified_img, modified_mem, self.fuse, self.delta_proc, self.fuse_proc = \
                 cloudlet.recover_launchVM(base_path, meta_info, self.overlay_pipe, 
                         log=sys.stdout, demanding_queue=demanding_queue)
         self.delta_proc.time_queue = time_delta # for measurement
-        self.fuse_thread.time_queue = time_fuse # for measurement
+        self.fuse_proc.time_queue = time_fuse # for measurement
 
         if self.synthesis_option.get(Protocol.SYNTHESIS_OPTION_EARLY_START, False):
             # 1. resume VM
@@ -407,7 +407,7 @@ class SynthesisHandler(SocketServer.StreamRequestHandler):
             download_process.start()
             decomp_process.start()
             self.delta_proc.start()
-            self.fuse_thread.start()
+            self.fuse_proc.start()
 
             # 3. return success right after resuming VM
             # before receiving all chunks
@@ -415,20 +415,20 @@ class SynthesisHandler(SocketServer.StreamRequestHandler):
             self.send_synthesis_done()
 
             # 4. then wait fuse end
-            self.fuse_thread.join()
+            self.fuse_proc.join()
         else:
             # 1. start processes
             download_process.start()
             decomp_process.start()
             self.delta_proc.start()
-            self.fuse_thread.start()
+            self.fuse_proc.start()
 
             # 2. resume VM
             self.resumed_VM = cloudlet.SynthesizedVM(modified_img, modified_mem, self.fuse)
             self.resumed_VM.start()
 
             # 3. wait for fuse end
-            self.fuse_thread.join()
+            self.fuse_proc.join()
 
             # 4. return success to client
             time_start_resume = time.time()     # measure pure resume time

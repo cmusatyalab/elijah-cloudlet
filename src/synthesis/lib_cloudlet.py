@@ -26,15 +26,12 @@ import Memory
 import Disk
 import vmnetfs
 import vmnetx
-import stat
 import delta
 import xray
 import hashlib
 import libvirt
 import shutil
 import multiprocessing
-import random
-import string
 
 from synthesis.db import api as db_api
 from synthesis.db import table_def as db_table
@@ -183,8 +180,9 @@ class VM_Overlay(threading.Thread):
         self.qemu_monitor.start()
 
         # 1. resume & get modified disk
-        LOG.info("[INFO] * Overlay creation configuration")
-        LOG.info("[INFO]  - %s" % str(self.options))
+        import pdb;pdb.set_trace()
+        LOG.info("* Overlay creation configuration")
+        LOG.info("  - %s" % str(self.options))
         self.old_xml_str, self.new_xml_str = _convert_xml(self.modified_disk, \
                 mem_snapshot=self.base_mem_fuse, \
                 qemu_logfile=self.qemu_logfile, \
@@ -253,7 +251,7 @@ class VM_Overlay(threading.Thread):
             os.unlink(self.mount_point)
 
         if self.options.MEMORY_SAVE_PATH:
-            LOG.debug("[INFO] moving memory sansphost to %s" % self.options.MEMORY_SAVE_PATH)
+            LOG.debug("moving memory sansphost to %s" % self.options.MEMORY_SAVE_PATH)
             shutil.move(self.modified_mem.name, self.options.MEMORY_SAVE_PATH)
         else:
             os.unlink(self.modified_mem.name)
@@ -286,7 +284,7 @@ class VM_Overlay(threading.Thread):
                     cache_manager.cache_dir, self.options.DATA_SOURCE_URI)
             #cache_manager.fetch_compiled_URIs(compiled_list)
             cache_fuse = cache_manager.launch_fuse(self.compiled_list)
-            LOG.debug("[INFO] cache fuse mount : %s, %s\n" % \
+            LOG.debug("cache fuse mount : %s, %s\n" % \
                     (cache_fuse.url_root, cache_fuse.mountpoint))
         except cache.CachingError, e:
             msg = "Cannot retrieve data from URI: %s" % str(e)
@@ -296,7 +294,7 @@ class VM_Overlay(threading.Thread):
         if os.path.lexists(mount_point) == True:
             os.unlink(mount_point)
         os.symlink(cache_fuse.mountpoint, mount_point)
-        LOG.debug("[INFO] create symbolic link to %s" % mount_point)
+        LOG.debug("create symbolic link to %s" % mount_point)
 
         return cache_manager, cache_fuse.mountpoint
 
@@ -1174,6 +1172,8 @@ def rettach_nic(machine, old_xml, new_xml, **kwargs):
         LOG.warning("failed to detach device")
     
     sleep(1)
+    import pdb;pdb.set_trace()
+
     #attach
     new_xml = ElementTree.fromstring(new_xml)
     new_nic = new_xml.find('devices/interface')
@@ -1181,7 +1181,7 @@ def rettach_nic(machine, old_xml, new_xml, **kwargs):
     #if filter_element != None:
     #    new_nic.remove(filter_element)
     new_nic_xml = ElementTree.tostring(new_nic)
-    machine.attachDevice(new_nic_xml)
+    ret = machine.attachDevice(new_nic_xml)
     if ret != 0:
         LOG.warning("failed to attach device")
 
@@ -1441,12 +1441,16 @@ def _create_baseVM(conn, domain, base_diskpath, base_mempath, base_diskmeta, bas
     # make memory snapshot
     # VM has to be paused first to perform stable disk hashing
     save_mem_snapshot(conn, domain, base_mempath, **kwargs)
+    LOG.info("Start Base VM Memory hashing")
     base_mem = Memory.hashing(base_mempath)
     base_mem.export_to_file(base_memmeta)
+    LOG.info("Finish Base VM Memory hashing")
 
     # generate disk hashing
     # TODO: need more efficient implementation, e.g. bisect
+    LOG.info("Start Base VM Disk hashing")
     base_hashvalue = Disk.hashing(base_diskpath, base_diskmeta)
+    LOG.info("Finish Base VM Disk hashing")
     return base_hashvalue
 
 
@@ -1821,8 +1825,8 @@ def main(argv):
         vm_overlay.create_overlay()
         
         LOG.info("overlay metafile : %s" % vm_overlay.overlay_metafile)
-        LOG.info("[INFO] overlay : %s" % str(vm_overlay.overlay_files[0]))
-        LOG.info("[INFO] overlay creation time: %f" % (time()-start_time()))
+        LOG.info("overlay : %s" % str(vm_overlay.overlay_files[0]))
+        LOG.info("overlay creation time: %f" % (time()-start_time()))
 
     elif mode == 'dedup_source':
         if len(args) != 4:

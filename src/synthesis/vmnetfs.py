@@ -300,7 +300,7 @@ class FileMonitor(threading.Thread):
         self.stop.set()
 
 
-class FuseFeedingThread(multiprocessing.Process):
+class FuseFeedingProc(multiprocessing.Process):
     def __init__(self, fuse, input_pipename, END_OF_PIPE, **kwargs):
         self.fuse = fuse
         self.input_pipename = input_pipename

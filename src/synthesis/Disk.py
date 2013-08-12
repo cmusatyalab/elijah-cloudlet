@@ -48,7 +48,6 @@ def hashing(disk_path, meta_path, chunk_size=4096, window_size=512):
     # chunk_size : hash chunk size
     # window_size : slicing window size
 
-    LOG.info("Start VM Disk hashing")
     prog_bar = AnimatedProgressBar(end=100, width=80, stdout=sys.stdout)
     total_iteration = os.path.getsize(disk_path)/window_size
     iter_count = 0
