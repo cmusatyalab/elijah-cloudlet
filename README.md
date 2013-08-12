@@ -4,11 +4,11 @@ A cloudlet is a new architectural element that arises from the convergence of
 mobile computing and cloud computing. It represents the middle tier of a
 3-tier hierarchy:  mobile device - cloudlet - cloud.   A cloudlet can be
 viewed as a "data center in a box" whose  goal is to "bring the cloud closer".
-A cloudlet has four key attributes: 
 
 Copyright (C) 2011-2012 Carnegie Mellon University
 This is a developing project and some features might not be stable yet.
 Please visit our website at [Elijah page](http://elijah.cs.cmu.edu/).
+
 
 
 License
@@ -17,6 +17,36 @@ License
 All source code, documentation, and related artifacts associated with the
 cloudlet open source project are licensed under the [Apache License, Version
 2.0](http://www.apache.org/licenses/LICENSE-2.0.html).
+
+
+
+Before you start
+-----------------
+
+This code is about **Virtual Machine Synthesis** that aimed to provide 
+__Rapid provisioning of a custom virtual machine**. This does not include any
+codes for mobile applications, rather it provides functions to create
+**VM overlay** and perform **VM Synthesis** that will rapidly reconstruct 
+your custom VM at an arbitrary computer.
+
+Please read [The Case for VM-based Cloudlets in Mobile Computing](https://github.com/cmusatyalab/elijah-cloudlet/blob/master/doc/papers/satya-ieeepvc-cloudlets-2009.pdf?raw=true)
+to understand what we do here and find the detail techniques at
+[Just-in-Time Provisioning for Cyber Foraging](https://github.com/cmusatyalab/elijah-cloudlet/blob/master/doc/papers/kiryong-mobisys-vmsynthesis.pdf?raw=true)
+
+The key to rapid provisioning is the recognition that a large part of
+a VM image is devoted to the guest OS, software libraries, and
+supporting software packages. The customizations of a base system
+needed for a particular application are usually relatively small.
+Therefore, if the ``base VM`` already exists on the cloudlet, only
+its difference relative to the desired custom VM, called a ``VM overlay``,
+needs to be transferred. Our approach of using VM overlays
+to provision cloudlets is called ``VM synthesis``.  Good analogy is
+a QCOW2 file with a backing file. can consider ``VM overlay`` as
+a QCOW2 file and ``Base VM`` as a backing file. The main difference 
+is that ``VM synthesis`` includes both disk and memory state and 
+it is much more efficient in generating diff and reconstructing
+suspended state.
+
 
 
 Installing
@@ -41,7 +71,7 @@ You will need:
 	- SQLAlchemy
 	- fabric
 
-To run install script:
+To run a installation script:
 
 		> $ sudo apt-get install fabric openssh-server
 		> $ fab localhost install
@@ -69,6 +99,8 @@ To install manually:
 	   permission of just revert the permission manually as bellow).
 
 		   > $ sudo chmod 1666 /dev/fuse
+		   > $ sudo chmod 644 /etc/fuse.conf
+		   > $ sod sed -i 's/#user_allow_other/user_allow_other/g' /etc/fuse.conf
 
 
 
@@ -87,21 +119,25 @@ How to use
 --------------			
 
 1. Creating ``base vm``.  
-	You will first create ``base vm`` from a regular VM disk image. This ``base
-	vm`` will be a template VM for overlay VMs. To create ``base vm``, you need
-	regular VM disk image in a raw format.  
+	You will first create ``base vm`` from a regular VM disk image. Here the
+	__regular VM disk image__ means a raw format virtual disk image 
+	you typically use at KVM/QEMU or Xen. The code will start running the OS
+	in this virtual disk and finally generate ``base vm``, which is composed
+	``base disk`` and ``base memory``. 
+	This ``base vm`` will be used as a template VM for your custom virtual machine.
 
         > $ cd ./bin
         > $ ./cloudlet base /path/to/base_disk.img
         > (__Use raw file format__)
 
-	This will launch remote connection(VNC) to guest OS and cloudlet module
-	will automatically start creating ``base vm`` when you close VNC window.
-	After finishing all the processing, you can check generated ``base vm``
-	using below command.
+	This will launch GUI (VNC) connecting to your guest OS and cloudlet module
+	will start creating ``base vm`` when you close VNC window. So please loggin
+	to the guest OS and close the GUI window when you think it's right snapshotting
+	point as a base VM.
+	The code will generate snapshot of the VM (for both memory and disk) and
+	save the information at DB. You can check list of ``base vm`` by
 
-    	> $ cd ./bin
-    	> $ ./cloudlet list_base
+		> $ ./cloudlet list-base
 
 
 2. Creating ``overlay vm`` on top of ``base vm``.  
@@ -109,12 +145,16 @@ How to use
   
         > $ cd ./bin
         > $ ./cloudlet overlay /path/to/base_disk.img
+        > % Path to base_disk is the path for virtual disk you used ealier
+        > % You can check the path by "cloudlet list-base"
 
-	This will launch VNC again. On top of this ``base vm``, you can install(and
-	execute) your custom server. For example, if you're a developer of ``face
-	recognition`` backend server, we will install required libraries and start
-	your server. Cloudlet will automatically extracts this customized part from
-	the ``base vm`` when you close VNC, and it will be your overlay.
+	This will launch VNC again with resumed ``base vm``. Now you can start making
+	any customizations on top of this ``base vm``. For example, if you're a
+	developer of ``face recognition`` backend server, we will install required
+	libraries, binaries and finally start your face recongition server. 
+	After closing the GUI windows, cloudlet will capture only the change portion
+	betwee your customization and ``base vm`` to generate ``VM overlay`` that
+	is a minimal binary for reconsturcting your customized VM.
 
 	``overlay VM`` is composed of 2 files; 1) ``overlay-meta file`` ends with
 	.overlay-meta, 2) compressed ``overlay blob files`` ends with .xz
@@ -169,7 +209,7 @@ How to use
     3) Network client (Android version)
 
 	We have source codes for android client at ./src/client/andoid and you can
-	import it to ``Eclipse`` as an Android porject. This client program will
+	import it to ``Eclipse`` as an Android project. This client program will
 	automatically find nearby Cloudlet using UPnP if both client and Cloudlet
 	are located in same broadcasting domain (ex. share WiFi access point)
 
@@ -198,9 +238,9 @@ You will need:
 Research works
 --------------------------
 
-* [The Case for VM-based Cloudlets in Mobile Computing](http://www.cs.cmu.edu/~satya/docdir/satya-ieeepvc-cloudlets-2009.pdf)
-* The Impact of Mobile Multimedia Applications on Data Center Consolidation (To be appeared)
-* [Just-in-Time Provisioning for Cyber Foraging](http://reports-archive.adm.cs.cmu.edu/anon/2012/CMU-CS-12-148.pdf)
+* [The Case for VM-based Cloudlets in Mobile Computing](https://github.com/cmusatyalab/elijah-cloudlet/blob/master/doc/papers/satya-ieeepvc-cloudlets-2009.pdf?raw=true)
+* [The Impact of Mobile Multimedia Applications on Data Center Consolidation](https://github.com/cmusatyalab/elijah-cloudlet/blob/master/doc/papers/kiryong-ic2e-latency.pdf?raw=true)
+* [Just-in-Time Provisioning for Cyber Foraging](https://github.com/cmusatyalab/elijah-cloudlet/blob/master/doc/papers/kiryong-mobisys-vmsynthesis.pdf?raw=true)
 * [Scalable Crowd-Sourcing of Video from Mobile Devices](http://reports-archive.adm.cs.cmu.edu/anon/2012/CMU-CS-12-147.pdf)
 
 
