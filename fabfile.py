@@ -67,6 +67,10 @@ def install():
     # Please see https://bugs.launchpad.net/ubuntu/+source/udev/+bug/1152718
     if sudo("chmod 1666 /dev/fuse").failed:
         abort("Failed to enable fuse for the user")
+    if sudo("chmod 644 /etc/fuse.conf").failed:
+        abort("Failed to change permission of fuse configuration")
+    if sudo("sed -i 's/#user_allow_other/user_allow_other/g' /etc/fuse.conf"):
+        abort("Failed to allow other user to access FUSE file")
 
     # (Optional) disable EPT support
     # When you use EPT support with FUSE+mmap, it randomly causes kernel panic.
