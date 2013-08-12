@@ -24,7 +24,7 @@ Before you start
 -----------------
 
 This code is about **Virtual Machine Synthesis** that aimed to provide 
-__Rapid provisioning of a custom virtual machine**. This does not include any
+**Rapid provisioning of a custom virtual machine**. This does not include any
 codes for mobile applications, rather it provides functions to create
 **VM overlay** and perform **VM Synthesis** that will rapidly reconstruct 
 your custom VM at an arbitrary computer.
@@ -40,8 +40,8 @@ needed for a particular application are usually relatively small.
 Therefore, if the ``base VM`` already exists on the cloudlet, only
 its difference relative to the desired custom VM, called a ``VM overlay``,
 needs to be transferred. Our approach of using VM overlays
-to provision cloudlets is called ``VM synthesis``.  Good analogy is
-a QCOW2 file with a backing file. can consider ``VM overlay`` as
+to provision cloudlets is called ``VM synthesis``.  A good analogy is
+a QCOW2 file with a backing file. You can consider ``VM overlay`` as
 a QCOW2 file and ``Base VM`` as a backing file. The main difference 
 is that ``VM synthesis`` includes both disk and memory state and 
 it is much more efficient in generating diff and reconstructing
@@ -71,32 +71,35 @@ You will need:
 	- SQLAlchemy
 	- fabric
 
-To run a installation script:
+
+To install, you either 
+
+	- run a installation script:
 
 		> $ sudo apt-get install fabric openssh-server
 		> $ fab localhost install
 
-To install manually:
+	- install manually:
 
-	1. install required package
+		1. install required package
 			> $ sudo apt-get install qemu-kvm libvirt-bin gvncviewer python-libvirt python-xdelta3 python-dev openjdk-6-jre liblzma-dev apparmor-utils libc6-i386 python-pip
 			> $ sudo pip install bson pyliblzma psutil sqlalchemy
 
-	2. Disable security module. This is for allowing custom KVM.
-	Example at Ubuntu 12
+		2. Disable security module. This is for allowing custom KVM.
+		Example at Ubuntu 12
 
 			> $ sudo aa-complain /usr/sbin/libvirtd
 
-	3. add current user to kvm, libvirtd group.
+		3. add current user to kvm, libvirtd group.
 
 			> $ sudo adduser [your_account_name] kvm
 			> $ sudo adduser [your_account_name] libvirtd
 	
-	4. change permission of the fuse access (The qemu-kvm library changes fuse
-	   access permission while it's being installed, and the permission is
-	   recovered if you reboot the host.  We believe this is a bug in qemu-kvm
-	   installation script, so you can either reboot the machine to have valid
-	   permission of just revert the permission manually as bellow).
+		4. change permission of the fuse access (The qemu-kvm library changes fuse
+		access permission while it's being installed, and the permission is
+		recovered if you reboot the host.  We believe this is a bug in qemu-kvm
+		installation script, so you can either reboot the machine to have valid
+		permission of just revert the permission manually as bellow).
 
 		   > $ sudo chmod 1666 /dev/fuse
 		   > $ sudo chmod 644 /etc/fuse.conf
@@ -107,11 +110,12 @@ To install manually:
 Recommended platform
 ---------------------
 
-We have tested at __Ubuntu 12.04 LTS 64-bit__
+We have tested at __Ubuntu 12.04 LTS 64-bit__ and it's derivatives such as Kubuntu.
 
-This version of Cloudlet has several dependencies on other projects for
-further optimization, and currently we include this dependency as a binary.
-Therefore, we recommend you to use __Ubuntu 12.04 LTS 64-bit__
+This version of Cloudlet has several dependencies on other projects for further
+optimization, and currently we include this dependency as a binary.  Therefore,
+we recommend you to use __Ubuntu 12.04 LTS 64-bit__. Later after solving all
+license issues, we'll provide relevant binaries.
 
 
 
@@ -128,19 +132,23 @@ How to use
 
         > $ cd ./bin
         > $ ./cloudlet base /path/to/base_disk.img
-        > (__Use raw file format__)
+        > % Use raw file format virtual disk
 
-	This will launch GUI (VNC) connecting to your guest OS and cloudlet module
+	This will launch GUI (VNC) connecting to your guest OS and the code
 	will start creating ``base vm`` when you close VNC window. So please loggin
-	to the guest OS and close the GUI window when you think it's right snapshotting
-	point as a base VM.
-	The code will generate snapshot of the VM (for both memory and disk) and
-	save the information at DB. You can check list of ``base vm`` by
+	to the guest OS and close the GUI window when you think it's right point
+	snapshotting the guest OS as a base VM (typically right after booting up).
+	Then, it will generate snapshot of the current states (for both memory and disk) 
+	and save the information to DB. You can check list of ``base vm`` by
 
 		> $ ./cloudlet list-base
+	
+	Later, we will provide several golden images for ``base vm`` such as vanilla
+	Windows7, Ubuntu 12.04 LTS, Fedora 19. We expect that general users import
+	these ``base vms`` rather than generates his own base vm.
 
 
-2. Creating ``overlay vm`` on top of ``base vm``.  
+2. Creating ``VM overlay`` using ``base vm``.  
     Now you can create your customized VM based on top of ``base vm``  
   
         > $ cd ./bin
@@ -156,7 +164,7 @@ How to use
 	betwee your customization and ``base vm`` to generate ``VM overlay`` that
 	is a minimal binary for reconsturcting your customized VM.
 
-	``overlay VM`` is composed of 2 files; 1) ``overlay-meta file`` ends with
+	``VM overlay`` is composed of 2 files; 1) ``overlay-meta file`` ends with
 	.overlay-meta, 2) compressed ``overlay blob files`` ends with .xz
 
 
@@ -179,14 +187,14 @@ How to use
 	this soon.
 
 
-3. Synthesizing ``overlay vm``  
+3. Synthesizing custom VM using ``VM overlay``  
 
 	Here, we'll show 3 different ways to perform VM synthesis using ``overlay
-	vm`` that you just generated; 1) verifying synthesis using command line
+	vm`` that you just generated; 1) verifying integrity of VM overlay using command line
 	interface, 2) synthesize over network using desktop client, and 3)
-	synthesize over network using Android client.  
+	synthesize over network using an Android client.  
 
-    1) Command line interface: You can resume your ``overlay vm`` using 
+    1) Command line interface: You can synthesize your ``VM overlay`` using 
 
         > $ cd ./bin
         > $ ./cloudlet synthesis /path/to/base_disk.img /path/to/overlay-meta
@@ -197,32 +205,38 @@ How to use
 	mobile client and you can start the server as below.
   
         > $ cd ./bin
-        > $ ./server
+        > $ ./synthesis_server
     
 	You can test this server using the client. You also need to copy the
 	overlay that you like to reconstruct to the other machine when you execute
 	this client.
     
-        > $ ./rapid_client.py -s [cloudlet ip address] -o [/path/to/overlay-meta]
+        > $ ./network_client.py -s [cloudlet ip address] -o [/path/to/overlay-meta]
 
     
     3) Network client (Android version)
 
-	We have source codes for android client at ./src/client/andoid and you can
+	We have source codes for a Android client at ./src/client/andoid and you can
 	import it to ``Eclipse`` as an Android project. This client program will
 	automatically find nearby Cloudlet using UPnP if both client and Cloudlet
-	are located in same broadcasting domain (ex. share WiFi access point)
+	are located in same broadcasting domain (e.g. sharing WiFi access point)
 
 	Once installing application at your mobile device, you should copy your
-	overlay VM (both overlay-meta and xz file) to Android phone. You can copy
+	VM overlay (both overlay-meta and xz file) to Android phone. You can copy
 	it to /sdcard/Cloudlet/overlay/ directory creating your overlay directory
-	name.  For example, you can copy your ``face recognition overlay vm`` to
+	name.  For example, you can copy your ``VM overlay for face recognition`` to
 	/sdcard/Cloudlet/overlay/face/ directory. This directory name will be
-	appeared to your Android application when you're asked to select ``overlay
-	vm``.  Right directory name is important since the directory name will be
+	appeared to your Android application when you're asked to select ``overlay vm``.
+	Right directory name is important since the directory name will be
 	saved as appName in internal data structure and being used to launch
-	associated mobile application after finishing ``VM synthesis``. See more
-	details at handleSucessSynthesis() method at CloudletConnector.java file.
+	associated mobile application after finishing ``VM synthesis``. Recall that
+	this VM synthesis client is for reconstructing your custom VM at arbirary 
+	computer and you need to launch your mobile application after finishing VM
+	thesis that will communicate with the server you just launched. To launch
+	mobile application after VM synthesis, we use Android Activity launch and
+	the directory name is used as an index to point out associated mobile
+	application. See more details at handleSucessSynthesis() method at 
+	CloudletConnector.java file.
 
 
 
@@ -235,7 +249,7 @@ You will need:
 * libc6-dev-i386 (for Free memory support)
 
 
-Research works
+Related research works
 --------------------------
 
 * [The Case for VM-based Cloudlets in Mobile Computing](https://github.com/cmusatyalab/elijah-cloudlet/blob/master/doc/papers/satya-ieeepvc-cloudlets-2009.pdf?raw=true)
