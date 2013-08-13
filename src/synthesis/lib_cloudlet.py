@@ -180,7 +180,6 @@ class VM_Overlay(threading.Thread):
         self.qemu_monitor.start()
 
         # 1. resume & get modified disk
-        import pdb;pdb.set_trace()
         LOG.info("* Overlay creation configuration")
         LOG.info("  - %s" % str(self.options))
         self.old_xml_str, self.new_xml_str = _convert_xml(self.modified_disk, \
@@ -894,7 +893,7 @@ def recover_launchVM(base_image, meta_info, overlay_file, **kwargs):
             launch_mem.name, vm_memory_size,
             launch_disk.name, vm_disk_size, Const.CHUNK_SIZE,
             out_pipename=named_pipename)
-    fuse_thread = vmnetfs.FuseFeedingThread(fuse,
+    fuse_thread = vmnetfs.FuseFeedingProc(fuse,
             named_pipename, delta.Recovered_delta.END_OF_PIPE)
     return [launch_disk.name, launch_mem.name, fuse, delta_proc, fuse_thread]
 
@@ -1161,6 +1160,7 @@ def rettach_nic(machine, old_xml, new_xml, **kwargs):
     #           You should use nova_util in OpenStack, or subprocess
     #           will be returned without finishing their work
     # get xml info of running xml
+    
     old_xml = ElementTree.fromstring(old_xml)
     old_nic = old_xml.find('devices/interface')
     filter_element = old_nic.find("filterref")
@@ -1170,20 +1170,26 @@ def rettach_nic(machine, old_xml, new_xml, **kwargs):
     ret = machine.detachDevice(old_nic_xml)
     if ret != 0:
         LOG.warning("failed to detach device")
-    
-    sleep(1)
-    import pdb;pdb.set_trace()
+    sleep(2)
 
     #attach
     new_xml = ElementTree.fromstring(new_xml)
     new_nic = new_xml.find('devices/interface')
-    #filter_element = new_nic.find("filterref")
-    #if filter_element != None:
-    #    new_nic.remove(filter_element)
     new_nic_xml = ElementTree.tostring(new_nic)
-    ret = machine.attachDevice(new_nic_xml)
-    if ret != 0:
-        LOG.warning("failed to attach device")
+
+    filter_element = new_nic.find("filterref")
+    if filter_element != None:
+        new_nic.remove(filter_element)
+
+    try:
+        ret = machine.attachDevice(new_nic_xml)
+        if ret != 0:
+            LOG.warning("failed to attach device")
+    except libvirt.libvirtError, e:
+        LOG.info("Failed to rettach NIC")
+        return
+
+    LOG.info("success to rettach nic device")
 
 
 def restore_with_config(conn, mem_snapshot, xml):
