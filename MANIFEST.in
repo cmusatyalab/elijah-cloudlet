@@ -1,5 +1,4 @@
 include README.md
 include LICENSE
 include CREDITS
-recursive-include src/synthesis/lib *
-global-exclude .gitignore
+recursive-include src/cloudlet/lib *.*
