@@ -19,7 +19,7 @@
 #
 import sys
 import signal
-sys.path.append("../src/")
+sys.path.insert(0, "../src/")
 
 from synthesis.lib_synthesis import SynthesisServer
 from synthesis.lib_cloudlet import validate_congifuration

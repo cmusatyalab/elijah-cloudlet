@@ -19,7 +19,7 @@
 #
 
 import sys
-sys.path.append("../src/")
+sys.path.insert(0, "../src/")
 
 from synthesis import lib_cloudlet as lib_cloudlet
 from synthesis.Configuration import Const as Const
