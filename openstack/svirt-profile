@@ -1,0 +1,6 @@
+  # for TRIM log
+  /tmp/**/qemu-trim-log rw,
+
+  # for fuse-mmaped file
+  /var/tmp/**/disk/image rw,
+  /var/tmp/**/memory/image rwm,

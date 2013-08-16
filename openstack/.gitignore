@@ -1,0 +1,8 @@
+*.a
+*.o
+*.cproject
+*.lzma
+*.qcow2
+*.mem
+*.pyc
+*.class
