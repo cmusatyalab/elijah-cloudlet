@@ -1,4 +1,16 @@
-Latest Changes
+v0.8.1
+-------------------
+- python packaging
+  1. Change directory structure to cope with python packaging
+  2. cloudlet standalone code is now downloadable using pip
+
+- Seamless openStack integration
+  1. clean up the abstraction layer to support seamleass integration with OpenStack
+     at [elijah-openstack](https://github.com/cmusatyalab/elijah-openstack.git)
+
+
+
+v0.8.0
 -------------------
 - master branch is merged with dev branch
 	Between commit 2870f23b15ea20b177a879e981fc1532e7502fe9 and a9aedfdc483db7645b4982fdfcc6356f845617c5
