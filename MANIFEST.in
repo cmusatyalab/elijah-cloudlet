@@ -1,4 +1,3 @@
 include README.md
 include LICENSE
 include CREDITS
-recursive-include src/cloudlet/lib *.*

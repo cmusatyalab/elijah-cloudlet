@@ -38,6 +38,9 @@ class DBConnector(object):
         # create DB file if it does not exist
         if not os.path.exists(Const.CLOUDLET_DB):
             log.write("[DB] Create new database\n")
+            dirpath = os.path.dirname(Const.CLOUDLET_DB)
+            if os.path.exists(dirpath) == False:
+                os.makedirs(dirpath)
             create_db(Const.CLOUDLET_DB)
 
         # mapping existing DB to class

@@ -7,15 +7,14 @@ from fabric.api import local
 from fabric.api import sudo
 from fabric.api import task
 from fabric.api import abort
+from fabric.context_managers import cd
 
 import os
 import sys
 
 
 # Constant
-CUSTOM_KVM = os.path.abspath("./src/synthesis/lib/bin/x86_64/qemu-system-x86_64") 
-SCRIPT_FILES = ["./bin/cloudlet", "./bin/synthesis_server"]
-SOURCE_PATH = os.path.abspath("./src/synthesis")
+CUSTOM_KVM = os.path.abspath("./src/cloudlet/lib/bin/x86_64/qemu-system-x86_64") 
 
 def check_support():
     if run("egrep '^flags.*(vmx|svm)' /proc/cpuinfo > /dev/null").failed:
@@ -50,9 +49,6 @@ def localhost():
 @task
 def install():
     global CUSTOM_KVM
-    global SCRIPT_FILES
-    global SOURCE_PATH
-
     check_support()
 
     # install dependent package
@@ -92,18 +88,16 @@ def install():
     # install custom KVM
     install_kvm()
 
-    ## install source files
-    #if sudo("cp -r %s /usr/lib/python2.7/dist-packages/" % SOURCE_PATH).failed == True:
-    #    abort("Cannot copy source to python package directory")
-
-    ## install scripts to /usr/local/bin
-    #for each_file in SCRIPT_FILES:
-    #    sudo("cp %s /usr/bin/" % (os.path.abspath(each_file)))
-
     # (Optional) disable EPT support
     # When you use EPT support with FUSE+mmap, it randomly causes kernel panic.
     # We're investigating it whether it's Linux kernel bug or not.
     disable_EPT()
+
+    # install cloudlet package
+    cur_dir = os.path.abspath(os.curdir)
+    with cd(cur_dir):
+        if sudo("python setup.py install").failed:
+            abort("cannot install cloudlet library")
 
     sys.stdout.write("[SUCCESS] VM synthesis code is installed\n")
 

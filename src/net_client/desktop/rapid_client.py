@@ -29,8 +29,7 @@ import select
 from optparse import OptionParser
 from pprint import pprint
 
-sys.path.append("../../")
-sys.path.append("../src/")
+# for local test
 from cloudlet.synthesis_protocol import Protocol as protocol
 from cloudlet.discovery.client.discovery_api import API
 from cloudlet.discovery.client.discovery_api import Cloudlet

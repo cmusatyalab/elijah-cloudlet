@@ -18,6 +18,4 @@
 #   limitations under the License.
 #
 
-from . import synthesis
-from . import server
 all = ['synthesis', 'server']

@@ -1614,6 +1614,13 @@ def synthesis(base_disk, meta, **kwargs):
     # param meta : path to meta file for overlay
     # param disk_only: synthesis size VM with only disk image
     # param return_residue: return residue of changed portion
+    if os.path.exists(base_disk) == False:
+        msg = "Base disk does not exist at %s" % base_disk
+        raise CloudletGenerationError(msg)
+    if os.path.exists(meta) == False:
+        msg = "Meta file for VM overlay does not exist at %s" % meta
+        raise CloudletGenerationError(msg)
+
     disk_only = kwargs.get('disk_only', False)
     return_residue = kwargs.get('return_residue', False)
     qemu_args = kwargs.get('qemu_args', False)

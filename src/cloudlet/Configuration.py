@@ -20,8 +20,25 @@
 
 import os
 
+
 class ConfigurationError(Exception):
     pass
+
+
+def which(program):
+    def is_exe(fpath):
+        return os.path.isfile(fpath) and os.access(fpath, os.X_OK) 
+    fpath, fname = os.path.split(program)
+    if fpath:
+        if is_exe(program):
+            return program
+    else:
+        for path in os.environ["PATH"].split(os.pathsep):
+            path = path.strip('"')
+            exe_file = os.path.join(path, program)
+            if is_exe(exe_file):
+                return exe_file
+    return exe_file
 
 
 class Options(object):
@@ -43,6 +60,8 @@ class Options(object):
 
 class Const(object):
     VERSION = 0.8
+    HOME_DIR = os.path.abspath(os.path.expanduser("~"))
+    CONFIGURATION_DIR = os.path.join('/', 'var', 'lib', 'cloudlet', 'conf')
 
     BASE_DISK               = ".base-img"
     BASE_MEM                = ".base-mem"
@@ -65,19 +84,22 @@ class Const(object):
     META_OVERLAY_FILE_MEMORY_CHUNKS     = "memory_chunk"
 
     MODULE_DIR = os.path.dirname(os.path.abspath(__file__))
-    VMNETFS_PATH            = os.path.abspath(os.path.join(MODULE_DIR, "lib/bin/x86_64/vmnetfs"))
-    #QEMU_BIN_PATH           = os.path.abspath(os.path.join(MODULE_DIR, "lib/bin/x86_64/qemu-system-x86_64"))
-    QEMU_BIN_PATH           = os.path.abspath(os.path.join(MODULE_DIR, "/usr/bin/qemu-system-x86_64"))
-    FREE_MEMORY_BIN_PATH    = os.path.abspath(os.path.join(MODULE_DIR, "lib/bin/x86_64/free_page_scan"))
-    XRAY_BIN_PATH           = os.path.abspath(os.path.join(MODULE_DIR, "lib/x86_64/disk_analyzer"))
-    UPnP_SERVER             = os.path.abspath(os.path.join(MODULE_DIR, "lib/bin/upnp_server.jar"))
+    QEMU_BIN_PATH           = which("cloudlet_qemu-system-x86_64")
+    FREE_MEMORY_BIN_PATH    = which("cloudlet_free_page_scan")
+    VMNETFS_PATH            = which("cloudlet_vmnetfs")
+    XRAY_BIN_PATH           = which("cloudlet_disk_analyzer")
+    UPnP_SERVER             = which("upnp_server.jar")
+    REST_SERVER_BIN         = which("cloudlet_RESTServer")
 
-    CLOUDLET_DB             = os.path.abspath(os.path.join(MODULE_DIR, "config/cloudlet.db"))
-    CLOUDLET_DB_SCHEMA      = os.path.abspath(os.path.join(MODULE_DIR, "config/schema.sql"))
-    TEMPLATE_XML            = os.path.abspath(os.path.join(MODULE_DIR, "config/VM_TEMPLATE.xml"))
-    TEMPLATE_OVF            = os.path.abspath(os.path.join(MODULE_DIR, "config/ovftransport.iso"))
-    REST_SERVER_BIN         = os.path.abspath(os.path.join(MODULE_DIR, "./RESTServer"))
+    CLOUDLET_DB             = os.path.abspath(os.path.join(HOME_DIR, ".cloudlet/config/cloudlet.db"))
+    CLOUDLET_DB_SCHEMA      = os.path.join(CONFIGURATION_DIR, "schema.sql")
+    TEMPLATE_XML            = os.path.join(CONFIGURATION_DIR, "VM_TEMPLATE.xml")
+    TEMPLATE_OVF            = os.path.join(CONFIGURATION_DIR, "ovftransport.iso")
     CHUNK_SIZE=4096
+
+    def __init__(self):
+        import pdb;pdb.set_trace()
+        pass
 
     @staticmethod
     def _check_path(name, path):
@@ -126,3 +148,5 @@ class Discovery_Const(object):
     REDIS_ADDR          = ('localhost', 6379)
     REDIS_REQ_CHANNEL   = "fuse_request"
     REDIS_RES_CHANNEL   = "fuse_response"
+
+

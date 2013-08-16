@@ -20,12 +20,16 @@
 
 import os
 import sys
+import traceback
 from optparse import OptionParser
 sys.path.insert(0, "../src/")
 
 from cloudlet import synthesis as synthesis
 from cloudlet.Configuration import Const as Const
 from cloudlet.Configuration import Options
+from cloudlet import log as logging
+
+LOG = logging.getLogger(__name__)
 
 def print_usage(commands):
     usage = "\n%prog command  [option] -- [qemu-options]\n"
@@ -168,7 +172,7 @@ def main(argv):
                 sys.stdout.write("[INFO] overlay URIs : %s\n" % \
                         vm_overlay.overlay_uri_meta)
         except Exception, e:
-            sys.stderr.write("Failed to create overlay\n")
+            LOG.error("%s\nFailed to create overlay" % str(traceback.format_exc()))
             return 1
     elif mode == CMD_SYNTEHSIS:
         if len(left_args) < 2:
@@ -184,7 +188,8 @@ def main(argv):
                                 return_residue=settings.return_residue, \
                                 qemu_args=qemu_args)
         except Exception, e:
-            sys.stderr.write("Failed to synthesize VM\n")
+            LOG.warning(str(e))
+            LOG.error("%s\nFailed to synthesize" % str(traceback.format_exc()))
             return 1
     elif mode == CMD_LIST_BASE:
         from cloudlet.db.table_def import BaseVM
@@ -209,7 +214,7 @@ def main(argv):
         basedisk_path = os.path.abspath(left_args[0])
         base_hashvalue = left_args[1]
         if not os.path.isfile(basedisk_path):
-            sys.stderr.write("Not valid file: %s\n" % basedisk_path)
+            LOG.error("Not valid file: %s\n" % basedisk_path)
             return 1
 
         new_basevm = BaseVM(basedisk_path, base_hashvalue)
@@ -233,7 +238,7 @@ def main(argv):
         if deleting_base:
             dbconn.del_item(item)
         else: 
-            sys.stderr.write("Cannot find matching base disk\n")
+            LOG.error("Cannot find matching base disk\n")
             return 1
     elif mode == CMD_LIST_SESSION:
         from cloudlet.db.table_def import Session
