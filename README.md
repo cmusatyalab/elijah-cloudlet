@@ -69,7 +69,10 @@ To install manually:
 	   permission of just revert the permission manually as bellow).
 
 		   > $ sudo chmod 1666 /dev/fuse
+	
+	5. finally, install cloudlet package using pip
 
+		   > $ sudo pip install cloudlet
 
 
 Recommended platform
@@ -91,8 +94,7 @@ How to use
 	vm`` will be a template VM for overlay VMs. To create ``base vm``, you need
 	regular VM disk image in a raw format.  
 
-        > $ cd ./bin
-        > $ ./cloudlet base /path/to/base_disk.img
+        > $ cloudlet base /path/to/base_disk.img
         > (__Use raw file format__)
 
 	This will launch remote connection(VNC) to guest OS and cloudlet module
@@ -100,15 +102,13 @@ How to use
 	After finishing all the processing, you can check generated ``base vm``
 	using below command.
 
-    	> $ cd ./bin
-    	> $ ./cloudlet list_base
+    	> $ cloudlet list_base
 
 
 2. Creating ``overlay vm`` on top of ``base vm``.  
     Now you can create your customized VM based on top of ``base vm``  
   
-        > $ cd ./bin
-        > $ ./cloudlet overlay /path/to/base_disk.img
+        > $ cloudlet overlay /path/to/base_disk.img
 
 	This will launch VNC again. On top of this ``base vm``, you can install(and
 	execute) your custom server. For example, if you're a developer of ``face
@@ -123,7 +123,7 @@ How to use
 	Note: if your application need specific port and you want to make a port
 	forwarding host to VM, you can use -redir parameter as below. 
 
-        > $ ./cloudlet overlay /path/to/base_disk.img -- -redir tcp:2222::22 -redir tcp:8080::80
+        > $ cloudlet overlay /path/to/base_disk.img -- -redir tcp:2222::22 -redir tcp:8080::80
 
 	This will forward client connection at host port 2222 to VM's 22 and 8080
 	to 80, respectively.
@@ -148,24 +148,21 @@ How to use
 
     1) Command line interface: You can resume your ``overlay vm`` using 
 
-        > $ cd ./bin
-        > $ ./cloudlet synthesis /path/to/base_disk.img /path/to/overlay-meta
+        > $ cloudlet synthesis /path/to/base_disk.img /path/to/overlay-meta
     
     2) Network client (python version)  
 
 	We have a synthesis server that received ``VM synthesis`` request from
 	mobile client and you can start the server as below.
   
-        > $ cd ./bin
-        > $ ./server
+        > $ synthesis_server
     
 	You can test this server using the client. You also need to copy the
 	overlay that you like to reconstruct to the other machine when you execute
 	this client.
     
-        > $ ./rapid_client.py -s [cloudlet ip address] -o [/path/to/overlay-meta]
+        > $ synthesis_client -s [cloudlet ip address] -o [/path/to/overlay-meta]
 
-    
     3) Network client (Android version)
 
 	We have source codes for android client at ./src/client/andoid and you can
