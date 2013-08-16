@@ -19,10 +19,10 @@
 #
 import sys
 import signal
-sys.path.append("../src/")
+sys.path.insert(0, "../src/")
 
-from synthesis.lib_synthesis import SynthesisServer
-from synthesis.lib_cloudlet import validate_congifuration
+from cloudlet.server import SynthesisServer
+from cloudlet.synthesis import validate_congifuration
 
 
 def sigint_handler(signum, frame):

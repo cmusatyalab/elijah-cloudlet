@@ -101,13 +101,16 @@ To install, you either
 		installation script, so you can either reboot the machine to have valid
 		permission of just revert the permission manually as bellow).
 
-		   > $ sudo chmod 1666 /dev/fuse
 		   > $ sudo chmod 644 /etc/fuse.conf
 		   > $ sod sed -i 's/#user_allow_other/user_allow_other/g' /etc/fuse.conf
+	
+	5. finally, install cloudlet package using pip
+
+		   > $ sudo pip install cloudlet
 
 
 
-Recommended platform
+Tested platforms
 ---------------------
 
 We have tested at __Ubuntu 12.04 LTS 64-bit__ and it's derivatives such as Kubuntu.
@@ -130,8 +133,7 @@ How to use
 	``base disk`` and ``base memory``. 
 	This ``base vm`` will be used as a template VM for your custom virtual machine.
 
-        > $ cd ./bin
-        > $ ./cloudlet base /path/to/base_disk.img
+        > $ cloudlet base /path/to/base_disk.img
         > % Use raw file format virtual disk
 
 	This will launch GUI (VNC) connecting to your guest OS and the code
@@ -141,7 +143,7 @@ How to use
 	Then, it will generate snapshot of the current states (for both memory and disk) 
 	and save the information to DB. You can check list of ``base vm`` by
 
-		> $ ./cloudlet list-base
+    	> $ cloudlet list_base
 	
 	Later, we will provide several golden images for ``base vm`` such as vanilla
 	Windows7, Ubuntu 12.04 LTS, Fedora 19. We expect that general users import
@@ -151,8 +153,7 @@ How to use
 2. Creating ``VM overlay`` using ``base vm``.  
     Now you can create your customized VM based on top of ``base vm``  
   
-        > $ cd ./bin
-        > $ ./cloudlet overlay /path/to/base_disk.img
+        > $ cloudlet overlay /path/to/base_disk.img
         > % Path to base_disk is the path for virtual disk you used ealier
         > % You can check the path by "cloudlet list-base"
 
@@ -171,7 +172,7 @@ How to use
 	Note: if your application need specific port and you want to make a port
 	forwarding host to VM, you can use -redir parameter as below. 
 
-        > $ ./cloudlet overlay /path/to/base_disk.img -- -redir tcp:2222::22 -redir tcp:8080::80
+        > $ cloudlet overlay /path/to/base_disk.img -- -redir tcp:2222::22 -redir tcp:8080::80
 
 	This will forward client connection at host port 2222 to VM's 22 and 8080
 	to 80, respectively.
@@ -196,24 +197,21 @@ How to use
 
     1) Command line interface: You can synthesize your ``VM overlay`` using 
 
-        > $ cd ./bin
-        > $ ./cloudlet synthesis /path/to/base_disk.img /path/to/overlay-meta
+        > $ cloudlet synthesis /path/to/base_disk.img /path/to/overlay-meta
     
     2) Network client (python version)  
 
 	We have a synthesis server that received ``VM synthesis`` request from
 	mobile client and you can start the server as below.
   
-        > $ cd ./bin
-        > $ ./synthesis_server
+        > $ synthesis_server
     
 	You can test this server using the client. You also need to copy the
 	overlay that you like to reconstruct to the other machine when you execute
 	this client.
     
-        > $ ./network_client.py -s [cloudlet ip address] -o [/path/to/overlay-meta]
+        > $ synthesis_client -s [cloudlet ip address] -o [/path/to/overlay-meta]
 
-    
     3) Network client (Android version)
 
 	We have source codes for a Android client at ./src/client/andoid and you can
