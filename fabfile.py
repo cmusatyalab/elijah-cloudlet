@@ -94,7 +94,7 @@ def install():
     disable_EPT()
 
     # install cloudlet package
-    if sudo("pip install cloudlet").failed:
+    if sudo("python setup.py install").failed:
         abort("cannot install cloudlet library")
 
     sys.stdout.write("[SUCCESS] VM synthesis code is installed\n")
