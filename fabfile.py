@@ -54,12 +54,12 @@ def install():
     # install dependent package
     with hide('stdout'):
         sudo("apt-get update")
-        if sudo("apt-get install -y qemu-kvm libvirt-bin gvncviewer " +
-                "python-libvirt python-xdelta3 python-dev openjdk-6-jre  " +
-                "liblzma-dev apparmor-utils libc6-i386 python-pip").failed:
-            abort("Failed to install libraries")
-        if sudo("pip install bson pyliblzma psutil sqlalchemy").failed:
-            abort("Failed to install python libraries")
+    if sudo("apt-get install -y qemu-kvm libvirt-bin gvncviewer " +
+            "python-libvirt python-xdelta3 python-dev openjdk-6-jre  " +
+            "liblzma-dev apparmor-utils libc6-i386 python-pip").failed:
+        abort("Failed to install libraries")
+    if sudo("pip install bson pyliblzma psutil sqlalchemy").failed:
+        abort("Failed to install python libraries")
 
     # disable libvirtd from appArmor to enable custom KVM
     if sudo("aa-complain /usr/sbin/libvirtd").failed:
