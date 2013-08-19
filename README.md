@@ -137,7 +137,7 @@ How to use
         > % Use raw file format virtual disk
 
 	This will launch GUI (VNC) connecting to your guest OS and the code
-	will start creating ``base vm`` when you close VNC window. So please loggin
+	will start creating ``base vm`` when you close VNC window. So please log-in
 	to the guest OS and close the GUI window when you think it's right point
 	snapshotting the guest OS as a base VM (typically right after booting up).
 	Then, it will generate snapshot of the current states (for both memory and disk) 
@@ -154,16 +154,16 @@ How to use
     Now you can create your customized VM based on top of ``base vm``  
   
         > $ cloudlet overlay /path/to/base_disk.img
-        > % Path to base_disk is the path for virtual disk you used ealier
+        > % Path to base_disk is the path for virtual disk you used earlier
         > % You can check the path by "cloudlet list-base"
 
 	This will launch VNC again with resumed ``base vm``. Now you can start making
 	any customizations on top of this ``base vm``. For example, if you're a
 	developer of ``face recognition`` backend server, we will install required
-	libraries, binaries and finally start your face recongition server. 
+	libraries, binaries and finally start your face recognition server. 
 	After closing the GUI windows, cloudlet will capture only the change portion
-	betwee your customization and ``base vm`` to generate ``VM overlay`` that
-	is a minimal binary for reconsturcting your customized VM.
+	between your customization and ``base vm`` to generate ``VM overlay`` that
+	is a minimal binary for reconstructing your customized VM.
 
 	``VM overlay`` is composed of 2 files; 1) ``overlay-meta file`` ends with
 	.overlay-meta, 2) compressed ``overlay blob files`` ends with .xz
@@ -214,7 +214,7 @@ How to use
 
     3) Network client (Android version)
 
-	We have source codes for a Android client at ./src/client/andoid and you can
+	We have source codes for a Android client at ./src/client/android and you can
 	import it to ``Eclipse`` as an Android project. This client program will
 	automatically find nearby Cloudlet using UPnP if both client and Cloudlet
 	are located in same broadcasting domain (e.g. sharing WiFi access point)
@@ -228,7 +228,7 @@ How to use
 	Right directory name is important since the directory name will be
 	saved as appName in internal data structure and being used to launch
 	associated mobile application after finishing ``VM synthesis``. Recall that
-	this VM synthesis client is for reconstructing your custom VM at arbirary 
+	this VM synthesis client is for reconstructing your custom VM at arbitrary 
 	computer and you need to launch your mobile application after finishing VM
 	thesis that will communicate with the server you just launched. To launch
 	mobile application after VM synthesis, we use Android Activity launch and
