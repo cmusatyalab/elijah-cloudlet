@@ -96,7 +96,6 @@ def install():
     # install cloudlet package
     current_dir = os.path.abspath(os.curdir)
     with cd(current_dir):
-        sys.stdout.write("!!!!!!!! %s " % current_dir)
         if sudo("python setup.py install").failed:
             abort("cannot install cloudlet library")
 
