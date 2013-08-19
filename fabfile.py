@@ -14,7 +14,7 @@ import sys
 
 
 # Constant
-CUSTOM_KVM = os.path.abspath("./src/cloudlet/lib/bin/x86_64/qemu-system-x86_64") 
+CUSTOM_KVM = os.path.abspath("./src/cloudlet/lib/bin/x86_64/cloudlet_qemu-system-x86_64") 
 
 def check_support():
     if run("egrep '^flags.*(vmx|svm)' /proc/cpuinfo > /dev/null").failed:

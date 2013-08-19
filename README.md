@@ -104,9 +104,9 @@ To install, you either
 		   > $ sudo chmod 644 /etc/fuse.conf
 		   > $ sod sed -i 's/#user_allow_other/user_allow_other/g' /etc/fuse.conf
 	
-	5. finally, install cloudlet package using pip
+	5. finally, install cloudlet package using python setup tool
 
-		   > $ sudo pip install cloudlet
+		   > $ sudo python setup.py install
 
 
 
