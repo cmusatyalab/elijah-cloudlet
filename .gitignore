@@ -14,6 +14,7 @@ src/tmp/
 *.class
 src/log_synthesis/
 paper/
+openstack/
 src/kvm-qemu/ 
 src/ec2/image/
 src/app/graphics/bin/
