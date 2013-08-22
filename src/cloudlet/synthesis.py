@@ -632,7 +632,7 @@ def _convert_xml(disk_path, xml=None, mem_snapshot=None, \
         remove_list = list()
         for argument_item in argument_list:
             arg_value = argument_item.get('value').strip()
-            if (arg_value is '-cloudlet') or (arg_value.startswith('logfile=')):
+            if (arg_value == '-cloudlet') or (arg_value.startswith('logfile=')):
                 remove_list.append(argument_item)
         for item in remove_list:
             qemu_element.remove(item)
