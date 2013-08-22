@@ -1,10 +1,27 @@
 <domain type='kvm' xmlns:qemu='http://libvirt.org/schemas/domain/qemu/1.0'>
+	<!--
+		 This template is used for the all VM in cloudlet.
+		 In OpenStack extension, we follow what is defined in OpenStack logic.
+		 
+		 You can edit anything except the followings
+		 1. We use kvm64 CPU model to have compatibilities across different CPU
+		 2. We use raw disk to precise get the modified disk
+
+		 Above two things are adjusted automatically in the code
+		 (at _convert_xml in cloudlet.py)
+	-->
 	<name>cloudlet</name>
 	<uuid>c7a5fdbd-cdaf-9455-926a-d65c16db1801</uuid>
 	<memory>1048576</memory>
 	<currentMemory>1048576</currentMemory>
 	<vcpu>4</vcpu>
 	<cpu>
+		<!--
+			 kvm64 model is enforced at the source code
+			 (_convert_xml in cloudlet.py)
+	<cpu match='exact'>
+		<model fallback='forbid'>kvm64</model>
+		-->
 		<topology sockets='1' cores='4' threads='1'/>
 	</cpu>
 	<os>

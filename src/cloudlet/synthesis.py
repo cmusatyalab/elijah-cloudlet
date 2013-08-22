@@ -31,6 +31,7 @@ import xray
 import hashlib
 import libvirt
 import shutil
+import stat
 import multiprocessing
 
 from cloudlet.db import api as db_api
@@ -549,9 +550,25 @@ def _convert_xml(disk_path, xml=None, mem_snapshot=None, \
     padding_element = xml.find("description")
     if padding_element != None:
         xml.remove(padding_element)
-   
+
+    # enforce CPU model to have kvm64
+    cpu_element = xml.find("cpu")
+    if cpu_element is None:
+        msg = "Malfomed XML input: %s\n", Const.TEMPLATE_XML
+        msg += "need to specify CPU"
+        raise CloudletGenerationError(msg)
+    cpu_element.set("match", "exact")
+    if cpu_element.find("arch") is not None:
+        cpu_element.remove(cpu_element.find("arch"))
+    if cpu_element.find("model") is not None:
+        cpu_element.remove(cpu_element.find("model"))
+    cpu_model_element = Element("model")
+    cpu_model_element.text = "kvm64"
+    cpu_model_element.set("fallback", "forbid")
+    cpu_element.append(cpu_model_element)
+
     # update uuid
-    if uuid == None:
+    if uuid is None:
         uuid = uuid4()
     uuid_element = xml.find('uuid')
     old_uuid = uuid_element.text
@@ -564,16 +581,17 @@ def _convert_xml(disk_path, xml=None, mem_snapshot=None, \
             entry.text = str(uuid)
 
     # update vm_name
-    if vm_name == None:
+    if vm_name is None:
         vm_name = 'cloudlet-' + str(uuid.hex)
     name_element = xml.find('name')
-    if name_element == None:
-        raise CloudletGenerationError("Malfomed XML input: %s", Const.TEMPLATE_XML)
+    if name_element is None:
+        msg = "Malfomed XML input: %s", Const.TEMPLATE_XML
+        raise CloudletGenerationError(msg)
     name_element.text = vm_name
 
     # Use custom QEMU
     qemu_emulator = xml.find('devices/emulator')
-    if qemu_emulator == None:
+    if qemu_emulator is None:
         qemu_emulator = Element("emulator")
         device_element = xml.find("devices")
         device_element.append(qemu_emulator)
@@ -588,31 +606,33 @@ def _convert_xml(disk_path, xml=None, mem_snapshot=None, \
         if disk_type == 'disk':
             hdd_source = disk_element.find('source')
             hdd_driver = disk_element.find("driver")
-            if hdd_driver != None and hdd_driver.get("type", None) != None:
+            if (hdd_driver is not None) and \
+                    (hdd_driver.get("type", None) is not None):
                 hdd_driver.set("type", "raw")
         if disk_type == 'cdrom':
             cdrom_source = disk_element.find('source')
     # hdd path setting
-    if hdd_source == None:
-        raise CloudletGenerationError("Malfomed XML input: %s", Const.TEMPLATE_XML)
+    if hdd_source is None:
+        msg = "Malfomed XML input: %s", Const.TEMPLATE_XML
+        raise CloudletGenerationError(msg)
     hdd_source.set("file", os.path.abspath(disk_path))
     # ovf path setting
-    if cdrom_source != None:
+    if cdrom_source is not None:
         cdrom_source.set("file", os.path.abspath(Const.TEMPLATE_OVF))
 
     # append QEMU-argument
-    if qemu_logfile != None:
+    if qemu_logfile is not None:
         qemu_xmlns="http://libvirt.org/schemas/domain/qemu/1.0"
         qemu_element = xml.find("{%s}commandline" % qemu_xmlns)
-        if qemu_element == None:
+        if qemu_element is None:
             qemu_element = Element("{%s}commandline" % qemu_xmlns)
             xml.append(qemu_element)
         # remove previous cloudlet argument if it is
         argument_list = qemu_element.findall("{%s}arg" % qemu_xmlns)
         remove_list = list()
         for argument_item in argument_list:
-            arg_value = argument_item.get('value').strip() 
-            if (arg_value== '-cloudlet') or (arg_value.startswith('logfile=')):
+            arg_value = argument_item.get('value').strip()
+            if (arg_value is '-cloudlet') or (arg_value.startswith('logfile=')):
                 remove_list.append(argument_item)
         for item in remove_list:
             qemu_element.remove(item)
@@ -622,9 +642,9 @@ def _convert_xml(disk_path, xml=None, mem_snapshot=None, \
 
     # append qemu argument give from user
     if qemu_args:
-        qemu_xmlns="http://libvirt.org/schemas/domain/qemu/1.0"
+        qemu_xmlns = "http://libvirt.org/schemas/domain/qemu/1.0"
         qemu_element = xml.find("{%s}commandline" % qemu_xmlns)
-        if qemu_element == None:
+        if qemu_element is None:
             qemu_element = Element("{%s}commandline" % qemu_xmlns)
             xml.append(qemu_element)
         for each_argument in qemu_args:
@@ -641,12 +661,12 @@ def _convert_xml(disk_path, xml=None, mem_snapshot=None, \
 
     network_element = device_element.find("interface")
     network_filter = network_element.find("filterref")
-    if network_filter != None:
+    if network_filter is not None:
         network_element.remove(network_filter)
 
     new_xml_str = ElementTree.tostring(xml)
     new_xml_str = new_xml_str.replace(old_uuid, str(uuid))
-    if mem_snapshot != None:
+    if mem_snapshot is not None:
         overwrite_xml(mem_snapshot, new_xml_str)
 
     return old_xml_str, new_xml_str
@@ -1523,11 +1543,16 @@ def create_baseVM(disk_image_path):
     new_basevm = db_table.BaseVM(disk_image_path, base_hashvalue)
     dbconn.add_item(new_basevm)
 
+    # write hashvalue to file
+    hashfile_path = Const.get_base_hashpath(disk_image_path)
+    open(hashfile_path, "w+").write(str(base_hashvalue) + "\n")
+
     # write protection
     #os.chmod(disk_image_path, stat.S_IRUSR)
     #os.chmod(base_diskmeta, stat.S_IRUSR)
     #os.chmod(base_mempath, stat.S_IRUSR)
     #os.chmod(base_memmeta, stat.S_IRUSR)
+    #os.chmod(hashfile_path, stat.S_IRUSR)
 
     return disk_image_path, base_mempath
 

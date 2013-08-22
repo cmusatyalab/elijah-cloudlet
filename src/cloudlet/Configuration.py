@@ -67,6 +67,7 @@ class Const(object):
     BASE_MEM                = ".base-mem"
     BASE_DISK_META          = ".base-img-meta"
     BASE_MEM_META           = ".base-mem-meta"
+    BASE_HASH_VALUE         = ".base-hash"
     OVERLAY_META            = ".overlay-meta"
     OVERLAY_URIs            = ".overlay-URIs"
     OVERLAY_FILE_PREFIX     = ".overlay"
@@ -124,6 +125,12 @@ class Const(object):
             Const._check_path('base memory-hash', memmeta)
 
         return diskmeta, mempath, memmeta
+
+    @staticmethod
+    def get_base_hashpath(base_disk_path):
+        image_name = os.path.splitext(os.path.basename(base_disk_path))[0]
+        dir_path = os.path.dirname(base_disk_path)
+        return os.path.join(dir_path, image_name+Const.BASE_HASH_VALUE)
 
 
 class Synthesis_Const(object):
