@@ -45,6 +45,8 @@ class RegisterThread(threading.Thread):
         self.server_dns = server_dns
         if self.server_dns.find("http://") != 0:
             self.server_dns = "http://" + self.server_dns
+        if self.server_dns.endswith("/") == True:
+            self.server_dns = self.server_dns[:-1]
         self.REGISTER_PERIOD_SEC = update_period
         self.local_ipaddress = get_local_ipaddress()
         self.stop = threading.Event()
@@ -63,7 +65,6 @@ class RegisterThread(threading.Thread):
             try:
                 self.resource_uri = self._initial_register(self.server_dns)
             except (socket.error, ValueError) as e:
-                pass
                 LOG.info("[REGISTER] waiting for directory server ready")
             finally:
                 self.stop.wait(self.REGISTER_PERIOD_SEC)
@@ -133,7 +134,7 @@ def http_get(end_point):
     headers = {"Content-type":"application/json"}
     end_string = "%s?%s" % (end_point[2], end_point[4])
 
-    conn = httplib.HTTPConnection(end_point[1], 80, timeout=1)
+    conn = httplib.HTTPConnection(end_point.hostname, end_point.port, timeout=1)
     conn.request("GET", end_string, params, headers)
     data = conn.getresponse().read()
     response_list = json.loads(data).get('objects', list())
