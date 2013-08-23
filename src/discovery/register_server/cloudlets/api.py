@@ -1,11 +1,11 @@
-# ds/api.py
+# cloudlets/api.py
 from django.utils.timezone import utc
 import datetime
 import heapq
 from decimal import Decimal
 from operator import itemgetter
 from tastypie.authorization import Authorization
-from ds.models import Cloudlet
+from cloudlets.models import Cloudlet
 from tastypie.resources import ModelResource, ALL, ALL_WITH_RELATIONS
 from django.contrib.auth.models import User
 from django.conf.urls.defaults import *

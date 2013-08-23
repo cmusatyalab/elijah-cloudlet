@@ -1,0 +1,9 @@
+<a href="http://{{cloudlet.ip_address}}" target="_blank">Connect to the Cloudlet</a>
+
+{% if cloudlet %}
+<ul>
+    <li>IP address : {{cloudlet.ip_address}}</li>
+    <li>Latitude   : {{cloudlet.latitude}}</li>
+    <li>Longitude  : {{cloudlet.longitude}}</li>
+</ul>
+{% endif %}

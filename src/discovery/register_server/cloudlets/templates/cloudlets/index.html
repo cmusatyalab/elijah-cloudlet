@@ -1,0 +1,49 @@
+{% load url from future %}
+{% load staticfiles %}
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
+<html xmlns="http://www.w3.org/1999/xhtml">
+
+    <head>
+        <title>{{page_title}}</title>
+        <meta http-equiv="Content-Type" content="text/html; charset=UTF-8" />
+		<link rel="stylesheet" href="{% static 'cloudlets/style.css' %}" media="all" />
+    </head>
+	<body>
+		<h1>{{page_title}}</h1>
+
+		<div id="content">
+
+			{% if latest_cloudlet_list %}
+			{% for cloudlet in latest_cloudlet_list %}
+			<div class="post_entry">
+				<h3 align="center" id="post_{{cloudlet.id}}" class="post_title"> <a href="{% url 'detail' cloudlet.id %}">{{ cloudlet.ip_address}}</a>
+				</h3>
+				<p class="post_info" align="right">
+				Created at {{cloudlet.pub_date}} <br />
+				Updated at {{cloudlet.mod_time}}
+				</p>
+				<div class="content_box">
+					Latitude 	: {{cloudlet.latitude}} <br />
+					Longitude	: {{cloudlet.longitude}} <br />
+					Status		: {{cloudlet.status}}
+					<h3>
+						<a href="http://{{cloudlet.ip_address}}" target="_blank">Connect</a>
+					</h3>
+				</div>
+				<ul class="post_meta">
+					<li>
+					meta information <br />
+					{% for tag in entry.Tags.all %}
+					<span>{{tag.Title}}</span>
+					{% endfor %}
+					</li>
+				</ul>
+
+			</div>
+            {% endfor %}
+        </ul>
+        {% else %}
+        <p>No cloudlets are available.</p>
+        {% endif %}
+    </body>
+</html>
