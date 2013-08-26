@@ -125,19 +125,19 @@ license issues, we'll provide relevant binaries.
 How to use
 --------------			
 
-1. Creating ``base vm``.  
+1. Creating ``base VM``.  
 
-	You will first create or import ``base vm``. Here we provide methods for both
-	importing ``base vm`` and creating your own ``base vm``.
+	You will first create or import ``base VM``. Here we provide methods for both
+	importing ``base VM`` and creating your own ``base VM``.
 
-	1) We provide sample __base VM__ of Ubuntu 12.04 32bit server for easy
-	bootstrapping. You first need to download preconfigured ``base vm`` at:
+	1) We provide __sample base VM__ of Ubuntu 12.04 32bit server for easy
+	bootstrapping. You first need to download preconfigured ``base VM`` at:
 
-	[Base VM Disk](https://storage.coda.cs.cmu.edu/cloudlet-basevm-ubuntu-12.04.01-i386/precise.raw)
-	[Base VM Disk meta](https://storage.coda.cs.cmu.edu/cloudlet-basevm-ubuntu-12.04.01-i386/precise.base-img-meta)
-	[Base VM Memory](https://storage.coda.cs.cmu.edu/cloudlet-basevm-ubuntu-12.04.01-i386/precise.base-mem)
-	[Base VM Memrmoy meta](https://storage.coda.cs.cmu.edu/cloudlet-basevm-ubuntu-12.04.01-i386/precise.base-mem-meta)
-	[Base VM Hash signature](https://storage.coda.cs.cmu.edu/cloudlet-basevm-ubuntu-12.04.01-i386/precise.base-hash)
+	[Base VM Disk](https://storage.coda.cs.cmu.edu/cloudlet-basevm-ubuntu-12.04.01-i386/precise.raw)  
+	[Base VM Disk meta](https://storage.coda.cs.cmu.edu/cloudlet-basevm-ubuntu-12.04.01-i386/precise.base-img-meta)  
+	[Base VM Memory](https://storage.coda.cs.cmu.edu/cloudlet-basevm-ubuntu-12.04.01-i386/precise.base-mem)  
+	[Base VM Memrmoy meta](https://storage.coda.cs.cmu.edu/cloudlet-basevm-ubuntu-12.04.01-i386/precise.base-mem-meta)  
+	[Base VM Hash signature](https://storage.coda.cs.cmu.edu/cloudlet-basevm-ubuntu-12.04.01-i386/precise.base-hash)  
 
 	Once you download these files and put them into a specific directory (e.g.
 	~/image/ubuntu-12.04-32bit), you can import them to the cloudlet DB by
@@ -146,17 +146,17 @@ How to use
 	
 	For example,
 
-		> $ cloudlet add-base ~/image/ubuntu-12.04-32bit 0c517b1eb021a1105db1f9aabba7314cec691ca9139d28c4185273113fc703e3
+		> $ cloudlet add-base ~/image/ubuntu-12.04-32bit/precise.raw 0c517b1eb021a1105db1f9aabba7314cec691ca9139d28c4185273113fc703e3
 	
-	You can find the hash value for the base vm at base vm hash file you just
+	You can find the hash value for the base VM at base VM hash file you just
 	downloaded. You can check import result by
 
 		> $ cloudlet list-base
 	
-	Later, we will provide more golden images for ``base vm`` such as vanilla
+	Later, we will provide more golden images for ``base VM`` such as vanilla
 	Ubuntu 12.04 LTS 64bit and Fedora 19. It would be similar with 
 	[Ubuntu Cloud Image](http://cloud-images.ubuntu.com/).
-	We expect that typical users import these ``base vms`` rather than generates his own.
+	We expect that typical users import these ``base VMs`` rather than generating his own.
 	
 
 	2) You can also create your own __base VM__ from a regular VM disk image.
@@ -167,28 +167,28 @@ How to use
         > % Use raw file format virtual disk
         
 	This will launch GUI (VNC) connecting to your guest OS and the code will
-	start creating ``base vm`` when you close VNC window. So, please close the
+	start creating ``base VM`` when you close VNC window. So, please close the
 	GUI window when you think it's right point to snapshot the VM as a base VM
 	(typically you close it after booting up).  Then, it will generate snapshot
 	of the current states for both memory and disk and save that information
-	to DB. You can check list of ``base vm`` by
+	to DB. You can check list of ``base VM`` by
 
     	> $ cloudlet list-base
 	
 
-2. Creating ``VM overlay`` using ``base vm``.  
-    Now you can create your customized VM based on top of ``base vm``  
+2. Creating ``VM overlay`` using ``base VM``.  
+    Now you can create your customized VM based on top of ``base VM``  
   
         > $ cloudlet overlay /path/to/base_disk.img
         > % Path to base_disk is the path for virtual disk you used earlier
         > % You can check the path by "cloudlet list-base"
 
-	This will launch VNC again with resumed ``base vm``. Now you can start making
-	any customizations on top of this ``base vm``. For example, if you're a
+	This will launch VNC again with resumed ``base VM``. Now you can start making
+	any customizations on top of this ``base VM``. For example, if you're a
 	developer of ``face recognition`` backend server, we will install required
 	libraries, binaries and finally start your face recognition server. 
 	After closing the GUI windows, cloudlet will capture only the change portion
-	between your customization and ``base vm`` to generate ``VM overlay`` that
+	between your customization and ``base VM`` to generate ``VM overlay`` that
 	is a minimal binary for reconstructing your customized VM.
 
 	``VM overlay`` is composed of 2 files; 1) ``overlay-meta file`` ends with
