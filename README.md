@@ -74,39 +74,37 @@ You will need:
 
 To install, you either 
 
-	- run a installation script:
+* run a installation script::
 
-		> $ sudo apt-get install fabric openssh-server
+		> $ sudo apt-get install fabric openssh-server  
 		> $ fab localhost install
 
-	- install manually:
+* install manually:
+	- install required package  
 
-		1. install required package
-			> $ sudo apt-get install qemu-kvm libvirt-bin gvncviewer python-libvirt python-xdelta3 python-dev openjdk-6-jre liblzma-dev apparmor-utils libc6-i386 python-pip
-			> $ sudo pip install bson pyliblzma psutil sqlalchemy
+			> $ sudo apt-get install qemu-kvm libvirt-bin gvncviewer python-libvirt python-xdelta3 python-dev openjdk-6-jre liblzma-dev apparmor-utils libc6-i386 python-pip  
+			> $ sudo pip install bson pyliblzma psutil sqlalchemy  
 
-		2. Disable security module. This is for allowing custom KVM.
-		Example at Ubuntu 12
+	- Disable security module. This is for allowing custom KVM. Example at Ubuntu 12  
 
-			> $ sudo aa-complain /usr/sbin/libvirtd
+			> $ sudo aa-complain /usr/sbin/libvirtd  
 
-		3. add current user to kvm, libvirtd group.
+	- Add current user to kvm, libvirtd group.  
 
-			> $ sudo adduser [your_account_name] kvm
-			> $ sudo adduser [your_account_name] libvirtd
-	
-		4. change permission of the fuse access (The qemu-kvm library changes fuse
-		access permission while it's being installed, and the permission is
+			> $ sudo adduser [your_account_name] kvm  
+			> $ sudo adduser [your_account_name] libvirtd  
+
+	- Change permission of the fuse access (The qemu-kvm library changes fuse access permission while it's being installed, and the permission is
 		recovered if you reboot the host.  We believe this is a bug in qemu-kvm
 		installation script, so you can either reboot the machine to have valid
 		permission of just revert the permission manually as bellow).
 
-		   > $ sudo chmod 644 /etc/fuse.conf
-		   > $ sod sed -i 's/#user_allow_other/user_allow_other/g' /etc/fuse.conf
+			> $ sudo chmod 644 /etc/fuse.conf  
+			> $ sod sed -i 's/#user_allow_other/user_allow_other/g' /etc/fuse.conf  
 	
-	5. finally, install cloudlet package using python setup tool
+  - Finally, install cloudlet package using python setup tool
 
-		   > $ sudo python setup.py install
+			> $ sudo python setup.py install
 
 
 
@@ -134,6 +132,7 @@ How to use
 	bootstrapping. You first need to download preconfigured ``base VM`` at:
 
 	[Base VM for Ubuntu-12.04.01-i386-Server](https://storage.coda.cs.cmu.edu/cloudlet-basevm-ubuntu-12.04.01-i386/ubuntu-12.04.01-i386-server.tar.gz)
+	(Account: cloudlet, password: cloudlet)
 
 	Untar the downloaded file into a specific directory (e.g. ~/base_VM/) and
 	you can import it to the cloudlet DB by
@@ -144,7 +143,7 @@ How to use
 
 		> $ cd ~/base_VM/
 		> $ tar xvf ubuntu-12.04.01-i386-server.tar.gz
-		> $ cloudlet add-base ./ubuntu-12.04.01-i386-server/precise.raw 0c517b1eb021a1105db1f9aabba7314cec691ca9139d28c4185273113fc703e3
+		> $ cloudlet add-base ./ubuntu-12.04.01-i386-server/precise.raw 32854753f684c10e8ab8553315c7bf6ada2ab93a27c36f9bbb164514b96d516a
 	
 	You can find the hash value for the base VM from base VM hash file you just
 	downloaded(e.g. precise.base-hash). You can check import result by
@@ -209,8 +208,8 @@ How to use
 	follow workaround of this link. It happens at a machine that does not have
 	enough memory with EPT support, and you can avoid this problem by disabling
 	EPT support. We're current suspicious about kernel bug, and we'll report
-	this soon.
-
+	this soon.  
+    
 
 3. Synthesizing custom VM using ``VM overlay``  
 
@@ -278,5 +277,4 @@ Related research works
 * [The Impact of Mobile Multimedia Applications on Data Center Consolidation](https://github.com/cmusatyalab/elijah-cloudlet/blob/master/doc/papers/kiryong-ic2e-latency.pdf?raw=true)
 * [Just-in-Time Provisioning for Cyber Foraging](https://github.com/cmusatyalab/elijah-cloudlet/blob/master/doc/papers/kiryong-mobisys-vmsynthesis.pdf?raw=true)
 * [Scalable Crowd-Sourcing of Video from Mobile Devices](http://reports-archive.adm.cs.cmu.edu/anon/2012/CMU-CS-12-147.pdf)
-
 
