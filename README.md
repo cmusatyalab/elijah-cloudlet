@@ -133,30 +133,28 @@ How to use
 	1) We provide __sample base VM__ of Ubuntu 12.04 32bit server for easy
 	bootstrapping. You first need to download preconfigured ``base VM`` at:
 
-	[Base VM Disk](https://storage.coda.cs.cmu.edu/cloudlet-basevm-ubuntu-12.04.01-i386/precise.raw)  
-	[Base VM Disk meta](https://storage.coda.cs.cmu.edu/cloudlet-basevm-ubuntu-12.04.01-i386/precise.base-img-meta)  
-	[Base VM Memory](https://storage.coda.cs.cmu.edu/cloudlet-basevm-ubuntu-12.04.01-i386/precise.base-mem)  
-	[Base VM Memrmoy meta](https://storage.coda.cs.cmu.edu/cloudlet-basevm-ubuntu-12.04.01-i386/precise.base-mem-meta)  
-	[Base VM Hash signature](https://storage.coda.cs.cmu.edu/cloudlet-basevm-ubuntu-12.04.01-i386/precise.base-hash)  
+	[Base VM for Ubuntu-12.04.01-i386-Server](https://storage.coda.cs.cmu.edu/cloudlet-basevm-ubuntu-12.04.01-i386/ubuntu-12.04.01-i386-server.tar.gz)
 
-	Once you download these files and put them into a specific directory (e.g.
-	~/image/ubuntu-12.04-32bit), you can import them to the cloudlet DB by
+	Untar the downloaded file into a specific directory (e.g. ~/base_VM/) and
+	you can import it to the cloudlet DB by
 
 		> $ cloudlet add-base [path/to/base_disk] [hash value]
 	
 	For example,
 
-		> $ cloudlet add-base ~/image/ubuntu-12.04-32bit/precise.raw 0c517b1eb021a1105db1f9aabba7314cec691ca9139d28c4185273113fc703e3
+		> $ cd ~/base_VM/
+		> $ tar xvf ubuntu-12.04.01-i386-server.tar.gz
+		> $ cloudlet add-base ./ubuntu-12.04.01-i386-server/precise.raw 0c517b1eb021a1105db1f9aabba7314cec691ca9139d28c4185273113fc703e3
 	
-	You can find the hash value for the base VM at base VM hash file you just
-	downloaded. You can check import result by
+	You can find the hash value for the base VM from base VM hash file you just
+	downloaded(e.g. precise.base-hash). You can check import result by
 
 		> $ cloudlet list-base
 	
 	Later, we will provide more golden images for ``base VM`` such as vanilla
-	Ubuntu 12.04 LTS 64bit and Fedora 19. It would be similar with 
-	[Ubuntu Cloud Image](http://cloud-images.ubuntu.com/).
-	We expect that typical users import these ``base VMs`` rather than generating his own.
+	Ubuntu 12.04 LTS 64bit and Fedora 19. It would be similar with [Ubuntu
+	Cloud Image](http://cloud-images.ubuntu.com/).  We expect that typical
+	users import these ``base VMs`` rather than generating his own.
 	
 
 	2) You can also create your own __base VM__ from a regular VM disk image.
