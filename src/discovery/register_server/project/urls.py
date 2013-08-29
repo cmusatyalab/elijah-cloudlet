@@ -13,7 +13,6 @@ from cloudlets import views
 
 urlpatterns = patterns('',
     url(r'^$', views.index, name='cloudlet-home'),
-    (r'^api/', include(v1_api.urls)),
 
     url(r'', include('cloudlets.base.urls')),
     url(r'^cloudlets/', include('cloudlets.urls')),
@@ -23,4 +22,5 @@ urlpatterns = patterns('',
     # url(r'^admin/doc/', include('django.contrib.admindocs.urls')),
     # Uncomment the next line to enable the admin:
     url(r'^admin/', include(admin.site.urls)),
+    (r'^api/', include(v1_api.urls)),
 )

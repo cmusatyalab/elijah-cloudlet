@@ -30,6 +30,9 @@ import socket
 from urlparse import urlparse
 from cloudlet import log as logging
 
+from cloudlet.discovery.monitor.resource import ResourceMonitorThread
+from cloudlet.discovery.monitor.resource import ResourceMonitorError
+
 
 LOG = logging.getLogger(__name__)
 
@@ -51,10 +54,10 @@ class RegisterThread(threading.Thread):
         self.local_ipaddress = get_local_ipaddress()
         self.stop = threading.Event()
         self.resource_uri = None
+        self.resource_monitor = ResourceMonitorThread()
         threading.Thread.__init__(self, target=self.register)
 
     def register(self):
-        
         LOG.info("[REGISTER] start register to %s" % (self.server_dns))
         while (self.resource_uri == None):
             if self.stop.wait(0.001):
@@ -96,27 +99,42 @@ class RegisterThread(threading.Thread):
                 (server_dns, RegisterThread.API_URL,  self.local_ipaddress))
         response_list = http_get(end_point)
 
+        resource_meta = {}
+        resource_meta.update(self.resource_monitor.get_static_resource())
+        resource_meta.update(self.resource_monitor.get_dynamic_resource())
         ret_uri = None
         if response_list == None or len(response_list) == 0:
             # POST
             end_point = urlparse("%s%s" % \
                 (server_dns, RegisterThread.API_URL))
-            json_string = {"status":"RUN"}
+            json_string = {
+                    "status":"RUN",
+                    'meta': resource_meta,
+                    }
             ret_msg = http_post(end_point, json_string=json_string)
             ret_uri = ret_msg.get('resource_uri', None)
         else:
             # PUT
             ret_uri = response_list[0].get('resource_uri', None)
             end_point = urlparse("%s%s" % (server_dns, ret_uri))
-            json_string = {"status":"RUN"}
+            json_string = {
+                    "status":"RUN",
+                    'meta': resource_meta,
+                    }
             http_put(end_point, json_string=json_string)
 
         return ret_uri
 
 
     def _update_status(self, server_dns):
+        resource_meta = {}
+        resource_meta.update(self.resource_monitor.get_static_resource())
+        resource_meta.update(self.resource_monitor.get_dynamic_resource())
         end_point = urlparse("%s%s" % (server_dns, self.resource_uri))
-        json_string = {"status":"RUN"}
+        json_string = {
+                "status":"RUN",
+                'meta': resource_meta,
+                }
         ret_msg = http_put(end_point, json_string=json_string)
         return ret_msg
 

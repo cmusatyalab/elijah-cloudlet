@@ -1,6 +1,7 @@
+import base64
 import datetime
 from django.utils.timezone import utc
-from django.contrib.auth.models import User
+from django.contrib.auth.models import Group, User
 from django.db import models
 from django.template.defaultfilters import slugify
 from uuid import uuid1
@@ -40,3 +41,17 @@ class Cloudlet(models.Model):
         return ret_dict
 
 
+class NotFound(Exception):
+    pass
+
+
+class UserInfo(models.Model):
+    class Meta:
+        verbose_name_plural = 'User info'
+
+    user = models.OneToOneField(User, primary_key=True, related_name='+')
+    feed_token = models.CharField(max_length=44, default=lambda:
+            base64.urlsafe_b64encode(os.urandom(33)))
+
+    def __unicode__(self):
+        return self.user.email

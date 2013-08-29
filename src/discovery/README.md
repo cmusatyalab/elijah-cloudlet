@@ -14,6 +14,7 @@ RESTful registration server
 You will need:
 * Django >= 1.5.1
 * django-tastypie >= 0.10.0
+* simplejson >= 1.9.3
 * pytz >= 2012f
 * python-mysqldb
 * pygeoip >= 0.2.5

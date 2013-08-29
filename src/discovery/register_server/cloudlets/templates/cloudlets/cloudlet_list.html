@@ -1,49 +1,66 @@
-{% load url from future %}
-{% load staticfiles %}
-<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
-<html xmlns="http://www.w3.org/1999/xhtml">
+{% extends "base.html" %}
 
-    <head>
-        <title>{{page_title}}</title>
-        <meta http-equiv="Content-Type" content="text/html; charset=UTF-8" />
-		<link rel="stylesheet" href="{% static 'cloudlets/style.css' %}" media="all" />
-    </head>
-	<body>
-		<h1>{{page_title}}</h1>
+{% load olive %}
+{% load compress %}
 
-		<div id="content">
+{% block title %}Cloudlet{% endblock %}
+{% block container-class %}container{% endblock %}
 
-			{% if latest_cloudlet_list %}
+{% block css %}
+{{ block.super }}
+<style type="text/less">
+.hero-unit {
+  margin-bottom: 25px;
+  h1 {
+    margin-bottom: 0.5em;
+  }
+}
+.container h3 {
+  margin: 0;
+}
+</style>
+{% endblock %}
+
+{% block content %}
+
+{% if latest_cloudlet_list %}
+<table class="table table-striped table-bordered table-hover">
+	<tr>
+		<thread>
+		<th>ID</th>
+		<th>Status</th>
+		<th>Latitude</th>
+		<th>Logitude</th>
+		<th>Update Time</th>
+		<th>Connect</th>
+		</thread>
+		<tbody>
 			{% for cloudlet in latest_cloudlet_list %}
-			<div class="post_entry">
-				<h3 align="center" id="post_{{cloudlet.id}}" class="post_title"> <a href="{% url 'detail' cloudlet.id %}">{{ cloudlet.ip_address}}</a>
-				</h3>
-				<p class="post_info" align="right">
-				Created at {{cloudlet.pub_date}} <br />
-				Updated at {{cloudlet.mod_time}}
-				</p>
-				<div class="content_box">
-					Latitude 	: {{cloudlet.latitude}} <br />
-					Longitude	: {{cloudlet.longitude}} <br />
-					Status		: {{cloudlet.status}}
-					<h3>
-						<a href="http://{{cloudlet.ip_address}}/horizon" target="_blank">Connect</a>
-					</h3>
+			<td align="center">
+				<div id="browse_app">
+					<a class="btn btn-info" href="{% url 'cloudlet-cloudlet-detail' cloudlet.id %}">{{ cloudlet.id }}</a>
 				</div>
-				<ul class="post_meta">
-					<li>
-					meta information <br />
-					{% for tag in entry.Tags.all %}
-					<span>{{tag.Title}}</span>
-					{% endfor %}
-					</li>
-				</ul>
+			</td>
+			<td>{{cloudlet.status}}</td>
+			<td>{{cloudlet.latitude}}</td>
+			<td>{{cloudlet.longitude}}</td>
+			<td>{{cloudlet.mod_time}}</td>
+			<td>
+				<div id="browse_app">
+				{% if cloudlet.status == "RUN" %}
+					<a class="btn btn-success" href="http://{{ cloudlet.ip_address }}/horizon" target="_blank">{{cloudlet.ip_address}}</a>
+				{% else %}
+					{{cloudlet.ip_address}}
+				{% endif %}
+				</div>
+			</td>
 
-			</div>
             {% endfor %}
-        </ul>
-        {% else %}
-        <p>No cloudlets are available.</p>
-        {% endif %}
-    </body>
-</html>
+		</tbody>
+	</tr>
+</table>
+{% else %}
+<p>No cloudlets are available.</p>
+{% endif %}
+
+{% endblock %}

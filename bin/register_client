@@ -23,8 +23,10 @@ import time
 sys.path.insert(0, "../src/")
 from optparse import OptionParser
 
-from cloudlet.discovery.ds_register import RegisterError
 from cloudlet.discovery.ds_register import RegisterThread
+from cloudlet.discovery.ds_register import RegisterError
+from cloudlet.discovery.monitor.resource import ResourceMonitorThread
+from cloudlet.discovery.monitor.resource import ResourceMonitorError
 from cloudlet import log as logging
 from cloudlet.Configuration import Const as Const
 
