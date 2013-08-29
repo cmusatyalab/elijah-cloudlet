@@ -1,0 +1,79 @@
+#!/usr/bin/env python 
+#
+# Cloudlet Infrastructure for Mobile Computing
+#
+#   Author: Kiryong Ha <krha@cmu.edu>
+#
+#   Copyright (C) 2011-2013 Carnegie Mellon University
+#   Licensed under the Apache License, Version 2.0 (the "License");
+#   you may not use this file except in compliance with the License.
+#   You may obtain a copy of the License at
+#
+#       http://www.apache.org/licenses/LICENSE-2.0
+#
+#   Unless required by applicable law or agreed to in writing, software
+#   distributed under the License is distributed on an "AS IS" BASIS,
+#   WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+#   See the License for the specific language governing permissions and
+#   limitations under the License.
+#
+
+import sys
+import time
+sys.path.insert(0, "../src/")
+from optparse import OptionParser
+
+from cloudlet.discovery.ds_register import RegisterError
+from cloudlet.discovery.ds_register import RegisterThread
+from cloudlet import log as logging
+from cloudlet.Configuration import Const as Const
+
+
+LOG = logging.getLogger(__name__)
+UPDATE_PERIOD = 30  # update information for every 30 seconds
+
+
+def process_command_line(argv):
+    USAGE = "$ %prog [registration_server_name] [option]\n"
+    USAGE += "  Example) $ %prog http://register.findcloudlet.org\n"
+    VERSION = 'cloudlet registration tool: %s' % Const.VERSION
+    DESCRIPTION = "Register Cloudlet to a central server for discovery purpose"
+    parser = OptionParser(usage=USAGE,
+            version=VERSION,
+            description=DESCRIPTION)
+
+    parser.add_option('-d',
+            dest='daemonize', action='store_false', default=True,
+            help='do not run as a daemon')
+
+    settings, args = parser.parse_args(argv)
+    if len(args) != 1:
+        parser.error("Need URL for registration server")
+
+    register_server = str(args[0]).lower()
+    return register_server, settings
+
+
+def main(argv):
+    register_server, settings = process_command_line(sys.argv[1:])
+
+    # Start registration client
+    try:
+        register_client = RegisterThread(register_server,
+                update_period=UPDATE_PERIOD)
+        register_client.start()
+        LOG.info("Register to Cloudlet direcory service")
+        while True:
+            time.sleep(10000)
+    except RegisterError as e:
+        LOG.warning(str(e))
+        LOG.warning("Cannot register Cloudlet to %s" % (register_server))
+    except KeyboardInterrupt as e:
+        LOG.warning("User exists")
+        register_client.terminate()
+        sys.exit(1)
+
+
+if __name__ == "__main__":
+    status = main(sys.argv)
+    sys.exit(status)
