@@ -116,7 +116,7 @@ TEMPLATE_DIRS = (
 
 INSTALLED_APPS = (
     'cloudlets',
-    'registration',
+    #'registration',
     'django.contrib.auth',
     'django.contrib.contenttypes',
     'django.contrib.sessions',
