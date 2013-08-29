@@ -24,6 +24,7 @@ class Cloudlet(models.Model):
     mod_time = models.DateTimeField(default=datetime.datetime.now)
     longitude = models.DecimalField(max_digits=10, decimal_places=4)
     latitude = models.DecimalField(max_digits=10, decimal_places=4)
+    meta = models.CharField(max_length=1024, default='')
 
     def save(self, *args, **kwargs):
         return super(Cloudlet, self).save(*args, **kwargs)

@@ -1,0 +1,9 @@
+{# Used by messages template tag; do not include directly #}
+
+{% load olive %}
+
+{% for message in messages %}
+<div class="{{ message.tags }}">
+{{ message.message|markdown }}
+</div>
+{% endfor %}

@@ -1,0 +1,32 @@
+{% extends "formbase.html" %}
+{% load compress %}
+
+{% block css %}
+{{ block.super }}
+{% compress css %}
+<style type="text/css">
+.controls.link-field {
+  padding-top: 5px;
+}
+</style>
+{% endcompress %}
+{% endblock %}
+
+{% block pagetitle %}Profile{% endblock %}
+
+{% block legend %}
+Update profile
+{% endblock %}
+
+{% block after-fields %}
+<div class="control-group">
+  <label class="control-label">Password</label>
+  <div class="controls link-field">
+    <a href="{% url 'cloudlet-change-password' %}">Change password</a>
+  </div>
+</div>
+{% endblock %}
+
+{% block submit %}
+Update
+{% endblock %}

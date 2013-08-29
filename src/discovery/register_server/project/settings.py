@@ -81,6 +81,7 @@ STATICFILES_FINDERS = (
     'django.contrib.staticfiles.finders.FileSystemFinder',
     'django.contrib.staticfiles.finders.AppDirectoriesFinder',
 #    'django.contrib.staticfiles.finders.DefaultStorageFinder',
+    'compressor.finders.CompressorFinder',
 )
 
 # Make this unique, and don't share it with anybody.
@@ -116,7 +117,9 @@ TEMPLATE_DIRS = (
 
 INSTALLED_APPS = (
     'cloudlets',
-    'registration',
+    'cloudlets.accounts',
+    'cloudlets.util',
+    'cloudlets.base',
     'django.contrib.auth',
     'django.contrib.contenttypes',
     'django.contrib.sessions',
@@ -127,6 +130,7 @@ INSTALLED_APPS = (
     'django.contrib.admin',
     # Uncomment the next line to enable admin documentation:
     # 'django.contrib.admindocs',
+    'compressor',
 )
 
 # A sample logging configuration. The only tangible logging
@@ -172,3 +176,15 @@ CACHES = {
 '''
 
 
+COMPRESS_OFFLINE = True
+COMPRESS_OFFLINE_CONTEXT = {}
+COMPRESS_PARSER = 'compressor.parser.LxmlParser'
+COMPRESS_PRECOMPILERS = (
+    ('text/less', 'lessc --no-color --yui-compress {infile} {outfile}'),
+)
+COMPRESS_STORAGE = 'compressor.storage.GzipCompressorFileStorage'
+# Ensure virtualenv bin directory is in PATH for node and lessc
+import os, sys
+os.putenv('PATH', os.environ['PATH'] + ':' + os.path.dirname(sys.executable))
+
+LOGIN_REDIRECT_URL = 'cloudlet-home'

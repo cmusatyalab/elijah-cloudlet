@@ -12,8 +12,8 @@ RESTful registration server
 
 ## Install ##
 You will need:
-* Django >= 1.4.3
-* django-tastypie >= 0.9.11
+* Django >= 1.5.1
+* django-tastypie >= 0.10.0
 * pytz >= 2012f
 * python-mysqldb
 * pygeoip >= 0.2.5
@@ -44,6 +44,7 @@ You can download it from [link](http://dev.maxmind.com/geoip/geolite).
 Or execute download_geoip_db.sh as follows:
 
 		$ ./download_geoip_db.sh
+
 
 
 DNS server for cloudlet

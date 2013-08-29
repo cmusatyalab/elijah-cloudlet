@@ -1,0 +1,6 @@
+You are receiving this email because you requested to change the email
+address for your Cloudlet user account at {{ site.domain }}.
+
+To finish changing your email address, please visit:
+
+{{ protocol }}://{{ site.domain }}{% url 'cloudlet-change-email' token %}

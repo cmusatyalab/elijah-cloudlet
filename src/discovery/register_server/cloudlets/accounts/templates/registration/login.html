@@ -1,0 +1,31 @@
+{% extends "formbase.html" %}
+{% load compress %}
+
+{% block pagetitle %}Sign In{% endblock %}
+
+{% block css %}
+{{ block.super }}
+{% compress css %}
+<style type="text/css">
+.pwreset {
+  margin-left: 1.5em;
+}
+</style>
+{% endcompress %}
+{% endblock %}
+
+{% block legend %}
+Sign in
+{% endblock %}
+
+{% block after-fields %}
+<input type="hidden" name="next" value="{{ next }}">
+{% endblock %}
+
+{% block submit %}
+Sign in
+{% endblock %}
+
+{% block after-controls %}
+<a class="pwreset" href="{% url 'cloudlet-reset-password' %}">Reset password</a>
+{% endblock %}

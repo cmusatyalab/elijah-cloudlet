@@ -1,0 +1,183 @@
+<!doctype html>
+<!--[if lt IE 7]> <html class="no-js lt-ie9 lt-ie8 lt-ie7" lang="en"> <![endif]-->
+<!--[if IE 7]>    <html class="no-js lt-ie9 lt-ie8" lang="en"> <![endif]-->
+<!--[if IE 8]>    <html class="no-js lt-ie9" lang="en"> <![endif]-->
+<!--[if gt IE 8]><!--> <html class="no-js" lang="en"> <!--<![endif]-->
+
+{% load compress %}
+
+<head>
+	<meta charset="utf-8">
+	<meta http-equiv="X-UA-Compatible" content="IE=edge,chrome=1">
+
+	<title>{% block title %}{% block pagetitle %}Cloudlet{% endblock %} &mdash; Elijah-Cloudlet{% endblock %}</title>
+
+	<link rel="icon" type="image/png" href="{{ STATIC_URL }}images/favicon.png">
+
+	{% compress css %}
+	<link rel="stylesheet" href="{{ STATIC_URL }}css/bootstrap.min.css">
+	<style type="text/less">
+	{% include "variables.less" %}
+	body {
+	  padding-top: (@navbar-height + 100px);
+	  padding-bottom: @navbar-height;
+	}
+  </style>
+	<link rel="stylesheet" href="{{ STATIC_URL }}css/font-awesome.min.css">
+	<link rel="stylesheet" href="{{ STATIC_URL }}css/style.css">
+	{% endcompress %}
+	{% block css %}{% endblock %}
+</head>
+<body>
+	<div class="navbar navbar-fixed-top navbar-inverse main-navbar">
+		<div class="container">
+			<div class="navbar-header">
+				<a href="{% url 'cloudlet-home' %}" class="navbar-brand">Cloudlet</a>
+				<button class="navbar-toggle" type="button" data-toggle="collapse" data-target="#navbar-main">
+					<span class="icon-bar"></span>
+					<span class="icon-bar"></span>
+					<span class="icon-bar"></span>
+				</button>
+			</div>
+			<div class="navbar-collapse collapse" id="navbar-main">
+				<ul class="nav navbar-nav">
+					<li>
+					<a href="http://elijah.cs.cmu.edu" target="_blank" />
+						About
+					</a>
+					</li>
+					<li class="dropdown">
+					<a href="#" class="dropdown-toggle" data-toggle="dropdown">
+						Using Cloudlet 
+						<b class="caret"></b>
+					</a>
+					<ul class="dropdown-menu">
+						<li><a href="https://github.com/cmusatyalab/elijah-cloudlet/" target="_blank">
+							Installation
+						</a></li>
+						<li><a href="https://github.com/cmusatyalab/elijah-cloudlet/issues" target="_blank">
+							Discussion List
+						</a></li>
+					</ul>
+					</li>
+				</ul>
+				<ul class="nav navbar-nav navbar-right">
+					{% if user.is_authenticated %}
+					<li class="dropdown">
+					<a href="#" class="dropdown-toggle" data-toggle="dropdown">
+						Browse
+						<b class="caret"></b>
+					</a>
+					<ul class="dropdown-menu">
+						<li><a href="">
+							All Virtual Machines
+						</a></li>
+						<li><a href="">
+							Featured Virtual Machines
+						</a></li>
+					</ul>
+					</li>
+					{% endif %}
+
+					{% if page != 'cloudlet-login' %}
+					{% if user.is_authenticated %}
+					<li class="dropdown">
+					<a href="#" class="dropdown-toggle" data-toggle="dropdown">
+						{% if user.get_full_name %}
+						{{ user.get_full_name }}
+						{% else %}
+						{{ user.email }}
+						{% endif %}
+						<b class="caret"></b>
+					</a>
+					<ul class="dropdown-menu">
+						{% if user.is_staff %}
+						<li><a href="{% url 'admin:index' %}">Administer</a></li>
+						{% endif %}
+						{% if user.is_staff and view_admin_url %}
+						<li><a href="{{ view_admin_url }}">Administer this</a></li>
+						{% endif %}
+						{% if perms.accounts.invite_user %}
+						<li><a href="{% url 'cloudlet-invite' %}">Invite user</a></li>
+						{% endif %}
+						<li><a href="">Profile</a></li>
+						<li><a href="{% url 'cloudlet-logout' %}">Sign out</a></li>
+					</ul>
+					</li>
+					{% else %}
+					<li>
+					<a href="{% url 'cloudlet-login' %}">Sign in</a>
+					</li>
+					{% endif %}
+					{% endif %}
+				</ul>
+			</div>
+		</div>
+	</div>
+
+<div class="{% block container-class %}container-fluid{% endblock %}">
+
+{% block content %}{% endblock %}
+
+  <hr>
+
+  <footer>
+    <p>&copy; Elijah-Cloudlet 2013</p>
+  </footer>
+
+</div> <!-- /container -->
+
+{% compress js %}
+<script src="{{ STATIC_URL }}js/libs/jquery-1.7.2.min.js"></script>
+<script src="{{ STATIC_URL }}js/libs/bootstrap/bootstrap.min.js"></script>
+<script src="{{ STATIC_URL }}js/log.js"></script>
+{% endcompress %}
+
+{% if piwik_base_url %}
+{# Piwik setup.  Contains template substitutions; do not compress #}
+<script type="text/javascript">
+  var _paq = _paq || [];
+  _paq.push(["setDocumentTitle", document.title.replace(/ . Elijah Cloudlet$/,
+      '')]);
+  _paq.push(["setDownloadClasses", "download"]);
+  {% if user.is_authenticated %}
+    _paq.push(["setCustomVariable", 1, "User", "{{ user.email }}"]);
+  {% endif %}
+  {% block piwik_additional_setup %}{% endblock %}
+</script>
+<script type="text/javascript">
+  _paq.push(["trackPageView"]);
+  _paq.push(["enableLinkTracking"]);
+
+  (function() {
+    var u="{{ piwik_base_url }}";
+    _paq.push(["setTrackerUrl", u+"piwik.php"]);
+    _paq.push(["setSiteId", "{{ piwik_site_id }}"]);
+    var d=document, g=d.createElement("script"),
+    s=d.getElementsByTagName("script")[0]; g.type="text/javascript";
+    g.defer=true; g.async=true; g.src=u+"piwik.js";
+    s.parentNode.insertBefore(g,s);
+  })();
+</script>
+{% compress js %}
+<script type="text/javascript">
+  _paq.push(["trackPageView"]);
+  _paq.push(["enableLinkTracking"]);
+
+  (function() {
+    var u="{{ piwik_base_url }}";
+    _paq.push(["setTrackerUrl", u+"piwik.php"]);
+    _paq.push(["setSiteId", "{{ piwik_site_id }}"]);
+    var d=document, g=d.createElement("script"),
+    s=d.getElementsByTagName("script")[0]; g.type="text/javascript";
+    g.defer=true; g.async=true; g.src=u+"piwik.js";
+    s.parentNode.insertBefore(g,s);
+  })();
+</script>
+{% endcompress %}
+{% endif %}
+
+{% block scripts %}{% endblock %}
+
+</body>
+</html>
