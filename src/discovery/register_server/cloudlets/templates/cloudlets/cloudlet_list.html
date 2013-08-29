@@ -36,6 +36,7 @@
 		</thread>
 		<tbody>
 			{% for cloudlet in latest_cloudlet_list %}
+			<tr>
 			<td align="center">
 				<div id="browse_app">
 					<a class="btn btn-info" href="{% url 'cloudlet-cloudlet-detail' cloudlet.id %}">{{ cloudlet.id }}</a>
@@ -46,7 +47,7 @@
 			<td>{{cloudlet.longitude}}</td>
 			<td>{{cloudlet.mod_time}}</td>
 			<td>
-				<div id="browse_app">
+				<div id="browse_app" align="center">
 				{% if cloudlet.status == "RUN" %}
 					<a class="btn btn-success" href="http://{{ cloudlet.ip_address }}/horizon" target="_blank">{{cloudlet.ip_address}}</a>
 				{% else %}
@@ -54,7 +55,7 @@
 				{% endif %}
 				</div>
 			</td>
-
+			</tr>
             {% endfor %}
 		</tbody>
 	</tr>

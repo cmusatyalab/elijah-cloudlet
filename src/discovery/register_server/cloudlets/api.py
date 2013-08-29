@@ -43,12 +43,12 @@ class CloudletResource(ModelResource):
 
         search_result = ['latitude', 'longitude', 'ip_address']
 
-    def obj_create(self, bundle, request=None, **kwargs):
+    def obj_create(self, bundle, **kwargs):
         '''
         called for POST
         '''
         #import pdb;pdb.set_trace()
-        return super(CloudletResource, self).obj_create(bundle, request, **kwargs)
+        return super(CloudletResource, self).obj_create(bundle, **kwargs)
 
     def hydrate(self, bundle):
         '''
@@ -78,12 +78,13 @@ class CloudletResource(ModelResource):
         #import pdb;pdb.set_trace()
         bundle.data['longitude'] = "%9.6f" % bundle.data['longitude']
         bundle.data['latitude'] = "%9.6f" % bundle.data['latitude']
-        return bundle 
-    
+        return bundle
+
     def override_urls(self):
-        return [url(r"^(?P<resource_name>%s)/search%s$" % (self._meta.resource_name, trailing_slash()),\
-                self.wrap_view('get_search'), name="api_get_search"), ] 
-        
+        return [url(r"^(?P<resource_name>%s)/search%s$" %
+                (self._meta.resource_name, trailing_slash()),
+                self.wrap_view('get_search'), name="api_get_search"), ]
+
     def get_search(self, request, **kwargs):
         self.method_check(request, allowed=['get'])
         self.is_authenticated(request)

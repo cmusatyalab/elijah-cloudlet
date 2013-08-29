@@ -1,9 +1,43 @@
-<a href="http://{{cloudlet.ip_address}}" target="_blank">Connect to the Cloudlet</a>
+{% extends "base.html" %}
 
-{% if cloudlet %}
-<ul>
-    <li>IP address : {{cloudlet.ip_address}}</li>
-    <li>Latitude   : {{cloudlet.latitude}}</li>
-    <li>Longitude  : {{cloudlet.longitude}}</li>
-</ul>
-{% endif %}
+{% load olive %}
+{% load compress %}
+
+{% block title %}Cloudlet{% endblock %}
+{% block container-class %}container{% endblock %}
+
+{% block css %}
+{{ block.super }}
+<style type="text/less">
+.hero-unit {
+  margin-bottom: 25px;
+  h1 {
+    margin-bottom: 0.5em;
+  }
+}
+.container h3 {
+  margin: 0;
+}
+</style>
+{% endblock %}
+
+{% block content %}
+	<h2>Detail information</h2>
+	{% if cloudlet %}
+	<ul>
+		<li>IP address			: {{cloudlet.ip_address}}</li>
+		<li>Latitude   			: {{cloudlet.latitude}}</li>
+		<li>Longitude  			: {{cloudlet.longitude}}</li>
+		<li>Registred time 		: {{cloudlet.pub_date}}</li>
+		<li>Last upadted time 	: {{cloudlet.mod_time}}</li>
+		<li>Matainfo   <br />
+		{{cloudlet.meta}}</li>
+	</ul>
+		{% if cloudlet.status == "RUN" %}
+			<a class="btn btn-success" href="http://{{ cloudlet.ip_address }}/horizon" target="_blank">Connect</a>
+		{% else %}
+			<a class="btn btn-success" href="#">Turned Off</a>
+		{% endif %}
+	{% endif %}
+
+{% endblock %}
