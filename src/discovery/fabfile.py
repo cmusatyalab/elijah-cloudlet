@@ -3,8 +3,13 @@ from fabric.contrib import files
 
 django_dir = "./cloudlet/src/discovery/register_server"
 
-@hosts('krha@rain.elijah.cs.cmu.edu')
-def deploy():
+
+@hosts('root@scarlet.aura.cs.cmu.edu')
+def setup():
+    run('yum install -q -y mysql-devel libmysqlclient-dev')
+
+@hosts('root@scarlet.aura.cs.cmu.edu')
+def deploy_rs():
     local('git push origin master --tags')
 
     if not files.exists('.pip/config'):
@@ -28,7 +33,7 @@ def deploy():
             update_env = run('test requirements.txt -ot env').failed
 
         if update_env:
-            run('. env/bin/pip install -q -r requirements.txt')
+            run('env/bin/pip install -q -r requirements.txt')
             run('touch env')
 
         # Install node if necessary

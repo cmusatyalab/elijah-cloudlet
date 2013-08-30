@@ -79,7 +79,7 @@ class CloudletResource(ModelResource):
         bundle.data['latitude'] = "%9.6f" % bundle.data['latitude']
         return bundle
 
-    def override_urls(self):
+    def prepend_urls(self):
         return [url(r"^(?P<resource_name>%s)/search%s$" %
                 (self._meta.resource_name, trailing_slash()),
                 self.wrap_view('get_search'), name="api_get_search"), ]
