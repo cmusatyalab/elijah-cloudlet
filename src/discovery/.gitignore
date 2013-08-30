@@ -1,3 +1,4 @@
+register_server/env/
 register_server/ds/network/hostip_db/
 register_server/ds/network/db/
 register_server/virt/

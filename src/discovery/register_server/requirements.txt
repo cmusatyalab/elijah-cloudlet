@@ -1,0 +1,8 @@
+Django==1.5.1
+django-tastypie==0.10.0
+simplejson==1.9.3
+MySQL-python==1.2.4
+django_compressor==1.3
+pygeoip==0.2.5
+nodeenv==0.6.5
+
