@@ -3,6 +3,7 @@ from django.conf.urls import patterns, include, url
 from .views import *
 
 urlpatterns = patterns('',
+    url(r'^$', index, name='cloudlet-home'),
     url(r'^contact/$', contact, name='cloudlet-contact'),
     url(r'^discuss/$', discussion, name='cloudlet-discussion'),
     url(r'^about/$', generic_page, {'path': 'about'}, name='cloudlet-about'),

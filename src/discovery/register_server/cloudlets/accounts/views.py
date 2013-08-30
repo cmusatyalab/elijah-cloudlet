@@ -14,7 +14,7 @@ from .models import *
 from ..util.utils import send_template_mail
 from ..util.views import land_message
 
-@permission_required('archive.invite_user')
+#@permission_required('archive.invite_user')
 def invite_user(request):
     if request.method == 'POST':
         form = forms.InviteForm(request.POST)

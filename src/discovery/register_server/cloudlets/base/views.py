@@ -8,6 +8,11 @@ from django.template import TemplateDoesNotExist
 from . import forms
 from ..util.utils import send_template_mail
 
+
+def index(request):
+    return render(request, "index.html", {})
+
+
 def generic_page(request, path, context=None):
     try:
         if path.endswith('.txt'):

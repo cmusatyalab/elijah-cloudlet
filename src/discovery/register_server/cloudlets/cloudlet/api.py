@@ -1,11 +1,10 @@
-# cloudlets/api.py
 from django.utils.timezone import utc
 import datetime
 import heapq
 from decimal import Decimal
 from operator import itemgetter
 from tastypie.authorization import Authorization
-from cloudlets.models import Cloudlet
+from .models import Cloudlet
 from tastypie.resources import ModelResource, ALL, ALL_WITH_RELATIONS
 from django.contrib.auth.models import User
 from django.conf.urls.defaults import *
@@ -14,7 +13,7 @@ from tastypie.utils import trailing_slash
 from django.core.serializers import json
 from django.utils import simplejson
 from tastypie.serializers import Serializer
-from network import ip_location
+from ..network import ip_location
 from django.db.models.signals import post_save
 
 now = datetime.datetime.utcnow().replace(tzinfo=utc)

@@ -1,16 +1,8 @@
-from django.http import HttpResponse
-from django.http import Http404
-from django.shortcuts import render
 from django.contrib.auth.decorators import login_required
 from django.views import generic
-from .util.utils import ObjectRange, RangeNotSatisfiable, paginate
+from ..util.utils import ObjectRange, RangeNotSatisfiable, paginate
 
-from cloudlets.models import Cloudlet
-
-
-def index(request):
-    return render(request, "cloudlets/index.html", {})
-
+from .models import Cloudlet
 
 
 @login_required
@@ -22,7 +14,7 @@ def all_images(request):
 
 
 class CloudletListView(generic.ListView):
-    template_name = 'cloudlets/cloudlet_list.html'
+    template_name = 'cloudlet_list.html'
     context_object_name = 'latest_cloudlet_list'
 
     def get_queryset(self):
@@ -31,6 +23,6 @@ class CloudletListView(generic.ListView):
 
 class CloudletDetailsView(generic.DetailView):
     model = Cloudlet
-    template_name = 'cloudlets/cloudlet_details.html'
+    template_name = 'cloudlet_details.html'
 
 

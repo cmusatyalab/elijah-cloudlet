@@ -116,7 +116,8 @@ TEMPLATE_DIRS = (
 )
 
 INSTALLED_APPS = (
-    'cloudlets',
+    'cloudlets.cloudlet',
+    'cloudlets.vmimages',
     'cloudlets.accounts',
     'cloudlets.util',
     'cloudlets.base',
