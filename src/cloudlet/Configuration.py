@@ -59,7 +59,7 @@ class Options(object):
 
 
 class Const(object):
-    VERSION = str("0.8.1")
+    VERSION = str("0.8.2")
     HOME_DIR = os.path.abspath(os.path.expanduser("~"))
     CONFIGURATION_DIR = os.path.join('/', 'var', 'lib', 'cloudlet', 'conf')
 
