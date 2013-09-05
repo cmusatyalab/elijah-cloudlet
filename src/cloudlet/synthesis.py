@@ -554,9 +554,8 @@ def _convert_xml(disk_path, xml=None, mem_snapshot=None, \
     # enforce CPU model to have kvm64
     cpu_element = xml.find("cpu")
     if cpu_element is None:
-        msg = "Malfomed XML input: %s\n", Const.TEMPLATE_XML
-        msg += "need to specify CPU"
-        raise CloudletGenerationError(msg)
+        cpu_element = Element("cpu")
+        xml.append(cpu_element)
     cpu_element.set("match", "exact")
     if cpu_element.find("arch") is not None:
         cpu_element.remove(cpu_element.find("arch"))
@@ -632,7 +631,7 @@ def _convert_xml(disk_path, xml=None, mem_snapshot=None, \
         remove_list = list()
         for argument_item in argument_list:
             arg_value = argument_item.get('value').strip()
-            if (arg_value is '-cloudlet') or (arg_value.startswith('logfile=')):
+            if arg_value.startswith('-cloudlet') or arg_value.startswith('logfile='):
                 remove_list.append(argument_item)
         for item in remove_list:
             qemu_element.remove(item)
