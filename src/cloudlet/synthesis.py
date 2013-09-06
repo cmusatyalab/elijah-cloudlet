@@ -535,14 +535,20 @@ def _convert_xml(disk_path, xml=None, mem_snapshot=None, \
     if mem_snapshot != None:
         hdr = vmnetx._QemuMemoryHeader(open(mem_snapshot))
         xml = ElementTree.fromstring(hdr.xml)
-    old_xml_str = ElementTree.tostring(xml)
+    original_xml_backup = ElementTree.tostring(xml)
 
     vm_name = None
     uuid = None
+    nova_vnc_element = None
     if nova_xml != None:
         new_xml = ElementTree.fromstring(nova_xml)
         vm_name = str(new_xml.find('name').text)
         uuid = str(new_xml.find('uuid').text)
+        nova_graphics_element = new_xml.find('devices/graphics')
+        if (nova_graphics_element is not None) and \
+                (nova_graphics_element.get('type') == 'vnc'):
+            nova_vnc_element = nova_graphics_element
+
         #network_element = new_xml.find('devices/interface')
         #network_xml_str = ElementTree.tostring(network_element)
 
@@ -587,6 +593,15 @@ def _convert_xml(disk_path, xml=None, mem_snapshot=None, \
         msg = "Malfomed XML input: %s", Const.TEMPLATE_XML
         raise CloudletGenerationError(msg)
     name_element.text = vm_name
+
+    # update vnc information
+    if nova_vnc_element is not None:
+        device_element = xml.find("devices")
+        graphics_elements = device_element.findall("graphics")
+        for graphics_element in graphics_elements:
+            if graphics_element.get("type") == "vnc":
+                device_element.remove(graphics_element)
+                device_element.append(nova_vnc_element)
 
     # Use custom QEMU
     qemu_emulator = xml.find('devices/emulator')
@@ -668,7 +683,7 @@ def _convert_xml(disk_path, xml=None, mem_snapshot=None, \
     if mem_snapshot is not None:
         overwrite_xml(mem_snapshot, new_xml_str)
 
-    return old_xml_str, new_xml_str
+    return original_xml_backup, new_xml_str
 
 
 def _get_monitoring_info(conn, machine, options,
