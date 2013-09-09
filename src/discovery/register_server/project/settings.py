@@ -1,4 +1,5 @@
 # Django settings for project project.
+from .local import *
 
 DEBUG = True
 TEMPLATE_DEBUG = DEBUG
