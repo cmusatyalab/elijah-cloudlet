@@ -1,5 +1,7 @@
 # Django settings for project project.
 from .local import *
+import os, sys
+BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 
 DEBUG = True
 TEMPLATE_DEBUG = DEBUG
@@ -50,20 +52,11 @@ USE_L10N = True
 # If you set this to False, Django will not use timezone-aware datetimes.
 USE_TZ = False
 
-# Absolute filesystem path to the directory that will hold user-uploaded files.
-# Example: "/home/media/media.lawrence.com/media/"
-MEDIA_ROOT = ''
-
-# URL that handles the media served from MEDIA_ROOT. Make sure to use a
-# trailing slash.
-# Examples: "http://media.lawrence.com/media/", "http://example.com/media/"
-MEDIA_URL = ''
-
 # Absolute path to the directory static files should be collected to.
 # Don't put anything in this directory yourself; store your static files
 # in apps' "static/" subdirectories and in STATICFILES_DIRS.
 # Example: "/home/media/media.lawrence.com/static/"
-STATIC_ROOT = ''
+STATIC_ROOT = os.path.join(BASE_DIR, 'static/')
 
 # URL prefix for static files.
 # Example: "http://media.lawrence.com/static/"
@@ -122,6 +115,7 @@ INSTALLED_APPS = (
     'cloudlets.accounts',
     'cloudlets.util',
     'cloudlets.base',
+    'fileshack',
     'django.contrib.auth',
     'django.contrib.contenttypes',
     'django.contrib.sessions',
@@ -134,6 +128,24 @@ INSTALLED_APPS = (
     # 'django.contrib.admindocs',
     'compressor',
 )
+
+# fileshack configuration
+SERVE_STATIC = False
+
+# List of hosts which are allowed to run scheduled tasks.
+FILESHACK_CRON_HOSTS = ('localhost',)
+FILESHACK_CRON_SECRET = ''
+FILESHACK_EMAIL_FROM = ''
+
+# Absolute filesystem path to the directory that will hold user-uploaded files.
+# Example: "/home/media/media.lawrence.com/media/"
+MEDIA_ROOT = os.path.join(BASE_DIR, 'media/')
+
+# URL that handles the media served from MEDIA_ROOT. Make sure to use a
+# trailing slash.
+# Examples: "http://media.lawrence.com/media/", "http://example.com/media/"
+MEDIA_URL = '/media/'
+
 
 # A sample logging configuration. The only tangible logging
 # performed by this configuration is to send an email to
@@ -186,7 +198,6 @@ COMPRESS_PRECOMPILERS = (
 )
 COMPRESS_STORAGE = 'compressor.storage.GzipCompressorFileStorage'
 # Ensure virtualenv bin directory is in PATH for node and lessc
-import os, sys
 os.putenv('PATH', os.environ['PATH'] + ':' + os.path.dirname(sys.executable))
 
 LOGIN_REDIRECT_URL = 'cloudlet-home'
