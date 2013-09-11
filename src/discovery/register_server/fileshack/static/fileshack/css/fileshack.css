@@ -251,7 +251,7 @@ form[action="logout/"] button:focus {
 }
 
 .box .name {
-    font-size: 18pt;
+    font-size: 16pt;
     margin-top: 5px;
     margin-left: 85px;
     margin-bottom: 10px;
@@ -334,14 +334,14 @@ form[action="logout/"] button:focus {
 }
 
 .item .desc {
-    font-size: 12pt;
+    font-size: 16pt;
     margin-left: 85px;
     color: #555753;
     line-height: 120%;
 }
 
 .item .size {
-    font-size: 20pt;
+    font-size: 16pt;
     color: #555753;
     float: right;
     line-height: 150%;

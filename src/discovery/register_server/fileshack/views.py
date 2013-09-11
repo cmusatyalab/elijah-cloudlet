@@ -106,6 +106,7 @@ def logout(request, store):
     return HttpResponseRedirect(store.get_absolute_url())
 
 @require_store
+#@require_login
 def index(request, store):
     if (not request.session.has_key("fileshack_stores") or \
         not store.id in request.session["fileshack_stores"]) \
