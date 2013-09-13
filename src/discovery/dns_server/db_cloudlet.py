@@ -31,7 +31,7 @@ from sqlalchemy import create_engine
 #from sqlalchemy.orm import mapper, sessionmaker
 
 DJANGO_PROJECT_PATH = os.path.abspath("../register_server/")
-sys.path.append(os.path.join(DJANGO_PROJECT_PATH, "ds"))
+sys.path.append(os.path.join(DJANGO_PROJECT_PATH, "cloudlets"))
 from network import ip_location
 
 
