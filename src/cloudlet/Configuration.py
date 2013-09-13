@@ -98,10 +98,6 @@ class Const(object):
     TEMPLATE_OVF            = os.path.join(CONFIGURATION_DIR, "ovftransport.iso")
     CHUNK_SIZE=4096
 
-    def __init__(self):
-        import pdb;pdb.set_trace()
-        pass
-
     @staticmethod
     def _check_path(name, path):
         if not os.path.exists(path):
