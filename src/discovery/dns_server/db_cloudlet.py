@@ -47,7 +47,7 @@ class DBConnector(object):
 
         lat1, lon1 = client_location.latitude, client_location.longitude
         search_field = ["latitude", "longitude", "ip_address"]
-        sql_query = "select %s from ds_cloudlet where status = 'RUN'" % (", ".join(search_field))
+        sql_query = "select %s from cloudlet_cloudlet where status = 'RUN'" % (", ".join(search_field))
         ret_list = self.db_engine.execute(sql_query)
         cloudlet_list = list()
         for item in ret_list:
