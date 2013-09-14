@@ -535,14 +535,20 @@ def _convert_xml(disk_path, xml=None, mem_snapshot=None, \
     if mem_snapshot != None:
         hdr = vmnetx._QemuMemoryHeader(open(mem_snapshot))
         xml = ElementTree.fromstring(hdr.xml)
-    old_xml_str = ElementTree.tostring(xml)
+    original_xml_backup = ElementTree.tostring(xml)
 
     vm_name = None
     uuid = None
+    nova_vnc_element = None
     if nova_xml != None:
         new_xml = ElementTree.fromstring(nova_xml)
         vm_name = str(new_xml.find('name').text)
         uuid = str(new_xml.find('uuid').text)
+        nova_graphics_element = new_xml.find('devices/graphics')
+        if (nova_graphics_element is not None) and \
+                (nova_graphics_element.get('type') == 'vnc'):
+            nova_vnc_element = nova_graphics_element
+
         #network_element = new_xml.find('devices/interface')
         #network_xml_str = ElementTree.tostring(network_element)
 
@@ -554,9 +560,8 @@ def _convert_xml(disk_path, xml=None, mem_snapshot=None, \
     # enforce CPU model to have kvm64
     cpu_element = xml.find("cpu")
     if cpu_element is None:
-        msg = "Malfomed XML input: %s\n", Const.TEMPLATE_XML
-        msg += "need to specify CPU"
-        raise CloudletGenerationError(msg)
+        cpu_element = Element("cpu")
+        xml.append(cpu_element)
     cpu_element.set("match", "exact")
     if cpu_element.find("arch") is not None:
         cpu_element.remove(cpu_element.find("arch"))
@@ -588,6 +593,15 @@ def _convert_xml(disk_path, xml=None, mem_snapshot=None, \
         msg = "Malfomed XML input: %s", Const.TEMPLATE_XML
         raise CloudletGenerationError(msg)
     name_element.text = vm_name
+
+    # update vnc information
+    if nova_vnc_element is not None:
+        device_element = xml.find("devices")
+        graphics_elements = device_element.findall("graphics")
+        for graphics_element in graphics_elements:
+            if graphics_element.get("type") == "vnc":
+                device_element.remove(graphics_element)
+                device_element.append(nova_vnc_element)
 
     # Use custom QEMU
     qemu_emulator = xml.find('devices/emulator')
@@ -632,7 +646,7 @@ def _convert_xml(disk_path, xml=None, mem_snapshot=None, \
         remove_list = list()
         for argument_item in argument_list:
             arg_value = argument_item.get('value').strip()
-            if (arg_value is '-cloudlet') or (arg_value.startswith('logfile=')):
+            if arg_value.startswith('-cloudlet') or arg_value.startswith('logfile='):
                 remove_list.append(argument_item)
         for item in remove_list:
             qemu_element.remove(item)
@@ -669,7 +683,7 @@ def _convert_xml(disk_path, xml=None, mem_snapshot=None, \
     if mem_snapshot is not None:
         overwrite_xml(mem_snapshot, new_xml_str)
 
-    return old_xml_str, new_xml_str
+    return original_xml_backup, new_xml_str
 
 
 def _get_monitoring_info(conn, machine, options,
