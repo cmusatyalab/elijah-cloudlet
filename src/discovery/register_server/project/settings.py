@@ -130,7 +130,7 @@ INSTALLED_APPS = (
 )
 
 # fileshack configuration
-SERVE_STATIC = False
+SERVE_STATIC = True
 
 # List of hosts which are allowed to run scheduled tasks.
 FILESHACK_CRON_HOSTS = ('localhost',)
