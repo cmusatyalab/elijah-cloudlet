@@ -43,6 +43,7 @@ from cloudlet.delta import DeltaList
 from cloudlet.delta import DeltaItem
 from cloudlet import msgpack
 from cloudlet.progressbar import AnimatedProgressBar
+from cloudlet.package import VMOverlayPackage
 
 from xml.etree import ElementTree
 from xml.etree.ElementTree import Element
@@ -210,11 +211,8 @@ class VM_Overlay(threading.Thread):
                 self.modified_disk, self.modified_mem.name)
 
         # 4. create_overlayfile
-        image_name = os.path.basename(self.base_disk).split(".")[0]
-        dir_path = os.path.dirname(self.base_mem)
-        overlay_prefix = os.path.join(dir_path,
-                image_name+Const.OVERLAY_FILE_PREFIX)
-        overlay_metapath = os.path.join(dir_path, image_name+Const.OVERLAY_META)
+        overlay_prefix = os.path.join(os.getcwd(), Const.OVERLAY_FILE_PREFIX)
+        overlay_metapath = os.path.join(os.getcwd(), Const.OVERLAY_META)
 
         self.overlay_metafile, self.overlay_files = \
                 generate_overlayfile(overlay_deltalist, self.options, 
@@ -222,12 +220,22 @@ class VM_Overlay(threading.Thread):
                 os.path.getsize(self.modified_mem.name),
                 overlay_metapath, overlay_prefix)
 
-        # option for data-intensive application
-        if self.options.DATA_SOURCE_URI != None:
-            overlay_uri_meta = os.path.join(dir_path, image_name+Const.OVERLAY_URIs)
-            self.overlay_uri_meta =  self._terminate_emulate_cache_fs(overlay_uri_meta)
+        # packaging VM overlay into a single zip file
+        if self.options.ZIP_CONTAINER == True:
+            self.overlay_zipfile = os.path.join(os.getcwd(), Const.OVERLAY_ZIP)
+            VMOverlayPackage.create(self.overlay_zipfile, self.overlay_metafile, self.overlay_files)
+            # delete tmp overlay files
+            if os.path.exists(self.overlay_metafile) == True:
+                os.remove(self.overlay_metafile)
+            for overlay_file in self.overlay_files:
+                if os.path.exists(overlay_file) == True:
+                    os.remove(overlay_file)
 
         # 5. terminting
+        # option for data-intensive application
+        if self.options.DATA_SOURCE_URI != None:
+            overlay_uri_meta = os.path.join(os.getcwd(), Const.OVERLAY_URIs)
+            self.overlay_uri_meta =  self._terminate_emulate_cache_fs(overlay_uri_meta)
         self.terminate()
 
     def terminate(self):
@@ -438,7 +446,7 @@ def _terminate_vm(conn, machine):
     except libvirt.libvirtError, e:
         pass
 
-def _create_overlay_meta(base_hash, overlay_metafile, modified_disksize, modified_memsize,
+def _create_overlay_meta(overlay_metafile, base_hash, modified_disksize, modified_memsize,
         blob_info):
     fout = open(overlay_metafile, "wrb")
 
@@ -831,10 +839,10 @@ def generate_overlayfile(overlay_deltalist, options,
 
     # create metadata
     if not options.DISK_ONLY:
-        _create_overlay_meta(base_hashvalue, overlay_metapath,
+        _create_overlay_meta(overlay_metapath, base_hashvalue,
                 launchdisk_size, launchmem_size, blob_list)
     else:
-        _create_overlay_meta(base_hashvalue, overlay_metapath,
+        _create_overlay_meta(overlay_metapath, base_hashvalue,
                 launchdisk_size, launchmem_size, blob_list)
 
     overlay_files = [item[Const.META_OVERLAY_FILE_NAME] for item in blob_list]
@@ -1310,10 +1318,8 @@ def create_residue(base_disk, base_hashvalue,
             residue_deltalist)
 
     # 5. create_overlayfile
-    image_name = os.path.basename(base_disk).split(".")[0]
-    dir_path = os.path.dirname(base_mem)
-    overlay_prefix = os.path.join(dir_path, image_name+Const.OVERLAY_FILE_PREFIX)
-    overlay_metapath = os.path.join(dir_path, image_name+Const.OVERLAY_META)
+    overlay_prefix = os.path.join(os.getcwd(), Const.OVERLAY_FILE_PREFIX)
+    overlay_metapath = os.path.join(os.getcwd(), Const.OVERLAY_META)
 
     overlay_metafile, overlay_files = \
             generate_overlayfile(merged_list, options, 

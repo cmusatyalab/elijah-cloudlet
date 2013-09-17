@@ -46,6 +46,7 @@ class Options(object):
     FREE_SUPPORT                        = False
     XRAY_SUPPORT                        = False
     DISK_ONLY                           = False
+    ZIP_CONTAINER                       = False
     DATA_SOURCE_URI                     = None
 
     # see the effect of dedup and reducing semantic by generating two indenpendent overlay
@@ -68,9 +69,10 @@ class Const(object):
     BASE_DISK_META          = ".base-img-meta"
     BASE_MEM_META           = ".base-mem-meta"
     BASE_HASH_VALUE         = ".base-hash"
-    OVERLAY_META            = ".overlay-meta"
     OVERLAY_URIs            = ".overlay-URIs"
-    OVERLAY_FILE_PREFIX     = ".overlay"
+    OVERLAY_META            = "overlay-meta"
+    OVERLAY_FILE_PREFIX     = "overlay-blob"
+    OVERLAY_ZIP             = "overlay.zip"
     OVERLAY_LOG             = ".overlay-log"
     LOG_PATH                = "/var/tmp/cloudlet/log-synthesis"
     OVERLAY_BLOB_SIZE_KB    = 1024*1024 # 1G

@@ -69,6 +69,9 @@ def process_command_line(argv, commands):
             '-d', '--disk', action='store_true', dest='disk_only', default=False,
             help='[overlay_creation] create only disk overlay only')
     parser.add_option(
+            '-z', '--zip', action='store_true', dest='zip_container', default=False,
+            help='[overlay_creation] encapsulate vm overlay files into a single zip file')
+    parser.add_option(
             '-s', '--samba-mount', action='store', dest='source_uri', default=None,
             help='[overlay_creation] mount samba for data-intensive application')
     parser.add_option(
@@ -149,6 +152,7 @@ def main(argv):
         options.TRIM_SUPPORT = not settings.disable_trim_support
         options.FREE_SUPPORT = settings.enable_free_support
         options.DISK_ONLY = settings.disk_only
+        options.ZIP_CONTAINER = settings.zip_container
         options.DATA_SOURCE_URI = settings.source_uri
 
         try:
@@ -158,14 +162,30 @@ def main(argv):
             machine = vm_overlay.resume_basevm()
             synthesis.connect_vnc(machine)
 
-            # process optimizations
-            vm_overlay.create_overlay()
-            sys.stdout.write("[INFO] overlay metafile (%ld) : %s\n" % \
-                    (os.path.getsize(vm_overlay.overlay_metafile), \
-                    vm_overlay.overlay_metafile))
-            for overlay_file in vm_overlay.overlay_files:
-                sys.stdout.write("[INFO] overlay (%ld) : %s\n" % \
-                        (os.path.getsize(overlay_file), overlay_file))
+            # optimizations
+            overlay_filename = vm_overlay.create_overlay()
+
+            # print output
+            if options.ZIP_CONTAINER == False:
+                sys.stdout.write("[INFO] overlay metafile (%ld) : %s\n" % \
+                        (os.path.getsize(vm_overlay.overlay_metafile), \
+                        vm_overlay.overlay_metafile))
+                for overlay_file in vm_overlay.overlay_files:
+                    sys.stdout.write("[INFO] overlay (%ld) : %s\n" % \
+                            (os.path.getsize(overlay_file), overlay_file))
+            else:
+                import zipfile
+                overlay_zip = zipfile.ZipFile(vm_overlay.overlay_zipfile)
+                filesize_count = 0
+                for zipinfo in overlay_zip.infolist():
+                    if zipinfo.filename == Const.OVERLAY_META:
+                        msg = "meta file : (%ld) bytes\n" % (zipinfo.file_size)
+                    else:
+                        msg = "blob file : (%ld) bytes (%s)\n" % (zipinfo.file_size, zipinfo.filename)
+                    filesize_count += zipinfo.file_size
+                    sys.stdout.write(msg)
+                sys.stdout.write("zip overhead : (%ld) bytes\n" % \
+                        (os.path.getsize(vm_overlay.overlay_zipfile)-filesize_count))
 
             # option for data-intensive application
             if options.DATA_SOURCE_URI != None and hasattr(vm_overlay, "overlay_uri_meta"):
