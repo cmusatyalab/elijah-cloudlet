@@ -80,7 +80,7 @@ class _HttpFile(object):
         self._buffer_size = buffer_size
         self._session = requests.Session()
         if hasattr(requests.utils, 'default_user_agent'):
-            self._session.headers['User-Agent'] = 'vmnetx/%s %s' % (
+            self._session.headers['User-Agent'] = 'cloudlet/%s %s' % (
                     Const.VERSION, requests.utils.default_user_agent())
         else:
             # requests < 0.13.3
@@ -357,7 +357,49 @@ class _PackageObject(object):
                 fh.write(buf)
                 count -= len(buf)
 
+
 class VMOverlayPackage(object):
+    # pylint doesn't understand named tuples
+    # pylint: disable=E1103
+    def __init__(self, url, scheme=None, username=None, password=None):
+        self.url = url
+
+        # Open URL
+        parsed = urlsplit(url)
+        if parsed.scheme == 'http' or parsed.scheme == 'https':
+            fh = _HttpFile(url, scheme=scheme, username=username,
+                    password=password)
+        elif parsed.scheme == 'file':
+            fh = _FileFile(url)
+        else:
+            raise ValueError('%s: URLs not supported' % parsed.scheme)
+
+        # Read Zip
+        try:
+            self.zip_overlay = zipfile.ZipFile(fh, 'r')
+
+            if Const.OVERLAY_META not in self.zip_overlay.namelist():
+                msg = "Does not have meta file named %s" % Const.OVERLAY_META
+                raise DetailException(msg)
+            
+            self.metafile = Const.OVERLAY_META
+            self.blobfiles = list()
+            for each_file in self.zip_overlay.namelist():
+                if (each_file != Const.OVERLAY_META):
+                    self.blobfiles.append(each_file)
+            
+        except (zipfile.BadZipfile, _HttpError), e:
+            raise BadPackageError(str(e))
+    # pylint: enable=E1103
+
+    def read_meta(self):
+        self.metadata = self.zip_overlay.read(self.metafile)
+        return self.metadata
+
+    def read_blob(self, blobname):
+        self.blobdata = self.zip_overlay.read(blobname)
+        return self.blobdata
+
     @classmethod
     def create(cls, outfilename, metafile, blobfiles):
         # Write package

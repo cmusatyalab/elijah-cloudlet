@@ -211,8 +211,9 @@ class VM_Overlay(threading.Thread):
                 self.modified_disk, self.modified_mem.name)
 
         # 4. create_overlayfile
-        overlay_prefix = os.path.join(os.getcwd(), Const.OVERLAY_FILE_PREFIX)
-        overlay_metapath = os.path.join(os.getcwd(), Const.OVERLAY_META)
+        temp_dir = mkdtemp(prefix="cloudlet-overlay-")
+        overlay_prefix = os.path.join(temp_dir, Const.OVERLAY_FILE_PREFIX)
+        overlay_metapath = os.path.join(temp_dir, Const.OVERLAY_META)
 
         self.overlay_metafile, self.overlay_files = \
                 generate_overlayfile(overlay_deltalist, self.options, 
@@ -222,7 +223,7 @@ class VM_Overlay(threading.Thread):
 
         # packaging VM overlay into a single zip file
         if self.options.ZIP_CONTAINER == True:
-            self.overlay_zipfile = os.path.join(os.getcwd(), Const.OVERLAY_ZIP)
+            self.overlay_zipfile = os.path.join(temp_dir, Const.OVERLAY_ZIP)
             VMOverlayPackage.create(self.overlay_zipfile, self.overlay_metafile, self.overlay_files)
             # delete tmp overlay files
             if os.path.exists(self.overlay_metafile) == True:
@@ -234,7 +235,7 @@ class VM_Overlay(threading.Thread):
         # 5. terminting
         # option for data-intensive application
         if self.options.DATA_SOURCE_URI != None:
-            overlay_uri_meta = os.path.join(os.getcwd(), Const.OVERLAY_URIs)
+            overlay_uri_meta = os.path.join(temp_dir, Const.OVERLAY_URIs)
             self.overlay_uri_meta =  self._terminate_emulate_cache_fs(overlay_uri_meta)
         self.terminate()
 
@@ -359,7 +360,7 @@ class SynthesizedVM(threading.Thread):
         self.launch_disk = launch_disk
         self.launch_mem = launch_mem
 
-        temp_qemu_dir = mkdtemp(prefix="cloudlet-qemu-")
+        temp_qemu_dir = mkdtemp(prefix="cloudlet-overlay-")
         self.qemu_logfile = os.path.join(temp_qemu_dir, "qemu-trim-log")
         open(self.qemu_logfile, "w+").close()
         os.chmod(os.path.dirname(self.qemu_logfile), 0o771)
@@ -1662,11 +1663,9 @@ def synthesis(base_disk, meta, **kwargs):
     if os.path.exists(base_disk) == False:
         msg = "Base disk does not exist at %s" % base_disk
         raise CloudletGenerationError(msg)
-    if os.path.exists(meta) == False:
-        msg = "Meta file for VM overlay does not exist at %s" % meta
-        raise CloudletGenerationError(msg)
 
     disk_only = kwargs.get('disk_only', False)
+    zip_container = kwargs.get('zip_container', False)
     return_residue = kwargs.get('return_residue', False)
     qemu_args = kwargs.get('qemu_args', False)
 
@@ -1675,15 +1674,35 @@ def synthesis(base_disk, meta, **kwargs):
     base_diskmeta = kwargs.get('base_diskmeta', None)
     base_memmeta = kwargs.get('base_memmeta', None)
 
-    LOG.info("Decompressing VM overlay")
     overlay_filename = NamedTemporaryFile(prefix="cloudlet-overlay-file-")
-    meta_info = decomp_overlay(meta, overlay_filename.name)
+    if zip_container == False:
+        if os.path.exists(meta) == False:
+            msg = "Meta file for VM overlay does not exist at %s" % meta
+            raise CloudletGenerationError(msg)
+        LOG.info("Decompressing VM overlay")
+        meta_info = decomp_overlay(meta, overlay_filename.name)
+    else:
+        # download VM overlay at local
+        from lzma import LZMADecompressor
+        overlay_package = VMOverlayPackage(meta)
+        meta_raw = overlay_package.read_meta()
+        meta_info = msgpack.unpackb(meta_raw)
+        comp_overlay_files = meta_info[Const.META_OVERLAY_FILES]
+        comp_overlay_files = [item[Const.META_OVERLAY_FILE_NAME] for item in comp_overlay_files]
+        overlay_fd = open(overlay_filename.name, "w+b")
+        import pdb;pdb.set_trace()
+        for comp_filename in comp_overlay_files:
+            comp_data = overlay_package.read_blob(comp_filename)
+            decompressor = LZMADecompressor()
+            decomp_data = decompressor.decompress(comp_data)
+            decomp_data += decompressor.flush()
+            overlay_fd.write(decomp_data)
+        overlay_fd.close()
 
     LOG.info("Recovering launch VM")
     launch_disk, launch_mem, fuse, delta_proc, fuse_thread = \
             recover_launchVM(base_disk, meta_info, overlay_filename.name, \
             **kwargs)
-
     # resume VM
     LOG.info("Resume the launch VM")
     synthesized_VM = SynthesizedVM(launch_disk, launch_mem, fuse,
