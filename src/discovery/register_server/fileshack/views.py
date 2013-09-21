@@ -269,7 +269,7 @@ def upload(request, store, id):
         item.size_total = size_total
         item.save()
         fp = default_storage.open(item.fileobject.path, "wb")
-    
+
     chunks = f.chunks().__iter__()
     while True:
         try: chunk = chunks.next()
@@ -402,7 +402,6 @@ class ItemFileWrapper(FileWrapper):
 @require_store
 @require_login
 def download(request, store, item_id):
-    import pdb;pdb.set_trace()
     item = get_object_or_404(Item, pk=item_id)
     
     if item.status() == "READY":

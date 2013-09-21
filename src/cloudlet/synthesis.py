@@ -1690,7 +1690,6 @@ def synthesis(base_disk, meta, **kwargs):
         comp_overlay_files = meta_info[Const.META_OVERLAY_FILES]
         comp_overlay_files = [item[Const.META_OVERLAY_FILE_NAME] for item in comp_overlay_files]
         overlay_fd = open(overlay_filename.name, "w+b")
-        import pdb;pdb.set_trace()
         for comp_filename in comp_overlay_files:
             comp_data = overlay_package.read_blob(comp_filename)
             decompressor = LZMADecompressor()

@@ -1,6 +1,10 @@
 # Django settings for project project.
-from .local import *
 import os, sys
+try:
+    from .local import *
+except ImportError as e:
+    sys.stderr.write("Warning, Failed to import local.py file\n")
+
 BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 
 DEBUG = True
