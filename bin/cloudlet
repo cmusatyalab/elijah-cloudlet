@@ -58,13 +58,13 @@ def process_command_line(argv, commands):
 
     parser.add_option(
             '-t', '--no-trim', action='store_true', dest='disable_trim_support', default=False,
-            help='This will disable TRIM Support, mainly for test purposes. \
-                    Normal user does not need to care about this option')
+            help="This will disable TRIM Support, mainly for test purposes.\n"+
+                    "Normal user does not need to care about this option")
     parser.add_option(
             '-m', '--extract-free-memory', action='store_true', dest='enable_free_support', default=False,
-            help='This will ENABLE extracting Free memory, mainly for test purposes. \
-                    We disable this feature in default because it requires agency within guest OS. \
-                    Normal user does not need to care about this option')
+            help="This will ENABLE extracting Free memory, mainly for test purposes.\n"+
+                    "We disable this feature in default because it requires agency within guest OS.\n"+
+                    "Normal user does not need to care about this option.")
     parser.add_option(
             '-d', '--disk', action='store_true', dest='disk_only', default=False,
             help='[overlay_creation] create only disk overlay only')

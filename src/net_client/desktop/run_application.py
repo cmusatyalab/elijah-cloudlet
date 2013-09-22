@@ -39,9 +39,9 @@ def process_command_line(argv):
         parser.error('program takes no command-line arguments; "%s" ignored.' % (args,))
     
     if not settings.app:
-        parser.error("Application name is required :%s" % ' '.join(application_names))
-
+        parser.error("Application name is required among (%s)" % ' '.join(application_names))
     return settings, args
+
 
 def main(argv=None):
     global command_type

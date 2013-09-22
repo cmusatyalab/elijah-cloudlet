@@ -833,7 +833,7 @@ def generate_overlayfile(overlay_deltalist, options,
     '''
 
     # Compression
-    LOG.info("[LZMA] Compressing overlay blobs")
+    LOG.info("[LZMA] Compressing overlay blobs (%s)", overlay_metapath)
     blob_list = delta.divide_blobs(overlay_deltalist, overlayfile_prefix,
             Const.OVERLAY_BLOB_SIZE_KB, Const.CHUNK_SIZE,
             Memory.Memory.RAM_PAGE_SIZE)
@@ -1280,7 +1280,7 @@ def create_residue(base_disk, base_hashvalue,
     '''Get residue
     Return : residue_metafile_path, residue_filelist
     '''
-    # 1 sanity check
+    # 1. sanity check
     if (options == None) or (isinstance(options, Options) == False):
         raise CloudletGenerationError("Given option class is invalid: %s" % str(options))
     (base_diskmeta, base_mem, base_memmeta) = \
@@ -1728,7 +1728,7 @@ def synthesis(base_disk, meta, **kwargs):
         options.FREE_SUPPORT = True
         options.DISK_ONLY = False
         try:
-            # FIX: here we revisit all overlay to reconstruct hash information
+            # FIX: currently we revisit all overlay to reconstruct hash information
             # we can leverage Recovered_delta class reconstruction process,
             # but that does not generate hash value
             (base_diskmeta, base_mem, base_memmeta) = \
@@ -1739,12 +1739,12 @@ def synthesis(base_disk, meta, **kwargs):
                     meta_info[Const.META_BASE_VM_SHA256],
                     synthesized_VM, options, 
                     prev_mem_deltalist)
-            LOG.write("[RESULT] Residue")
-            LOG.write("[RESULT]   Metafile : %s" % \
+            LOG.info("[RESULT] Residue")
+            LOG.info("[RESULT]   Metafile : %s" % \
                     (os.path.abspath(residue_meta)))
-            LOG.write("[RESULT]   Files : %s" % str(residue_files))
+            LOG.info("[RESULT]   Files : %s" % str(residue_files))
         except CloudletGenerationError, e:
-            sys.stderr.write("Cannot create residue : %s" % (str(e)))
+            LOG.error("Cannot create residue : %s" % (str(e)))
 
     # terminate
     synthesized_VM.terminate()
