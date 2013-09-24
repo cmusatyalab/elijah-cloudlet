@@ -1280,6 +1280,9 @@ def create_residue(base_disk, base_hashvalue,
     '''Get residue
     Return : residue_metafile_path, residue_filelist
     '''
+    LOG.info("* Overlay creation configuration")
+    LOG.info("  - %s" % str(options))
+
     # 1. sanity check
     if (options == None) or (isinstance(options, Options) == False):
         raise CloudletGenerationError("Given option class is invalid: %s" % str(options))

@@ -24,11 +24,26 @@ from optparse import OptionParser
 sys.path.insert(0, "../src/")
 
 from cloudlet import msgpack
-from cloudlet import synthesis as synthesis
+from cloudlet import synthesis
 from cloudlet.Configuration import Const as Const
+from tempfile import NamedTemporaryFile
 
 
-def compare_vm_overlay(overlay_meta1, overlay_meta2):
+def get_indexed_delta_list(base_disk, overlay_metapath):
+    from cloudlet.tool import decomp_overlay
+    temp_overlay = NamedTemporaryFile(prefix="cloudlet-overlay-file-")
+    meta = decomp_overlay(overlay_metapath, temp_overlay.name)
+    (base_diskmeta, base_mem, base_memmeta) = \
+            Const.get_basepath(base_disk, check_exist=True)
+    delta_list = synthesis._reconstruct_mem_deltalist( \
+            base_disk, base_mem, temp_overlay.name)
+    indexed_delta_list = dict()
+    for item in delta_list:
+        indexed_delta_list[item.index] = item
+    return indexed_delta_list
+
+
+def compare_vm_overlay(base_disk, overlay_meta1, overlay_meta2):
     def _get_modified_chunks(metafile):
         meta1 = msgpack.unpackb(open(metafile, "r").read())
         overlay_files = meta1[Const.META_OVERLAY_FILES]
@@ -48,7 +63,29 @@ def compare_vm_overlay(overlay_meta1, overlay_meta2):
 
     disk_chunks1, memory_chunks1 = _get_modified_chunks(overlay_meta1)
     disk_chunks2, memory_chunks2 = _get_modified_chunks(overlay_meta2)
-    import pdb;pdb.set_trace()
+    unique_memory = len(memory_chunks1-memory_chunks2)
+    unique_disk = len(disk_chunks1-disk_chunks2)
+    print "unique to %s : (%ld+%ld)" % (overlay_meta1, unique_memory, unique_disk)
+
+    deltalist1 = get_indexed_delta_list(base_disk, overlay_meta1)
+    deltalist2 = get_indexed_delta_list(base_disk, overlay_meta2)
+    count_total = len(deltalist1)
+    count_unique = 0
+    count_changed = 0
+    count_identical = 0
+    for (index, delta_item) in deltalist1.iteritems():
+        item2 = deltalist2.get(index, None) 
+        if item2 == None:
+            count_unique += 1
+            continue
+        if delta_item.hash_value == item2.hash_value:
+            count_identical += 1
+        else:
+            count_changed += 1
+
+    print "# of identical chunk : %ld (%4f %%)" % (count_identical, 100.0*count_identical/count_total)
+    print "# of changed chunk   : %ld (%4f %%)" % (count_changed, 100.0*count_changed/count_total)
+    print "# of unique          : %ld (%4f %%)" % (count_unique, 100.0*count_unique/count_total)
 
 
 def process_command_line(argv):
@@ -64,24 +101,27 @@ def process_command_line(argv):
 
 def main(argv):
     #settings = process_command_line(sys.argv[1:])
-    if len(sys.argv) != 3:
-        sys.stderr.write('usage : %prog VM_overlay1 VM_overlay2\n')
+    if len(sys.argv) != 4:
+        sys.stderr.write('usage : %prog basepath VM_overlay1 VM_overlay2\n')
         sys.exit(1)
 
     # sanity check
-    vm_overlay1 = sys.argv[1]
+    base_path = sys.argv[1]
+    if os.path.exists(base_path) == False:
+        sys.stderr.write("not a valid file at %s" % basepath)
+        sys.exit(1)
+    vm_overlay1 = sys.argv[2]
     if os.path.exists(vm_overlay1) == False:
         sys.stderr.write("not a valid file at %s" % vm_overlay1)
         sys.exit(1)
-    vm_overlay2 = sys.argv[2]
+    vm_overlay2 = sys.argv[3]
     if os.path.exists(vm_overlay2) == False:
         sys.stderr.write("not a valid file at %s" % vm_overlay2)
         sys.exit(1)
 
-    compare_vm_overlay(vm_overlay1, vm_overlay2)
-
-
+    compare_vm_overlay(base_path, vm_overlay1, vm_overlay2)
     return 0
+
 
 if __name__ == "__main__":
     status = main(sys.argv)
