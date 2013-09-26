@@ -407,6 +407,7 @@ def diff_with_deltalist(delta_list, const_deltalist, ref_id):
             delta.data_len = 8
             delta.data = long(const_delta.offset)
         s_index += 1
+    LOG.info("Found %d matching chunk out of %ld" % (matching_count, len(const_deltalist)))
     return delta_list 
 
 
