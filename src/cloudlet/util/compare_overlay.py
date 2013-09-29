@@ -75,32 +75,20 @@ def compare_vm_overlay(base_disk, overlay_meta1, overlay_meta2):
         hash_dict[item.hash_value] = item
 
     count_total = len(deltadict1)
-    count_unique = 0
     count_changed = 0
     count_identical = 0
-    count_duplicated = 0
     for (index, delta_item) in deltadict1.iteritems():
         item2 = deltadict2.get(index, None) 
-        if item2 == None:
-            count_unique += 1
-            continue
-        if delta_item.hash_value == item2.hash_value:
+        dup_found = hash_dict.get(delta_item.hash_value, None)
+        if dup_found != None:
             count_identical += 1
         else:
-            dup_found = hash_dict.get(delta_item.hash_value, None)
-            if dup_found != None:
-                count_duplicated += 1
-            else: 
-                count_changed += 1
+            count_changed += 1
 
-    print "# of identical chunk : %ld (%4f %%)" % \
-            (count_identical, 100.0*count_identical/count_total)
     print "# of deduplicated    : %ld (%4f %%)" % \
-            (count_duplicated, 100.0*count_duplicated/count_total)
-    print "# of changed chunk   : %ld (%4f %%)" % \
+            (count_identical, 100.0*count_identical/count_total)
+    print "# of changed         : %ld (%4f %%)" % \
             (count_changed, 100.0*count_changed/count_total)
-    print "# of unique          : %ld (%4f %%)" % \
-            (count_unique, 100.0*count_unique/count_total)
 
     '''
     ref_id = 0x70
