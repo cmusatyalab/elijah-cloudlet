@@ -28,6 +28,9 @@ from cloudlet import synthesis as synthesis
 from cloudlet.Configuration import Const as Const
 from cloudlet.Configuration import Options
 from cloudlet import log as logging
+from cloudlet.db.table_def import BaseVM
+from cloudlet.db.table_def import Session
+from cloudlet.db.table_def import OverlayVM
 
 LOG = logging.getLogger(__name__)
 
@@ -49,6 +52,17 @@ def get_database():
     dbconn = DBConnector()
     return dbconn
 
+
+def _get_matching_basevm(basedisk_path):
+    dbconn = get_database()
+    basedisk_path = os.path.abspath(basedisk_path)
+    basevm_list = dbconn.list_item(BaseVM)
+    ret_basevm = None
+    for item in basevm_list:
+        if basedisk_path == item.disk_path: 
+            ret_basevm = item
+            break
+    return ret_basevm
 
 def process_command_line(argv, commands):
     VERSION = 'cloudlet tool: %s' % Const.VERSION
@@ -111,6 +125,8 @@ def main(argv):
     CMD_LIST_BASE           = "list-base"
     CMD_DEL_BASE            = "del-base"
     CMD_ADD_BASE            = "add-base"
+    CMD_EXPORT_BASE         = "export-base"
+    CMD_IMPORT_BASE         = "import-base"
     CMD_LIST_SESSION        = "list-session"
     CMD_CLEAR_SESSION       = "clear-session"
     CMD_LIST_OVERLAY        = "list-overlay"
@@ -122,6 +138,8 @@ def main(argv):
             CMD_LIST_BASE: "show all base VM at this machine",
             CMD_ADD_BASE: "add existing base vm to DB",
             CMD_DEL_BASE: "delete base vm at database",
+            CMD_EXPORT_BASE: "export base VM into a single file",
+            CMD_IMPORT_BASE: "import base VM from a single file",
             CMD_LIST_SESSION: "list all the session history",
             CMD_LIST_OVERLAY: "list all the overlay history",
             }
@@ -216,9 +234,7 @@ def main(argv):
             LOG.error("%s\nFailed to synthesize" % str(traceback.format_exc()))
             return 1
     elif mode == CMD_LIST_BASE:
-        from cloudlet.db.table_def import BaseVM
         dbconn = get_database()
-
         basevm_list = dbconn.list_item(BaseVM)
         sys.stdout.write("hash value" + "\t\t\t\t\t" + "path\n")
         sys.stdout.write("-"*90 + "\n")
@@ -226,7 +242,6 @@ def main(argv):
             sys.stdout.write(item.hash_value + "\t" + item.disk_path + "\n")
         sys.stdout.write("-"*90 + "\n")
     elif mode == CMD_ADD_BASE:
-        from cloudlet.db.table_def import BaseVM
         dbconn = get_database()
 
         if len(left_args) < 2:
@@ -244,30 +259,35 @@ def main(argv):
         new_basevm = BaseVM(basedisk_path, base_hashvalue)
         dbconn.add_item(new_basevm)
     elif mode == CMD_DEL_BASE:
-        from cloudlet.db.table_def import BaseVM
-        dbconn = get_database()
-
         if len(left_args) < 1:
             sys.stderr.write("delete base vm requires base path\n \
                     Ex) ./cloudlet del_base /path/to/base_disk.img \n")
             return 1
-        basedisk_path = os.path.abspath(left_args[0])
-        basevm_list = dbconn.list_item(BaseVM)
-        deleting_base = None
-        for item in basevm_list:
-            if basedisk_path == item.disk_path: 
-                deleting_base = item
-                break
-
-        if deleting_base:
-            dbconn.del_item(item)
+        deleting_base = _get_matching_basevm(left_args[0])
+        if deleting_base != None:
+            dbconn.del_item(deleting_base)
         else: 
             LOG.error("Cannot find matching base disk\n")
             return 1
+    elif mode == CMD_IMPORT_BASE:
+        pass
+    elif mode == CMD_EXPORT_BASE:
+        if len(left_args) < 2:
+            sys.stderr.write("export base vm requires 1) base path 2) name of base VM\n \
+                    Ex) ./cloudlet export-base /path/to/base_disk.img Ubuntu-12.04-i686 \n")
+            return 1
+        basedisk_path = left_args[0]
+        matching_basevm = _get_matching_basevm(basedisk_path)
+        name = str(left_args[1])
+        if matching_basevm != None:
+            from cloudlet.package import PackagingUtil
+            PackagingUtil.export_basevm(basedisk_path, name)
+        else: 
+            LOG.error("Cannot find matching base disk\n")
+            return 1
+        pass
     elif mode == CMD_LIST_SESSION:
-        from cloudlet.db.table_def import Session
         dbconn = get_database()
-
         session_list = dbconn.list_item(Session)
         sys.stdout.write("session_id\t\tassociated_time\t\t\tdisassociated_time\t\tstatus\n")
         sys.stdout.write("-"*95 + "\n")
@@ -275,17 +295,13 @@ def main(argv):
             sys.stdout.write(str(item) + "\n")
         sys.stdout.write("-"*95 + "\n")
     elif mode == CMD_CLEAR_SESSION:
-        from cloudlet.db.table_def import Session
         dbconn = get_database()
-
         session_list = dbconn.list_item(Session)
         for item in session_list:
             dbconn.session.delete(item)
         dbconn.session.commit()
     elif mode == CMD_LIST_OVERLAY:
-        from cloudlet.db.table_def import OverlayVM
         dbconn = get_database()
-
         overlay_list = dbconn.list_item(OverlayVM)
         sys.stdout.write("id\tsession_id\t\tbasevm_path\t\t\t\t\t\tstatus\n")
         sys.stdout.write("-"*95 + "\n")

@@ -23,10 +23,16 @@ import os
 import re
 import requests
 import struct
+from lxml import etree
 from urlparse import urlsplit
 import zipfile
+from lxml.builder import ElementMaker
 
 from cloudlet.Configuration import Const
+from cloudlet import log as logging
+
+LOG = logging.getLogger(__name__)
+
 
 # We want this to be a public attribute
 # pylint: disable=C0103
@@ -495,3 +501,94 @@ class VMOverlayPackage(object):
 #        zip.write(disk_path, DISK_FILENAME)
 #        zip.close()
 #
+
+class BaseVMPackage(object):
+    NS = 'http://opencloudlet.org/xmlns/vmsynthesis/package'
+    NSP = '{' + NS + '}'
+    SCHEMA_PATH = os.path.join(os.path.dirname(__file__), 'config', 'package.xsd')
+    schema = etree.XMLSchema(etree.parse(SCHEMA_PATH))
+
+    MANIFEST_FILENAME = 'basevm-package.xml'
+    #DISK_FILENAME = 'disk.img'
+    #MEMORY_FILENAME = 'memory.img'
+    #DISK_HASH_FILENAME = 'disk-hash.img'
+    #MEMORY_HASH_FILENAME = 'memory-hash.img'
+
+    # pylint doesn't understand named tuples
+    # pylint: disable=E1103
+    def __init__(self, url, scheme=None, username=None, password=None):
+        self.url = url
+
+        # Open URL
+        parsed = urlsplit(url)
+        if parsed.scheme == 'http' or parsed.scheme == 'https':
+            fh = _HttpFile(url, scheme=scheme, username=username,
+                    password=password)
+        elif parsed.scheme == 'file':
+            fh = _FileFile(url)
+        else:
+            raise ValueError('%s: URLs not supported' % parsed.scheme)
+
+        # Read Zip
+        try:
+            self.zip_overlay = zipfile.ZipFile(fh, 'r')
+
+            if Const.OVERLAY_META not in self.zip_overlay.namelist():
+                msg = "Does not have meta file named %s" % Const.OVERLAY_META
+                raise DetailException(msg)
+            
+            self.metafile = Const.OVERLAY_META
+            self.blobfiles = list()
+            for each_file in self.zip_overlay.namelist():
+                if (each_file != Const.OVERLAY_META):
+                    self.blobfiles.append(each_file)
+            
+        except (zipfile.BadZipfile, _HttpError), e:
+            raise BadPackageError(str(e))
+    # pylint: enable=E1103
+
+    def read_meta(self):
+        self.metadata = self.zip_overlay.read(self.metafile)
+        return self.metadata
+
+    @classmethod
+    def create(cls, outfile, name, \
+            base_disk, base_memory, disk_hash, memory_hash):
+        # Generate manifest XML
+        e = ElementMaker(namespace=cls.NS, nsmap={None: cls.NS})
+        tree = e.image(
+            e.disk(path=os.path.basename(base_disk)),
+            e.memory(path=os.path.basename(base_memory)),
+            e.disk_hash(path=os.path.basename(disk_hash)),
+            e.memory_hash(path=os.path.basename(memory_hash)),
+            name=name,
+        )
+        cls.schema.assertValid(tree)
+        xml = etree.tostring(tree, encoding='UTF-8', pretty_print=True,
+                xml_declaration=True)
+
+        # Write package
+        zip = zipfile.ZipFile(outfile, 'w', zipfile.ZIP_DEFLATED, True)
+        zip.comment = 'Cloudlet package for base VM'
+        zip.writestr(cls.MANIFEST_FILENAME, xml)
+        filelist = [base_disk, base_memory, disk_hash, memory_hash]
+        for filepath in filelist:
+            basename = os.path.basename(filepath)
+            filesize = os.path.getsize(filepath)
+            LOG.info("Zipping %s (%ld bytes) into %s" % (basename, filesize, outfile))
+            zip.write(filepath, basename)
+        zip.close()
+
+
+class PackagingUtil(object):
+    @staticmethod
+    def export_basevm(basevm_path, name):
+        (base_diskmeta, base_mempath, base_memmeta) = \
+                Const.get_basepath(basevm_path)
+        output_path = os.path.join(os.curdir, name)
+        if output_path.endswith(".zip") == False:
+            output_path += ".zip"
+
+        BaseVMPackage.create(output_path, name, basevm_path, base_mempath, base_diskmeta, base_memmeta)
+        #BaseVMPackage.create(output_path, name, base_diskmeta, base_memmeta, base_diskmeta, base_memmeta)
+        return output_path
