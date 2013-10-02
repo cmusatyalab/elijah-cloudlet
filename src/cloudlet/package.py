@@ -567,17 +567,23 @@ class BaseVMPackage(object):
         xml = etree.tostring(tree, encoding='UTF-8', pretty_print=True,
                 xml_declaration=True)
 
-        # Write package
-        zip = zipfile.ZipFile(outfile, 'w', zipfile.ZIP_DEFLATED, True)
-        zip.comment = 'Cloudlet package for base VM'
-        zip.writestr(cls.MANIFEST_FILENAME, xml)
+        # zip library bug at python 2.7.3
+        # see more at http://bugs.python.org/issue9720
+
+        #zip = zipfile.ZipFile(outfile, 'w', zipfile.ZIP_DEFLATED, True)
+        #zip.comment = 'Cloudlet package for base VM'
+        #zip.writestr(cls.MANIFEST_FILENAME, xml)
+        #filelist = [base_disk, base_memory, disk_hash, memory_hash]
+        #for filepath in filelist:
+        #    basename = os.path.basename(filepath)
+        #    filesize = os.path.getsize(filepath)
+        #    LOG.info("Zipping %s (%ld bytes) into %s" % (basename, filesize, outfile))
+        #    zip.write(filepath, basename)
+        #zip.close()
+
+        cmd = ['zip']
         filelist = [base_disk, base_memory, disk_hash, memory_hash]
-        for filepath in filelist:
-            basename = os.path.basename(filepath)
-            filesize = os.path.getsize(filepath)
-            LOG.info("Zipping %s (%ld bytes) into %s" % (basename, filesize, outfile))
-            zip.write(filepath, basename)
-        zip.close()
+        cmd.update(filelist)
 
 
 class PackagingUtil(object):

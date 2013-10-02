@@ -683,9 +683,10 @@ def _convert_xml(disk_path, xml=None, mem_snapshot=None, \
         device_element.remove(serial_element)
 
     network_element = device_element.find("interface")
-    network_filter = network_element.find("filterref")
-    if network_filter is not None:
-        network_element.remove(network_filter)
+    if network_element is not None:
+        network_filter = network_element.find("filterref")
+        if network_filter is not None:
+            network_element.remove(network_filter)
 
     new_xml_str = ElementTree.tostring(xml)
     new_xml_str = new_xml_str.replace(old_uuid, str(uuid))
