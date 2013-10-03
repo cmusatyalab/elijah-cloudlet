@@ -31,7 +31,6 @@ import xray
 import hashlib
 import libvirt
 import shutil
-import stat
 import multiprocessing
 
 from cloudlet.db import api as db_api

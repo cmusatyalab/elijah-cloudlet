@@ -281,7 +281,7 @@ def main(argv):
         name = str(left_args[1])
         if matching_basevm != None:
             from cloudlet.package import PackagingUtil
-            PackagingUtil.export_basevm(basedisk_path, name)
+            PackagingUtil.export_basevm(name, basedisk_path, matching_basevm.hash_value)
         else: 
             LOG.error("Cannot find matching base disk\n")
             return 1

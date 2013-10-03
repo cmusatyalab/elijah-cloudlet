@@ -27,6 +27,8 @@ from lxml import etree
 from urlparse import urlsplit
 import zipfile
 from lxml.builder import ElementMaker
+import sys
+import subprocess
 
 from cloudlet.Configuration import Const
 from cloudlet import log as logging
@@ -505,7 +507,7 @@ class VMOverlayPackage(object):
 class BaseVMPackage(object):
     NS = 'http://opencloudlet.org/xmlns/vmsynthesis/package'
     NSP = '{' + NS + '}'
-    SCHEMA_PATH = os.path.join(os.path.dirname(__file__), 'config', 'package.xsd')
+    SCHEMA_PATH = Const.BASEVM_PACKAGE_SCHEMA
     schema = etree.XMLSchema(etree.parse(SCHEMA_PATH))
 
     MANIFEST_FILENAME = 'basevm-package.xml'
@@ -552,7 +554,7 @@ class BaseVMPackage(object):
         return self.metadata
 
     @classmethod
-    def create(cls, outfile, name, \
+    def create(cls, outfile, basevm_hashvalue,
             base_disk, base_memory, disk_hash, memory_hash):
         # Generate manifest XML
         e = ElementMaker(namespace=cls.NS, nsmap={None: cls.NS})
@@ -561,18 +563,20 @@ class BaseVMPackage(object):
             e.memory(path=os.path.basename(base_memory)),
             e.disk_hash(path=os.path.basename(disk_hash)),
             e.memory_hash(path=os.path.basename(memory_hash)),
-            name=name,
+            hash_value=str(basevm_hashvalue),
         )
+        import pdb;pdb.set_trace()
         cls.schema.assertValid(tree)
         xml = etree.tostring(tree, encoding='UTF-8', pretty_print=True,
                 xml_declaration=True)
+        zip = zipfile.ZipFile(outfile, 'w', zipfile.ZIP_DEFLATED, True)
+        zip.comment = 'Cloudlet package for base VM'
+        zip.writestr(cls.MANIFEST_FILENAME, xml)
+        zip.close()
 
         # zip library bug at python 2.7.3
         # see more at http://bugs.python.org/issue9720
 
-        #zip = zipfile.ZipFile(outfile, 'w', zipfile.ZIP_DEFLATED, True)
-        #zip.comment = 'Cloudlet package for base VM'
-        #zip.writestr(cls.MANIFEST_FILENAME, xml)
         #filelist = [base_disk, base_memory, disk_hash, memory_hash]
         #for filepath in filelist:
         #    basename = os.path.basename(filepath)
@@ -581,20 +585,31 @@ class BaseVMPackage(object):
         #    zip.write(filepath, basename)
         #zip.close()
 
-        cmd = ['zip']
-        filelist = [base_disk, base_memory, disk_hash, memory_hash]
-        cmd.update(filelist)
+        cmd = ['zip', '-j', '-9']
+        cmd += ["%s" % outfile]
+        cmd += [base_disk, base_memory, disk_hash, memory_hash]
+        proc = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+        LOG.info("Start compressing")
+        LOG.info("%s" % ' '.join(cmd))
+        for line in iter(proc.stdout.readline, ''):
+            line = line.replace('\r', '')
+            sys.stdout.write(line)
+            sys.stdout.flush()
 
 
 class PackagingUtil(object):
     @staticmethod
-    def export_basevm(basevm_path, name):
+    def export_basevm(name, basevm_path, basevm_hashvalue):
         (base_diskmeta, base_mempath, base_memmeta) = \
                 Const.get_basepath(basevm_path)
         output_path = os.path.join(os.curdir, name)
         if output_path.endswith(".zip") == False:
             output_path += ".zip"
+        if os.path.exists(output_path) == True:
+            is_overwrite = raw_input("%s exists. Overwirte it? (y/N) " % output_path)
+            if is_overwrite != 'y':
+                return None
 
-        BaseVMPackage.create(output_path, name, basevm_path, base_mempath, base_diskmeta, base_memmeta)
+        BaseVMPackage.create(output_path, basevm_hashvalue, basevm_path, base_mempath, base_diskmeta, base_memmeta)
         #BaseVMPackage.create(output_path, name, base_diskmeta, base_memmeta, base_diskmeta, base_memmeta)
         return output_path

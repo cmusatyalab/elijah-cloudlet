@@ -60,7 +60,7 @@ class Options(object):
 
 
 class Const(object):
-    VERSION = str("0.8.3")
+    VERSION = str("0.8.4")
     HOME_DIR = os.path.abspath(os.path.expanduser("~"))
     CONFIGURATION_DIR = os.path.join('/', 'var', 'lib', 'cloudlet', 'conf')
 
@@ -96,6 +96,7 @@ class Const(object):
 
     CLOUDLET_DB             = os.path.abspath(os.path.join(HOME_DIR, ".cloudlet/config/cloudlet.db"))
     CLOUDLET_DB_SCHEMA      = os.path.join(CONFIGURATION_DIR, "schema.sql")
+    BASEVM_PACKAGE_SCHEMA   = os.path.join(CONFIGURATION_DIR, "package.xsd")
     TEMPLATE_XML            = os.path.join(CONFIGURATION_DIR, "VM_TEMPLATE.xml")
     TEMPLATE_OVF            = os.path.join(CONFIGURATION_DIR, "ovftransport.iso")
     CHUNK_SIZE=4096
