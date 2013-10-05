@@ -23,7 +23,9 @@ import os
 import re
 import requests
 import struct
+import shutil
 from lxml import etree
+from tempfile import mkdtemp
 from urlparse import urlsplit
 import zipfile
 from lxml.builder import ElementMaker
@@ -32,6 +34,8 @@ import subprocess
 
 from cloudlet.Configuration import Const
 from cloudlet import log as logging
+from cloudlet.db.api import DBConnector
+from cloudlet.db.table_def import BaseVM
 
 LOG = logging.getLogger(__name__)
 
@@ -533,18 +537,26 @@ class BaseVMPackage(object):
 
         # Read Zip
         try:
-            self.zip_overlay = zipfile.ZipFile(fh, 'r')
+            zip = zipfile.ZipFile(fh, 'r')
 
-            if Const.OVERLAY_META not in self.zip_overlay.namelist():
-                msg = "Does not have meta file named %s" % Const.OVERLAY_META
-                raise DetailException(msg)
-            
-            self.metafile = Const.OVERLAY_META
-            self.blobfiles = list()
-            for each_file in self.zip_overlay.namelist():
-                if (each_file != Const.OVERLAY_META):
-                    self.blobfiles.append(each_file)
-            
+            # Parse manifest
+            if self.MANIFEST_FILENAME not in zip.namelist():
+                raise BadPackageError('Package does not contain manifest')
+            xml = zip.read(self.MANIFEST_FILENAME)
+            tree = etree.fromstring(xml, etree.XMLParser(schema=self.schema))
+
+            # Create attributes
+            self.base_hashvalue = tree.get('hash_value')
+            self.disk = _PackageObject(zip,
+                    tree.find(self.NSP + 'disk').get('path'))
+            self.memory = _PackageObject(zip,
+                    tree.find(self.NSP + 'memory').get('path'))
+            self.disk_hash = _PackageObject(zip,
+                    tree.find(self.NSP + 'disk_hash').get('path'))
+            self.memory_hash = _PackageObject(zip,
+                    tree.find(self.NSP + 'memory_hash').get('path'))
+        except etree.XMLSyntaxError, e:
+            raise BadPackageError('Manifest XML does not validate', str(e))
         except (zipfile.BadZipfile, _HttpError), e:
             raise BadPackageError(str(e))
     # pylint: enable=E1103
@@ -565,7 +577,6 @@ class BaseVMPackage(object):
             e.memory_hash(path=os.path.basename(memory_hash)),
             hash_value=str(basevm_hashvalue),
         )
-        import pdb;pdb.set_trace()
         cls.schema.assertValid(tree)
         xml = etree.tostring(tree, encoding='UTF-8', pretty_print=True,
                 xml_declaration=True)
@@ -599,6 +610,18 @@ class BaseVMPackage(object):
 
 class PackagingUtil(object):
     @staticmethod
+    def _get_matching_basevm(basedisk_path):
+        dbconn = DBConnector()
+        basedisk_path = os.path.abspath(basedisk_path)
+        basevm_list = dbconn.list_item(BaseVM)
+        ret_basevm = None
+        for item in basevm_list:
+            if basedisk_path == item.disk_path: 
+                ret_basevm = item
+                break
+        return ret_basevm
+
+    @staticmethod
     def export_basevm(name, basevm_path, basevm_hashvalue):
         (base_diskmeta, base_mempath, base_memmeta) = \
                 Const.get_basepath(basevm_path)
@@ -613,3 +636,61 @@ class PackagingUtil(object):
         BaseVMPackage.create(output_path, basevm_hashvalue, basevm_path, base_mempath, base_diskmeta, base_memmeta)
         #BaseVMPackage.create(output_path, name, base_diskmeta, base_memmeta, base_diskmeta, base_memmeta)
         return output_path
+
+    @staticmethod
+    def import_basevm(filename):
+        # Parse manifest
+        zip = zipfile.ZipFile(_FileFile("file:///%s" % filename), 'r')
+        if BaseVMPackage.MANIFEST_FILENAME not in zip.namelist():
+            raise BadPackageError('Package does not contain manifest')
+        xml = zip.read(BaseVMPackage.MANIFEST_FILENAME)
+        tree = etree.fromstring(xml, etree.XMLParser(schema=BaseVMPackage.schema))
+
+        # Create attributes
+        base_hashvalue = tree.get('hash_value')
+        disk_name = tree.find(BaseVMPackage.NSP + 'disk').get('path')
+        memory_name = tree.find(BaseVMPackage.NSP + 'memory').get('path')
+        diskhash_name = tree.find(BaseVMPackage.NSP + 'disk_hash').get('path')
+        memoryhash_name = tree.find(BaseVMPackage.NSP + 'memory_hash').get('path')
+
+        # check directory
+        base_vm_dir = os.path.join(os.path.dirname(Const.BASE_VM_DIR), base_hashvalue)
+        temp_dir = mkdtemp(prefix="cloudlet-base-")
+        disk_tmp_path = os.path.join(temp_dir, disk_name)
+        disk_target_path = os.path.join(base_vm_dir, disk_name)
+        matching_basevm = PackagingUtil._get_matching_basevm(disk_target_path)
+        if matching_basevm != None:
+            LOG.info("Base VM is already exists")
+            LOG.info("Delete existing Base VM using command")
+            LOG.info("See more 'cloudlet --help'")
+            return None
+        if not os.path.exists(base_vm_dir):
+            LOG.info("create directory for base VM")
+            os.makedirs(base_vm_dir)
+
+
+        # decompress
+        LOG.info("Decompressing Base VM to temp directory at %s" % temp_dir)
+        zip.extractall(temp_dir)
+        shutil.move(disk_tmp_path, disk_target_path)
+        (target_diskhash, target_memory, target_memoryhash) = \
+                Const.get_basepath(disk_target_path, check_exist=False)
+        path_list = {
+                os.path.join(temp_dir, memory_name): target_memory,
+                os.path.join(temp_dir, diskhash_name): target_diskhash,
+                os.path.join(temp_dir, memoryhash_name): target_memoryhash,
+                }
+
+        LOG.info("Place base VM to the right directory")
+        for (src, dest) in path_list.iteritems():
+            shutil.move(src, dest)
+
+        # add to DB
+        dbconn = DBConnector()
+        LOG.info("Register New Base to DB")
+        LOG.info("ID for the new Base VM: %s" % base_hashvalue)
+        new_basevm = BaseVM(disk_target_path, base_hashvalue)
+        LOG.info("Success")
+        dbconn.add_item(new_basevm)
+        return disk_target_path, base_hashvalue
+

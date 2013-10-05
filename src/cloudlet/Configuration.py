@@ -94,7 +94,11 @@ class Const(object):
     UPnP_SERVER             = which("upnp_server.jar")
     REST_SERVER_BIN         = which("cloudlet_RESTServer")
 
+    # personal information
     CLOUDLET_DB             = os.path.abspath(os.path.join(HOME_DIR, ".cloudlet/config/cloudlet.db"))
+    BASE_VM_DIR             = os.path.abspath(os.path.join(HOME_DIR, ".cloudlet", "baseVM"))
+
+    # global configuration files
     CLOUDLET_DB_SCHEMA      = os.path.join(CONFIGURATION_DIR, "schema.sql")
     BASEVM_PACKAGE_SCHEMA   = os.path.join(CONFIGURATION_DIR, "package.xsd")
     TEMPLATE_XML            = os.path.join(CONFIGURATION_DIR, "VM_TEMPLATE.xml")

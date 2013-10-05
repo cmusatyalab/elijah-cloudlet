@@ -53,17 +53,6 @@ def get_database():
     return dbconn
 
 
-def _get_matching_basevm(basedisk_path):
-    dbconn = get_database()
-    basedisk_path = os.path.abspath(basedisk_path)
-    basevm_list = dbconn.list_item(BaseVM)
-    ret_basevm = None
-    for item in basevm_list:
-        if basedisk_path == item.disk_path: 
-            ret_basevm = item
-            break
-    return ret_basevm
-
 def process_command_line(argv, commands):
     VERSION = 'cloudlet tool: %s' % Const.VERSION
     DESCRIPTION = 'Cloudlet Overlay Generation & Synthesis'
@@ -115,6 +104,7 @@ def process_command_line(argv, commands):
 
 
 def main(argv):
+    from cloudlet.package import PackagingUtil
     if not synthesis.validate_congifuration():
         sys.stderr.write("failed to validate configuration\n")
         return 1
@@ -259,25 +249,32 @@ def main(argv):
         new_basevm = BaseVM(basedisk_path, base_hashvalue)
         dbconn.add_item(new_basevm)
     elif mode == CMD_DEL_BASE:
+        dbconn = get_database()
         if len(left_args) < 1:
             sys.stderr.write("delete base vm requires base path\n \
                     Ex) ./cloudlet del_base /path/to/base_disk.img \n")
             return 1
-        deleting_base = _get_matching_basevm(left_args[0])
+        deleting_base = PackagingUtil._get_matching_basevm(left_args[0])
+        import pdb;pdb.set_trace()
         if deleting_base != None:
             dbconn.del_item(deleting_base)
         else: 
             LOG.error("Cannot find matching base disk\n")
             return 1
     elif mode == CMD_IMPORT_BASE:
-        pass
+        if len(left_args) < 1:
+            sys.stderr.write("import base vm requires 1) path to the exported file\n" +
+                    "Ex) ./cloudlet import-base /path/to/base_disk.img\n")
+            return 1
+        import_file = left_args[0]
+        PackagingUtil.import_basevm(import_file)
     elif mode == CMD_EXPORT_BASE:
         if len(left_args) < 2:
-            sys.stderr.write("export base vm requires 1) base path 2) name of base VM\n \
-                    Ex) ./cloudlet export-base /path/to/base_disk.img Ubuntu-12.04-i686 \n")
+            sys.stderr.write("export base vm requires 1) base path 2) name of base VM\n" +
+                    "Ex) ./cloudlet export-base /path/to/base_disk.img Ubuntu-12.04-i686 \n")
             return 1
         basedisk_path = left_args[0]
-        matching_basevm = _get_matching_basevm(basedisk_path)
+        matching_basevm = PackagingUtil._get_matching_basevm(basedisk_path)
         name = str(left_args[1])
         if matching_basevm != None:
             from cloudlet.package import PackagingUtil
@@ -285,7 +282,6 @@ def main(argv):
         else: 
             LOG.error("Cannot find matching base disk\n")
             return 1
-        pass
     elif mode == CMD_LIST_SESSION:
         dbconn = get_database()
         session_list = dbconn.list_item(Session)
