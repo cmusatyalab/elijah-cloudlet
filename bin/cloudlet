@@ -255,7 +255,6 @@ def main(argv):
                     Ex) ./cloudlet del_base /path/to/base_disk.img \n")
             return 1
         deleting_base = PackagingUtil._get_matching_basevm(left_args[0])
-        import pdb;pdb.set_trace()
         if deleting_base != None:
             dbconn.del_item(deleting_base)
         else: 

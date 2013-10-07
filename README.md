@@ -131,7 +131,7 @@ How to use
 	1) We provide __sample base VM__ of Ubuntu 12.04 32bit server for easy
 	bootstrapping. You first need to download preconfigured ``base VM`` at:
 
-	[Base VM for Ubuntu-12.04.01-i386-Server](https://storage.coda.cs.cmu.edu/cloudlet-basevm-ubuntu-12.04.01-i386/ubuntu-12.04.01-i386-server.tar.gz)
+	[Base VM for Ubuntu-12.04.01-i386-Server](https://storage.cmusatyalab.org/cloudlet-basevm-ubuntu-12.04.01-i386/ubuntu-12.04.01-i386-server.tar.gz)
 	(Account: cloudlet, password: cloudlet)
 
 	Untar the downloaded file into a specific directory (e.g. ~/base_VM/) and
