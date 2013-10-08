@@ -638,9 +638,9 @@ class PackagingUtil(object):
         return output_path
 
     @staticmethod
-    def import_basevm(filename):
+    def _get_basevm_attribute(zipped_file):
         # Parse manifest
-        zip = zipfile.ZipFile(_FileFile("file:///%s" % filename), 'r')
+        zip = zipfile.ZipFile(_FileFile("file:///%s" % zipped_file), 'r')
         if BaseVMPackage.MANIFEST_FILENAME not in zip.namelist():
             raise BadPackageError('Package does not contain manifest')
         xml = zip.read(BaseVMPackage.MANIFEST_FILENAME)
@@ -652,6 +652,14 @@ class PackagingUtil(object):
         memory_name = tree.find(BaseVMPackage.NSP + 'memory').get('path')
         diskhash_name = tree.find(BaseVMPackage.NSP + 'disk_hash').get('path')
         memoryhash_name = tree.find(BaseVMPackage.NSP + 'memory_hash').get('path')
+        zip.close()
+
+        return base_hashvalue, disk_name, memory_name, diskhash_name, memoryhash_name
+
+    @staticmethod
+    def import_basevm(filename):
+        (base_hashvalue, disk_name, memory_name, diskhash_name, memoryhash_name) = \
+                PackagingUtil._get_basevm_attribute(filename)
 
         # check directory
         base_vm_dir = os.path.join(os.path.dirname(Const.BASE_VM_DIR), base_hashvalue)
@@ -668,10 +676,10 @@ class PackagingUtil(object):
             LOG.info("create directory for base VM")
             os.makedirs(base_vm_dir)
 
-
         # decompress
         LOG.info("Decompressing Base VM to temp directory at %s" % temp_dir)
-        zip.extractall(temp_dir)
+        zipbase = zipfile.ZipFile(_FileFile("file:///%s" % filename), 'r')
+        zipbase.extractall(temp_dir)
         shutil.move(disk_tmp_path, disk_target_path)
         (target_diskhash, target_memory, target_memoryhash) = \
                 Const.get_basepath(disk_target_path, check_exist=False)
