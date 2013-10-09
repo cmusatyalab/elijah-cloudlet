@@ -639,6 +639,7 @@ class PackagingUtil(object):
 
     @staticmethod
     def _get_basevm_attribute(zipped_file):
+        zipped_file = os.path.abspath(zipped_file)
         # Parse manifest
         zip = zipfile.ZipFile(_FileFile("file:///%s" % zipped_file), 'r')
         if BaseVMPackage.MANIFEST_FILENAME not in zip.namelist():
@@ -658,6 +659,7 @@ class PackagingUtil(object):
 
     @staticmethod
     def import_basevm(filename):
+        filename = os.path.abspath(filename)
         (base_hashvalue, disk_name, memory_name, diskhash_name, memoryhash_name) = \
                 PackagingUtil._get_basevm_attribute(filename)
 
