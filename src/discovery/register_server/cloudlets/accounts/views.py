@@ -32,7 +32,6 @@ def invite_user(request):
     })
 
 def register(request, token):
-    import pdb;pdb.set_trace()
     try:
         invitation = Invitation.objects.get(token=token)
     except Invitation.DoesNotExist:

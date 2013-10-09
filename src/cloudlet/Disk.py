@@ -199,7 +199,6 @@ def create_disk_deltalist(modified_disk,
     trimed_list = []
     xrayed_list = []
 
-
     # 1. get modified page
     LOG.debug("1.get modified disk page")
     delta_list = list()

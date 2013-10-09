@@ -1,3 +1,6 @@
+MANIFEST
+TODO.md
+disk/
 nonpublic/
 bin/
 build/
