@@ -110,6 +110,9 @@ class Const(object):
         if not os.path.exists(path):
             message = "Cannot find name at %s" % (path)
             raise ConfigurationError(message)
+        if not os.access(path, os.R_OK):
+            message = "File exists but cannot read the file at %s" % (path)
+            raise ConfigurationError(message)
 
     @staticmethod
     def get_basepath(base_disk_path, check_exist=False):

@@ -255,7 +255,6 @@ def main(argv):
                     Ex) ./cloudlet del_base /path/to/base_disk.img \n")
             return 1
         deleting_base = PackagingUtil._get_matching_basevm(left_args[0])
-        import pdb;pdb.set_trace()
         if deleting_base != None:
             dbconn.del_item(deleting_base)
         else: 
@@ -266,7 +265,12 @@ def main(argv):
             sys.stderr.write("import base vm requires 1) path to the exported file\n" +
                     "Ex) ./cloudlet import-base /path/to/base_disk.img\n")
             return 1
-        import_file = left_args[0]
+        import_file = os.path.abspath(left_args[0])
+        if os.path.exists(import_file) == False or \
+                os.access(import_file, os.R_OK) == False:
+            msg = "Cannot access file: %s" % import_file
+            LOG.error(msg)
+            return 1
         PackagingUtil.import_basevm(import_file)
     elif mode == CMD_EXPORT_BASE:
         if len(left_args) < 2:

@@ -786,7 +786,7 @@ def get_overlay_deltalist(monitoring_info, options,
     if options.DISK_ONLY:
         mem_deltalist = list()
     else:
-        mem_deltalist= Memory.create_memory_deltalist(modified_mem,
+        mem_deltalist = Memory.create_memory_deltalist(modified_mem,
                 basemem_meta=base_memmeta, basemem_path=base_mem,
                 apply_free_memory=options.FREE_SUPPORT,
                 free_memory_info=free_memory_dict)

@@ -34,5 +34,8 @@ zone = [
     MX('findcloudlet.org', 0, 'mail.findcloudlet.org'),
     A('mail.findcloudlet.org', '128.2.209.221'),
     A('findcloudlet.org', '128.2.209.221'),
+    A('cloud.findcloudlet.org', '128.2.213.24'),
+    A('storage.findcloudlet.org', '128.2.213.101'),
     A('register.findcloudlet.org', '128.2.209.221'),
+
 ]
