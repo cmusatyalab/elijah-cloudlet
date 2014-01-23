@@ -111,8 +111,8 @@ public class NetworkClientSender extends Thread {
 			totalByte += sendByte;
 			if (notify) {
 				duration = format.format((System.currentTimeMillis() - startTime) / 1000.0);
-				statusMsg = "Overlay(" + format.format(imageLength/1024.0/1024) + " MB) - "
-						+ duration + " s";
+				statusMsg = "Overlay(" + format.format(imageLength/1024.0/1024) + " MB) - ";
+//						+ duration + " s";
 				this.notifyMessage(statusMsg);
 				this.notifyTransferStatus((int) (100.0 * totalByte / imageLength));
 			}
