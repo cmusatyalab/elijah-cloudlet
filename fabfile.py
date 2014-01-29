@@ -58,7 +58,7 @@ def install():
             "python-libvirt python-xdelta3 python-dev openjdk-6-jre  " +
             "liblzma-dev apparmor-utils libc6-i386 python-pip").failed:
         abort("Failed to install libraries")
-    if sudo("pip install bson pyliblzma psutil sqlalchemy").failed:
+    if sudo("pip install bson pyliblzma psutil sqlalchemy python-dateutil requests").failed:
         abort("Failed to install python libraries")
 
     # disable libvirtd from appArmor to enable custom KVM
