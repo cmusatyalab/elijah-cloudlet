@@ -29,9 +29,7 @@ import json
 import socket
 from urlparse import urlparse
 from cloudlet import log as logging
-
-from cloudlet.discovery.monitor.resource import ResourceMonitorThread
-from cloudlet.discovery.monitor.resource import ResourceMonitorError
+from cloudlet.discovery.Const import DiscoveryConst as Const
 
 
 LOG = logging.getLogger(__name__)
@@ -42,23 +40,22 @@ class RegisterError(Exception):
 
 
 class RegisterThread(threading.Thread):
-    API_URL             =   "/api/v1/Cloudlet/"
 
-    def __init__(self, server_dns, update_period=60):
-        self.server_dns = server_dns
-        if self.server_dns.find("http://") != 0:
-            self.server_dns = "http://" + self.server_dns
-        if self.server_dns.endswith("/") == True:
-            self.server_dns = self.server_dns[:-1]
+    def __init__(self, register_server, resource_monitor, update_period=60):
+        self.register_server = register_server
+        if self.register_server.find("http://") != 0:
+            self.register_server = "http://" + self.register_server
+        if self.register_server.endswith("/") == True:
+            self.register_server = self.register_server[:-1]
         self.REGISTER_PERIOD_SEC = update_period
         self.local_ipaddress = get_local_ipaddress()
         self.stop = threading.Event()
         self.resource_uri = None
-        self.resource_monitor = ResourceMonitorThread()
+        self.resource_monitor = resource_monitor
         threading.Thread.__init__(self, target=self.register)
 
     def register(self):
-        LOG.info("[REGISTER] start register to %s" % (self.server_dns))
+        LOG.info("[REGISTER] start register to %s" % (self.register_server))
         while (self.resource_uri == None):
             if self.stop.wait(0.001):
                 # finish thread without deregister since it hasn't done register
@@ -66,7 +63,8 @@ class RegisterThread(threading.Thread):
 
             # first resource creation until successfully connected
             try:
-                self.resource_uri = self._initial_register(self.server_dns)
+                self.resource_uri = self._initial_register(self.register_server)
+                LOG.info("[REGISTER] success to initial register")
             except (socket.error, ValueError) as e:
                 LOG.info("[REGISTER] waiting for directory server ready")
             finally:
@@ -75,7 +73,7 @@ class RegisterThread(threading.Thread):
         # regular update
         while(not self.stop.wait(0.001)):
             try:
-                self._update_status(self.server_dns)
+                self._update_status(self.register_server)
                 LOG.info("[REGISTER] updating status")
             except (socket.error, ValueError) as e:
                 pass
@@ -85,7 +83,7 @@ class RegisterThread(threading.Thread):
 
         # send termination message
         try:
-            self._deregister(self.server_dns)
+            self._deregister(self.register_server)
             LOG.info("[REGISTER] Deregister")
         except (socket.error, ValueError) as e:
             LOG.info("[REGISTER] Failed to deregister due to server error")
@@ -93,20 +91,21 @@ class RegisterThread(threading.Thread):
     def terminate(self):
         self.stop.set()
 
-    def _initial_register(self, server_dns):
-        # get cloudlet list matching server_dns
+    def _initial_register(self, register_server):
+        # get cloudlet list matching register_server
         end_point = urlparse("%s%s?ip_address=%s" % \
-                (server_dns, RegisterThread.API_URL,  self.local_ipaddress))
+                (register_server, Const.REGISTER_URL,  self.local_ipaddress))
         response_list = http_get(end_point)
 
-        resource_meta = {}
+        resource_meta = {
+                Const.KEY_REST_API_PORT: Const.REST_API_PORT
+                }
         resource_meta.update(self.resource_monitor.get_static_resource())
-        resource_meta.update(self.resource_monitor.get_dynamic_resource())
         ret_uri = None
         if response_list == None or len(response_list) == 0:
             # POST
             end_point = urlparse("%s%s" % \
-                (server_dns, RegisterThread.API_URL))
+                (register_server, Const.REGISTER_URL))
             json_string = {
                     "status":"RUN",
                     'meta': resource_meta,
@@ -116,7 +115,7 @@ class RegisterThread(threading.Thread):
         else:
             # PUT
             ret_uri = response_list[0].get('resource_uri', None)
-            end_point = urlparse("%s%s" % (server_dns, ret_uri))
+            end_point = urlparse("%s%s" % (register_server, ret_uri))
             json_string = {
                     "status":"RUN",
                     'meta': resource_meta,
@@ -126,11 +125,11 @@ class RegisterThread(threading.Thread):
         return ret_uri
 
 
-    def _update_status(self, server_dns):
+    def _update_status(self, register_server):
         resource_meta = {}
         resource_meta.update(self.resource_monitor.get_static_resource())
-        resource_meta.update(self.resource_monitor.get_dynamic_resource())
-        end_point = urlparse("%s%s" % (server_dns, self.resource_uri))
+        #resource_meta.update(self.resource_monitor.get_dynamic_resource())
+        end_point = urlparse("%s%s" % (register_server, self.resource_uri))
         json_string = {
                 "status":"RUN",
                 'meta': resource_meta,
@@ -139,8 +138,8 @@ class RegisterThread(threading.Thread):
         return ret_msg
 
 
-    def _deregister(self, server_dns):
-        end_point = urlparse("%s%s" % (server_dns, self.resource_uri))
+    def _deregister(self, register_server):
+        end_point = urlparse("%s%s" % (register_server, self.resource_uri))
         json_string = {"status":"TER"}
         ret_msg = http_put(end_point, json_string=json_string)
         return ret_msg
@@ -197,23 +196,23 @@ def get_local_ipaddress():
 
 
 def process_command_line(argv):
-    USAGE = 'Usage: %prog -s server_dns'
+    USAGE = 'Usage: %prog -s register_server'
     DESCRIPTION = 'Cloudlet register thread'
 
     parser = OptionParser(usage=USAGE, description=DESCRIPTION)
 
     parser.add_option(
-            '-s', '--server', action='store', dest='server_dns',
+            '-s', '--server', action='store', dest='register_server',
             help='IP address of directory server')
     settings, args = parser.parse_args(argv)
-    if not settings.server_dns:
+    if not settings.register_server:
         parser.error("need server dns")
     return settings, args
 
 
 def main(argv):
     settings, args = process_command_line(sys.argv[1:])
-    registerThread = RegisterThread(settings.server_dns, update_period=60)
+    registerThread = RegisterThread(settings.register_server, update_period=60)
     try:
         registerThread.start()
         time.sleep(60*60*60*60)

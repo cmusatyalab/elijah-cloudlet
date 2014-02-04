@@ -12,7 +12,6 @@ MACHINE_CACHE_SIZE              =   "machine_cache_size"
 MACHINE_CACHE_BLOCK_SIZE        =   "machine_cache_size"
 
 
-
 # dynamic resource
 TOTAL_CPU_USE_PERCENT              =   "machine_total_cpu_usage_percent"
 TOTAL_FREE_MEMORY                  =   "machine_total_free_memory_mb"

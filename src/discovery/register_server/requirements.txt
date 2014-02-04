@@ -9,3 +9,5 @@ nodeenv==0.6.5
 Markdown==2.3.1
 pytz==2013b
 BeautifulSoup==3.2.1
+lxml==3.3.0
+gunicorn==18.0

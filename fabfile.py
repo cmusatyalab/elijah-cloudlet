@@ -59,7 +59,7 @@ def install():
             "liblzma-dev apparmor-utils libc6-i386 python-pip libxml2-dev " +
             "libxslt1-dev").failed:
         abort("Failed to install libraries")
-    if sudo("pip install bson pyliblzma psutil sqlalchemy python-dateutil requests").failed:
+    if sudo("pip install bson pyliblzma psutil sqlalchemy python-dateutil requests lxml").failed:
         abort("Failed to install python libraries")
 
     # disable libvirtd from appArmor to enable custom KVM

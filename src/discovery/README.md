@@ -22,8 +22,8 @@ You will need:
 * python-devel
 * libmysqlclient-dev
 
-		$ sudo apt-get install mysql-server python-mysqldb python-dev libmysqlclient-dev
-		$ sudo pip install django django-tastypie pytz mysql-python pygeoip
+		$ sudo apt-get install mysql-server python-mysqldb python-dev libmysqlclient-dev 
+		$ sudo pip install django django-tastypie pytz mysql-python pygeoip django_compressor mimeparse
 
 Then, create user/database at mysql and register it at mysql.conf file at
 project directory. For example,
