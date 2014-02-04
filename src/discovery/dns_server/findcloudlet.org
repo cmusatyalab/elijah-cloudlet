@@ -32,10 +32,10 @@ zone = [
     CNAME('ftp.findcloudler.org', 'findcloudlet.org'),
 
     MX('findcloudlet.org', 0, 'mail.findcloudlet.org'),
-    A('mail.findcloudlet.org', '128.2.209.221'),
-    A('findcloudlet.org', '128.2.209.221'),
-    A('cloud.findcloudlet.org', '128.2.213.24'),
+    A('mail.findcloudlet.org', '128.2.213.123'),
+    A('findcloudlet.org', '128.2.213.123'),
+    A('cloud.findcloudlet.org', '128.2.210.197'),
     A('storage.findcloudlet.org', '128.2.213.101'),
-    A('register.findcloudlet.org', '128.2.209.221'),
+    A('reg.findcloudlet.org', '128.2.213.123'),
 
 ]
