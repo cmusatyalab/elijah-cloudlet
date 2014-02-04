@@ -56,9 +56,10 @@ def install():
         sudo("apt-get update")
     if sudo("apt-get install -y qemu-kvm libvirt-bin gvncviewer " +
             "python-libvirt python-xdelta3 python-dev openjdk-6-jre  " +
-            "liblzma-dev apparmor-utils libc6-i386 python-pip").failed:
+            "liblzma-dev apparmor-utils libc6-i386 python-pip libxml2-dev " +
+            "libxslt1-dev").failed:
         abort("Failed to install libraries")
-    if sudo("pip install bson pyliblzma psutil sqlalchemy").failed:
+    if sudo("pip install bson pyliblzma psutil sqlalchemy python-dateutil requests").failed:
         abort("Failed to install python libraries")
 
     # disable libvirtd from appArmor to enable custom KVM

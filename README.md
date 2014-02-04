@@ -64,12 +64,14 @@ You will need:
 * Java JRE (for UPnP server)
 * apparmor-utils (for disable apparmor for libvirt)
 * libc6-i386 (for extracting free memory of 32 bit vm)
+* libxml2-dev libxslt1-dev (for overlay packaging)
 * python library
     - bson
 	- pyliblzma
 	- psutil
 	- SQLAlchemy
 	- fabric
+	- dateutil
 
 
 To install, you either 
@@ -82,8 +84,8 @@ To install, you either
 * install manually:
 	- install required package  
 
-			> $ sudo apt-get install qemu-kvm libvirt-bin gvncviewer python-libvirt python-xdelta3 python-dev openjdk-6-jre liblzma-dev apparmor-utils libc6-i386 python-pip  
-			> $ sudo pip install bson pyliblzma psutil sqlalchemy  
+			> $ sudo apt-get install qemu-kvm libvirt-bin gvncviewer python-libvirt python-xdelta3 python-dev openjdk-6-jre liblzma-dev apparmor-utils libc6-i386 python-pip libxml2-dev libxslt1-dev
+			> $ sudo pip install bson pyliblzma psutil sqlalchemy python-dateutil requests lxml
 
 	- Disable security module. This is for allowing custom KVM. Example at Ubuntu 12  
 

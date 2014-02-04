@@ -19,8 +19,10 @@ You will need:
 * python-mysqldb
 * pygeoip >= 0.2.5
 * mysql-server >= 14.14
+* python-devel
+* libmysqlclient-dev
 
-		$ sudo apt-get install mysql-server python-mysqldb
+		$ sudo apt-get install mysql-server python-mysqldb python-dev libmysqlclient-dev
 		$ sudo pip install django django-tastypie pytz mysql-python pygeoip
 
 Then, create user/database at mysql and register it at mysql.conf file at

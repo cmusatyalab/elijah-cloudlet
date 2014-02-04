@@ -173,21 +173,21 @@ public class CloudletActivity extends Activity {
 
 	public boolean runStandAlone(String application) {
 		application = application.trim();
-		return runStandAloneIP(application, CLOUDLET_SYNTHESIS_IP, TEST_CLOUDLET_APP_MOPED_PORT);
+		return runStandAloneIP(application, CLOUDLET_SYNTHESIS_IP);
 	}
 	
-	public boolean runStandAloneIP(String application, String ip, int port){
+	public boolean runStandAloneIP(String application, String ip){
 
 		if (application.equalsIgnoreCase("moped") || application.equalsIgnoreCase("object")) {
 			Intent intent = new Intent(CloudletActivity.this, CloudletCameraActivity.class);
 			intent.putExtra("address", ip);
-			intent.putExtra("port", port);
+			intent.putExtra("port", TEST_CLOUDLET_APP_MOPED_PORT);
 			startActivityForResult(intent, 0);
 			return true;
 		} else if (application.equalsIgnoreCase("graphics") || application.equalsIgnoreCase("fluid")) {
 			Intent intent = new Intent(CloudletActivity.this, GraphicsClientActivity.class);
 			intent.putExtra("address", ip);
-			intent.putExtra("port", port);
+			intent.putExtra("port", TEST_CLOUDLET_APP_GRAPHICS_PORT);
 			startActivityForResult(intent, 0);
 			return true;
 		} else {
@@ -211,15 +211,13 @@ public class CloudletActivity extends Activity {
 					showAlert("Error", errMsg);
 				}
 			} else if (v.getId() == R.id.synthesisFromOpenStack) {
-				String OPENSTACK_RELAY_IP = "rain.elijah.cs.cmu.edu";
+				String OPENSTACK_RELAY_IP = "cloudlet.krha.kr";
 				int OPENSTACK_RELAY_PORT = 8081;
 				String applicationName = "moped";
-				String overly_meta_url = "http://scarlet.aura.cs.cmu.edu:8000/overlay.meta";
-				String overly_blob_url = "http://scarlet.aura.cs.cmu.edu:8000/overlay.blob";
+				String overly_url = "http://storage.findcloudlet.org/media/qlw7l9nf13/overlay-moped.zip";
 
 				HashMap<String, String> requestMap = new HashMap<String, String>();
-				requestMap.put("overlay_meta_url", overly_meta_url);
-				requestMap.put("overlay_blob_url", overly_blob_url);
+				requestMap.put("overlay_url", overly_url);
 				requestMap.put("application_name", applicationName);
 				JSONObject requestJson = new JSONObject(requestMap);
 
@@ -422,7 +420,7 @@ public class CloudletActivity extends Activity {
 				if ((progDialog != null) && (progDialog.isShowing())) {
 					progDialog.dismiss();
 				}
-				runStandAloneIP(appName, serverIP, TEST_CLOUDLET_APP_MOPED_PORT);
+				runStandAloneIP(appName, serverIP);
 			} else {
 				String errString = (String) msg.obj;
 				// Ask IP Address
