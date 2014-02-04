@@ -25,7 +25,7 @@ from cloudlet.discovery.monitor import ResourceConst as Const
 
 
 CLOUDLET_DOMAIN = "search.findcloudlet.org"
-CLOUDLET_PORT = 8021
+CLOUDLET_PORT = 8022
 RET_FAILED  = 0
 RET_SUCCESS = 1
 
@@ -145,6 +145,7 @@ class API(object):
             API.discovery_err_str = "No Available Cloudlet"
             return RET_FAILED
         for each_addr in addr_list:
+            import pdb;pdb.set_trace()
             new_cloudlet = Cloudlet(ip_address=each_addr[-1][0])
             cloudlet_list_ret.append(new_cloudlet)
         return RET_SUCCESS

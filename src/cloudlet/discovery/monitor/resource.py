@@ -21,11 +21,20 @@ import ResourceConst as Const
 import threading
 
 
+_monitor_instance = None
+
+
+def get_instance():
+    global _monitor_instance
+    if _monitor_instance is None:
+        _monitor_instance = _ResourceMonitorThread()
+    return _monitor_instance
+
 class ResourceMonitorError(Exception):
     pass
 
 
-class ResourceMonitorThread(threading.Thread):
+class _ResourceMonitorThread(threading.Thread):
     def __init__(self, log=None):
         self.stop = threading.Event()
         if log:
@@ -95,7 +104,7 @@ class ResourceMonitorThread(threading.Thread):
 
 if __name__ == "__main__":
     from pprint import pprint
-    monitor = ResourceMonitorThread()
+    monitor = get_instance()
     pprint(monitor.get_static_resource())
     pprint(monitor.get_dynamic_resource())
     
