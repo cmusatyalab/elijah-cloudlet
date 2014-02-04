@@ -2,3 +2,4 @@
 /static/
 cloudlets/network/db/
 project/local.py
+gunicorn.pid
