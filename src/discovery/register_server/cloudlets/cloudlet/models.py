@@ -21,6 +21,8 @@ class Cloudlet(models.Model):
     #resource_id = models.CharField(max_length=36, primary_key=True, default=lambda :(str(uuid1())))
     pub_date = models.DateTimeField(default=datetime.datetime.now)
     ip_address = models.CharField(max_length=16)
+    REST_port = models.IntegerField(default=80)
+    REST_url = models.CharField(max_length=250)
     status = models.CharField(max_length=3, choices=CLOUDLET_STATUS)
     mod_time = models.DateTimeField(default=datetime.datetime.now)
     longitude = models.DecimalField(max_digits=10, decimal_places=4)

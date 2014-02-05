@@ -18,3 +18,19 @@
 #   limitations under the License.
 #
 
+from cloudlet import log as logging
+
+
+LOG = logging.getLogger(__name__)
+
+class DiscoveryConst(object):
+    REGISTER_URL        = "/api/v1/Cloudlet/"
+
+    KEY_REST_PORT   = "rest_api_port"
+    KEY_REST_URL    = "rest_api_url"
+    REST_API_PORT       = 8022
+    REST_API_URL        = "/api/v1/resource/"
+
+
+class RESTConst(object):
+    DFS_ROOT_DIR = "/magfs"

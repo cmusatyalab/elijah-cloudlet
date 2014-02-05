@@ -98,7 +98,8 @@ class RegisterThread(threading.Thread):
         response_list = http_get(end_point)
 
         resource_meta = {
-                Const.KEY_REST_API_PORT: Const.REST_API_PORT
+                Const.KEY_REST_PORT: Const.REST_API_PORT,
+                Const.KEY_REST_URL: Const.REST_API_URL
                 }
         resource_meta.update(self.resource_monitor.get_static_resource())
         ret_uri = None

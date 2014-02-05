@@ -16,6 +16,8 @@ from tastypie.serializers import Serializer
 from ..network import ip_location
 from django.db.models.signals import post_save
 
+from Const import Const
+
 now = datetime.datetime.utcnow().replace(tzinfo=utc)
 cost = ip_location.IPLocation()
 
@@ -39,21 +41,18 @@ class CloudletResource(ModelResource):
         list_allowed_methods = ['get', 'post', 'put', 'delete']
         excludes = ['pub_date', 'mod_time', 'id']
         filtering = {"mod_time":ALL, "status":ALL, "ip_address":ALL}
-
         search_result = ['latitude', 'longitude', 'ip_address']
 
     def obj_create(self, bundle, **kwargs):
         '''
         called for POST
         '''
-        #import pdb;pdb.set_trace()
         return super(CloudletResource, self).obj_create(bundle, **kwargs)
 
     def hydrate(self, bundle):
         '''
         called for POST, UPDATE
         '''
-        #import pdb;pdb.set_trace()
         cloudlet_ip = bundle.request.META.get("REMOTE_ADDR")
         if cloudlet_ip == '127.0.0.1':
             import socket
@@ -65,9 +64,19 @@ class CloudletResource(ModelResource):
         location = cost.ip2location(cloudlet_ip)
         # in python 2.6, you cannot directly convert float to Decimal
         bundle.obj.longitude = Decimal(str(location.longitude))
+        bundle.obj.longitude = Decimal(str(location.longitude))
         bundle.obj.latitude = Decimal(str(location.latitude))
         # update latest update time
         bundle.obj.mod_time = datetime.datetime.now()
+        # get RESTful API port number
+        meta_data = bundle.data.get('meta', None)
+        if meta_data is not None:
+            rest_api_port = meta_data.get(Const.KEY_REST_API_PORT)
+            if rest_api_port is not None:
+                bundle.obj.REST_port = int(rest_api_port)
+            rest_api_url = meta_data.get(Const.KEY_REST_API_URL)
+            if rest_api_url is not None:
+                bundle.obj.REST_url = str(rest_api_url)
         return bundle
 
     def dehydrate(self, bundle):
