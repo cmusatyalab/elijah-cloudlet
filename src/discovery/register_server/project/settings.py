@@ -3,7 +3,8 @@ import os, sys
 try:
     from .local import *
 except ImportError as e:
-    sys.stderr.write("Warning, Failed to import local.py file\n")
+    #sys.stderr.write("Warning, Failed to import local.py file\n")
+    pass
 
 BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 

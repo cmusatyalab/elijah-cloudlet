@@ -16,8 +16,6 @@ from tastypie.serializers import Serializer
 from ..network import ip_location
 from django.db.models.signals import post_save
 
-from Const import Const
-
 now = datetime.datetime.utcnow().replace(tzinfo=utc)
 cost = ip_location.IPLocation()
 
@@ -40,8 +38,8 @@ class CloudletResource(ModelResource):
         resource_name = 'Cloudlet'
         list_allowed_methods = ['get', 'post', 'put', 'delete']
         excludes = ['pub_date', 'mod_time', 'id']
-        filtering = {"mod_time":ALL, "status":ALL, "ip_address":ALL}
-        search_result = ['latitude', 'longitude', 'ip_address']
+        filtering = {"mod_time":ALL, "status":ALL, "ip_address":ALL,
+                "latitude":ALL, "longitude":ALL, "rest_api_port":ALL}
 
     def obj_create(self, bundle, **kwargs):
         '''
@@ -54,36 +52,26 @@ class CloudletResource(ModelResource):
         called for POST, UPDATE
         '''
         cloudlet_ip = bundle.request.META.get("REMOTE_ADDR")
-        if cloudlet_ip == '127.0.0.1':
+        if cloudlet_ip == "127.0.0.1":
             import socket
             cloudlet_ip = socket.gethostbyname(socket.gethostname())
 
-        # record Cloudlet's ip address
-        bundle.obj.ip_address = cloudlet_ip
         # find location of cloudlet
         location = cost.ip2location(cloudlet_ip)
         # in python 2.6, you cannot directly convert float to Decimal
-        bundle.obj.longitude = Decimal(str(location.longitude))
-        bundle.obj.longitude = Decimal(str(location.longitude))
-        bundle.obj.latitude = Decimal(str(location.latitude))
-        # update latest update time
+        if bundle.obj.longitude is None:
+            bundle.obj.longitude = Decimal(str(location.longitude))
+        if bundle.obj.latitude is None:
+            bundle.obj.latitude = Decimal(str(location.latitude))
+
+        # record Cloudlet's ip address
         bundle.obj.mod_time = datetime.datetime.now()
-        # get RESTful API port number
-        meta_data = bundle.data.get('meta', None)
-        if meta_data is not None:
-            rest_api_port = meta_data.get(Const.KEY_REST_API_PORT)
-            if rest_api_port is not None:
-                bundle.obj.REST_port = int(rest_api_port)
-            rest_api_url = meta_data.get(Const.KEY_REST_API_URL)
-            if rest_api_url is not None:
-                bundle.obj.REST_url = str(rest_api_url)
         return bundle
 
     def dehydrate(self, bundle):
         '''
         called for POST, UPDATE, GET
         '''
-        #import pdb;pdb.set_trace()
         bundle.data['longitude'] = "%9.6f" % bundle.data['longitude']
         bundle.data['latitude'] = "%9.6f" % bundle.data['latitude']
         return bundle
@@ -99,16 +87,22 @@ class CloudletResource(ModelResource):
         self.throttle_check(request)
 
         SEARCH_COUNT = int(request.GET.get('n', 5))
-        cloudlet_ip = request.META.get("REMOTE_ADDR")
-        client_location = cost.ip2location(cloudlet_ip)
-        lat1, lon1 = client_location.latitude, client_location.longitude
+        latitude = request.GET.get('latitude', None)
+        longitude = request.GET.get('latitude', None)
+        if latitude is None or longitude is None:
+            cloudlet_ip = request.META.get("REMOTE_ADDR")
+            client_location = cost.ip2location(cloudlet_ip)
+            latitude = client_location.latitude
+            longitude = client_location.longitude
+        latitude, longitude = float(latitude), float(longitude)
         cloudlet_list = list()
         for cloudlet in self.Meta.queryset:
             if cloudlet.status != Cloudlet.CLOUDLET_STATUS_RUNNING:
                 continue
-
-            lat2, lon2 = float(cloudlet.latitude), float(cloudlet.longitude)
-            geo_distance = ip_location.geo_distance(lat1, lon1, lat2, lon2)
+            cloudlet_lat = float(cloudlet.latitude)
+            cloudlet_long = float(cloudlet.longitude)
+            geo_distance = ip_location.geo_distance(latitude, longitude, \
+                    cloudlet_lat, cloudlet_long)
             cloudlet.cost = geo_distance
             cloudlet_list.append(cloudlet)
 

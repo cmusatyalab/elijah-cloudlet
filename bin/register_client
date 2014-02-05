@@ -50,6 +50,19 @@ def process_command_line(argv):
             version=VERSION,
             description=DESCRIPTION)
 
+    parser.add_option(
+            '-i', '--rest_ip', action='store', type='string', dest='rest_ip', \
+            default=None, help="Manually set cloudlet rest server's IP address")
+    parser.add_option(
+            '-p', '--rest_port', action='store', type='int', \
+            dest='rest_port', default=DiscoveryConst.REST_API_PORT, \
+            help="Manually set rest port number")
+    parser.add_option(
+            '-a', '--latitude', action='store', type='string', dest='latitude', \
+            default=None, help="Manually set cloudlet's latitude")
+    parser.add_option(
+            '-o', '--longitude', action='store', type='string', dest='longitude',
+            default=None, help="Manually set cloudlet's longitude")
     parser.add_option('-d',
             dest='daemonize', action='store_false', default=True,
             help='do not run as a daemon')
@@ -66,7 +79,6 @@ def main(argv):
     register_server, settings = process_command_line(sys.argv[1:])
     resource_monitor = None
     register_client = None
-    rest_api = None
     ret_code = 0
 
     try:
@@ -77,7 +89,9 @@ def main(argv):
 
         # Start registration client
         register_client = RegisterThread(register_server, resource_monitor,
-                update_period=UPDATE_PERIOD)
+                update_period=UPDATE_PERIOD, cloudlet_ip=settings.rest_ip,
+                cloudlet_rest_port=settings.rest_port,
+                latitude=settings.latitude, longitude=settings.longitude)
         register_client.start()
 
         # discover rest API
@@ -86,7 +100,7 @@ def main(argv):
         api.add_resource(ResourceInfo, '/api/v1/resource/')
         api.add_resource(CacheInfo, '/api/v1/resource/<string:app_id>')
         # do no turn on debug mode. it make a mess for graceful terminate
-        LOG.info("Start RESTful API Server at %d" % (DiscoveryConst.REST_API_PORT))
+        LOG.info("Start RESTful API Server at %d" % (settings.rest_port))
         app.run(host="0.0.0.0", port=DiscoveryConst.REST_API_PORT)
 
     except ResourceMonitorError as e:

@@ -41,17 +41,28 @@ class RegisterError(Exception):
 
 class RegisterThread(threading.Thread):
 
-    def __init__(self, register_server, resource_monitor, update_period=60):
+    def __init__(self, register_server, resource_monitor, update_period=60, 
+            cloudlet_ip=None, cloudlet_rest_port=None,
+            latitude=None, longitude=None):
         self.register_server = register_server
         if self.register_server.find("http://") != 0:
             self.register_server = "http://" + self.register_server
         if self.register_server.endswith("/") == True:
             self.register_server = self.register_server[:-1]
         self.REGISTER_PERIOD_SEC = update_period
-        self.local_ipaddress = get_local_ipaddress()
         self.stop = threading.Event()
         self.resource_uri = None
         self.resource_monitor = resource_monitor
+
+        # custom argument
+        self.cloudlet_ip = cloudlet_ip
+        if self.cloudlet_ip is None:
+            self.cloudlet_ip = get_local_ipaddress()
+        self.cloudlet_rest_port = cloudlet_rest_port
+        if self.cloudlet_rest_port is None:
+            self.cloudlet_rest_port = Const.REST_API_PORT
+        self.latitude = latitude
+        self.longitude = longitude
         threading.Thread.__init__(self, target=self.register)
 
     def register(self):
@@ -92,36 +103,40 @@ class RegisterThread(threading.Thread):
         self.stop.set()
 
     def _initial_register(self, register_server):
-        # get cloudlet list matching register_server
+        resource_meta = {
+                }
+        # check existing
         end_point = urlparse("%s%s?ip_address=%s" % \
-                (register_server, Const.REGISTER_URL,  self.local_ipaddress))
+                (register_server, Const.REGISTER_URL,  self.cloudlet_ip))
         response_list = http_get(end_point)
 
-        resource_meta = {
-                Const.KEY_REST_PORT: Const.REST_API_PORT,
-                Const.KEY_REST_URL: Const.REST_API_URL
-                }
         resource_meta.update(self.resource_monitor.get_static_resource())
         ret_uri = None
-        if response_list == None or len(response_list) == 0:
+        json_string = {
+                "status":"RUN",
+                Const.KEY_REST_URL: Const.REST_API_URL,
+                Const.KEY_CLOUDLET_IP: self.cloudlet_ip,
+                Const.KEY_REST_PORT: self.cloudlet_rest_port,
+                'meta': resource_meta,
+                }
+        if self.latitude is not None:
+            json_string.update({Const.KEY_LATITUDE: self.latitude})
+        if self.longitude is not None:
+            json_string.update({Const.KEY_LONGITUDE: self.longitude})
+
+        if response_list is None or len(response_list) == 0:
             # POST
             end_point = urlparse("%s%s" % \
                 (register_server, Const.REGISTER_URL))
-            json_string = {
-                    "status":"RUN",
-                    'meta': resource_meta,
-                    }
             ret_msg = http_post(end_point, json_string=json_string)
             ret_uri = ret_msg.get('resource_uri', None)
+            LOG.info("POST information: %s" % json_string)
         else:
             # PUT
             ret_uri = response_list[0].get('resource_uri', None)
             end_point = urlparse("%s%s" % (register_server, ret_uri))
-            json_string = {
-                    "status":"RUN",
-                    'meta': resource_meta,
-                    }
             http_put(end_point, json_string=json_string)
+            LOG.info("PUT information: %s" % json_string)
 
         return ret_uri
 

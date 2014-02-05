@@ -20,6 +20,9 @@ TOTAL_DISK_WRITE_BPS               =   "machine_disk_write_bytes_per_sec"
 TOTAL_NETWORK_READ_BPS             =   "machine_network_read_bytes_per_sec"
 TOTAL_NETWORK_WRITE_BPS            =   "machine_newwork_write_bytes_per_sec"
 
+# cache status
+APP_CACHE_TOTAL_SCORE                 =   "app_cache_total_score"
+
 VM                              =   "VM"
 VM_ID                           =   "id"
 VM_STATUS                       =   "status"

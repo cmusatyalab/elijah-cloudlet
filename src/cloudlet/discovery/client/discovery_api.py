@@ -74,12 +74,27 @@ class CloudletResourceDynamic(object):
         self.mem_free_mb = data.get(Const.TOTAL_FREE_MEMORY, None)
 
 
+class CloudletCache(object):
+    def __init__(self):
+        self.cache_score = 0
+
+    def __repr__(self):
+        return pprint.pformat(self.__dict__)
+
+    def __str__(self):
+        return pprint.pformat(self.__dict__)
+
+    def update(self, data):
+        pass
+
+
 class Cloudlet(object):
     def __init__(self, ip_address=None):
         self.ip_v4 = ip_address
         self.port_number = CLOUDLET_PORT
         self.resource_static = CloudletResourceStatic()
         self.resource_dynamic = CloudletResourceDynamic()
+        self.cache_status = CloudletCache()
 
     def __str__(self):
         ret_str = pprint.pformat(self.__dict__)
@@ -88,6 +103,7 @@ class Cloudlet(object):
     def update(self, data):
         self.resource_static.update(data)
         self.resource_dynamic.update(data)
+        self.cache_status.update(data)
 
 
 class Util(object):
@@ -283,12 +299,13 @@ class API(object):
         '''
         pass
 
+
 def _wait_for_next():
     sys.stdout.write("Enter for next: ")
     raw_input("")
 
-def main(argv):
 
+def main(argv):
     cloudlet_list = list()
     print "Step 1. Get nearby Cloudlet from DNS"
     if RET_SUCCESS == API.find_nearby_cloudlets(cloudlet_list):
