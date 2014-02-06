@@ -60,9 +60,9 @@ class CloudletResource(ModelResource):
         location = cost.ip2location(cloudlet_ip)
         # in python 2.6, you cannot directly convert float to Decimal
         if bundle.obj.longitude is None:
-            bundle.obj.longitude = Decimal(str(location.longitude))
+            bundle.obj.longitude = str(location.longitude).strip()
         if bundle.obj.latitude is None:
-            bundle.obj.latitude = Decimal(str(location.latitude))
+            bundle.obj.latitude = str(location.latitude).strip()
 
         # record Cloudlet's ip address
         bundle.obj.mod_time = datetime.datetime.now()
@@ -72,8 +72,8 @@ class CloudletResource(ModelResource):
         '''
         called for POST, UPDATE, GET
         '''
-        bundle.data['longitude'] = "%9.6f" % bundle.data['longitude']
-        bundle.data['latitude'] = "%9.6f" % bundle.data['latitude']
+        #bundle.data['longitude'] = "%9.6f" % bundle.data['longitude']
+        #bundle.data['latitude'] = "%9.6f" % bundle.data['latitude']
         return bundle
 
     def prepend_urls(self):
@@ -88,7 +88,7 @@ class CloudletResource(ModelResource):
 
         SEARCH_COUNT = int(request.GET.get('n', 5))
         latitude = request.GET.get('latitude', None)
-        longitude = request.GET.get('latitude', None)
+        longitude = request.GET.get('longitude', None)
         if latitude is None or longitude is None:
             cloudlet_ip = request.META.get("REMOTE_ADDR")
             client_location = cost.ip2location(cloudlet_ip)
@@ -106,7 +106,7 @@ class CloudletResource(ModelResource):
             cloudlet.cost = geo_distance
             cloudlet_list.append(cloudlet)
 
-        top_cloudlets = heapq.nlargest(SEARCH_COUNT, cloudlet_list, key=itemgetter('cost'))
+        top_cloudlets = heapq.nsmallest(SEARCH_COUNT, cloudlet_list, key=itemgetter('cost'))
         top_cloudlet_list = [item.search_out() for item in top_cloudlets]
         object_list = {
             'cloudlet' : top_cloudlet_list

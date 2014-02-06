@@ -17,6 +17,7 @@
 
 import sys
 import socket
+import pprint
 from optparse import OptionParser
 
 import urllib
@@ -51,7 +52,7 @@ class CloudletDiscoveryClient(object):
     def _search_by_proximity(self, latitude=None, longitude=None, n_max=5):
         # get cloudlet list
         if latitude is not None and longitude is not None:
-            end_point = urlparse("%s%s?n=%d&latitude=%f&longitude=%f" % \
+            end_point = urlparse("%s%s?n=%d&latitude=%s&longitude=%s" % \
                     (self.register_server, CloudletDiscoveryClient.API_URL, n_max,
                         latitude, longitude))
         else:
@@ -112,18 +113,17 @@ def process_command_line(argv):
     if settings.dns_server == None and settings.register_server == None:
         parser.error("need either dns or register server")
     if settings.dns_server is not None and settings.register_server is not None:
-    parser.error("need either dns or register server")
+        parser.error("need either dns or register server")
     return settings, args
 
 
 def main(argv):
     settings, args = process_command_line(sys.argv[1:])
     if settings.register_server is not None:
-        client = CloudletDiscoveryClient(settings.register_server, log=sys.stdout,\
-    cloudlet = client.findcloudlet("test_app", 
+        client = CloudletDiscoveryClient(settings.register_server, log=sys.stdout)
+        cloudlet = client.findcloudlet("test_app",
                 latitude=settings.latitude, longitude=settings.longitude)
-    import pprint
-    pprint.pprint(cloudlet)
+        pprint.pprint(cloudlet)
     return 0
 
 

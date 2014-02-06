@@ -26,8 +26,9 @@ class Cloudlet(models.Model):
     rest_api_url = models.CharField(max_length=250)
     status = models.CharField(max_length=3, choices=CLOUDLET_STATUS)
     mod_time = models.DateTimeField(default=datetime.datetime.now)
-    longitude = models.DecimalField(max_digits=10, decimal_places=4)
-    latitude = models.DecimalField(max_digits=10, decimal_places=4)
+    longitude = models.CharField(max_length=12)
+    latitude = models.CharField(max_length=12)
+    #latitude = models.DecimalField(max_digits=10, decimal_places=4)
     meta = models.CharField(max_length=1024, default='')
 
     def save(self, *args, **kwargs):
