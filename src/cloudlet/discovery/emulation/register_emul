@@ -19,8 +19,9 @@
 #
 
 import sys
+sys.path.insert(0, "../../../")
 import time
-sys.path.insert(0, "../src/")
+import threading
 from optparse import OptionParser
 
 from urlparse import urlparse
@@ -74,7 +75,7 @@ def process_command_line(argv):
     return register_server, gps_file, settings
 
 
-class EmulRegisterThread(object):
+class EmulRegisterThread(threading.Thread):
     def __init__(self, register_server, resource_monitor,
             gps_filename, cloudlet_ip=None, cloudlet_rest_port=None):
         gps_file = open(gps_filename, "r").read().split("\n")[0:-1]
@@ -91,11 +92,15 @@ class EmulRegisterThread(object):
             lat = coodinates[0].strip()
             lon = coodinates[-1].strip()
             self.gps_list[name] = (float(lat), float(lon))
+        self.stop = threading.Event()
+        threading.Thread.__init__(self, target=self.start_register)
 
     def start_register(self):
         resource_meta = {}
         resource_meta.update(self.resource_monitor.get_static_resource())
         for name, (lat, lon) in self.gps_list.iteritems():
+            if self.stop.wait(0.001):
+                break
             self._register(self.register_server, resource_meta, name, lat, lon)
 
     def _register(self, register_server, resource_meta, name, lat, lon):
@@ -131,6 +136,7 @@ class EmulRegisterThread(object):
         self.url_dict[name] = ret_uri
 
     def terminate(self):
+        self.stop.set()
         for name, resource_uri in self.url_dict.iteritems():
             end_point = urlparse("%s%s" % (self.register_server, resource_uri))
             json_string = {"status":"TER"}
@@ -155,7 +161,7 @@ def main(argv):
                 cloudlet_ip=get_local_ipaddress(),
                 cloudlet_rest_port=settings.rest_port,
                 gps_filename=infile)
-        register_client.start_register()
+        register_client.start()
 
         # discover rest API
         app = Flask(__name__)

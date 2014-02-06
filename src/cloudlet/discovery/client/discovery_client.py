@@ -20,13 +20,42 @@ import socket
 import pprint
 from optparse import OptionParser
 
+try:
+    from cloudlet.discovery.Const import DiscoveryConst as Const
+except ImportError as e:
+    sys.path.insert(0, "..")
+    from Const import DiscoveryConst as Const
+
 import urllib
 import httplib
 import json
+import ast
+import threading
 from urlparse import urlparse
 
 class CloudletDiscoveryClientError(Exception):
     pass
+
+class CloudletQueryingThread(threading.Thread):
+    def __init__(self, cloudlet_info):
+        self.cloudlet_info = cloudlet_info
+        self.url = "http://%s:%d%s" % (
+                cloudlet_info[Const.KEY_CLOUDLET_IP], 
+                cloudlet_info[Const.KEY_REST_PORT],
+                cloudlet_info[Const.KEY_REST_URL])
+        threading.Thread.__init__(self, target=self.get_info)
+
+    def get_info(self):
+        end_point = urlparse(self.url)
+        params = urllib.urlencode({})
+        end_string = "%s" % (end_point[2])
+        conn = httplib.HTTPConnection(end_point.hostname, end_point.port, timeout=10)
+        conn.request("GET", end_string, params)
+        print "Connecting to %s" % self.url
+        data = conn.getresponse().read()
+        json_data = json.loads(data)
+        recv_info = ast.literal_eval(json_data)
+        self.cloudlet_info.update(recv_info)
 
 
 class CloudletDiscoveryClient(object):
@@ -66,7 +95,15 @@ class CloudletDiscoveryClient(object):
         return self.cloudlet_list
 
     def _get_cloudlet_infos(self, cloudlet_list, app_id):
-        pass
+        thread_list = list()
+        for cloudlet in cloudlet_list:
+            new_thread = CloudletQueryingThread(cloudlet)
+            thread_list.append(new_thread)
+        for th in thread_list:
+            th.start()
+        for th in thread_list:
+            th.join()
+
 
     def _find_best_cloudlet(self, cloudlet_list):
         if len(cloudlet_list) == 0:
