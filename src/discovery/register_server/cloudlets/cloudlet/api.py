@@ -1,12 +1,11 @@
 from django.utils.timezone import utc
 import datetime
 import heapq
-from decimal import Decimal
+import socket 
 from operator import itemgetter
 from tastypie.authorization import Authorization
 from .models import Cloudlet
 from tastypie.resources import ModelResource, ALL, ALL_WITH_RELATIONS
-from django.contrib.auth.models import User
 from django.conf.urls.defaults import *
 from tastypie.utils import trailing_slash
 
@@ -87,14 +86,20 @@ class CloudletResource(ModelResource):
         self.throttle_check(request)
 
         SEARCH_COUNT = int(request.GET.get('n', 5))
+        client_ip = request.GET.get('client_ip', None)
         latitude = request.GET.get('latitude', None)
         longitude = request.GET.get('longitude', None)
-        if latitude is None or longitude is None:
-            cloudlet_ip = request.META.get("REMOTE_ADDR")
-            client_location = cost.ip2location(cloudlet_ip)
+        if client_ip is not None and self._is_ip(client_ip) is True:
+            client_location = cost.ip2location(str(client_ip))
             latitude = client_location.latitude
             longitude = client_location.longitude
-        latitude, longitude = float(latitude), float(longitude)
+        elif latitude is not None and longitude is not None:
+            latitude, longitude = float(latitude), float(longitude)
+        else:
+            client_ip = request.META.get("REMOTE_ADDR")
+            client_location = cost.ip2location(client_ip)
+            latitude = client_location.latitude
+            longitude = client_location.longitude
         cloudlet_list = list()
         for cloudlet in self.Meta.queryset:
             if cloudlet.status != Cloudlet.CLOUDLET_STATUS_RUNNING:
@@ -113,6 +118,13 @@ class CloudletResource(ModelResource):
         }
         self.log_throttled_access(request)
         return self.create_response(request, object_list)
+
+    def _is_ip(self, ip_address):
+        try:
+            socket.inet_aton(ip_address)
+            return True
+        except socket.error:
+            return False
 
 
 def post_save_signal(sender, **kwargs):

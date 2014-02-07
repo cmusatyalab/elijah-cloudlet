@@ -20,12 +20,6 @@ import socket
 import pprint
 from optparse import OptionParser
 
-try:
-    from cloudlet.discovery.Const import DiscoveryConst as Const
-except ImportError as e:
-    sys.path.insert(0, "..")
-    from Const import DiscoveryConst as Const
-
 import urllib
 import httplib
 import json
@@ -40,9 +34,9 @@ class CloudletQueryingThread(threading.Thread):
     def __init__(self, cloudlet_info):
         self.cloudlet_info = cloudlet_info
         self.url = "http://%s:%d%s" % (
-                cloudlet_info[Const.KEY_CLOUDLET_IP], 
-                cloudlet_info[Const.KEY_REST_PORT],
-                cloudlet_info[Const.KEY_REST_URL])
+                cloudlet_info['ip_address'],
+                cloudlet_info['rest_api_port'],
+                cloudlet_info['rest_api_url'])
         threading.Thread.__init__(self, target=self.get_info)
 
     def get_info(self):
@@ -51,7 +45,7 @@ class CloudletQueryingThread(threading.Thread):
         end_string = "%s" % (end_point[2])
         conn = httplib.HTTPConnection(end_point.hostname, end_point.port, timeout=10)
         conn.request("GET", end_string, params)
-        print "Connecting to %s" % self.url
+        print "Connecting to cloudlet at %s" % self.url
         data = conn.getresponse().read()
         json_data = json.loads(data)
         recv_info = ast.literal_eval(json_data)
@@ -72,22 +66,35 @@ class CloudletDiscoveryClient(object):
         else:
             self.log = open("/dev/null", "w+b")
 
-    def findcloudlet(self, app_id, latitude=None, longitude=None):
-        cloudlet_list = self._search_by_proximity(latitude, longitude)
+    def find_by_ip(self, app_id, client_ip):
+        cloudlet_list = self._search_by_proximity(client_ip=client_ip)
         self._get_cloudlet_infos(cloudlet_list, app_id)
         cloudlet = self._find_best_cloudlet(cloudlet_list)
         return cloudlet
 
-    def _search_by_proximity(self, latitude=None, longitude=None, n_max=5):
+    def find_by_gps(self, app_id, latitude, longitude):
+        cloudlet_list = self._search_by_proximity(latitude=latitude, 
+                longitude=longitude)
+        self._get_cloudlet_infos(cloudlet_list, app_id)
+        cloudlet = self._find_best_cloudlet(cloudlet_list)
+        return cloudlet
+
+    def _search_by_proximity(self, client_ip=None, \
+            latitude=None, longitude=None, n_max=5):
         # get cloudlet list
         if latitude is not None and longitude is not None:
             end_point = urlparse("%s%s?n=%d&latitude=%s&longitude=%s" % \
-                    (self.register_server, CloudletDiscoveryClient.API_URL, n_max,
-                        latitude, longitude))
-        else:
+                    (self.register_server, CloudletDiscoveryClient.API_URL, \
+                    n_max, latitude, longitude))
+        elif client_ip is not None:
             # search by IP address
+            end_point = urlparse("%s%s?n=%d&client_ip=%s" % \
+                    (self.register_server, CloudletDiscoveryClient.API_URL, \
+                    n_max, str(client_ip)))
+        else:
             end_point = urlparse("%s%s?n=%d" % \
-                    (self.register_server, CloudletDiscoveryClient.API_URL, n_max))
+                    (self.register_server, CloudletDiscoveryClient.API_URL, \
+                    n_max))
         try:
             self.cloudlet_list = http_get(end_point)
         except socket.error as e:
@@ -115,7 +122,7 @@ class CloudletDiscoveryClient(object):
 
 
 def http_get(end_point):
-    sys.stdout.write("Connecting to %s\n" % (''.join(end_point)))
+    sys.stdout.write("Connecting to %s\n" % (end_point.geturl()))
     params = urllib.urlencode({})
     headers = {"Content-type":"application/json"}
     end_string = "%s?%s" % (end_point[2], end_point[4])
@@ -158,8 +165,9 @@ def main(argv):
     settings, args = process_command_line(sys.argv[1:])
     if settings.register_server is not None:
         client = CloudletDiscoveryClient(settings.register_server, log=sys.stdout)
-        cloudlet = client.findcloudlet("test_app",
-                latitude=settings.latitude, longitude=settings.longitude)
+        #cloudlet = client.find_by_gps("test_app",
+        #        latitude=settings.latitude, longitude=settings.longitude)
+        cloudlet = client.find_by_ip("test_app", client_ip="128.2.210.197")
         pprint.pprint(cloudlet)
     return 0
 
