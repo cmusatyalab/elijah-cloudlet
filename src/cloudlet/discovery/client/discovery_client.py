@@ -148,10 +148,13 @@ def process_command_line(argv):
             '-s', '--register_server', action='store', dest='register_server',
             default=None, help='IP address of cloudlet register server')
     parser.add_option(
-            '-a', '--latitude', action='store', type='string', dest='latitude', \
+            '-a', '--latitude', action='store', type='string', dest='latitude',
             default=None, help="Manually set cloudlet's latitude")
     parser.add_option(
             '-o', '--longitude', action='store', type='string', dest='longitude',
+            default=None, help="Manually set cloudlet's longitude")
+    parser.add_option(
+            '-c', '--client-ip', action='store', type='string', dest='client_ip',
             default=None, help="Manually set cloudlet's longitude")
     settings, args = parser.parse_args(argv)
     if settings.dns_server == None and settings.register_server == None:
@@ -161,13 +164,34 @@ def process_command_line(argv):
     return settings, args
 
 
+def get_ip(iface = 'eth0'):
+    import socket
+    import struct
+    import fcntl
+    sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+    sockfd = sock.fileno()
+    SIOCGIFADDR = 0x8915
+
+    ifreq = struct.pack('16sH14s', iface, socket.AF_INET, '\x00' * 14)
+    try:
+        res = fcntl.ioctl(sockfd, SIOCGIFADDR, ifreq)
+    except:
+        return None
+    ip = struct.unpack('16sH2x4s8x', res)[2]
+    return socket.inet_ntoa(ip)
+
+
 def main(argv):
     settings, args = process_command_line(sys.argv[1:])
     if settings.register_server is not None:
         client = CloudletDiscoveryClient(settings.register_server, log=sys.stdout)
-        #cloudlet = client.find_by_gps("test_app",
-        #        latitude=settings.latitude, longitude=settings.longitude)
-        cloudlet = client.find_by_ip("test_app", client_ip="128.2.210.197")
+        if settings.latitude is not None and settings.longitude is not None:
+            cloudlet = client.find_by_gps("test_app",
+                    latitude=settings.latitude, longitude=settings.longitude)
+        elif settings.client_ip is not None:
+            cloudlet = client.find_by_ip("test_app", client_ip=settings.client_ip)
+        else:
+            cloudlet = client.find_by_ip("test_app", client_ip=get_ip())
         pprint.pprint(cloudlet)
     return 0
 

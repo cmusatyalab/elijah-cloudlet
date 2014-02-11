@@ -52,10 +52,10 @@ class CacheInfo(Resource):
                 ret_json = {app_id:None}
         return json.dumps(ret_json)
 
-    def _cache_score_for_file(filepath):
+    def _cache_score_for_file(self, filepath):
         return 100
 
-    def _cache_score_for_dir(dirpath):
+    def _cache_score_for_dir(self, dirpath):
         return 100
 
 

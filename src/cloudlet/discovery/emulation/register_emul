@@ -164,13 +164,16 @@ def main(argv):
         register_client.start()
 
         # discover rest API
-        app = Flask(__name__)
-        api = restful.Api(app)
-        api.add_resource(ResourceInfo, '/api/v1/resource/')
-        api.add_resource(CacheInfo, '/api/v1/resource/<string:app_id>')
-        # do no turn on debug mode. it make a mess for graceful terminate
-        LOG.info("Start RESTful API Server at %d" % (settings.rest_port))
-        app.run(host="0.0.0.0", port=DiscoveryConst.REST_API_PORT)
+        #app = Flask(__name__)
+        #api = restful.Api(app)
+        #api.add_resource(ResourceInfo, '/api/v1/resource/')
+        #api.add_resource(CacheInfo, '/api/v1/resource/<string:app_id>')
+        ## do no turn on debug mode. it make a mess for graceful terminate
+        #LOG.info("Start RESTful API Server at %d" % (settings.rest_port))
+        #app.run(host="0.0.0.0", port=DiscoveryConst.REST_API_PORT)
+
+        while True:
+            time.sleep(100)
 
     except ResourceMonitorError as e:
         LOG.info(str(e))

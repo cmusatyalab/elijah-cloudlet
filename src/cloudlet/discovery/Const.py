@@ -37,4 +37,4 @@ class DiscoveryConst(object):
 
 
 class RESTConst(object):
-    DFS_ROOT_DIR = "/magfs"
+    DFS_ROOT_DIR = "/magfs/home/kiryongh@ANDREW.AD.CMU.EDU"
