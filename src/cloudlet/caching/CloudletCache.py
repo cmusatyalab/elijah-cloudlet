@@ -32,10 +32,10 @@ import dateutil.parser
 import time
 from datetime import datetime
 try:
-    from Configuration import Discovery_Const
+    from Configuration import Caching_Const
 except ImportError, e:
     sys.path.append("../../server");
-    from Configuration import Discovery_Const
+    from Configuration import Caching_Const
 
 
 
@@ -348,7 +348,7 @@ class CacheManager(threading.Thread):
                 # update fuse via redis pub/sub
                 response_str = "fetch:%s" % relpath
                 self.print_out.write("[INFO][REDIS] response %s\n" % response_str)
-                self.redis_pub.publish(Discovery_Const.REDIS_RES_CHANNEL, response_str)
+                self.redis_pub.publish(Caching_Const.REDIS_RES_CHANNEL, response_str)
         except AttributeError, e:
             # terminate all fuse
             for fuse in self.fuse_queue_list:
@@ -367,7 +367,7 @@ class CacheManager(threading.Thread):
             conn.flushall()
             rc = redis.Redis(host=str(self.redis_addr[0]), port=int(self.redis_addr[1]), db=0)
             pubsub = rc.pubsub()
-            pubsub.subscribe(Discovery_Const.REDIS_REQ_CHANNEL)
+            pubsub.subscribe(Caching_Const.REDIS_REQ_CHANNEL)
         except redis.exceptions.ConnectionError, e:
             raise CachingError("Failed to connect to Redis")
 
@@ -537,8 +537,8 @@ class CacheManager(threading.Thread):
         if url_root.endswith("/") == True:
             url_root = url_root[0:-1]
         fuse = CacheFS(self.fuse_binpath, self.cache_dir, url_root, 
-                self.redis_addr, Discovery_Const.REDIS_REQ_CHANNEL,
-                Discovery_Const.REDIS_RES_CHANNEL, print_out=self.print_out)
+                self.redis_addr, Caching_Const.REDIS_REQ_CHANNEL,
+                Caching_Const.REDIS_RES_CHANNEL, print_out=self.print_out)
         try:
             fuse.launch()
             fuse.start()
@@ -579,7 +579,7 @@ class CacheManager(threading.Thread):
         self.stop.set()
 
         # terminate redis subscribe connection
-        self.redis_sub.unsubscribe(Discovery_Const.REDIS_REQ_CHANNEL)
+        self.redis_sub.unsubscribe(Caching_Const.REDIS_REQ_CHANNEL)
         self.redis_sub.close()
 
         # terminate all fuse
@@ -596,8 +596,8 @@ if __name__ == '__main__':
         sys.exit(1)
 
     try:
-        cache_manager = CacheManager(Discovery_Const.CACHE_ROOT, \
-                Discovery_Const.REDIS_ADDR, Discovery_Const.CACHE_FUSE_BINPATH,
+        cache_manager = CacheManager(Caching_Const.CACHE_ROOT, \
+                Caching_Const.REDIS_ADDR, Caching_Const.CACHE_FUSE_BINPATH,
                 print_out=sys.stdout)
         cache_manager.setDaemon(True)
         cache_manager.start()

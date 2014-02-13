@@ -59,9 +59,6 @@ setup(
         scripts=script_files+executable_files,
         packages=[
             'cloudlet',
-            'cloudlet.discovery',
-            'cloudlet.discovery.client',
-            'cloudlet.discovery.monitor',
             'cloudlet.db',
             'cloudlet.caching',
             'cloudlet.msgpack',

@@ -31,14 +31,125 @@ from pprint import pprint
 
 # for local test
 from cloudlet.synthesis_protocol import Protocol as protocol
-from cloudlet.discovery.client.discovery_api import API
-from cloudlet.discovery.client.discovery_api import Cloudlet
-from cloudlet.discovery.client.discovery_api import Util
-from cloudlet.discovery.client import discovery_api
+
+# import msgpack
+import_msgpack = False
+try:
+    import msgpack
+    import_msgpack = True
+except ImportError as e:
+    pass
+
+if import_msgpack is False:
+    from cloudlet import msgpack as msgpack
+    import_msgpack = True
+
+
 
 
 class RapidClientError(Exception):
     pass
+
+
+class Client(object):
+    RET_FAILED  = 0
+    RET_SUCCESS = 1
+    CLOUDLET_PORT = 8022
+
+    @staticmethod
+    def connect(ip, port):
+        if not ip:
+            return None
+        try:
+            address = (ip, port)
+            time_out = 10
+            #print "Connecting to (%s).." % str(address)
+            sock = socket.create_connection(address, time_out)
+            sock.setblocking(True)
+        except socket.error, msg:
+            return None
+        return sock
+
+    @staticmethod
+    def recvall(sock, size):
+        data = ''
+        while len(data) < size:
+            data += sock.recv(size - len(data))
+        return data
+
+    @staticmethod
+    def encoding(data):
+        return msgpack.packb(data)
+
+    @staticmethod
+    def decoding(data):
+        return msgpack.unpackb(data)
+
+    @staticmethod
+    def associate_with_cloudlet(ip, port):
+        '''
+        :param cloudlet_t: cloudlet_t instance that has ip_address of the cloudlet
+        :type cloudlet_t: cloudlet_t
+
+        :return: session id or -1 if it failed
+        :rtype: long
+        '''
+        sock = Client.connect(ip, port)
+        if not sock:
+            return Client.RET_FAILED
+
+        # send request
+        header_dict = {
+            protocol.KEY_COMMAND : protocol.MESSAGE_COMMAND_SESSION_CREATE
+            }
+        header = Client.encoding(header_dict)
+        sock.sendall(struct.pack("!I", len(header)))
+        sock.sendall(header)
+
+        # recv response
+        recv_size, = struct.unpack("!I", Client.recvall(sock, 4))
+        data = Client.recvall(sock, recv_size)
+        data = Client.decoding(data)
+        session_id = data.get(protocol.KEY_SESSION_ID, None)
+        if not session_id:
+            session_id = Client.RET_FAILED
+            reason = data.get(protocol.KEY_FAILED_REASON, None)
+            msg = "Cannot create session: %s" % str(reason)
+            raise RapidClientError(msg)
+        sock.close()
+        return session_id
+
+    @staticmethod
+    def disassociate(ip, port, session_id):
+        '''
+        :param session_id: session_id that was returned when associated
+        :type session_id: long
+
+        :return: N/A
+        '''
+        sock = Client.connect(ip, port)
+        if not sock:
+            return Client.RET_FAILED
+
+        # send request
+        header_dict = {
+            protocol.KEY_COMMAND : protocol.MESSAGE_COMMAND_SESSION_CLOSE,
+            protocol.KEY_SESSION_ID: session_id,
+            }
+        header = Client.encoding(header_dict)
+        sock.sendall(struct.pack("!I", len(header)))
+        sock.sendall(header)
+
+        # recv response
+        recv_size, = struct.unpack("!I", Client.recvall(sock, 4))
+        data = Client.recvall(sock, recv_size)
+        data = Client.decoding(data)
+
+        sock.close()
+        is_success = data.get(protocol.KEY_COMMAND, False)
+        if is_success == protocol.MESSAGE_COMMAND_SUCCESS:
+            return Client.RET_SUCCESS
+        return Client.RET_FAILED
 
 
 def process_command_line(argv):
@@ -54,10 +165,6 @@ def process_command_line(argv):
             '-s', '--server', action='store', type='string', dest='server_ip', \
             default=None, help="Set cloudlet server's IP address")
     parser.add_option(
-            '-c', '--cloudlet-discover', action='store', type='string', \
-            dest='discovery_server', default=None, \
-            help="Set cloudlet discovery server address")
-    parser.add_option(
             '-d', '--display', action='store_false', dest='display_vnc', default=True,
             help='Turn on VNC display of VM (Default True)')
     parser.add_option(
@@ -67,8 +174,8 @@ def process_command_line(argv):
 
     if settings.overlay_path == None:
         parser.error("Need path to overlay-meta file")
-    if (not settings.server_ip) and (not settings.discovery_server):
-        message = "You need either specify cloudlet ip(option -s) or enable to discover cloudlet service(option -c)"
+    if (not settings.server_ip):
+        message = "You need to specify cloudlet ip(option -s)"
         parser.error(message)
     if not len(args) == 0:
         parser.error('program takes no command-line arguments; "%s" ignored.' % (args,))
@@ -83,29 +190,28 @@ def recv_all(sock, size):
     return data
 
 
-def synthesis(address, port, overlay_path, app_function, synthesis_option):
-    if os.path.exists(overlay_path) == False:
+def synthesis(ip, port, overlay_path, app_function, synthesis_option):
+    if os.path.exists(overlay_path) is False:
         sys.stderr.write("Invalid overlay path: %s\n" % overlay_path)
         sys.exit(1)
 
     # get session
-    cloudlet = Cloudlet(ip_address=address)
-    session_id = API.associate_with_cloudlet(cloudlet)
-    if session_id == discovery_api.RET_FAILED:
-        sys.stderr.write("Cannot create session : ")
-        sys.stderr.write(API.discovery_err_str + "\n")
+    session_id = Client.associate_with_cloudlet(ip, port)
+    if session_id == Client.RET_FAILED:
+        sys.stderr.write("Cannot create session\n")
         sys.exit(1)
 
-    start_cloudlet(cloudlet, session_id, overlay_path, app_function, synthesis_option)
+    start_cloudlet(ip, port, session_id, overlay_path,
+            app_function, synthesis_option)
     print "finished"
 
 
-def start_cloudlet(cloudlet, session_id, overlay_meta_path, app_function, synthesis_options=dict()):
+def start_cloudlet(ip, port, session_id, overlay_meta_path,
+        app_function, synthesis_options=dict()):
     # connection
     start_time = time.time()
-    sock = Util.connect(cloudlet)
+    sock = Client.connect(ip, port)
     if not sock:
-        print API.discovery_err_str
         sys.exit(1)
 
     blob_request_list = list()
@@ -114,7 +220,7 @@ def start_cloudlet(cloudlet, session_id, overlay_meta_path, app_function, synthe
 
     print "Overlay Meta: %s" % (overlay_meta_path)
     print "Session ID: %ld" % (session_id)
-    meta_info = Util.decoding(open(overlay_meta_path, "r").read())
+    meta_info = Client.decoding(open(overlay_meta_path, "r").read())
 
     # send header
     header_dict = {
@@ -124,7 +230,7 @@ def start_cloudlet(cloudlet, session_id, overlay_meta_path, app_function, synthe
         }
     if len(synthesis_options) > 0:
         header_dict[protocol.KEY_SYNTHESIS_OPTION] = synthesis_options
-    header = Util.encoding(header_dict)
+    header = Client.encoding(header_dict)
     sock.sendall(struct.pack("!I", len(header)))
     sock.sendall(header)
     sock.sendall(open(overlay_meta_path, "r").read())
@@ -134,7 +240,7 @@ def start_cloudlet(cloudlet, session_id, overlay_meta_path, app_function, synthe
     data = recv_all(sock, 4)
     msg_size = struct.unpack("!I", data)[0]
     msg_data = recv_all(sock, msg_size);
-    message = Util.decoding(msg_data)
+    message = Client.decoding(msg_data)
     command = message.get(protocol.KEY_COMMAND, None)
     if command != protocol.MESSAGE_COMMAND_SUCCESS:
         sys.stderr.write("[ERROR] Failed to send overlay meta header\n")
@@ -154,7 +260,7 @@ def start_cloudlet(cloudlet, session_id, overlay_meta_path, app_function, synthe
                     break
                 msg_size = struct.unpack("!I", data)[0]
                 msg_data = recv_all(sock, msg_size);
-                message = Util.decoding(msg_data)
+                message = Client.decoding(msg_data)
                 command = message.get(protocol.KEY_COMMAND)
                 if command ==  protocol.MESSAGE_COMMAND_SUCCESS:    # RET_SUCCESS
                     pass
@@ -196,7 +302,7 @@ def start_cloudlet(cloudlet, session_id, overlay_meta_path, app_function, synthe
                         }
 
                 # send close signal to cloudlet server
-                header = Util.encoding(segment_info)
+                header = Client.encoding(segment_info)
                 sock.sendall(struct.pack("!I", len(header)))
                 sock.sendall(header)
                 sock.sendall(open(blob_path, "rb").read())
@@ -220,7 +326,7 @@ def start_cloudlet(cloudlet, session_id, overlay_meta_path, app_function, synthe
     client_info = {
             protocol.KEY_COMMAND : protocol.MESSAGE_COMMAND_FINISH,
             protocol.KEY_SESSION_ID : session_id,
-            'Transfer End':(send_end-start_time), 
+            'Transfer End':(send_end-start_time),
             'Synthesis Success': (recv_end-start_time),
             'App Start': (app_start-start_time),
             'App End': (app_end-start_time)
@@ -228,22 +334,22 @@ def start_cloudlet(cloudlet, session_id, overlay_meta_path, app_function, synthe
     pprint(client_info)
 
     # send close signal to cloudlet server
-    header = Util.encoding(client_info)
+    header = Client.encoding(client_info)
     sock.sendall(struct.pack("!I", len(header)))
     sock.sendall(header)
 
     # recv finish success (as well as residue) from server
     data = recv_all(sock, 4)
     msg_size = struct.unpack("!I", data)[0]
-    msg_data = recv_all(sock, msg_size);
-    message = Util.decoding(msg_data)
+    msg_data = recv_all(sock, msg_size)
+    message = Client.decoding(msg_data)
     command = message.get(protocol.KEY_COMMAND)
     if command != protocol.MESSAGE_COMMAND_SUCCESS:
-        raise RapidClientError("finish sucess errror: %d" % command)
+        raise RapidClientError("finish success error: %d" % command)
 
     # close session
-    if API.disassociate(cloudlet, session_id) == False:
-        print API.discovery_err_str
+    if Client.disassociate(ip, port, session_id) is False:
+        print "Failed to close session"
 
 
 class client_thread(threading.Thread):
@@ -276,30 +382,14 @@ def main(argv=None):
     cloudlet_ip = None
     if settings.server_ip:
         cloudlet_ip = settings.server_ip
-    elif settings.discovery_server:
-        cloudlet_list = list()
-        if discovery_api.RET_FAILED == API.find_nearby_cloudlets(cloudlet_list):
-            sys.stderr.write(API.discovery_err_str)
-            sys.exit(1)
-        for index, each_cloudlet in enumerate(cloudlet_list):
-            API.get_cloudlet_info(each_cloudlet)
-            print "%d : %s" % (index, each_cloudlet)
-        print ""
-        while True:
-            user_input = raw_input("Choose Cloudlet (0~%d): " % (len(cloudlet_list)-1))
-            if not user_input.isdigit():
-                continue
-            selected_number = int(user_input)
-            if 0 <= selected_number < len(cloudlet_list):
-                break
-        cloudlet_ip = cloudlet_list[selected_number].ip_v4
     else:
-        message = "You need either specify cloudlet ip(option -s) or enable to discover cloudlet service(option -c)"
+        message = "You need to specify cloudlet ip(option -s)"
         sys.stderr.write(message)
         sys.exit(1)
-        
+
     synthesis(cloudlet_ip, port, settings.overlay_path, app_function, synthesis_options)
     return 0
+
 
 
 if __name__ == "__main__":

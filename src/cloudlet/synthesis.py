@@ -37,7 +37,7 @@ from cloudlet.db import api as db_api
 from cloudlet.db import table_def as db_table
 from cloudlet.Configuration import Const
 from cloudlet.Configuration import Options
-from cloudlet.Configuration import Discovery_Const
+from cloudlet.Configuration import Caching_Const
 from cloudlet.delta import DeltaList
 from cloudlet.delta import DeltaItem
 from cloudlet import msgpack
@@ -277,15 +277,15 @@ class VM_Overlay(threading.Thread):
 
     def _start_emulate_cache_fs(self):
         # check samba
-        if os.path.exists(Discovery_Const.HOST_SAMBA_DIR) == False:
+        if os.path.exists(Caching_Const.HOST_SAMBA_DIR) == False:
             msg = "Cloudlet does not have samba directory at %s\n" % \
-                    Discovery_Const.HOST_SAMBA_DIR
+                    Caching_Const.HOST_SAMBA_DIR
             msg += "You can change samba path at Configuration.py\n"
             raise CloudletGenerationError(msg)
         # fetch URI to cache
         try:
-            cache_manager = cache.CacheManager(Discovery_Const.CACHE_ROOT, \
-                    Discovery_Const.REDIS_ADDR, Discovery_Const.CACHE_FUSE_BINPATH)
+            cache_manager = cache.CacheManager(Caching_Const.CACHE_ROOT, \
+                    Caching_Const.REDIS_ADDR, Caching_Const.CACHE_FUSE_BINPATH)
                     
             cache_manager.start()
             self.compiled_list = cache.Util.get_compiled_URIs( \
@@ -298,7 +298,7 @@ class VM_Overlay(threading.Thread):
             msg = "Cannot retrieve data from URI: %s" % str(e)
             raise CloudletGenerationError(msg)
         # create symbolic link to samba dir
-        mount_point = os.path.join(Discovery_Const.HOST_SAMBA_DIR, cache_fuse.url_root)
+        mount_point = os.path.join(Caching_Const.HOST_SAMBA_DIR, cache_fuse.url_root)
         if os.path.lexists(mount_point) == True:
             os.unlink(mount_point)
         os.symlink(cache_fuse.mountpoint, mount_point)

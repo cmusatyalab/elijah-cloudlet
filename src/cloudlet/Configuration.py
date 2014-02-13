@@ -92,7 +92,6 @@ class Const(object):
     VMNETFS_PATH            = which("cloudlet_vmnetfs")
     XRAY_BIN_PATH           = which("cloudlet_disk_analyzer")
     UPnP_SERVER             = which("upnp_server.jar")
-    REST_SERVER_BIN         = which("cloudlet_RESTServer")
 
     # personal information
     CLOUDLET_DB             = os.path.abspath(os.path.join(HOME_DIR, ".cloudlet/config/cloudlet.db"))
@@ -145,15 +144,12 @@ class Synthesis_Const(object):
     END_OF_FILE             = "!!Overlay Transfer End Marker"
     ERROR_OCCURED           = "!!Overlay Transfer Error Marker"
 
-    # Discovery
-    DIRECTORY_UPDATE_PERIOD = 60*10 # 10 min
-
     # Synthesis Server
     LOCAL_IPADDRESS = 'localhost'
     SERVER_PORT_NUMBER = 8021
 
 
-class Discovery_Const(object):
+class Caching_Const(object):
     MODULE_DIR          = os.path.dirname(os.path.abspath(__file__))
     CACHE_FUSE_BINPATH  = os.path.abspath(os.path.join(MODULE_DIR, "./caching/fuse/cachefs"))
     HOST_SAMBA_DIR      = "/var/samba/"
