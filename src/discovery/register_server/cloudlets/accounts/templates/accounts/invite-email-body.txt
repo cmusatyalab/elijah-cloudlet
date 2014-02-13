@@ -1,5 +1,0 @@
-{{ inviter.get_full_name }} has invited you to join {{ site.name }}!
-
-To create an account, please visit:
-
-{{ protocol }}://{{ site.domain }}{% url 'cloudlet-register' token %}
