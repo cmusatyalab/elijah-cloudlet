@@ -35,15 +35,9 @@ from cloudlet.db.api import DBConnector
 from cloudlet.db.table_def import BaseVM, Session, OverlayVM
 from cloudlet.synthesis_protocol import Protocol as Protocol
 from cloudlet.upnp_server import UPnPServer, UPnPError
-from cloudlet.discovery.ds_register import RegisterError
-from cloudlet.discovery.ds_register import RegisterThread
 from cloudlet.Configuration import Const as Cloudlet_Const
 from cloudlet.Configuration import Synthesis_Const as Synthesis_Const
 from cloudlet import msgpack
-# this is for REST API at stand-alone version of synthesis server
-#from cloudlet.RESTServer_binder import RESTServer, RESTServerError
-#from cloudlet.discovery.monitor.resource import ResourceMonitorThread
-#from cloudlet.discovery.monitor.resource import ResourceMonitorError
 
 from pprint import pformat
 from optparse import OptionParser
@@ -676,7 +670,8 @@ class SynthesisServer(SocketServer.TCPServer):
             self.upnp_server = None
         LOG.info("[INFO] Start UPnP Server")
 
-        # Start registration client
+        # This is cloudlet discovery related part and separated out
+        '''
         if settings.register_server:
             try:
                 self.register_client = RegisterThread(
@@ -687,9 +682,6 @@ class SynthesisServer(SocketServer.TCPServer):
             except RegisterError as e:
                 LOG.info(str(e))
                 LOG.info("[Warning] Cannot register Cloudlet to central server")
-
-        # cloudlet REST Server
-        '''
         try:
             self.rest_server = RESTServer()
             self.rest_server.start()
@@ -698,10 +690,6 @@ class SynthesisServer(SocketServer.TCPServer):
             LOG.info("[Warning] Cannot start REST API Server")
             self.rest_server = None
         LOG.info("[INFO] Start RESTful API Server")
-        '''
-
-        # cloudlet machine monitor
-        '''
         try:
             self.resource_monitor = ResourceMonitorThread()
             self.resource_monitor.start()

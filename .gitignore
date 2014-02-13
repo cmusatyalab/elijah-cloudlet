@@ -1,5 +1,10 @@
+MANIFEST
+TODO.md
+disk/
 nonpublic/
+dist/
 bin/
+build/
 image/
 cloudlet_env/
 test/memory_snapshot/

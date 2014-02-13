@@ -31,18 +31,18 @@ import xray
 import hashlib
 import libvirt
 import shutil
-import stat
 import multiprocessing
 
 from cloudlet.db import api as db_api
 from cloudlet.db import table_def as db_table
 from cloudlet.Configuration import Const
 from cloudlet.Configuration import Options
-from cloudlet.Configuration import Discovery_Const
+from cloudlet.Configuration import Caching_Const
 from cloudlet.delta import DeltaList
 from cloudlet.delta import DeltaItem
 from cloudlet import msgpack
 from cloudlet.progressbar import AnimatedProgressBar
+from cloudlet.package import VMOverlayPackage
 
 from xml.etree import ElementTree
 from xml.etree.ElementTree import Element
@@ -210,11 +210,9 @@ class VM_Overlay(threading.Thread):
                 self.modified_disk, self.modified_mem.name)
 
         # 4. create_overlayfile
-        image_name = os.path.basename(self.base_disk).split(".")[0]
-        dir_path = os.path.dirname(self.base_mem)
-        overlay_prefix = os.path.join(dir_path,
-                image_name+Const.OVERLAY_FILE_PREFIX)
-        overlay_metapath = os.path.join(dir_path, image_name+Const.OVERLAY_META)
+        temp_dir = mkdtemp(prefix="cloudlet-overlay-")
+        overlay_prefix = os.path.join(temp_dir, Const.OVERLAY_FILE_PREFIX)
+        overlay_metapath = os.path.join(temp_dir, Const.OVERLAY_META)
 
         self.overlay_metafile, self.overlay_files = \
                 generate_overlayfile(overlay_deltalist, self.options, 
@@ -222,12 +220,22 @@ class VM_Overlay(threading.Thread):
                 os.path.getsize(self.modified_mem.name),
                 overlay_metapath, overlay_prefix)
 
-        # option for data-intensive application
-        if self.options.DATA_SOURCE_URI != None:
-            overlay_uri_meta = os.path.join(dir_path, image_name+Const.OVERLAY_URIs)
-            self.overlay_uri_meta =  self._terminate_emulate_cache_fs(overlay_uri_meta)
+        # packaging VM overlay into a single zip file
+        if self.options.ZIP_CONTAINER == True:
+            self.overlay_zipfile = os.path.join(temp_dir, Const.OVERLAY_ZIP)
+            VMOverlayPackage.create(self.overlay_zipfile, self.overlay_metafile, self.overlay_files)
+            # delete tmp overlay files
+            if os.path.exists(self.overlay_metafile) == True:
+                os.remove(self.overlay_metafile)
+            for overlay_file in self.overlay_files:
+                if os.path.exists(overlay_file) == True:
+                    os.remove(overlay_file)
 
         # 5. terminting
+        # option for data-intensive application
+        if self.options.DATA_SOURCE_URI != None:
+            overlay_uri_meta = os.path.join(temp_dir, Const.OVERLAY_URIs)
+            self.overlay_uri_meta =  self._terminate_emulate_cache_fs(overlay_uri_meta)
         self.terminate()
 
     def terminate(self):
@@ -269,15 +277,15 @@ class VM_Overlay(threading.Thread):
 
     def _start_emulate_cache_fs(self):
         # check samba
-        if os.path.exists(Discovery_Const.HOST_SAMBA_DIR) == False:
+        if os.path.exists(Caching_Const.HOST_SAMBA_DIR) == False:
             msg = "Cloudlet does not have samba directory at %s\n" % \
-                    Discovery_Const.HOST_SAMBA_DIR
+                    Caching_Const.HOST_SAMBA_DIR
             msg += "You can change samba path at Configuration.py\n"
             raise CloudletGenerationError(msg)
         # fetch URI to cache
         try:
-            cache_manager = cache.CacheManager(Discovery_Const.CACHE_ROOT, \
-                    Discovery_Const.REDIS_ADDR, Discovery_Const.CACHE_FUSE_BINPATH)
+            cache_manager = cache.CacheManager(Caching_Const.CACHE_ROOT, \
+                    Caching_Const.REDIS_ADDR, Caching_Const.CACHE_FUSE_BINPATH)
                     
             cache_manager.start()
             self.compiled_list = cache.Util.get_compiled_URIs( \
@@ -290,7 +298,7 @@ class VM_Overlay(threading.Thread):
             msg = "Cannot retrieve data from URI: %s" % str(e)
             raise CloudletGenerationError(msg)
         # create symbolic link to samba dir
-        mount_point = os.path.join(Discovery_Const.HOST_SAMBA_DIR, cache_fuse.url_root)
+        mount_point = os.path.join(Caching_Const.HOST_SAMBA_DIR, cache_fuse.url_root)
         if os.path.lexists(mount_point) == True:
             os.unlink(mount_point)
         os.symlink(cache_fuse.mountpoint, mount_point)
@@ -351,7 +359,7 @@ class SynthesizedVM(threading.Thread):
         self.launch_disk = launch_disk
         self.launch_mem = launch_mem
 
-        temp_qemu_dir = mkdtemp(prefix="cloudlet-qemu-")
+        temp_qemu_dir = mkdtemp(prefix="cloudlet-overlay-")
         self.qemu_logfile = os.path.join(temp_qemu_dir, "qemu-trim-log")
         open(self.qemu_logfile, "w+").close()
         os.chmod(os.path.dirname(self.qemu_logfile), 0o771)
@@ -438,7 +446,7 @@ def _terminate_vm(conn, machine):
     except libvirt.libvirtError, e:
         pass
 
-def _create_overlay_meta(base_hash, overlay_metafile, modified_disksize, modified_memsize,
+def _create_overlay_meta(overlay_metafile, base_hash, modified_disksize, modified_memsize,
         blob_info):
     fout = open(overlay_metafile, "wrb")
 
@@ -535,14 +543,20 @@ def _convert_xml(disk_path, xml=None, mem_snapshot=None, \
     if mem_snapshot != None:
         hdr = vmnetx._QemuMemoryHeader(open(mem_snapshot))
         xml = ElementTree.fromstring(hdr.xml)
-    old_xml_str = ElementTree.tostring(xml)
+    original_xml_backup = ElementTree.tostring(xml)
 
     vm_name = None
     uuid = None
+    nova_vnc_element = None
     if nova_xml != None:
         new_xml = ElementTree.fromstring(nova_xml)
         vm_name = str(new_xml.find('name').text)
         uuid = str(new_xml.find('uuid').text)
+        nova_graphics_element = new_xml.find('devices/graphics')
+        if (nova_graphics_element is not None) and \
+                (nova_graphics_element.get('type') == 'vnc'):
+            nova_vnc_element = nova_graphics_element
+
         #network_element = new_xml.find('devices/interface')
         #network_xml_str = ElementTree.tostring(network_element)
 
@@ -554,9 +568,8 @@ def _convert_xml(disk_path, xml=None, mem_snapshot=None, \
     # enforce CPU model to have kvm64
     cpu_element = xml.find("cpu")
     if cpu_element is None:
-        msg = "Malfomed XML input: %s\n", Const.TEMPLATE_XML
-        msg += "need to specify CPU"
-        raise CloudletGenerationError(msg)
+        cpu_element = Element("cpu")
+        xml.append(cpu_element)
     cpu_element.set("match", "exact")
     if cpu_element.find("arch") is not None:
         cpu_element.remove(cpu_element.find("arch"))
@@ -588,6 +601,15 @@ def _convert_xml(disk_path, xml=None, mem_snapshot=None, \
         msg = "Malfomed XML input: %s", Const.TEMPLATE_XML
         raise CloudletGenerationError(msg)
     name_element.text = vm_name
+
+    # update vnc information
+    if nova_vnc_element is not None:
+        device_element = xml.find("devices")
+        graphics_elements = device_element.findall("graphics")
+        for graphics_element in graphics_elements:
+            if graphics_element.get("type") == "vnc":
+                device_element.remove(graphics_element)
+                device_element.append(nova_vnc_element)
 
     # Use custom QEMU
     qemu_emulator = xml.find('devices/emulator')
@@ -632,7 +654,7 @@ def _convert_xml(disk_path, xml=None, mem_snapshot=None, \
         remove_list = list()
         for argument_item in argument_list:
             arg_value = argument_item.get('value').strip()
-            if (arg_value == '-cloudlet') or (arg_value.startswith('logfile=')):
+            if arg_value.startswith('-cloudlet') or arg_value.startswith('logfile='):
                 remove_list.append(argument_item)
         for item in remove_list:
             qemu_element.remove(item)
@@ -660,16 +682,17 @@ def _convert_xml(disk_path, xml=None, mem_snapshot=None, \
         device_element.remove(serial_element)
 
     network_element = device_element.find("interface")
-    network_filter = network_element.find("filterref")
-    if network_filter is not None:
-        network_element.remove(network_filter)
+    if network_element is not None:
+        network_filter = network_element.find("filterref")
+        if network_filter is not None:
+            network_element.remove(network_filter)
 
     new_xml_str = ElementTree.tostring(xml)
     new_xml_str = new_xml_str.replace(old_uuid, str(uuid))
     if mem_snapshot is not None:
         overwrite_xml(mem_snapshot, new_xml_str)
 
-    return old_xml_str, new_xml_str
+    return original_xml_backup, new_xml_str
 
 
 def _get_monitoring_info(conn, machine, options,
@@ -763,7 +786,7 @@ def get_overlay_deltalist(monitoring_info, options,
     if options.DISK_ONLY:
         mem_deltalist = list()
     else:
-        mem_deltalist= Memory.create_memory_deltalist(modified_mem,
+        mem_deltalist = Memory.create_memory_deltalist(modified_mem,
                 basemem_meta=base_memmeta, basemem_path=base_mem,
                 apply_free_memory=options.FREE_SUPPORT,
                 free_memory_info=free_memory_dict)
@@ -810,17 +833,17 @@ def generate_overlayfile(overlay_deltalist, options,
     '''
 
     # Compression
-    LOG.info("[LZMA] Compressing overlay blobs")
+    LOG.info("[LZMA] Compressing overlay blobs (%s)", overlay_metapath)
     blob_list = delta.divide_blobs(overlay_deltalist, overlayfile_prefix,
             Const.OVERLAY_BLOB_SIZE_KB, Const.CHUNK_SIZE,
             Memory.Memory.RAM_PAGE_SIZE)
 
     # create metadata
     if not options.DISK_ONLY:
-        _create_overlay_meta(base_hashvalue, overlay_metapath,
+        _create_overlay_meta(overlay_metapath, base_hashvalue,
                 launchdisk_size, launchmem_size, blob_list)
     else:
-        _create_overlay_meta(base_hashvalue, overlay_metapath,
+        _create_overlay_meta(overlay_metapath, base_hashvalue,
                 launchdisk_size, launchmem_size, blob_list)
 
     overlay_files = [item[Const.META_OVERLAY_FILE_NAME] for item in blob_list]
@@ -1257,7 +1280,10 @@ def create_residue(base_disk, base_hashvalue,
     '''Get residue
     Return : residue_metafile_path, residue_filelist
     '''
-    # 1 sanity check
+    LOG.info("* Overlay creation configuration")
+    LOG.info("  - %s" % str(options))
+
+    # 1. sanity check
     if (options == None) or (isinstance(options, Options) == False):
         raise CloudletGenerationError("Given option class is invalid: %s" % str(options))
     (base_diskmeta, base_mem, base_memmeta) = \
@@ -1296,10 +1322,8 @@ def create_residue(base_disk, base_hashvalue,
             residue_deltalist)
 
     # 5. create_overlayfile
-    image_name = os.path.basename(base_disk).split(".")[0]
-    dir_path = os.path.dirname(base_mem)
-    overlay_prefix = os.path.join(dir_path, image_name+Const.OVERLAY_FILE_PREFIX)
-    overlay_metapath = os.path.join(dir_path, image_name+Const.OVERLAY_META)
+    overlay_prefix = os.path.join(os.getcwd(), Const.OVERLAY_FILE_PREFIX)
+    overlay_metapath = os.path.join(os.getcwd(), Const.OVERLAY_META)
 
     overlay_metafile, overlay_files = \
             generate_overlayfile(merged_list, options, 
@@ -1642,11 +1666,9 @@ def synthesis(base_disk, meta, **kwargs):
     if os.path.exists(base_disk) == False:
         msg = "Base disk does not exist at %s" % base_disk
         raise CloudletGenerationError(msg)
-    if os.path.exists(meta) == False:
-        msg = "Meta file for VM overlay does not exist at %s" % meta
-        raise CloudletGenerationError(msg)
 
     disk_only = kwargs.get('disk_only', False)
+    zip_container = kwargs.get('zip_container', False)
     return_residue = kwargs.get('return_residue', False)
     qemu_args = kwargs.get('qemu_args', False)
 
@@ -1655,15 +1677,34 @@ def synthesis(base_disk, meta, **kwargs):
     base_diskmeta = kwargs.get('base_diskmeta', None)
     base_memmeta = kwargs.get('base_memmeta', None)
 
-    LOG.info("Decompressing VM overlay")
     overlay_filename = NamedTemporaryFile(prefix="cloudlet-overlay-file-")
-    meta_info = decomp_overlay(meta, overlay_filename.name)
+    if zip_container == False:
+        if os.path.exists(meta) == False:
+            msg = "Meta file for VM overlay does not exist at %s" % meta
+            raise CloudletGenerationError(msg)
+        LOG.info("Decompressing VM overlay")
+        meta_info = decomp_overlay(meta, overlay_filename.name)
+    else:
+        # download VM overlay at local
+        from lzma import LZMADecompressor
+        overlay_package = VMOverlayPackage(meta)
+        meta_raw = overlay_package.read_meta()
+        meta_info = msgpack.unpackb(meta_raw)
+        comp_overlay_files = meta_info[Const.META_OVERLAY_FILES]
+        comp_overlay_files = [item[Const.META_OVERLAY_FILE_NAME] for item in comp_overlay_files]
+        overlay_fd = open(overlay_filename.name, "w+b")
+        for comp_filename in comp_overlay_files:
+            comp_data = overlay_package.read_blob(comp_filename)
+            decompressor = LZMADecompressor()
+            decomp_data = decompressor.decompress(comp_data)
+            decomp_data += decompressor.flush()
+            overlay_fd.write(decomp_data)
+        overlay_fd.close()
 
     LOG.info("Recovering launch VM")
     launch_disk, launch_mem, fuse, delta_proc, fuse_thread = \
             recover_launchVM(base_disk, meta_info, overlay_filename.name, \
             **kwargs)
-
     # resume VM
     LOG.info("Resume the launch VM")
     synthesized_VM = SynthesizedVM(launch_disk, launch_mem, fuse,
@@ -1690,7 +1731,7 @@ def synthesis(base_disk, meta, **kwargs):
         options.FREE_SUPPORT = True
         options.DISK_ONLY = False
         try:
-            # FIX: here we revisit all overlay to reconstruct hash information
+            # FIX: currently we revisit all overlay to reconstruct hash information
             # we can leverage Recovered_delta class reconstruction process,
             # but that does not generate hash value
             (base_diskmeta, base_mem, base_memmeta) = \
@@ -1701,12 +1742,12 @@ def synthesis(base_disk, meta, **kwargs):
                     meta_info[Const.META_BASE_VM_SHA256],
                     synthesized_VM, options, 
                     prev_mem_deltalist)
-            LOG.write("[RESULT] Residue")
-            LOG.write("[RESULT]   Metafile : %s" % \
+            LOG.info("[RESULT] Residue")
+            LOG.info("[RESULT]   Metafile : %s" % \
                     (os.path.abspath(residue_meta)))
-            LOG.write("[RESULT]   Files : %s" % str(residue_files))
+            LOG.info("[RESULT]   Files : %s" % str(residue_files))
         except CloudletGenerationError, e:
-            sys.stderr.write("Cannot create residue : %s" % (str(e)))
+            LOG.error("Cannot create residue : %s" % (str(e)))
 
     # terminate
     synthesized_VM.terminate()

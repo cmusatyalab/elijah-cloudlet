@@ -64,49 +64,49 @@ You will need:
 * Java JRE (for UPnP server)
 * apparmor-utils (for disable apparmor for libvirt)
 * libc6-i386 (for extracting free memory of 32 bit vm)
+* libxml2-dev libxslt1-dev (for overlay packaging)
 * python library
     - bson
 	- pyliblzma
 	- psutil
 	- SQLAlchemy
 	- fabric
+	- dateutil
 
 
 To install, you either 
 
-	- run a installation script:
+* run a installation script::
 
-		> $ sudo apt-get install fabric openssh-server
+		> $ sudo apt-get install fabric openssh-server  
 		> $ fab localhost install
 
-	- install manually:
+* install manually:
+	- install required package  
 
-		1. install required package
-			> $ sudo apt-get install qemu-kvm libvirt-bin gvncviewer python-libvirt python-xdelta3 python-dev openjdk-6-jre liblzma-dev apparmor-utils libc6-i386 python-pip
-			> $ sudo pip install bson pyliblzma psutil sqlalchemy
+			> $ sudo apt-get install qemu-kvm libvirt-bin gvncviewer python-libvirt python-xdelta3 python-dev openjdk-6-jre liblzma-dev apparmor-utils libc6-i386 python-pip libxml2-dev libxslt1-dev
+			> $ sudo pip install bson pyliblzma psutil sqlalchemy python-dateutil requests lxml
 
-		2. Disable security module. This is for allowing custom KVM.
-		Example at Ubuntu 12
+	- Disable security module. This is for allowing custom KVM. Example at Ubuntu 12  
 
-			> $ sudo aa-complain /usr/sbin/libvirtd
+			> $ sudo aa-complain /usr/sbin/libvirtd  
 
-		3. add current user to kvm, libvirtd group.
+	- Add current user to kvm, libvirtd group.  
 
-			> $ sudo adduser [your_account_name] kvm
-			> $ sudo adduser [your_account_name] libvirtd
-	
-		4. change permission of the fuse access (The qemu-kvm library changes fuse
-		access permission while it's being installed, and the permission is
+			> $ sudo adduser [your_account_name] kvm  
+			> $ sudo adduser [your_account_name] libvirtd  
+
+	- Change permission of the fuse access (The qemu-kvm library changes fuse access permission while it's being installed, and the permission is
 		recovered if you reboot the host.  We believe this is a bug in qemu-kvm
 		installation script, so you can either reboot the machine to have valid
 		permission of just revert the permission manually as bellow).
 
-		   > $ sudo chmod 644 /etc/fuse.conf
-		   > $ sod sed -i 's/#user_allow_other/user_allow_other/g' /etc/fuse.conf
+			> $ sudo chmod 644 /etc/fuse.conf  
+			> $ sod sed -i 's/#user_allow_other/user_allow_other/g' /etc/fuse.conf  
 	
-	5. finally, install cloudlet package using python setup tool
+  - Finally, install cloudlet package using python setup tool
 
-		   > $ sudo python setup.py install
+			> $ sudo python setup.py install
 
 
 
@@ -125,44 +125,69 @@ license issues, we'll provide relevant binaries.
 How to use
 --------------			
 
-1. Creating ``base vm``.  
-	You will first create ``base vm`` from a regular VM disk image. Here the
-	__regular VM disk image__ means a raw format virtual disk image 
-	you typically use at KVM/QEMU or Xen. The code will start running the OS
-	in this virtual disk and finally generate ``base vm``, which is composed
-	``base disk`` and ``base memory``. 
-	This ``base vm`` will be used as a template VM for your custom virtual machine.
+1. Creating ``base VM``.  
+
+	You will first create or import ``base VM``. Here we provide methods for both
+	importing ``base VM`` and creating your own ``base VM``.
+
+	1) We provide __sample base VM__ of Ubuntu 12.04 32bit server for easy
+	bootstrapping. You first need to download preconfigured ``base VM`` at:
+
+	[Base VM for Ubuntu-12.04.01-i386-Server](https://storage.cmusatyalab.org/cloudlet-basevm-ubuntu-12.04.01-i386/ubuntu-12.04.01-i386-server.tar.gz)
+	(Account: cloudlet, password: cloudlet)
+
+	Untar the downloaded file into a specific directory (e.g. ~/base_VM/) and
+	you can import it to the cloudlet DB by
+
+		> $ cloudlet add-base [path/to/base_disk] [hash value]
+	
+	For example,
+
+		> $ cd ~/base_VM/
+		> $ tar xvf ubuntu-12.04.01-i386-server.tar.gz
+		> $ cloudlet add-base ./ubuntu-12.04.01-i386-server/precise.raw 32854753f684c10e8ab8553315c7bf6ada2ab93a27c36f9bbb164514b96d516a
+	
+	You can find the hash value for the base VM from base VM hash file you just
+	downloaded(e.g. precise.base-hash). You can check import result by
+
+		> $ cloudlet list-base
+	
+	Later, we will provide more golden images for ``base VM`` such as vanilla
+	Ubuntu 12.04 LTS 64bit and Fedora 19. It would be similar with [Ubuntu
+	Cloud Image](http://cloud-images.ubuntu.com/).  We expect that typical
+	users import these ``base VMs`` rather than generating his own.
+	
+
+	2) You can also create your own __base VM__ from a regular VM disk image.
+	Here the _regular VM disk image_ means a raw format virtual disk image
+	you normaly use for KVM/QEMU or Xen. 
 
         > $ cloudlet base /path/to/base_disk.img
         > % Use raw file format virtual disk
+        
+	This will launch GUI (VNC) connecting to your guest OS and the code will
+	start creating ``base VM`` when you close VNC window. So, please close the
+	GUI window when you think it's right point to snapshot the VM as a base VM
+	(typically you close it after booting up).  Then, it will generate snapshot
+	of the current states for both memory and disk and save that information
+	to DB. You can check list of ``base VM`` by
 
-	This will launch GUI (VNC) connecting to your guest OS and the code
-	will start creating ``base vm`` when you close VNC window. So please log-in
-	to the guest OS and close the GUI window when you think it's right point
-	snapshotting the guest OS as a base VM (typically right after booting up).
-	Then, it will generate snapshot of the current states (for both memory and disk) 
-	and save the information to DB. You can check list of ``base vm`` by
-
-    	> $ cloudlet list_base
+    	> $ cloudlet list-base
 	
-	Later, we will provide several golden images for ``base vm`` such as vanilla
-	Windows7, Ubuntu 12.04 LTS, Fedora 19. We expect that general users import
-	these ``base vms`` rather than generates his own base vm.
 
-
-2. Creating ``VM overlay`` using ``base vm``.  
-    Now you can create your customized VM based on top of ``base vm``  
+2. Creating ``VM overlay`` using ``base VM``.  
+    Now you can create your customized VM based on top of ``base VM``  
   
         > $ cloudlet overlay /path/to/base_disk.img
         > % Path to base_disk is the path for virtual disk you used earlier
         > % You can check the path by "cloudlet list-base"
 
-	This will launch VNC again with resumed ``base vm``. Now you can start making
-	any customizations on top of this ``base vm``. For example, if you're a
+	This will launch VNC again with resumed ``base VM``. Now you can start making
+	any customizations on top of this ``base VM``. For example, if you're a
 	developer of ``face recognition`` backend server, we will install required
 	libraries, binaries and finally start your face recognition server. 
 	After closing the GUI windows, cloudlet will capture only the change portion
-	between your customization and ``base vm`` to generate ``VM overlay`` that
+	between your customization and ``base VM`` to generate ``VM overlay`` that
 	is a minimal binary for reconstructing your customized VM.
 
 	``VM overlay`` is composed of 2 files; 1) ``overlay-meta file`` ends with
@@ -185,8 +210,8 @@ How to use
 	follow workaround of this link. It happens at a machine that does not have
 	enough memory with EPT support, and you can avoid this problem by disabling
 	EPT support. We're current suspicious about kernel bug, and we'll report
-	this soon.
-
+	this soon.  
+    
 
 3. Synthesizing custom VM using ``VM overlay``  
 
@@ -254,5 +279,4 @@ Related research works
 * [The Impact of Mobile Multimedia Applications on Data Center Consolidation](https://github.com/cmusatyalab/elijah-cloudlet/blob/master/doc/papers/kiryong-ic2e-latency.pdf?raw=true)
 * [Just-in-Time Provisioning for Cyber Foraging](https://github.com/cmusatyalab/elijah-cloudlet/blob/master/doc/papers/kiryong-mobisys-vmsynthesis.pdf?raw=true)
 * [Scalable Crowd-Sourcing of Video from Mobile Devices](http://reports-archive.adm.cs.cmu.edu/anon/2012/CMU-CS-12-147.pdf)
-
 

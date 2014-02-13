@@ -46,7 +46,7 @@ last_average_power = 0.0
 
 
 delivery_server = "cloudlet.krha.kr"
-APP_DIR = "/home/krha/cloudlet/src/client/applications"
+APP_DIR = "/home/krha/cloudlet/provision/src/net_client/applications"
 MOPED_client = "%s/moped_client.py -i ./input/moped -s %s -p 9092" % (APP_DIR, delivery_server)
 GRAPHICS_client = "%s/graphics_client.py -i ./input/graphics/acc_input_1sec -s %s -p 9093" % (APP_DIR, delivery_server)
 FACE_client = "java -jar %s/FACE/FacerecDesktopControlClient.jar %s 9876 ./input/face/" % (APP_DIR, delivery_server)

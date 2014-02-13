@@ -129,6 +129,7 @@ public class CloudletCameraActivity extends Activity implements TextToSpeech.OnI
 						Utilities.showError(CloudletCameraActivity.this, "Error", "Cannot connect to Server " + server_ipaddress + ":" + server_port);
 						client = null;
 						mDialog.dismiss();
+						return;
 					}
 				}
 				client.uploadImageList(testImageList);
@@ -318,23 +319,20 @@ public class CloudletCameraActivity extends Activity implements TextToSpeech.OnI
 	 */
 	public boolean onKeyDown(int keyCode, KeyEvent event) {
 		if (keyCode == KeyEvent.KEYCODE_BACK) {
-
             Intent caller = getIntent(); 
             caller.putExtra("message", "finish"); 
             setResult(RESULT_OK, caller); 
             finish();
-            
-//			Intent intent = new Intent(CloudletCameraActivity.this, CloudletActivity.class);
-//			startActivity(intent); 
-//			finish();
 		}
 		return super.onKeyDown(keyCode, event);
 	}
 
 	@Override
 	public void onDestroy() {
-		if(client != null)
+		if(client != null){
 			client.close();
+			client = null;
+		}
 		
 		if(mPreview != null)
 			mPreview.close();

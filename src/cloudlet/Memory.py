@@ -494,10 +494,12 @@ def _get_free_pfn_list(snapshot_path, pglist_addr, pgn0_addr, mem_size_gb, mem_o
     proc = subprocess.Popen(cmd, close_fds=True, stdin=_PIPE, stdout=_PIPE, stderr=_PIPE)
     out, err = proc.communicate()
     if err:
+        LOG.warning("Error in getting free memory : %s" % str(err))
         return list()
     free_pfn_list = out.split("\n")
     if len(free_pfn_list[-1].strip()) == 0:
         free_pfn_list = free_pfn_list[:-1]
+    LOG.info("Free memory pages : %ld" % len(free_pfn_list))
     LOG.info("Finish getting free memory pages")
     return free_pfn_list
 

@@ -46,6 +46,7 @@ class Options(object):
     FREE_SUPPORT                        = False
     XRAY_SUPPORT                        = False
     DISK_ONLY                           = False
+    ZIP_CONTAINER                       = False
     DATA_SOURCE_URI                     = None
 
     # see the effect of dedup and reducing semantic by generating two indenpendent overlay
@@ -59,7 +60,7 @@ class Options(object):
 
 
 class Const(object):
-    VERSION = str("0.8.2")
+    VERSION = str("0.8.5")
     HOME_DIR = os.path.abspath(os.path.expanduser("~"))
     CONFIGURATION_DIR = os.path.join('/', 'var', 'lib', 'cloudlet', 'conf')
 
@@ -68,9 +69,10 @@ class Const(object):
     BASE_DISK_META          = ".base-img-meta"
     BASE_MEM_META           = ".base-mem-meta"
     BASE_HASH_VALUE         = ".base-hash"
-    OVERLAY_META            = ".overlay-meta"
     OVERLAY_URIs            = ".overlay-URIs"
-    OVERLAY_FILE_PREFIX     = ".overlay"
+    OVERLAY_META            = "overlay-meta"
+    OVERLAY_FILE_PREFIX     = "overlay-blob"
+    OVERLAY_ZIP             = "overlay.zip"
     OVERLAY_LOG             = ".overlay-log"
     LOG_PATH                = "/var/tmp/cloudlet/log-synthesis"
     OVERLAY_BLOB_SIZE_KB    = 1024*1024 # 1G
@@ -90,22 +92,25 @@ class Const(object):
     VMNETFS_PATH            = which("cloudlet_vmnetfs")
     XRAY_BIN_PATH           = which("cloudlet_disk_analyzer")
     UPnP_SERVER             = which("upnp_server.jar")
-    REST_SERVER_BIN         = which("cloudlet_RESTServer")
 
+    # personal information
     CLOUDLET_DB             = os.path.abspath(os.path.join(HOME_DIR, ".cloudlet/config/cloudlet.db"))
+    BASE_VM_DIR             = os.path.abspath(os.path.join(HOME_DIR, ".cloudlet", "baseVM"))
+
+    # global configuration files
     CLOUDLET_DB_SCHEMA      = os.path.join(CONFIGURATION_DIR, "schema.sql")
+    BASEVM_PACKAGE_SCHEMA   = os.path.join(CONFIGURATION_DIR, "package.xsd")
     TEMPLATE_XML            = os.path.join(CONFIGURATION_DIR, "VM_TEMPLATE.xml")
     TEMPLATE_OVF            = os.path.join(CONFIGURATION_DIR, "ovftransport.iso")
     CHUNK_SIZE=4096
-
-    def __init__(self):
-        import pdb;pdb.set_trace()
-        pass
 
     @staticmethod
     def _check_path(name, path):
         if not os.path.exists(path):
             message = "Cannot find name at %s" % (path)
+            raise ConfigurationError(message)
+        if not os.access(path, os.R_OK):
+            message = "File exists but cannot read the file at %s" % (path)
             raise ConfigurationError(message)
 
     @staticmethod
@@ -139,15 +144,12 @@ class Synthesis_Const(object):
     END_OF_FILE             = "!!Overlay Transfer End Marker"
     ERROR_OCCURED           = "!!Overlay Transfer Error Marker"
 
-    # Discovery
-    DIRECTORY_UPDATE_PERIOD = 60*10 # 10 min
-
     # Synthesis Server
     LOCAL_IPADDRESS = 'localhost'
     SERVER_PORT_NUMBER = 8021
 
 
-class Discovery_Const(object):
+class Caching_Const(object):
     MODULE_DIR          = os.path.dirname(os.path.abspath(__file__))
     CACHE_FUSE_BINPATH  = os.path.abspath(os.path.join(MODULE_DIR, "./caching/fuse/cachefs"))
     HOST_SAMBA_DIR      = "/var/samba/"

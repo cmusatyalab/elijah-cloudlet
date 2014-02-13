@@ -122,7 +122,7 @@ public class GNetworkClientSender extends Thread {
 				
 			}
 		}
-		this.notifyFinishInfo();
+//		this.notifyFinishInfo();
 	}
 	
 	private void notifyFinishInfo() {
@@ -134,7 +134,8 @@ public class GNetworkClientSender extends Thread {
 			}
 		}
 		
-		String message = "Number of missed acc ID: " + numberOfMissedAcc + "\nNumber of duplicated Acc ID: " + this.receiver.getDuplicatedAcc();
+		String message = "Number of missed acc ID: " + numberOfMissedAcc +
+				"\nNumber of duplicated Acc ID: " + this.receiver.getDuplicatedAcc();
 		Message msg = Message.obtain();
 		msg.what = GNetworkClient.FINISH_MESSAGE;
 		msg.arg1 = messageCounter++;

@@ -13,12 +13,15 @@ import java.util.TimerTask;
 
 import javax.microedition.khronos.opengles.GL10;
 
+import edu.cmu.cs.cloudlet.android.CloudletActivity;
 import edu.cmu.cs.cloudlet.android.R;
 import edu.cmu.cs.cloudlet.android.application.Preview;
 
 import android.app.Activity;
 import android.app.AlertDialog;
 import android.content.Context;
+import android.content.DialogInterface;
+import android.content.Intent;
 import android.graphics.Point;
 import android.hardware.SensorListener;
 import android.hardware.SensorManager;
@@ -28,6 +31,7 @@ import android.os.Environment;
 import android.util.AttributeSet;
 import android.util.Log;
 import android.view.Display;
+import android.view.KeyEvent;
 import android.view.MotionEvent;
 import android.view.View;
 import android.widget.ScrollView;
@@ -116,7 +120,6 @@ public class GraphicsClientActivity extends Activity implements SensorListener {
 		GLView.requestRender();
 	}
 	
-	
 	public void updateLog(String msg){
 		textView.setText(msg);
 		/*
@@ -140,7 +143,8 @@ public class GraphicsClientActivity extends Activity implements SensorListener {
 	@Override
 	public void onSensorChanged(int sensor, float[] values) {
         if (sensor == SensorManager.SENSOR_ACCELEROMETER) {
-        	connector.updateAccValue(values);
+        	if (connector != null)
+        		connector.updateAccValue(values);
         }
 	}
 
@@ -155,8 +159,10 @@ public class GraphicsClientActivity extends Activity implements SensorListener {
 	@Override
 	protected void onStop() {
 		this.sensor.unregisterListener(this);
-		if(this.connector != null)
+		if(this.connector != null){
 			this.connector.close();
+			this.connector = null;
+		}
 		super.onStop();
 	}
 
@@ -166,7 +172,18 @@ public class GraphicsClientActivity extends Activity implements SensorListener {
 		GLView.onPause();
         this.sensor.unregisterListener(this);
     }
-
+	
+	public boolean onKeyDown(int keyCode, KeyEvent event) {
+		if (keyCode == KeyEvent.KEYCODE_BACK) {
+            Intent caller = getIntent(); 
+            caller.putExtra("message", "finish"); 
+            setResult(RESULT_OK, caller); 
+			this.connector.close();
+			this.connector = null;
+			finish();
+		}
+		return super.onKeyDown(keyCode, event);
+	}
 	
 	
 	/**********************************************************************

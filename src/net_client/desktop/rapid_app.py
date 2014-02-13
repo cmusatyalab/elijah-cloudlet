@@ -21,10 +21,10 @@
 import sys
 import time
 import os
-from rapid_client import synthesis
+from synthesis_client import Client
 from optparse import OptionParser
 import cloudlet_client
-from synthesis_protocol import Protocol as protocol
+from cloudlet.synthesis_protocol import Protocol as protocol
 
 sys.path.append("../src/")
 
@@ -89,7 +89,7 @@ def app_synthesis(ip, port, app_name, options=None):
         synthesis_options.update(options)
 
     #overlay path
-    OVERLAY_ROOT = "../../../image/overlay/"
+    OVERLAY_ROOT = "../../../../image/overlay/"
     overlay_meta_path = None
     if len(app_name.split("_")) > 1:
         app_name, order, blob_size = app_name.split("_")
@@ -113,7 +113,8 @@ def app_synthesis(ip, port, app_name, options=None):
     elif app_name == "graphics":
         app_function = exec_graphics
 
-    synthesis(ip, port, overlay_meta_path, app_function, synthesis_options)
+    client = Client(ip, port, overlay_meta_path, app_function, synthesis_options)
+    client.provisioning()
     time.sleep(10)
 
 
