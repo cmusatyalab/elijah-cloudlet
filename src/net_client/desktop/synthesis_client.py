@@ -29,9 +29,6 @@ import select
 from optparse import OptionParser
 from pprint import pprint
 
-# for local test
-from cloudlet.synthesis_protocol import Protocol as protocol
-
 # import msgpack
 import_msgpack = False
 try:
@@ -39,10 +36,47 @@ try:
     import_msgpack = True
 except ImportError as e:
     pass
-
 if import_msgpack is False:
     from cloudlet import msgpack as msgpack
     import_msgpack = True
+
+
+class Protocol(object):
+    #
+    # Command List "command": command_number
+    #
+    KEY_COMMAND                 = "command"
+    # client -> server
+    MESSAGE_COMMAND_SEND_META           = 0x11
+    MESSAGE_COMMAND_SEND_OVERLAY        = 0x12
+    MESSAGE_COMMAND_FINISH              = 0x13
+    MESSAGE_COMMAND_GET_RESOURCE_INFO   = 0x14
+    MESSAGE_COMMAND_SESSION_CREATE      = 0x15
+    MESSAGE_COMMAND_SESSION_CLOSE       = 0x16
+    # server -> client as return
+    MESSAGE_COMMAND_SUCCESS             = 0x01
+    MESSAGE_COMMAND_FAIELD              = 0x02
+    # server -> client as command
+    MESSAGE_COMMAND_ON_DEMAND           = 0x03
+    MESSAGE_COMMAND_SYNTHESIS_DONE      = 0x04
+
+    #
+    # other keys
+    #
+    KEY_ERROR                   = "error"
+    KEY_META_SIZE               = "meta_size"
+    KEY_REQUEST_SEGMENT         = "blob_uri"
+    KEY_REQUEST_SEGMENT_SIZE    = "blob_size"
+    KEY_FAILED_REASON           = "reasons"
+    KEY_PAYLOAD                 = "payload"
+    KEY_SESSION_ID             = "session_id"
+    KEY_REQUESTED_COMMAND       = "requested_command"
+
+    # synthesis option
+    KEY_SYNTHESIS_OPTION        = "synthesis_option"
+    SYNTHESIS_OPTION_DISPLAY_VNC = "option_display_vnc"
+    SYNTHESIS_OPTION_EARLY_START = "option_early_start"
+    SYNTHESIS_OPTION_SHOW_STATISTICS = "option_show_statistics"
 
 
 class ClientError(Exception):
@@ -52,14 +86,15 @@ class ClientError(Exception):
 class Client(object):
     RET_FAILED = 0
     RET_SUCCESS = 1
-    CLOUDLET_PORT = 8022
+    CLOUDLET_PORT = 8021
 
-    def __init__(self, ip, port, overlay_path, app_function, synthesis_option):
+    def __init__(self, ip, port, overlay_path, app_function=None, synthesis_option=dict()):
         self.ip = ip
         self.port = port
         self.overlay_path = overlay_path
         self.app_function = app_function
         self.synthesis_option = synthesis_option or dict()
+        self.time_dict = dict()
 
         if os.path.exists(self.overlay_path) is False:
             msg = "Invalid overlay path: %s\n" % self.overlay_path
@@ -76,7 +111,7 @@ class Client(object):
 
     def provisioning(self):
         # connection
-        start_time = time.time()
+        self.start_provisioning_time = time.time()
         sock = Client.connect(self.ip, self.port)
         if not sock:
             msg = "Cannot connect to Cloudlet (%s:%d)\n" % (self.ip, self.port)
@@ -84,8 +119,6 @@ class Client(object):
             raise ClientError(msg)
 
         blob_request_list = list()
-        time_dict = dict()
-        app_time_dict = dict()
 
         sys.stdout.write("Overlay Meta: %s\n" % (self.overlay_path))
         sys.stdout.write("Session ID: %ld\n" % (self.session_id))
@@ -93,33 +126,34 @@ class Client(object):
 
         # send header
         header_dict = {
-            protocol.KEY_COMMAND : protocol.MESSAGE_COMMAND_SEND_META,
-            protocol.KEY_META_SIZE : os.path.getsize(self.overlay_path),
-            protocol.KEY_SESSION_ID: self.session_id,
+            Protocol.KEY_COMMAND : Protocol.MESSAGE_COMMAND_SEND_META,
+            Protocol.KEY_META_SIZE : os.path.getsize(self.overlay_path),
+            Protocol.KEY_SESSION_ID: self.session_id,
             }
         if len(self.synthesis_option) > 0:
-            header_dict[protocol.KEY_SYNTHESIS_OPTION] = self.synthesis_option
+            header_dict[Protocol.KEY_SYNTHESIS_OPTION] = self.synthesis_option
         header = Client.encoding(header_dict)
         sock.sendall(struct.pack("!I", len(header)))
         sock.sendall(header)
         sock.sendall(open(self.overlay_path, "r").read())
-        time_dict['send_end_time'] = time.time()
+        self.time_dict['send_end_time'] = time.time()
 
         # recv header
         data = Client.recv_all(sock, 4)
         msg_size = struct.unpack("!I", data)[0]
         msg_data = Client.recv_all(sock, msg_size)
         message = Client.decoding(msg_data)
-        command = message.get(protocol.KEY_COMMAND, None)
-        if command != protocol.MESSAGE_COMMAND_SUCCESS:
+        command = message.get(Protocol.KEY_COMMAND, None)
+        if command != Protocol.MESSAGE_COMMAND_SUCCESS:
             msg = "Failed to send overlay meta header: %s" %\
-                    message.get(protocol.KEY_FAILED_REASON, None)
+                    message.get(Protocol.KEY_FAILED_REASON, None)
             sys.stderr.write("[ERROR] %s\n" % msg)
             raise ClientError(msg)
 
-        app_thread = None
+        self.app_thread = None
         total_blob_count = len(meta_info['overlay_files'])
         sent_blob_list = list()
+        is_synthesis_finished = False
 
         while True:
             inputready, outputready, exceptrdy = select.select([sock], [sock],
@@ -132,27 +166,29 @@ class Client(object):
                     msg_size = struct.unpack("!I", data)[0]
                     msg_data = Client.recv_all(sock, msg_size)
                     message = Client.decoding(msg_data)
-                    command = message.get(protocol.KEY_COMMAND)
-                    if command == protocol.MESSAGE_COMMAND_SUCCESS:
+                    command = message.get(Protocol.KEY_COMMAND)
+                    if command == Protocol.MESSAGE_COMMAND_SUCCESS:
                         # RET_SUCCESS
                         pass
-                    elif command == protocol.MESSAGE_COMMAND_FAIELD:
+                    elif command == Protocol.MESSAGE_COMMAND_FAIELD:
                         # RET_FAIL
                         sys.stderr.write("Synthesis Failed\n")
 
-                    if command ==  protocol.MESSAGE_COMMAND_SYNTHESIS_DONE:
+                    if command ==  Protocol.MESSAGE_COMMAND_SYNTHESIS_DONE:
                         # RET_SUCCESS
                         sys.stdout.write("Synthesis SUCCESS\n")
-                        time_dict['recv_success_time'] = time.time()
+                        self.time_dict['recv_success_time'] = time.time()
+                        is_synthesis_finished = True
                         #run user input waiting thread
-                        app_thread = ApplicationThread(self.app_function)
-                        app_thread.start()
-                    elif command == protocol.MESSAGE_COMMAND_ON_DEMAND:
+                        if self.app_function is not None:
+                            self.app_thread = ApplicationThread(self.app_function)
+                            self.app_thread.start()
+                    elif command == Protocol.MESSAGE_COMMAND_ON_DEMAND:
                         # request blob
-                        #sys.stdout.write("Request: %s\n" % (message.get(protocol.KEY_REQUEST_SEGMENT)))
-                        blob_request_list.append(str(message.get(protocol.KEY_REQUEST_SEGMENT)))
+                        #sys.stdout.write("Request: %s\n" % (message.get(Protocol.KEY_REQUEST_SEGMENT)))
+                        blob_request_list.append(str(message.get(Protocol.KEY_REQUEST_SEGMENT)))
                     else:
-                        sys.stderr.write("protocol error:%d\n" % (command))
+                        sys.stderr.write("Protocol error:%d\n" % (command))
 
             # send data
             for i in outputready:
@@ -171,10 +207,10 @@ class Client(object):
                     filename = os.path.basename(requested_uri)
                     blob_path = os.path.join(os.path.dirname(self.overlay_path), filename)
                     segment_info = {
-                            protocol.KEY_COMMAND : protocol.MESSAGE_COMMAND_SEND_OVERLAY,
-                            protocol.KEY_REQUEST_SEGMENT : requested_uri,
-                            protocol.KEY_REQUEST_SEGMENT_SIZE : os.path.getsize(blob_path),
-                            protocol.KEY_SESSION_ID: self.session_id,
+                            Protocol.KEY_COMMAND : Protocol.MESSAGE_COMMAND_SEND_OVERLAY,
+                            Protocol.KEY_REQUEST_SEGMENT : requested_uri,
+                            Protocol.KEY_REQUEST_SEGMENT_SIZE : os.path.getsize(blob_path),
+                            Protocol.KEY_SESSION_ID: self.session_id,
                             }
 
                     # send close signal to cloudlet server
@@ -184,28 +220,44 @@ class Client(object):
                     sock.sendall(open(blob_path, "rb").read())
 
                     if len(sent_blob_list) == total_blob_count:
-                        time_dict['send_end_time'] = time.time()
+                        self.time_dict['send_end_time'] = time.time()
 
             # check condition
-            if (app_thread is not None) and (app_thread.isAlive() == False)\
-                    and (len(sent_blob_list) == total_blob_count):
-                break
+            if (len(sent_blob_list) == total_blob_count):
+                # sent all vm overlay
+                if (self.app_function is not None):
+                    # wait until application finishes
+                    if (self.app_thread is not None) and (self.app_thread.isAlive() is False):
+                        break
+                else:
+                    # No application is instantiated
+                    # wait until synthesis done
+                    if is_synthesis_finished == True:
+                        break
 
-        app_thread.join()
-        time_dict.update(app_thread.time_dict)
-        time_dict.update(app_time_dict)
 
-        send_end = time_dict['send_end_time']
-        recv_end = time_dict['recv_success_time']
-        app_start = time_dict['app_start']
-        app_end = time_dict['app_end']
+    def terminate(self):
+        sock = Client.connect(self.ip, self.port)
+        if not sock:
+            msg = "Cannot connect to Cloudlet (%s:%d)\n" % (self.ip, self.port)
+            sys.stderr.write(msg)
+            raise ClientError(msg)
+
+        if self.app_function is not None and self.app_thread is not None:
+            self.app_thread.join()
+            self.time_dict.update(self.app_thread.time_dict)
+
+        send_end = self.time_dict['send_end_time']
+        recv_end = self.time_dict['recv_success_time']
+        app_start = self.time_dict['app_start']
+        app_end = self.time_dict['app_end']
         client_info = {
-                protocol.KEY_COMMAND : protocol.MESSAGE_COMMAND_FINISH,
-                protocol.KEY_SESSION_ID : self.session_id,
-                'Transfer End':(send_end-start_time),
-                'Synthesis Success': (recv_end-start_time),
-                'App Start': (app_start-start_time),
-                'App End': (app_end-start_time)
+                Protocol.KEY_COMMAND : Protocol.MESSAGE_COMMAND_FINISH,
+                Protocol.KEY_SESSION_ID : self.session_id,
+                'Transfer End':(send_end-self.start_provisioning_time),
+                'Synthesis Success': (recv_end-self.start_provisioning_time),
+                'App Start': (app_start-self.start_provisioning_time),
+                'App End': (app_end-self.start_provisioning_time)
                 }
         pprint(client_info)
 
@@ -219,8 +271,8 @@ class Client(object):
         msg_size = struct.unpack("!I", data)[0]
         msg_data = Client.recv_all(sock, msg_size)
         message = Client.decoding(msg_data)
-        command = message.get(protocol.KEY_COMMAND)
-        if command != protocol.MESSAGE_COMMAND_SUCCESS:
+        command = message.get(Protocol.KEY_COMMAND)
+        if command != Protocol.MESSAGE_COMMAND_SUCCESS:
             raise ClientError("finish success error: %d" % command)
 
         # close session
@@ -272,7 +324,7 @@ class Client(object):
 
         # send request
         header_dict = {
-            protocol.KEY_COMMAND: protocol.MESSAGE_COMMAND_SESSION_CREATE
+            Protocol.KEY_COMMAND: Protocol.MESSAGE_COMMAND_SESSION_CREATE
             }
         header = Client.encoding(header_dict)
         sock.sendall(struct.pack("!I", len(header)))
@@ -282,10 +334,10 @@ class Client(object):
         recv_size, = struct.unpack("!I", Client.recv_all(sock, 4))
         data = Client.recv_all(sock, recv_size)
         data = Client.decoding(data)
-        session_id = data.get(protocol.KEY_SESSION_ID, None)
+        session_id = data.get(Protocol.KEY_SESSION_ID, None)
         if not session_id:
             session_id = Client.RET_FAILED
-            reason = data.get(protocol.KEY_FAILED_REASON, None)
+            reason = data.get(Protocol.KEY_FAILED_REASON, None)
             msg = "Cannot create session: %s" % str(reason)
             raise ClientError(msg)
         sock.close()
@@ -305,8 +357,8 @@ class Client(object):
 
         # send request
         header_dict = {
-            protocol.KEY_COMMAND: protocol.MESSAGE_COMMAND_SESSION_CLOSE,
-            protocol.KEY_SESSION_ID: session_id,
+            Protocol.KEY_COMMAND: Protocol.MESSAGE_COMMAND_SESSION_CLOSE,
+            Protocol.KEY_SESSION_ID: session_id,
             }
         header = Client.encoding(header_dict)
         sock.sendall(struct.pack("!I", len(header)))
@@ -318,8 +370,8 @@ class Client(object):
         data = Client.decoding(data)
 
         sock.close()
-        is_success = data.get(protocol.KEY_COMMAND, False)
-        if is_success == protocol.MESSAGE_COMMAND_SUCCESS:
+        is_success = data.get(Protocol.KEY_COMMAND, False)
+        if is_success == Protocol.MESSAGE_COMMAND_SUCCESS:
             return Client.RET_SUCCESS
         return Client.RET_FAILED
 
@@ -378,9 +430,8 @@ def main(argv=None):
 
     port = 8021
     synthesis_option = dict()
-    synthesis_option[protocol.SYNTHESIS_OPTION_DISPLAY_VNC] = settings.display_vnc
-    synthesis_option[protocol.SYNTHESIS_OPTION_EARLY_START] = settings.early_start
-    app_function = default_app_function
+    synthesis_option[Protocol.SYNTHESIS_OPTION_DISPLAY_VNC] = settings.display_vnc
+    synthesis_option[Protocol.SYNTHESIS_OPTION_EARLY_START] = settings.early_start
     cloudlet_ip = None
     if settings.server_ip:
         cloudlet_ip = settings.server_ip
@@ -389,11 +440,11 @@ def main(argv=None):
         sys.stderr.write(message)
         sys.exit(1)
 
-    client = Client(cloudlet_ip, port, settings.overlay_path, \
-            app_function, synthesis_option)
+    client = Client(cloudlet_ip, port, settings.overlay_path,\
+            app_function=None, synthesis_option=synthesis_option)
     try:
         client.provisioning()
-        sys.stdout.write("SUCESSS in Provisioning\n")
+        sys.stdout.write("SUCCESS in Provisioning\n")
     except ClientError as e:
         sys.stderr.write(str(e))
     return 0

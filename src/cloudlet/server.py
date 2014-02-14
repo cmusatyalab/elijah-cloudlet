@@ -47,10 +47,71 @@ from cloudlet import log as logging
 
 
 LOG = logging.getLogger(__name__)
+session_resources = dict()   # dict[session_id] = obj(SessionResource)
 
 
 class RapidSynthesisError(Exception):
     pass
+
+
+class SessionResource(object):
+    DELTA_PROCESS = "delta_proc"
+    RESUMED_VM  = "resumed_vm"
+    FUSE        = "fuse"
+    OVERLAY_PIPE    = "overlay_pipe"
+    OVERLAY_DIR     = "overlay_dir"
+    OVERLAY_DB_ENTRY    = "overlay_db_entry"
+
+    def __init__(self, session_id):
+        self.session_id = session_id
+        self.resource_dict = dict()
+        self.resource_list = list()
+        self.resource_list.append(SessionResource.DELTA_PROCESS)
+        self.resource_list.append(SessionResource.RESUMED_VM)
+        self.resource_list.append(SessionResource.FUSE)
+        self.resource_list.append(SessionResource.OVERLAY_PIPE)
+        self.resource_list.append(SessionResource.OVERLAY_DIR)
+        self.resource_list.append(SessionResource.OVERLAY_DB_ENTRY)
+
+    def add(self, name, obj):
+        if name not in self.resource_list:
+            msg = "Resource (%s) is not allowed" % name
+            msg += "Allowed resources: %s" % ' '.join(self.resource_list)
+            raise RapidSynthesisError(msg)
+        resource = self.resource_dict.get(name, None)
+        if resource is not None:
+            msg = "resource %s is already existing at session(%s)" % \
+                    (name, str(self.session))
+            raise RapidSynthesisError(msg)
+        self.resource_dict[name] = obj
+
+    def deallocate(self):
+        delta_proc = self.resource_dict.get(SessionResource.DELTA_PROCESS, None)
+        resumed_vm = self.resource_dict.get(SessionResource.RESUMED_VM, None)
+        fuse = self.resource_dict.get(SessionResource.FUSE, None)
+        overlay_pipe = self.resource_dict.get(SessionResource.OVERLAY_PIPE, None)
+        overlay_dir = self.resource_dict.get(SessionResource.OVERLAY_DIR, None)
+        overlay_db_entry = self.resource_dict.get(SessionResource.OVERLAY_DB_ENTRY, None)
+        if delta_proc:
+            delta_proc.finish()
+            if delta_proc.is_alive():
+                delta_proc.terminate()
+            del self.resource_dict[SessionResource.DELTA_PROCESS]
+        if resumed_vm:
+            resumed_vm.terminate()
+            del self.resource_dict[SessionResource.RESUMED_VM]
+        if fuse:
+            fuse.terminate()
+            del self.resource_dict[SessionResource.FUSE]
+        if overlay_pipe:
+            os.unlink(overlay_pipe)
+            del self.resource_dict[SessionResource.OVERLAY_PIPE]
+        if overlay_dir and os.path.exists(overlay_dir):
+            shutil.rmtree(overlay_dir)
+            del self.resource_dict[SessionResource.OVERLAY_DIR]
+        if overlay_db_entry: 
+            overlay_db_entry.terminate()
+
 
 
 def wrap_process_fault(function):
@@ -292,9 +353,12 @@ class SynthesisHandler(SocketServer.StreamRequestHandler):
             Protocol.KEY_COMMAND : Protocol.MESSAGE_COMMAND_SYNTHESIS_DONE,
             })
         LOG.info("SUCCESS to launch VM")
-        message_size = struct.pack("!I", len(message))
-        self.request.send(message_size)
-        self.wfile.write(message)
+        try:
+            message_size = struct.pack("!I", len(message))
+            self.request.send(message_size)
+            self.wfile.write(message)
+        except socket.error as e:
+            pass
 
     def _check_validity(self, message):
         header_info = None
@@ -440,20 +504,17 @@ class SynthesisHandler(SocketServer.StreamRequestHandler):
         if self.synthesis_option.get(Protocol.SYNTHESIS_OPTION_DISPLAY_VNC, False):
             synthesis.connect_vnc(self.resumed_VM.machine, no_wait=True)
 
-        # wait for finish message from client
-        LOG.info("[SOCKET] waiting for client exit message")
-        data = self.request.recv(4)
-        msgpack_size = struct.unpack("!I", data)[0]
-        msgpack_data = self.request.recv(msgpack_size)
-        while len(msgpack_data) < msgpack_size:
-            msgpack_data += self.request.recv(msgpack_size- len(msgpack_data))
-        finish_message = NetworkUtil.decoding(msgpack_data)
-        command = finish_message.get(Protocol.KEY_COMMAND, None)
-        if command != Protocol.MESSAGE_COMMAND_FINISH:
-            msg = "Unexpected command while streaming overlay VM: %d" % command
-            raise RapidSynthesisError(msg)
-        self.ret_success(Protocol.MESSAGE_COMMAND_FINISH)
-        LOG.info("  - %s" % str(pformat(finish_message)))
+        # save all the resource to the session resource
+        global session_resources
+        s_resource = SessionResource(session_id)
+        s_resource.add(SessionResource.DELTA_PROCESS, self.delta_proc)
+        s_resource.add(SessionResource.RESUMED_VM, self.resumed_VM)
+        s_resource.add(SessionResource.FUSE, self.fuse)
+        s_resource.add(SessionResource.OVERLAY_PIPE, self.overlay_pipe)
+        s_resource.add(SessionResource.OVERLAY_DIR, self.tmp_overlay_dir)
+        s_resource.add(SessionResource.OVERLAY_DB_ENTRY, new_overlayvm)
+        session_resources[session_id] = s_resource
+        LOG.info("Resource is allocated for Session: %s" % str(session_id))
 
         # printout synthesis statistics
         if self.synthesis_option.get(Protocol.SYNTHESIS_OPTION_SHOW_STATISTICS):
@@ -461,9 +522,26 @@ class SynthesisHandler(SocketServer.StreamRequestHandler):
             disk_access_list = self.resumed_VM.monitor.disk_access_chunk_list
             synthesis.synthesis_statistics(meta_info, temp_overlay_filepath, \
                     mem_access_list, disk_access_list)
+        LOG.info("[SOCKET] waiting for client exit message")
 
-        # update DB
-        new_overlayvm.terminate()
+
+    def _handle_finish(self, message):
+        global session_resources
+
+        session_id = message.get(Protocol.KEY_SESSION_ID, None)
+        session_resource = session_resources.get(session_id)
+        if session_resource is None:
+            # No saved resource for the session
+            msg = "No resource to be deallocated found at Session (%s)" % session_id
+            LOG.warning(msg)
+        else:
+            # deallocate all the session resource
+            msg = "Deallocating resources for the Session (%s)" % session_id
+            LOG.info(msg)
+            session_resource.deallocate()
+
+        LOG.info("  - %s" % str(pformat(message)))
+        self.ret_success(Protocol.MESSAGE_COMMAND_FINISH)
 
     def _handle_get_resource_info(self, message):
         if hasattr(self.server, 'resource_monitor'):
@@ -536,8 +614,8 @@ class SynthesisHandler(SocketServer.StreamRequestHandler):
                 # handled at _handle_synthesis
                 pass
             elif command == Protocol.MESSAGE_COMMAND_FINISH:
-                # handled at _handle_synthesis
-                pass
+                if self._check_session(message):
+                    self._handle_finish(message)
             elif command == Protocol.MESSAGE_COMMAND_GET_RESOURCE_INFO:
                 self._handle_get_resource_info(message)
             elif command == Protocol.MESSAGE_COMMAND_SESSION_CREATE:
@@ -558,18 +636,7 @@ class SynthesisHandler(SocketServer.StreamRequestHandler):
             raise e
 
     def finish(self):
-        if hasattr(self, 'delta_proc') and self.delta_proc != None:
-            self.delta_proc.join()
-            self.delta_proc.finish()
-        if hasattr(self, 'resumed_VM') and self.resumed_VM != None:
-            self.resumed_VM.terminate()
-        if hasattr(self, 'fuse') and self.fuse != None:
-            self.fuse.terminate()
-
-        if hasattr(self, 'overlay_pipe') and os.path.exists(self.overlay_pipe):
-            os.unlink(self.overlay_pipe)
-        if hasattr(self, 'tmp_overlay_dir') and os.path.exists(self.tmp_overlay_dir):
-            shutil.rmtree(self.tmp_overlay_dir)
+        pass
 
     def terminate(self):
         # force terminate when something wrong in handling request
@@ -737,7 +804,18 @@ class SynthesisServer(SocketServer.TCPServer):
             LOG.info("[TERMINATE] Terminate resource monitor")
             self.resource_monitor.terminate()
             self.resource_monitor.join()
+
+        global session_resources
+        for (session_id, resource) in session_resources.iteritems():
+            try:
+                resource.deallocate()
+                msg = "Deallocate resources for Session: %s" % str(session_id)
+                LOG.info(msg)
+            except Exception as e:
+                msg = "Failed to deallocate resources for Session : %s" % str(session_id)
+                LOG.warning(msg)
         LOG.info("[TERMINATE] Finish synthesis server connection")
+
 
     @staticmethod
     def process_command_line(argv):
