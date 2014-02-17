@@ -1,2 +1,0 @@
-java -jar FacerecDesktopControlClient.jar server_ip_address server_port location_of_directory_containing_images 
-example - java -jar FacerecDesktopControlClient.jar 192.168.168.205 9876 ../input_images

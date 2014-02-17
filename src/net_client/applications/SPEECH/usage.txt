@@ -1,3 +1,0 @@
-java -jar SpeechrecDesktopControlClient.jar server-ip-address server-port path-of-directory-with-input-audio
-Example 
-java -jar SpeechrecDesktopControlClient.jar localhost 9001 ../input_audio
