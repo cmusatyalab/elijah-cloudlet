@@ -9,22 +9,22 @@ Copyright (C) 2011-2014 Carnegie Mellon University.
 
 **Please visit our website at [Elijah Project](http://elijah.cs.cmu.edu/) for detail project information.**
 
-**We have reorganized the entire repository. Please read README file**
+**We have reorganized the entire repositories. Please read README file.**
 
 
 Cloudlet Project Repository
 --------------------------
 ####OpenStack++ and library project####
 <pre>
-<b><a href=https://github.com/cmusatyalab/elijah-cloudlet target="_blank">elijah-OpenStack</a>: OpenStack extension for cloudlet</b>
+<b><a href=https://github.com/cmusatyalab/elijah-openstacktarget="_blank">elijah-OpenStack</a>: OpenStack extension for cloudlet</b>
   ├── Code and UI for cloudlet OpenStack extension.
   │   Dependency on other cloudlet projects as below.
   │
-  ├── <b><a href=https://github.com/cmusatyalab/elijah-cloudlet target="_blank">elijah-provisioning</a> (since v1.0)</b>
+  ├── <b><a href=https://github.com/cmusatyalab/elijah-provisioning target="_blank">elijah-provisioning</a> (since v1.0)</b>
   │     ├─ Library for Cloudlet provisioning using VM synthesis
   │     └─ Standalone server and client for VM provisioning
   │
-  ├── <b><a href=https://github.com/cmusatyalab/elijah-cloudlet target="_blank">elijah-discovery</a> (since v2.0)</b>
+  ├── <b><a href=https://github.com/cmusatyalab/elijah-discovery target="_blank">elijah-discovery</a> (since v2.0)</b>
   │     ├─ Library for registration and Cloudlet query  
   │     │    ├─ Resource monitor
   │     │    ├─ Cache monitor
