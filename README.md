@@ -16,7 +16,7 @@ Cloudlet Project Repository
 --------------------------
 ####OpenStack++ and library project####
 <pre>
-<b><a href=https://github.com/cmusatyalab/elijah-openstacktarget="_blank">elijah-OpenStack</a>: OpenStack extension for cloudlet</b>
+<b><a href=https://github.com/cmusatyalab/elijah-openstack target="_blank">elijah-OpenStack</a>: OpenStack extension for cloudlet</b>
   ├── Code and UI for cloudlet OpenStack extension.
   │   Dependency on other cloudlet projects as below.
   │
