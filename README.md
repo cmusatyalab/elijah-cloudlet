@@ -9,7 +9,6 @@ Copyright (C) 2011-2014 Carnegie Mellon University.
 
 **Please visit our website at [Elijah Project](http://elijah.cs.cmu.edu/) for detail project information.**
 
-**We have reorganized the entire repositories. Please read README file.**
 
 
 Cloudlet Project Repository
