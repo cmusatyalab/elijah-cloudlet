@@ -11,7 +11,7 @@ Copyright (C) 2011-2014 Carnegie Mellon University.
 
 
 
-Before You [[Start]]
+Before You Start
 --------------------------
 Please take a look at below two papers if you want to understand our work better.  
 
