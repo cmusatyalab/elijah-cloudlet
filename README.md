@@ -9,7 +9,19 @@ Copyright (C) 2011-2014 Carnegie Mellon University.
 
 **Please visit our website at [Elijah Project](http://elijah.cs.cmu.edu/) for detail project information.**
 
-**We have reorganized the entire repositories. Please read README file.**
+
+
+Before You [[Start]]
+--------------------------
+Please take a look at below two papers if you want to understand our work better.  
+
+1. [The Case for VM-based Cloudlets in Mobile
+   Computing](http://www.cs.cmu.edu/~satya/docdir/satya-ieeepvc-cloudlets-2009.pdf):
+   a position paper proposing the concept of the cloudlet.
+2. [The Impact of Mobile Multimedia Applications on Data Center
+   Consolidation](http://www.cs.cmu.edu/~satya/docdir/ha-ic2e2013.pdf):
+   experimental results presenting how the cloudlet can make a difference.
+
 
 
 Cloudlet Project Repository
@@ -22,7 +34,8 @@ Cloudlet Project Repository
   │
   ├── <b><a href=https://github.com/cmusatyalab/elijah-provisioning target="_blank">elijah-provisioning</a> (since v1.0)</b>
   │     ├─ Library for Cloudlet provisioning using VM synthesis
-  │     └─ Standalone server and client for VM provisioning
+  │     ├─ Standalone server and client for VM provisioning
+  │     └─ Paper: <a href=http://www.cs.cmu.edu/~satya/docdir/ha-mobisys-vmsynthesis-2013.pdf target="_blank">Just-in-Time Provisioning for Cyber Foraging </a>
   │
   ├── <b><a href=https://github.com/cmusatyalab/elijah-discovery target="_blank">elijah-discovery</a> (since v2.0)</b>
   │     ├─ Library for registration and Cloudlet query  
