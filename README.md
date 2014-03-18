@@ -37,7 +37,7 @@ Cloudlet Project Repository
   │     ├─ Standalone server and client for VM provisioning
   │     └─ Paper: <a href=http://www.cs.cmu.edu/~satya/docdir/ha-mobisys-vmsynthesis-2013.pdf target="_blank">Just-in-Time Provisioning for Cyber Foraging </a>
   │
-  ├── <b><a href=https://github.com/cmusatyalab/elijah-discovery target="_blank">elijah-discovery</a> (since v2.0)</b>
+  ├── <b>elijah-discovery (since v2.0, under developmenet)</b>
   │     ├─ Library for registration and Cloudlet query  
   │     │    ├─ Resource monitor
   │     │    ├─ Cache monitor
