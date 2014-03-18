@@ -13,7 +13,7 @@ Copyright (C) 2011-2014 Carnegie Mellon University.
 
 Before You Start
 --------------------------
-Please take a look at below two papers if you want to understand our work better.  
+Please take a look at following two papers to understand our work better.  
 
 1. [The Case for VM-based Cloudlets in Mobile
    Computing](http://www.cs.cmu.edu/~satya/docdir/satya-ieeepvc-cloudlets-2009.pdf):
@@ -36,8 +36,12 @@ Cloudlet Project Repository
   │     ├─ Library for Cloudlet provisioning using VM synthesis
   │     ├─ Standalone server and client for VM provisioning
   │     └─ Paper: <a href=http://www.cs.cmu.edu/~satya/docdir/ha-mobisys-vmsynthesis-2013.pdf target="_blank">Just-in-Time Provisioning for Cyber Foraging </a>
+  ├── <b>elijah-handoff (since v2.0)</b>
+  │     ├─ Library for achieving VM handoff across Cloudlets
+  │     ├─ Adaptive VM live migration optimized for WAN
+  │     └─ Under development (Will be released at 2015 summer).
   │
-  ├── <b><a href=https://github.com/cmusatyalab/elijah-discovery target="_blank">elijah-discovery</a> (since v2.0)</b>
+  ├── <b><a href=https://github.com/cmusatyalab/elijah-discovery-basic target="_blank">elijah-discovery</a> (since v2.0)</b>
   │     ├─ Library for registration and Cloudlet query  
   │     │    ├─ Resource monitor
   │     │    ├─ Cache monitor
@@ -54,10 +58,8 @@ Cloudlet Project Repository
 
 ####Applications leverging cloudlet####
 1. [GigaSight](https://github.com/cmusatyalab/GigaSight): Scalable Crowd-Sourcing of Video from Mobile Devices
-2. [QuiltView](https://github.com/cmusatyalab/quiltview) (private*): A Crowd-Sourced Video Response System
-3. [Gabriel](https://github.com/cmusatyalab/gabriel) (private*): A Wearable Cognitive Assistance System
-
-*: Private project will be opened to the public as soon as it gets stable. Please cntact Kiryong Ha (krha@cmu.edu), if you want to access earlier.
+2. [QuiltView](https://github.com/cmusatyalab/quiltview): A Crowd-Sourced Video Response System
+3. [Gabriel](https://github.com/cmusatyalab/gabriel): A Wearable Cognitive Assistance System
 
 
 

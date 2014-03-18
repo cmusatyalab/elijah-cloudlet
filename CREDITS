@@ -1,10 +1,10 @@
-Primary implementor of Cloudlet:
-	Kiryong Ha (Carnegie Mellon University, krha@cs.cmu.edu) 
-
-Other contributors include: 
-	Wolfgang Ritcher (Carnegie Mellon University)
-	Yoshihisa Abe (Carnegie Mellon University)
-	Padmanabhan Pillai (Intel)
+Primary contributors of Cloudlet implementation:
+	Kiryong Ha (Carnegie Mellon University, krha@cmu.edu) 
+	Zhuo Chen (Carnegie Mellon University, zhuoc@cs.cmu.edu)
+	Wenlu Hu (Carnegie Mellon University, wenlu@cmu.edu)
+	Wolfgang Ritcher (Carnegie Mellon University, wolf@cs.cmu.edu)
+	Yoshihisa Abe (Carnegie Mellon University, yoshiabe@cs.cmu.edu)
+	Padmanabhan Pillai (Intel, padmanabhan.s.pillai@intel.com)
 
 Contributors to pre-Elijah versions of code to support cloudlets
 include: Grace Lewis (Software Engineering Institute), Soumya Simanta
