@@ -57,7 +57,7 @@ Cloudlet Project Repository
 2. [QuiltView](https://github.com/cmusatyalab/quiltview) (private*): A Crowd-Sourced Video Response System
 3. [Gabriel](https://github.com/cmusatyalab/gabriel) (private*): A Wearable Cognitive Assistance System
 
-*: Private project will be opened to the public as soon as it gets stable. Please cntact Kiryong Ha (krha@cmu.edu), if you want to access earlier.
+*: Private project will be opened to the public as soon as it gets stable. Please contact Kiryong Ha (krha@cmu.edu), if you want to access earlier.
 
 
 
