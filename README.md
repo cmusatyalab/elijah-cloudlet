@@ -36,6 +36,7 @@ Cloudlet Project Repository
   │     ├─ Library for Cloudlet provisioning using VM synthesis
   │     ├─ Standalone server and client for VM provisioning
   │     └─ Paper: <a href=http://www.cs.cmu.edu/~satya/docdir/ha-mobisys-vmsynthesis-2013.pdf target="_blank">Just-in-Time Provisioning for Cyber Foraging </a>
+  │
   ├── <b>elijah-handoff (since v2.0)</b>
   │     ├─ Library for achieving VM handoff across Cloudlets
   │     ├─ Adaptive VM live migration optimized for WAN
